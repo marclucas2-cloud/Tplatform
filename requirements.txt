@@ -26,5 +26,8 @@ structlog>=23.1.0
 pytest>=7.4.0
 pytest-asyncio>=0.21.0
 
+# --- Données de marché réelles ---
+yfinance>=0.2.40
+
 # --- Optionnel (backtest avancé) ---
 # vectorbt>=0.26.0   # Décommenter pour backtests haute performance

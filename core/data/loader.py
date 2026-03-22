@@ -9,7 +9,17 @@ Règle fondamentale du no-lookahead bias :
 Sources supportées :
   - CSV local (Dukascopy, Histdata, etc.)
   - API IG Markets (via ig_client)
-  - Yahoo Finance (yfinance — optionnel)
+  - Yahoo Finance (yfinance) — données réelles gratuites
+
+Limites yfinance sur l'historique intraday :
+  1M   → 7 jours max
+  5M   → 60 jours max
+  1H   → 730 jours (~2 ans)
+  1D   → illimité (5 ans recommandés)
+
+Mapping tickers Yahoo Finance :
+  EURUSD → EURUSD=X  |  DAX / IX.D.DAX.* → ^GDAXI
+  SP500  → ^GSPC     |  FTSE → ^FTSE  |  NASDAQ → ^IXIC
 """
 from __future__ import annotations
 
@@ -153,6 +163,131 @@ class OHLCVLoader:
         }
         tf = timeframe_map.get(resolution, resolution)
         return OHLCVData(df, epic, tf, source="ig")
+
+    # Correspondance IG epic / symbole → ticker Yahoo Finance
+    _YF_TICKER_MAP: dict[str, str] = {
+        "EURUSD":              "EURUSD=X",
+        "GBPUSD":              "GBPUSD=X",
+        "USDJPY":              "USDJPY=X",
+        "EURGBP":              "EURGBP=X",
+        "AUDUSD":              "AUDUSD=X",
+        "USDCHF":              "USDCHF=X",
+        "DAX":                 "^GDAXI",
+        "SP500":               "^GSPC",
+        "FTSE":                "^FTSE",
+        "NASDAQ":              "^IXIC",
+        "CAC40":               "^FCHI",
+        "DOW":                 "^DJI",
+        # Epics IG Markets → ticker YF
+        "IX.D.DAX.DAILY.IP":   "^GDAXI",
+        "IX.D.DAX.IFD.IP":     "^GDAXI",
+        "IX.D.FTSE.DAILY.IP":  "^FTSE",
+        "IX.D.SPTRD.DAILY.IP": "^GSPC",
+        "CS.D.EURUSD.MINI.IP": "EURUSD=X",
+        "CS.D.GBPUSD.MINI.IP": "GBPUSD=X",
+    }
+
+    # Mapping timeframe plateforme → interval yfinance
+    _YF_INTERVAL_MAP: dict[str, str] = {
+        "1M":  "1m",
+        "5M":  "5m",
+        "15M": "15m",
+        "30M": "30m",
+        "1H":  "1h",
+        "4H":  "1h",   # yfinance n'a pas 4H — utiliser 1H et agréger si besoin
+        "1D":  "1d",
+        "1W":  "1wk",
+    }
+
+    # Historique maximum téléchargeable par interval
+    _YF_MAX_PERIOD: dict[str, str] = {
+        "1m":  "7d",
+        "5m":  "60d",
+        "15m": "60d",
+        "30m": "60d",
+        "1h":  "730d",
+        "1d":  "5y",
+        "1wk": "10y",
+    }
+
+    @staticmethod
+    def from_yfinance(asset: str, timeframe: str,
+                      period: str | None = None,
+                      start: str | None = None,
+                      end: str | None = None,
+                      ticker: str | None = None) -> "OHLCVData":
+        """
+        Charge des données réelles depuis Yahoo Finance (gratuit, sans clé API).
+
+        asset     : symbole plateforme (ex: "EURUSD", "DAX", "IX.D.DAX.DAILY.IP")
+        timeframe : "1M", "5M", "1H", "1D", etc.
+        period    : ex "60d", "2y" — si None, utilise le max disponible pour ce timeframe
+        start/end : alternative à period (ex: start="2022-01-01", end="2024-12-31")
+        ticker    : forcer un ticker Yahoo Finance (ex: "EURUSD=X") — override le mapping auto
+
+        Exemples :
+            OHLCVLoader.from_yfinance("EURUSD", "1H")           # 2 ans EUR/USD 1H
+            OHLCVLoader.from_yfinance("DAX", "1D", period="5y") # 5 ans DAX daily
+            OHLCVLoader.from_yfinance("EURUSD", "5M")           # 60 jours EUR/USD 5M
+        """
+        try:
+            import yfinance as yf
+        except ImportError:
+            raise ImportError("yfinance non installé — pip install yfinance")
+
+        # Résolution du ticker
+        yf_ticker = ticker or OHLCVLoader._YF_TICKER_MAP.get(asset, asset)
+        yf_interval = OHLCVLoader._YF_INTERVAL_MAP.get(timeframe, "1d")
+
+        # Période par défaut selon les limites yfinance
+        if period is None and start is None:
+            period = OHLCVLoader._YF_MAX_PERIOD.get(yf_interval, "1y")
+
+        # Téléchargement
+        kwargs: dict = {"ticker": yf_ticker, "interval": yf_interval, "auto_adjust": True, "progress": False}
+        if start:
+            kwargs["start"] = start
+            if end:
+                kwargs["end"] = end
+        else:
+            kwargs["period"] = period
+
+        t = yf.Ticker(yf_ticker)
+        raw = t.history(
+            interval=yf_interval,
+            period=period if not start else None,
+            start=start or None,
+            end=end or None,
+            auto_adjust=True,
+        )
+
+        if raw.empty:
+            raise ValueError(
+                f"yfinance n'a retourné aucune donnée pour {yf_ticker} "
+                f"(interval={yf_interval}, period={period}). "
+                f"Vérifier le ticker et les limites d'historique intraday."
+            )
+
+        # Normalisation colonnes
+        raw.columns = [c.lower() for c in raw.columns]
+        keep = ["open", "high", "low", "close", "volume"]
+        df = raw[[c for c in keep if c in raw.columns]].copy()
+        if "volume" not in df.columns:
+            df["volume"] = 0.0
+
+        # Index UTC
+        if df.index.tz is None:
+            df.index = df.index.tz_localize("UTC")
+        else:
+            df.index = df.index.tz_convert("UTC")
+
+        df = df.sort_index()
+        df = df.dropna()
+
+        if len(df) == 0:
+            raise ValueError(f"DataFrame vide après nettoyage pour {yf_ticker}")
+
+        return OHLCVData(df, asset, timeframe, source="yfinance")
 
     @staticmethod
     def generate_synthetic(asset: str = "SYNTHETIC", timeframe: str = "1H",
