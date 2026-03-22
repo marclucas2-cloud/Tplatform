@@ -1,0 +1,42 @@
+{
+  "strategy_id": "orb_indices_v1",
+  "version": "1.0.0",
+  "created_at": "2026-03-22T00:00:00Z",
+  "description": "Opening Range Breakout sur indices. Établit le range de la première heure de session, puis trade le breakout avec confirmation de volume. Optimal sur DAX, SP500, FTSE.",
+  "asset": "IX.D.DAX.IFD.IP",
+  "timeframe": "1H",
+  "parameters": {
+    "volume_multiplier": 1.5,
+    "volume_lookback": 20,
+    "stop_loss_pct": 0.5,
+    "take_profit_pct": 1.5,
+    "max_position_pct": 0.015
+  },
+  "entry_rules": {
+    "long":  "or_established AND close > or_high AND volume > volume_multiplier * avg_volume",
+    "short": "or_established AND close < or_low  AND volume > volume_multiplier * avg_volume"
+  },
+  "exit_rules": {
+    "long":  "stop_loss OR take_profit OR end_of_session",
+    "short": "stop_loss OR take_profit OR end_of_session"
+  },
+  "cost_model": {
+    "spread_pips": 1.0,
+    "slippage_pips": 0.5,
+    "commission_per_lot": 0.0
+  },
+  "validation_requirements": {
+    "min_trades": 40,
+    "min_sharpe": 0.5,
+    "max_drawdown_pct": 18,
+    "walk_forward_windows": 4,
+    "out_of_sample_pct": 30,
+    "min_profit_factor": 1.2
+  },
+  "risk_management": {
+    "max_position_pct": 0.015,
+    "max_open_trades": 1,
+    "daily_loss_limit_pct": 0.025
+  },
+  "tags": ["breakout", "opening_range", "indices", "intraday", "volume_filter"]
+}

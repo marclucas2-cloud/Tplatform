@@ -559,3 +559,129 @@ def breakout_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     df["signal_short"] = df["close"].shift(1) < lower
 
     return df
+
+
+@register_strategy("rsi_filtered_")
+def rsi_filtered_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """
+    RSI Mean Reversion filtré par ADX.
+
+    Logique :
+      - Signal RSI classique (oversold/overbought)
+      - MAIS uniquement si ADX < adx_threshold (marché ranging, pas trending)
+
+    Le filtre ADX est crucial : évite les faux signaux en tendance forte.
+    ADX < 20 = ranging → mean reversion viable
+    ADX > 25 = trending → ignorer les signaux RSI
+    """
+    from core.features.store import FeatureStore
+
+    period      = int(params.get("rsi_period", 14))
+    oversold    = params.get("oversold", 30)
+    overbought  = params.get("overbought", 70)
+    adx_period  = int(params.get("adx_period", 14))
+    adx_thresh  = params.get("adx_threshold", 25)
+
+    fs = FeatureStore()
+    enriched = fs.compute(df, [f"rsi_{period}", f"adx_{adx_period}"])
+
+    rsi = enriched[f"rsi_{period}"]       # déjà shifté de 1 par le FeatureStore
+    rsi_prev = rsi.shift(1)               # shift supplémentaire pour croisement
+    adx = enriched[f"adx_{adx_period}"]   # déjà shifté de 1
+
+    ranging = adx < adx_thresh
+
+    df = df.copy()
+    df["rsi"] = rsi
+    df["adx"] = adx
+    df["signal_long"]  = ranging & (rsi < oversold)  & (rsi_prev >= oversold)
+    df["signal_short"] = ranging & (rsi > overbought) & (rsi_prev <= overbought)
+
+    return df
+
+
+@register_strategy("vwap_")
+def vwap_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """
+    VWAP Mean Reversion.
+
+    Logique :
+      - Prix s'éloigne du VWAP de plus de N écarts-types → retour probable
+      - Signal LONG  : close < VWAP - n_std * ATR  (prix trop bas vs VWAP)
+      - Signal SHORT : close > VWAP + n_std * ATR  (prix trop haut vs VWAP)
+      - Sortie : retour vers VWAP (écart < exit_std * ATR)
+
+    Pourquoi ça marche :
+      Les market makers utilisent le VWAP comme référence de prix équitable.
+      Les déviations importantes génèrent un flow de retour vers la moyenne.
+    """
+    from core.features.store import FeatureStore
+
+    atr_period = int(params.get("atr_period", 14))
+    n_std      = params.get("entry_std", 1.5)     # écart pour entrée
+    exit_std   = params.get("exit_std", 0.3)      # écart pour sortie
+
+    fs = FeatureStore()
+    enriched = fs.compute(df, ["vwap", f"atr_{atr_period}"])
+
+    vwap = enriched["vwap"]
+    atr  = enriched[f"atr_{atr_period}"]
+    close_prev = df["close"].shift(1)  # close de la bougie fermée
+
+    deviation = close_prev - vwap
+    band = n_std * atr
+
+    df = df.copy()
+    df["vwap"]      = vwap
+    df["atr"]       = atr
+    df["deviation"] = deviation
+    df["signal_long"]  = deviation < -band          # Prix trop bas → long
+    df["signal_short"] = deviation > band            # Prix trop haut → short
+    # Signal de sortie : retour vers VWAP
+    df["signal_exit_long"]  = deviation > -exit_std * atr
+    df["signal_exit_short"] = deviation < exit_std * atr
+
+    return df
+
+
+@register_strategy("orb_")
+def orb_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """
+    Opening Range Breakout (ORB).
+
+    Logique :
+      - Établir le range des premières N minutes de la session
+      - Signal LONG  : close dépasse or_high avec momentum (volume élevé)
+      - Signal SHORT : close passe sous or_low avec momentum
+      - Sortie : trailing stop ou fin de session
+
+    Excellent sur indices (DAX, SP500) et instruments liquides en ouverture.
+    """
+    from core.features.store import FeatureStore
+
+    volume_mult = params.get("volume_multiplier", 1.5)  # volume > N * volume moyen
+    vol_lookback = int(params.get("volume_lookback", 20))
+
+    fs = FeatureStore()
+    enriched = fs.compute(df, ["or_high", "or_low", "or_established"])
+
+    or_high       = enriched["or_high"]
+    or_low        = enriched["or_low"]
+    established   = enriched["or_established"]
+    close_prev    = df["close"].shift(1)
+
+    # Filtre volume : breakout valide uniquement si volume élevé
+    vol_avg = df["volume"].rolling(vol_lookback).mean().shift(1)
+    vol_prev = df["volume"].shift(1)
+    high_volume = vol_prev > volume_mult * vol_avg
+
+    df = df.copy()
+    df["or_high"]        = or_high
+    df["or_low"]         = or_low
+    df["or_established"] = established
+    df["signal_long"]    = (established > 0) & (close_prev > or_high) & high_volume
+    df["signal_short"]   = (established > 0) & (close_prev < or_low)  & high_volume
+
+    return df
+
+    return df

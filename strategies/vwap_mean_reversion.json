@@ -1,0 +1,43 @@
+{
+  "strategy_id": "vwap_mean_reversion_v1",
+  "version": "1.0.0",
+  "created_at": "2026-03-22T00:00:00Z",
+  "description": "VWAP Mean Reversion intraday. Entre quand le prix s'éloigne significativement du VWAP (mesure en ATR). Sort au retour vers le VWAP. Exploite les micro-inefficiences intraday créées par les ordres institutionnels.",
+  "asset": "CS.D.EURUSD.MINI.IP",
+  "timeframe": "5M",
+  "parameters": {
+    "atr_period": 14,
+    "entry_std": 1.5,
+    "exit_std": 0.3,
+    "stop_loss_pct": 0.3,
+    "take_profit_pct": 0.6,
+    "max_position_pct": 0.02
+  },
+  "entry_rules": {
+    "long":  "close < vwap - entry_std * atr",
+    "short": "close > vwap + entry_std * atr"
+  },
+  "exit_rules": {
+    "long":  "close > vwap - exit_std * atr OR stop_loss OR take_profit",
+    "short": "close < vwap + exit_std * atr OR stop_loss OR take_profit"
+  },
+  "cost_model": {
+    "spread_pips": 0.8,
+    "slippage_pips": 0.5,
+    "commission_per_lot": 0.0
+  },
+  "validation_requirements": {
+    "min_trades": 80,
+    "min_sharpe": 0.6,
+    "max_drawdown_pct": 12,
+    "walk_forward_windows": 4,
+    "out_of_sample_pct": 30,
+    "min_profit_factor": 1.2
+  },
+  "risk_management": {
+    "max_position_pct": 0.02,
+    "max_open_trades": 1,
+    "daily_loss_limit_pct": 0.02
+  },
+  "tags": ["mean_reversion", "vwap", "intraday", "forex", "5min"]
+}
