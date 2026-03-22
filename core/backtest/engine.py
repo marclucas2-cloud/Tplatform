@@ -78,6 +78,8 @@ class BacktestResult:
     avg_trade_pnl: float = 0.0
     avg_bars_held: float = 0.0
     total_costs: float = 0.0
+    expectancy: float = 0.0          # Gain attendu moyen par trade (€)
+    rolling_sharpe_std: float = 0.0  # Stabilité : std du Sharpe sur fenêtres glissantes
 
     # Données détaillées
     trades: list[Trade] = field(default_factory=list)
@@ -105,6 +107,8 @@ class BacktestResult:
             "win_rate_pct": round(self.win_rate_pct, 2),
             "total_trades": self.total_trades,
             "total_costs": round(self.total_costs, 6),
+            "expectancy": round(self.expectancy, 6),
+            "rolling_sharpe_std": round(self.rolling_sharpe_std, 4),
             "passes_validation": self.passes_validation,
             "validation_failures": self.validation_failures,
         }
@@ -125,6 +129,8 @@ class BacktestResult:
             f"  Win rate   : {self.win_rate_pct:.1f}%",
             f"  Profit f.  : {self.profit_factor:.3f}",
             f"  Couts tot. : {self.total_costs:.6f}",
+            f"  Expectancy : {self.expectancy:+.4f}",
+            f"  Sharpe std : {self.rolling_sharpe_std:.3f}",
         ]
         if self.validation_failures:
             lines.append(f"  Echecs     : {', '.join(self.validation_failures)}")
@@ -202,11 +208,13 @@ class BacktestEngine:
         return result
 
     def _resolve_strategy(self, strategy_id: str) -> Callable | None:
-        """Trouve la fonction de stratégie dans le registre par préfixe."""
+        """Trouve la fonction de stratégie dans le registre par préfixe (plus long match gagne)."""
+        best_prefix, best_fn = None, None
         for prefix, fn in _STRATEGY_REGISTRY.items():
             if strategy_id.startswith(prefix):
-                return fn
-        return None
+                if best_prefix is None or len(prefix) > len(best_prefix):
+                    best_prefix, best_fn = prefix, fn
+        return best_fn
 
     def _simulate_trades(self, df: pd.DataFrame, params: dict,
                          cost_model: dict) -> tuple[list[Trade], pd.Series]:
@@ -222,6 +230,7 @@ class BacktestEngine:
 
         stop_loss_pct = params.get("stop_loss_pct", 0.5) / 100
         take_profit_pct = params.get("take_profit_pct", 1.0) / 100
+        trailing_stop_pct = params.get("trailing_stop_pct", 0.0) / 100  # 0 = désactivé
         position_size = params.get("max_position_pct", 0.02)  # fraction du capital
 
         trades: list[Trade] = []
@@ -252,6 +261,7 @@ class BacktestEngine:
                         "entry_bar": i + 1,
                         "stop": entry_price * (1 - stop_loss_pct),
                         "target": entry_price * (1 + take_profit_pct),
+                        "high_watermark": entry_price,  # trailing stop
                     }
                 elif signal_short:
                     entry_price = next_row["open"] - total_cost_per_side
@@ -264,8 +274,28 @@ class BacktestEngine:
                         "entry_bar": i + 1,
                         "stop": entry_price * (1 + stop_loss_pct),
                         "target": entry_price * (1 - take_profit_pct),
+                        "low_watermark": entry_price,   # trailing stop
                     }
             else:
+                # Trailing stop : mise à jour du watermark et du stop dynamique
+                if trailing_stop_pct > 0:
+                    if position["direction"] == "long":
+                        hw = position.get("high_watermark", position["entry_price"])
+                        if next_row["high"] > hw:
+                            hw = next_row["high"]
+                            position["high_watermark"] = hw
+                            new_stop = hw * (1 - trailing_stop_pct)
+                            if new_stop > position["stop"]:  # stop ne recule jamais
+                                position["stop"] = new_stop
+                    else:
+                        lw = position.get("low_watermark", position["entry_price"])
+                        if next_row["low"] < lw:
+                            lw = next_row["low"]
+                            position["low_watermark"] = lw
+                            new_stop = lw * (1 + trailing_stop_pct)
+                            if new_stop < position["stop"]:  # stop ne remonte jamais
+                                position["stop"] = new_stop
+
                 # Vérifier conditions de sortie
                 exit_reason = None
                 exit_price = next_row["open"]
@@ -403,6 +433,20 @@ class BacktestEngine:
         else:
             sortino = 0.0
 
+        # Expectancy = gain espéré moyen par trade
+        avg_win  = float(wins.mean())  if len(wins)   > 0 else 0.0
+        avg_loss = float(abs(losses.mean())) if len(losses) > 0 else 0.0
+        wr = win_rate / 100
+        expectancy = avg_win * wr - avg_loss * (1 - wr)
+
+        # Stabilité : std du Sharpe sur fenêtres glissantes (20% des données)
+        roll_window = max(50, len(returns) // 5)
+        def _rolling_sharpe(x: np.ndarray) -> float:
+            s = x.std()
+            return (x.mean() / s * np.sqrt(periods_per_year)) if s > 0 else 0.0
+        rs = returns.rolling(roll_window).apply(_rolling_sharpe, raw=True).dropna()
+        rolling_sharpe_std = float(rs.std()) if len(rs) > 1 else 0.0
+
         # Return annualisé
         n_years = len(data.df) / periods_per_year
         annualized = ((1 + total_return / 100) ** (1 / n_years) - 1) * 100 if n_years > 0 else 0
@@ -439,6 +483,8 @@ class BacktestEngine:
             avg_trade_pnl=round(float(pnls.mean()), 6),
             avg_bars_held=round(np.mean([t.bars_held for t in trades]), 1),
             total_costs=round(total_costs, 6),
+            expectancy=round(expectancy, 6),
+            rolling_sharpe_std=round(rolling_sharpe_std, 4),
             trades=trades,
             equity_curve=equity,
             passes_validation=len(failures) == 0,
@@ -617,19 +663,29 @@ def vwap_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     """
     from core.features.store import FeatureStore
 
-    atr_period = int(params.get("atr_period", 14))
-    n_std      = params.get("entry_std", 1.5)     # écart pour entrée
-    exit_std   = params.get("exit_std", 0.3)      # écart pour sortie
+    atr_period       = int(params.get("atr_period", 14))
+    n_std            = params.get("entry_std", 1.5)      # écart pour entrée
+    exit_std         = params.get("exit_std", 0.3)       # écart pour sortie
+    use_sigma_bands  = int(params.get("use_sigma_bands", 0))  # 0=ATR, 1=σ rolling std
+    sigma_period     = int(params.get("sigma_period", 20))
 
     fs = FeatureStore()
-    enriched = fs.compute(df, ["vwap", f"atr_{atr_period}"])
+    features = ["vwap", f"atr_{atr_period}"]
+    enriched = fs.compute(df, features)
 
     vwap = enriched["vwap"]
     atr  = enriched[f"atr_{atr_period}"]
     close_prev = df["close"].shift(1)  # close de la bougie fermée
 
+    # Bandes : ATR (classique) ou écart-type glissant (σ bands)
+    if use_sigma_bands:
+        sigma = df["close"].rolling(sigma_period).std().shift(1)
+        band_unit = sigma.fillna(atr)  # fallback ATR si sigma NaN
+    else:
+        band_unit = atr
+
     deviation = close_prev - vwap
-    band = n_std * atr
+    band = n_std * band_unit
 
     df = df.copy()
     df["vwap"]      = vwap
@@ -638,8 +694,8 @@ def vwap_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     df["signal_long"]  = deviation < -band          # Prix trop bas → long
     df["signal_short"] = deviation > band            # Prix trop haut → short
     # Signal de sortie : retour vers VWAP
-    df["signal_exit_long"]  = deviation > -exit_std * atr
-    df["signal_exit_short"] = deviation < exit_std * atr
+    df["signal_exit_long"]  = deviation > -exit_std * band_unit
+    df["signal_exit_short"] = deviation < exit_std * band_unit
 
     return df
 
@@ -683,5 +739,162 @@ def orb_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     df["signal_short"]   = (established > 0) & (close_prev < or_low)  & high_volume
 
     return df
+
+
+@register_strategy("bb_squeeze_")
+def bb_squeeze_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """
+    Bollinger Band Squeeze — Breakout après compression de volatilité.
+
+    Logique :
+      - Squeeze  : BB width < sa moyenne mobile N périodes (marché qui coile)
+      - Breakout : BB width repasse au-dessus de la moyenne (expansion)
+      - Direction : déterminée par le momentum (EMA rapide vs EMA lente)
+
+      Signal LONG  : sortie de squeeze + momentum haussier (ema_fast > ema_slow)
+      Signal SHORT : sortie de squeeze + momentum baissier (ema_fast < ema_slow)
+
+    Pourquoi ça marche :
+      La compression de volatilité précède les grands mouvements.
+      On joue la direction du breakout en filtrant par momentum.
+    """
+    from core.features.store import FeatureStore
+
+    bb_period    = int(params.get("bb_period", 20))
+    bb_std       = params.get("bb_std", 2.0)
+    squeeze_ma   = int(params.get("squeeze_ma_period", 20))  # période MA de la BB width
+    ema_fast     = int(params.get("ema_fast", 9))
+    ema_slow     = int(params.get("ema_slow", 21))
+    squeeze_mult = params.get("squeeze_threshold", 0.95)  # width < mult * ma_width = squeeze
+
+    std_int = int(bb_std)  # FeatureStore utilise int(n_std) dans les clés : bb_width_20_2
+    fs = FeatureStore()
+    enriched = fs.compute(df, [
+        f"bb_width_{bb_period}_{std_int}",
+        f"ema_{ema_fast}",
+        f"ema_{ema_slow}",
+    ])
+
+    bb_width  = enriched[f"bb_width_{bb_period}_{std_int}"]
+    ema_f     = enriched[f"ema_{ema_fast}"]
+    ema_s     = enriched[f"ema_{ema_slow}"]
+
+    # Squeeze détecté quand bb_width est sous sa propre MA (bandes qui se serrent)
+    width_ma    = bb_width.rolling(squeeze_ma).mean()
+    in_squeeze  = bb_width < squeeze_mult * width_ma  # déjà shiftée par FeatureStore
+
+    # Sortie du squeeze : était en squeeze, ne l'est plus
+    in_squeeze_prev = in_squeeze.shift(1)
+    squeeze_exit    = (~in_squeeze) & in_squeeze_prev
+
+    momentum_bull = ema_f > ema_s
+    momentum_bear = ema_f < ema_s
+
+    df = df.copy()
+    df["bb_width"]     = bb_width
+    df["ema_fast"]     = ema_f
+    df["ema_slow"]     = ema_s
+    df["in_squeeze"]   = in_squeeze
+    df["signal_long"]  = squeeze_exit & momentum_bull
+    df["signal_short"] = squeeze_exit & momentum_bear
+
+    return df
+
+
+@register_strategy("momentum_burst_")
+def momentum_burst_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """
+    Momentum Burst — EMA crossover + spike de volume.
+
+    Logique :
+      - Signal LONG  : EMA rapide croise au-dessus de l'EMA lente
+                       ET volume > volume_mult × volume moyen
+      - Signal SHORT : EMA rapide croise en dessous de l'EMA lente
+                       ET volume élevé
+
+    Le filtre volume est critique : seuls les croisements accompagnés
+    d'un vrai engagement du marché (smart money) sont retenus.
+    """
+    from core.features.store import FeatureStore
+
+    ema_fast    = int(params.get("ema_fast", 9))
+    ema_slow    = int(params.get("ema_slow", 21))
+    vol_mult    = params.get("volume_multiplier", 2.0)
+    vol_lookback = int(params.get("volume_lookback", 20))
+
+    fs = FeatureStore()
+    enriched = fs.compute(df, [f"ema_{ema_fast}", f"ema_{ema_slow}"])
+
+    ema_f = enriched[f"ema_{ema_fast}"]   # déjà shift(1) par FeatureStore
+    ema_s = enriched[f"ema_{ema_slow}"]
+
+    ema_f_prev = ema_f.shift(1)
+    ema_s_prev = ema_s.shift(1)
+
+    # Croisement haussier : était sous, maintenant au-dessus
+    cross_bull = (ema_f > ema_s) & (ema_f_prev <= ema_s_prev)
+    # Croisement baissier
+    cross_bear = (ema_f < ema_s) & (ema_f_prev >= ema_s_prev)
+
+    # Filtre volume (shift(1) pour no-lookahead)
+    vol_avg  = df["volume"].rolling(vol_lookback).mean().shift(1)
+    vol_prev = df["volume"].shift(1)
+    high_vol = vol_prev > vol_mult * vol_avg
+
+    df = df.copy()
+    df["ema_fast"]     = ema_f
+    df["ema_slow"]     = ema_s
+    df["signal_long"]  = cross_bull & high_vol
+    df["signal_short"] = cross_bear & high_vol
+
+    return df
+
+
+@register_strategy("seasonality_")
+def seasonality_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """
+    Intraday Seasonality — Filtres horaires sur tendances statistiques.
+
+    Logique :
+      - Actif uniquement pendant les fenêtres horaires à haute probabilité
+      - Signal de base : EMA crossover (momentum)
+      - Filtre heure : trade uniquement dans les plages définies par session
+        Ex : ouverture London (8h-10h) ou overlap London/NY (13h-15h)
+
+    Pourquoi ça marche :
+      Les flux institutionnels sont concentrés à certaines heures.
+      Les patterns intraday se répètent statistiquement.
+    """
+    from core.features.store import FeatureStore
+
+    ema_fast      = int(params.get("ema_fast", 9))
+    ema_slow      = int(params.get("ema_slow", 21))
+    session_start = int(params.get("session_start_hour", 8))   # heure UTC
+    session_end   = int(params.get("session_end_hour", 10))
+
+    fs = FeatureStore()
+    enriched = fs.compute(df, [f"ema_{ema_fast}", f"ema_{ema_slow}"])
+
+    ema_f = enriched[f"ema_{ema_fast}"]
+    ema_s = enriched[f"ema_{ema_slow}"]
+    ema_f_prev = ema_f.shift(1)
+    ema_s_prev = ema_s.shift(1)
+
+    cross_bull = (ema_f > ema_s) & (ema_f_prev <= ema_s_prev)
+    cross_bear = (ema_f < ema_s) & (ema_f_prev >= ema_s_prev)
+
+    # Filtre temporel : on utilise l'heure de l'index (supposé UTC)
+    if hasattr(df.index, "hour"):
+        in_session = (df.index.hour >= session_start) & (df.index.hour < session_end)
+        in_session = pd.Series(in_session, index=df.index)
+    else:
+        in_session = pd.Series(True, index=df.index)  # pas de filtrage si index sans heure
+
+    df = df.copy()
+    df["ema_fast"]     = ema_f
+    df["ema_slow"]     = ema_s
+    df["in_session"]   = in_session
+    df["signal_long"]  = cross_bull & in_session
+    df["signal_short"] = cross_bear & in_session
 
     return df
