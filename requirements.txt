@@ -1,0 +1,30 @@
+# Trading Platform — dépendances Python
+# Installer : pip install -r requirements.txt
+
+# --- Data & Calcul quantitatif ---
+pandas>=2.0.0
+numpy>=1.24.0
+scipy>=1.10.0
+
+# --- Validation JSON ---
+jsonschema>=4.17.0
+
+# --- API IG Markets ---
+requests>=2.31.0
+aiohttp>=3.9.0
+
+# --- LLM (Research Agent) ---
+anthropic>=0.20.0
+
+# --- Configuration ---
+python-dotenv>=1.0.0
+
+# --- Logging structuré ---
+structlog>=23.1.0
+
+# --- Tests ---
+pytest>=7.4.0
+pytest-asyncio>=0.21.0
+
+# --- Optionnel (backtest avancé) ---
+# vectorbt>=0.26.0   # Décommenter pour backtests haute performance

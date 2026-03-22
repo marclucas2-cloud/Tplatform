@@ -1,0 +1,157 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://trading-platform/strategy.schema.json",
+  "title": "TradingStrategy",
+  "description": "Schéma JSON source de vérité pour toute stratégie de trading. Validé avant backtest et exécution.",
+  "type": "object",
+  "required": [
+    "strategy_id", "version", "created_at", "asset", "timeframe",
+    "parameters", "entry_rules", "exit_rules", "cost_model", "validation_requirements"
+  ],
+  "additionalProperties": false,
+  "properties": {
+    "strategy_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9_]+_v[0-9]+$",
+      "description": "Identifiant unique snake_case avec version. Ex: rsi_mean_reversion_v1"
+    },
+    "version": {
+      "type": "string",
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "description": "Semver de la stratégie"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "description": {
+      "type": "string",
+      "maxLength": 500
+    },
+    "asset": {
+      "type": "string",
+      "description": "Epic IG Markets ou symbole standard. Ex: EURUSD, IX.D.FTSE.DAILY.IP"
+    },
+    "timeframe": {
+      "type": "string",
+      "enum": ["1M", "5M", "15M", "30M", "1H", "4H", "1D", "1W"],
+      "description": "Timeframe des bougies OHLCV"
+    },
+    "parameters": {
+      "type": "object",
+      "description": "Paramètres numériques de la stratégie — seuls ces paramètres sont autorisés dans les calculs",
+      "additionalProperties": {
+        "type": "number"
+      },
+      "minProperties": 1
+    },
+    "entry_rules": {
+      "type": "object",
+      "description": "Conditions d'entrée exprimées en pseudo-code lisible",
+      "properties": {
+        "long": { "type": "string" },
+        "short": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "exit_rules": {
+      "type": "object",
+      "description": "Conditions de sortie",
+      "properties": {
+        "long": { "type": "string" },
+        "short": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "cost_model": {
+      "type": "object",
+      "description": "Modèle de coûts réels — obligatoire, intégré dans chaque backtest",
+      "required": ["spread_pips", "slippage_pips"],
+      "additionalProperties": false,
+      "properties": {
+        "spread_pips": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Spread moyen en pips"
+        },
+        "slippage_pips": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Slippage estimé en pips par ordre"
+        },
+        "commission_per_lot": {
+          "type": "number",
+          "minimum": 0,
+          "default": 0
+        }
+      }
+    },
+    "validation_requirements": {
+      "type": "object",
+      "description": "Seuils minimaux que le Validation Agent doit vérifier — stratégie rejetée si un seuil n'est pas atteint",
+      "required": ["min_trades", "min_sharpe", "max_drawdown_pct", "walk_forward_windows", "out_of_sample_pct"],
+      "additionalProperties": false,
+      "properties": {
+        "min_trades": {
+          "type": "integer",
+          "minimum": 30,
+          "description": "Nombre minimum de trades pour significativité statistique"
+        },
+        "min_sharpe": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Sharpe ratio minimum (annualisé)"
+        },
+        "max_drawdown_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100,
+          "description": "Drawdown maximum acceptable en %"
+        },
+        "walk_forward_windows": {
+          "type": "integer",
+          "minimum": 3,
+          "description": "Nombre de fenêtres walk-forward"
+        },
+        "out_of_sample_pct": {
+          "type": "number",
+          "minimum": 20,
+          "maximum": 50,
+          "description": "% des données réservées à l'out-of-sample"
+        },
+        "min_profit_factor": {
+          "type": "number",
+          "minimum": 0,
+          "default": 1.2
+        }
+      }
+    },
+    "risk_management": {
+      "type": "object",
+      "description": "Règles de gestion du risque (optionnel — écrase les defaults de l'Execution Agent)",
+      "additionalProperties": false,
+      "properties": {
+        "max_position_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1,
+          "description": "% maximum du capital sur une position"
+        },
+        "max_open_trades": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "daily_loss_limit_pct": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        }
+      }
+    },
+    "tags": {
+      "type": "array",
+      "items": { "type": "string" },
+      "description": "Tags pour classifier la stratégie. Ex: [mean_reversion, forex, oscillator]"
+    }
+  }
+}
