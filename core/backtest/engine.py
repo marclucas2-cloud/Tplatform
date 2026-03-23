@@ -301,18 +301,34 @@ class BacktestEngine:
                 exit_price = next_row["open"]
 
                 if position["direction"] == "long":
-                    if next_row["low"] <= position["stop"]:
+                    if next_row["open"] <= position["stop"]:
+                        # Gap down overnight : sortie au prix d'ouverture réel (pire que le stop)
+                        exit_price = next_row["open"]
+                        exit_reason = "stop_loss"
+                    elif next_row["low"] <= position["stop"]:
                         exit_price = position["stop"]
                         exit_reason = "stop_loss"
+                    elif next_row["open"] >= position["target"]:
+                        # Gap up overnight : plafonné au target (conservateur)
+                        exit_price = position["target"]
+                        exit_reason = "take_profit"
                     elif next_row["high"] >= position["target"]:
                         exit_price = position["target"]
                         exit_reason = "take_profit"
                     elif signal_short:  # Signal inverse = sortie
                         exit_reason = "signal"
                 else:  # short
-                    if next_row["high"] >= position["stop"]:
+                    if next_row["open"] >= position["stop"]:
+                        # Gap up overnight : sortie au prix d'ouverture réel (pire que le stop)
+                        exit_price = next_row["open"]
+                        exit_reason = "stop_loss"
+                    elif next_row["high"] >= position["stop"]:
                         exit_price = position["stop"]
                         exit_reason = "stop_loss"
+                    elif next_row["open"] <= position["target"]:
+                        # Gap down overnight : plafonné au target (conservateur)
+                        exit_price = position["target"]
+                        exit_reason = "take_profit"
                     elif next_row["low"] <= position["target"]:
                         exit_price = position["target"]
                         exit_reason = "take_profit"
@@ -350,7 +366,16 @@ class BacktestEngine:
                     trades.append(trade)
                     position = None
 
-            equity_values.append(capital)
+            # MTM : inclure le P&L latent si une position est ouverte
+            if position is not None:
+                current_price = next_row["close"]
+                if position["direction"] == "long":
+                    unrealized = (current_price - position["entry_price"]) * position["size"]
+                else:
+                    unrealized = (position["entry_price"] - current_price) * position["size"]
+                equity_values.append(capital + unrealized)
+            else:
+                equity_values.append(capital)
             equity_times.append(next_row.name)
 
         # Fermeture forcée fin de données

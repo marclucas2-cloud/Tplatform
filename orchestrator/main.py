@@ -28,7 +28,11 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import sys
+from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from agents.base_agent import AgentMessage
 from agents.research.agent import ResearchAgent

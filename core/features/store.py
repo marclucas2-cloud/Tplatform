@@ -240,6 +240,14 @@ class FeatureStore:
         Pour timeframe 1H : or_minutes=30 → première demi-heure (approximée sur 1H)
         Pour timeframe 5M : or_minutes=30 → 6 premières bougies
         """
+        # Détecter le timeframe depuis le delta médian entre barres consécutives
+        if len(df) >= 2:
+            delta_sec = (df.index[1] - df.index[0]).total_seconds()
+            bar_minutes = max(1, delta_sec / 60)
+        else:
+            bar_minutes = 60
+        n_or_bars = max(1, round(or_minutes / bar_minutes))
+
         # Grouper par jour
         dates = df.index.date
         or_high_series = pd.Series(np.nan, index=df.index)
@@ -249,9 +257,6 @@ class FeatureStore:
         for date, group in df.groupby(dates):
             if len(group) < 2:
                 continue
-            # Première bougie du jour = opening range (simplifié)
-            # En 5M : prendre les 6 premières bougies
-            n_or_bars = max(1, or_minutes // 60)  # Adapter selon timeframe
             or_bars = group.iloc[:n_or_bars]
             or_high = or_bars["high"].max()
             or_low  = or_bars["low"].min()

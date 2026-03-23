@@ -310,6 +310,83 @@ class OHLCVLoader:
         return OHLCVData(df, asset, timeframe, source="yfinance")
 
     @staticmethod
+    def from_alpaca(asset: str, timeframe: str,
+                    start: str | None = None,
+                    end: str | None = None,
+                    bars: int = 1000,
+                    api_key: str | None = None,
+                    secret_key: str | None = None,
+                    regular_hours_only: bool = False) -> "OHLCVData":
+        """
+        Charge des données OHLCV depuis Alpaca Markets.
+
+        Avantage vs yfinance : même source de données que l'exécution live.
+        Pas de divergence backtest / paper trading.
+
+        asset     : ticker US (ex: "IWM", "SPY", "AAPL")
+        timeframe : "1M", "5M", "15M", "1H", "4H", "1D", "1W"
+        start/end : dates ISO "YYYY-MM-DD" (optionnel)
+        bars      : nombre de barres si pas de start (estimation)
+        api_key / secret_key : override les variables d'environnement
+
+        Exemples :
+            OHLCVLoader.from_alpaca("IWM", "1D", start="2019-01-01")
+            OHLCVLoader.from_alpaca("SPY", "1H", bars=500)
+        """
+        import os
+        key    = api_key    or os.getenv("ALPACA_API_KEY")
+        secret = secret_key or os.getenv("ALPACA_SECRET_KEY")
+        if not key or not secret:
+            raise ValueError(
+                "ALPACA_API_KEY et ALPACA_SECRET_KEY requis "
+                "(variables d'environnement ou paramètres)"
+            )
+
+        from core.alpaca_client.client import AlpacaClient
+        client = AlpacaClient(api_key=key, secret_key=secret)
+        raw = client.get_prices(symbol=asset, timeframe=timeframe,
+                                bars=bars, start=start or "", end=end or "")
+
+        bars_list = raw.get("bars", [])
+        if not bars_list:
+            raise ValueError(
+                f"Alpaca n'a retourné aucune donnée pour {asset} {timeframe}"
+            )
+
+        import pandas as pd
+        df = pd.DataFrame([{
+            "datetime": pd.Timestamp(b["t"]),
+            "open":   b["o"],
+            "high":   b["h"],
+            "low":    b["l"],
+            "close":  b["c"],
+            "volume": b["v"],
+        } for b in bars_list])
+        df = df.set_index("datetime").sort_index()
+
+        if df.index.tz is None:
+            df.index = df.index.tz_localize("UTC")
+        else:
+            df.index = df.index.tz_convert("UTC")
+
+        df = df.dropna()
+
+        # Filtre heures régulières US (9h30–16h ET) — obligatoire pour ORB et intraday
+        if regular_hours_only and timeframe not in ("1D", "1W"):
+            import datetime as _dt
+            import zoneinfo
+            et = zoneinfo.ZoneInfo("America/New_York")
+            df_et = df.copy()
+            df_et.index = df.index.tz_convert(et)
+            t_open  = _dt.time(9, 30)
+            t_close = _dt.time(16, 0)
+            mask = (df_et.index.time >= t_open) & (df_et.index.time < t_close)
+            df = df_et[mask].copy()
+            df.index = df.index.tz_convert("UTC")
+
+        return OHLCVData(df, asset, timeframe, source="alpaca")
+
+    @staticmethod
     def generate_synthetic(asset: str = "SYNTHETIC", timeframe: str = "1H",
                             n_bars: int = 2000, seed: int = 42) -> OHLCVData:
         """

@@ -32,20 +32,23 @@ class ExecutionAgent(BaseAgent):
     Exécution des ordres avec circuit-breakers et mode paper/live.
     """
 
-    def __init__(self, bus, ig_client=None):
+    def __init__(self, bus, ig_client=None, broker_client=None):
         super().__init__("execution", bus)
         self.paper_trading = os.getenv("PAPER_TRADING", "true").lower() == "true"
         self.max_daily_drawdown = float(os.getenv("MAX_DAILY_DRAWDOWN", "0.05"))
-        self._ig = ig_client
+        # broker_client prend la priorité (Alpaca), ig_client conservé pour compatibilité
+        self._broker = broker_client or ig_client
+        self._ig = self._broker  # alias rétrocompat
         self._active_allocations: dict[str, dict] = {}  # strategy_id → allocation
         self._daily_pnl = 0.0
         self._daily_capital_start = 0.0
         self._open_positions: dict[str, dict] = {}     # deal_id → position
 
+        broker_name = type(self._broker).__name__ if self._broker else "aucun"
         if self.paper_trading:
-            self.logger.warning("MODE PAPER TRADING — aucun ordre réel ne sera passé")
+            self.logger.warning(f"MODE PAPER TRADING — broker={broker_name}, aucun ordre réel")
         else:
-            self.logger.warning("MODE LIVE — les ordres seront exécutés sur IG Markets !")
+            self.logger.warning(f"MODE LIVE — broker={broker_name}, ordres réels activés !")
 
     async def process(self, message: AgentMessage):
         if message.type == "ALLOCATION_READY":
@@ -118,17 +121,16 @@ class ExecutionAgent(BaseAgent):
                 f"size={size:.4f} @ {price:.5f} — deal_id={deal_id}"
             )
         else:
-            if not self._ig:
-                self.logger.error("Client IG non initialisé — impossible d'ouvrir position live")
+            if not self._broker:
+                self.logger.error("Broker non initialisé — impossible d'ouvrir position live")
                 return
             try:
-                response = self._ig.create_position(
-                    epic=epic,
+                response = self._broker.create_position(
+                    symbol=epic,
                     direction=direction.upper(),
-                    size=size,
-                    order_type="MARKET",
+                    qty=round(size, 4),
                 )
-                deal_id = response.get("dealId", deal_id)
+                deal_id = response.get("orderId", response.get("dealId", deal_id))
                 self.logger.info(f"[LIVE] Position ouverte : {deal_id}")
             except Exception as e:
                 self.logger.error(f"Erreur ouverture position IG : {e}")

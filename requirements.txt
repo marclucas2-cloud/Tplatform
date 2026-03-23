@@ -29,6 +29,9 @@ pytest-asyncio>=0.21.0
 # --- Données de marché réelles ---
 yfinance>=0.2.40
 
+# --- Alpaca Markets (paper trading + live US equities) ---
+alpaca-py>=0.20.0
+
 # --- Dashboard Pro (interface locale) ---
 streamlit>=1.35.0
 plotly>=5.18.0

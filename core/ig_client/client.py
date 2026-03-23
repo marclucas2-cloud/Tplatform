@@ -99,7 +99,7 @@ class IGClient:
             "password": self._password,
             "encryptedPassword": False,
         }
-        headers = self._base_headers(version="2")
+        headers = self._base_headers(version="2", auth_call=True)
 
         resp = self._http.post(url, json=payload, headers=headers)
         if resp.status_code not in (200, 201):
@@ -124,7 +124,7 @@ class IGClient:
             logger.info("Session IG expirée — renouvellement")
             self.authenticate()
 
-    def _base_headers(self, version: str = "1") -> dict:
+    def _base_headers(self, version: str = "1", auth_call: bool = False) -> dict:
         """Headers de base pour toutes les requêtes."""
         headers = {
             "X-IG-API-KEY": self._api_key,
@@ -132,10 +132,11 @@ class IGClient:
             "Accept": "application/json; charset=UTF-8",
             "Version": version,
         }
-        if self._session_token:
-            headers["X-SECURITY-TOKEN"] = self._session_token
-        if self._cst:
-            headers["CST"] = self._cst
+        if not auth_call:
+            if self._session_token:
+                headers["X-SECURITY-TOKEN"] = self._session_token
+            if self._cst:
+                headers["CST"] = self._cst
         return headers
 
     def _get(self, endpoint: str, params: dict | None = None, version: str = "1") -> dict:
