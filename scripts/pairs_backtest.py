@@ -64,10 +64,10 @@ def print_discovery_table(pairs_stats):
     if not pairs_stats:
         print("  Aucune paire trouvée avec les filtres actuels.")
         return
-    print(f"\n  {'Paire':<16} {'Corr':>6} {'β':>7} {'ADF_p':>6} {'HL(j)':>7} {'Coint':>6} {'N':>5}")
+    print(f"\n  {'Paire':<16} {'Corr':>6} {'beta':>7} {'ADF_p':>6} {'HL(j)':>7} {'Coint':>6} {'N':>5}")
     print(f"  {'-'*58}")
     for p in pairs_stats:
-        flag = "✅" if p.is_cointegrated else "  "
+        flag = " OK" if p.is_cointegrated else "   "
         print(f"  {p.symbol_a+'/'+p.symbol_b:<16} "
               f"{p.correlation:>+6.3f} {p.hedge_ratio:>7.3f} "
               f"{p.adf_pvalue:>6.3f} {p.half_life_days:>7.1f} "
@@ -86,8 +86,8 @@ def print_backtest_table(results: list[PairsBacktestResult]):
     print(f"  {'-'*95}")
 
     for r in results_sorted:
-        flag = "✅" if r.passes_validation else "  "
-        coint = "✅" if r.half_life_days < 60 else "  "
+        flag = "[V]" if r.passes_validation else "   "
+        coint = "[C]" if r.half_life_days < 60 else "   "
         print(f"  {r.pair_id:<16} "
               f"{r.sharpe_ratio:>+7.3f} "
               f"{r.max_drawdown_pct:>6.1f} "
@@ -176,10 +176,11 @@ def run_sector(
         try:
             r = engine.run(data_dict[ps.symbol_a], data_dict[ps.symbol_b], ps)
             flag = "✅" if r.sharpe_ratio > 1.0 else "  "
+            flag2 = "[OK]" if r.sharpe_ratio > 1.0 else "    "
             print(f"  {ps.symbol_a+'/'+ps.symbol_b:<16} "
                   f"Sharpe={r.sharpe_ratio:>+6.3f}  "
                   f"DD={r.max_drawdown_pct:.1f}%  "
-                  f"Trades={r.total_trades:>3}  {flag}")
+                  f"Trades={r.total_trades:>3}  {flag2}")
             results.append(r)
         except Exception as e:
             print(f"  {ps.symbol_a+'/'+ps.symbol_b:<16} ERREUR — {e}")
