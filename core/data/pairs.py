@@ -29,10 +29,37 @@ import pandas as pd
 # ─── Mapping secteurs → symboles ─────────────────────────────────────────────
 
 SECTOR_MAP: dict[str, list[str]] = {
-    "tech_us":    ["AAPL", "MSFT", "GOOGL", "AMZN", "NVDA", "TSLA", "META", "NFLX"],
-    "finance_us": ["JPM", "GS", "BAC", "BRKB"],
-    "europe":     ["ASML", "LVMH", "SAP"],
-    "crypto":     ["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "AVAX", "LINK"],
+    # S&P 500 Information Technology (GICS 45) + Communication Services tech
+    # ~45 valeurs → C(45,2) = 990 paires possibles
+    "tech_us": [
+        # ── Mega cap ──────────────────────────────────────────────────────
+        "AAPL", "MSFT", "NVDA", "META", "GOOGL", "AMZN", "TSLA",
+        # ── Semiconducteurs ───────────────────────────────────────────────
+        "AVGO", "AMD", "QCOM", "TXN", "INTC", "MU", "AMAT",
+        "LRCX", "KLAC", "MCHP", "ADI", "ON", "MPWR", "TER",
+        # ── Software / Cloud / SaaS ───────────────────────────────────────
+        "ORCL", "CRM", "NOW", "ADBE", "SNPS", "CDNS",
+        "FTNT", "PANW", "ANSS", "PTC", "PAYC",
+        # ── Internet / Plateforme ─────────────────────────────────────────
+        "NFLX", "UBER", "ABNB", "RBLX", "SPOT",
+        # ── Hardware / Réseau ─────────────────────────────────────────────
+        "CSCO", "ANET", "IBM", "HPE", "HPQ", "CDW", "WDC", "STX",
+        # ── IT Services ───────────────────────────────────────────────────
+        "ACN", "CTSH",
+    ],
+    # S&P 500 Financials (GICS 40)
+    "finance_us": [
+        "JPM", "BAC", "WFC", "GS", "MS", "C", "BLK", "SCHW",
+        "AXP", "USB", "PNC", "TFC", "COF", "BRKB", "CB", "MET",
+        "PRU", "AFL", "ALL", "ICE", "CME", "SPGI", "MCO",
+    ],
+    # Europe — indices + blue chips cotés aux US (ADR ou ETF proxies)
+    "europe": [
+        "ASML", "SAP", "LVMH", "TTE", "SHEL", "NVO", "AZN",
+        "HSBC", "UL", "BP", "RIO", "DEO", "PHG",
+    ],
+    # Crypto — top 8 par market cap (via yfinance tickers -USD)
+    "crypto": ["BTC", "ETH", "SOL", "BNB", "XRP", "ADA", "AVAX", "LINK"],
 }
 
 

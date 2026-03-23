@@ -214,7 +214,15 @@ def main():
     parser.add_argument("--export", default="", help="Exporter en CSV")
     parser.add_argument(
         "--min-adf-pvalue", type=float, default=0.05,
-        help="Seuil p-value ADF pour considérer une paire coïntégrée",
+        help="Seuil p-value ADF (1.0 = désactivé)",
+    )
+    parser.add_argument(
+        "--min-correlation", type=float, default=0.50,
+        help="Corrélation minimum des rendements (0.0 = désactivé)",
+    )
+    parser.add_argument(
+        "--max-halflife", type=float, default=120.0,
+        help="Half-life maximum en jours (9999 = désactivé)",
     )
     args = parser.parse_args()
 
@@ -226,7 +234,8 @@ def main():
     )
     discovery = PairDiscovery(
         adf_pvalue_threshold=args.min_adf_pvalue,
-        min_correlation=0.50,
+        min_correlation=args.min_correlation,
+        max_halflife_days=args.max_halflife,
     )
 
     t0 = time.time()
