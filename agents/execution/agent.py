@@ -129,6 +129,7 @@ class ExecutionAgent(BaseAgent):
                     symbol=epic,
                     direction=direction.upper(),
                     qty=round(size, 4),
+                    _authorized_by="execution_agent",
                 )
                 deal_id = response.get("orderId", response.get("dealId", deal_id))
                 self.logger.info(f"[LIVE] Position ouverte : {deal_id}")

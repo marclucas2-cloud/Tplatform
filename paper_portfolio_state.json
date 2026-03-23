@@ -1,0 +1,55 @@
+{
+  "capital": 100000.0,
+  "positions": {
+    "vrp_rotation": {
+      "symbols": [
+        "SPY"
+      ]
+    }
+  },
+  "allocations": {
+    "momentum_25etf": {
+      "pct": 0.3424,
+      "capital": 34241.25,
+      "max_position": 34241.25
+    },
+    "pairs_mu_amat": {
+      "pct": 0.3658,
+      "capital": 36575.88,
+      "max_position": 36575.88
+    },
+    "vrp_rotation": {
+      "pct": 0.2918,
+      "capital": 29182.88,
+      "max_position": 29182.88
+    }
+  },
+  "last_monthly": "2026-03-23T22:54:37.972603+00:00",
+  "daily_capital_start": 100000.0,
+  "daily_pnl": 0.0,
+  "benchmark_start_price": 655.3800048828125,
+  "benchmark_start_date": "2026-03-23T22:54:23.485215+00:00",
+  "history": [
+    {
+      "date": "2026-03-23",
+      "signals": {
+        "momentum_25etf": "sell_all",
+        "pairs_mu_amat": "hold",
+        "vrp_rotation": "rebalance"
+      },
+      "orders": 0,
+      "capital": 100000.0
+    },
+    {
+      "date": "2026-03-23",
+      "signals": {
+        "momentum_25etf": "sell_all",
+        "pairs_mu_amat": "hold",
+        "vrp_rotation": "rebalance"
+      },
+      "orders": 1,
+      "capital": 100000.0
+    }
+  ],
+  "last_run_date": "2026-03-23"
+}

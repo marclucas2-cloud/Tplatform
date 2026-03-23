@@ -332,15 +332,28 @@ class AlpacaClient:
 
     def create_position(self, symbol: str, direction: str,
                         qty: float | None = None,
-                        notional: float | None = None) -> dict:
+                        notional: float | None = None,
+                        _authorized_by: str | None = None) -> dict:
         """
         Ouvre une position market order.
+
+        IMPORTANT : tout ordre DOIT passer par le pipeline d'allocation.
+        Le parametre _authorized_by doit contenir l'identifiant du composant
+        appelant (ex: "paper_portfolio", "execution_agent"). Tout appel
+        direct sans _authorized_by est refuse.
 
         symbol    : ticker US
         direction : "BUY" ou "SELL" (short)
         qty       : nombre d'actions (ou notional en $)
         notional  : montant en $ (alternatif à qty)
+        _authorized_by : identifiant du pipeline appelant (obligatoire)
         """
+        if _authorized_by is None:
+            raise AlpacaAPIError(
+                f"Ordre REFUSE pour {symbol}: create_position() appele sans "
+                f"_authorized_by. Tout ordre doit passer par le pipeline "
+                f"d'allocation (paper_portfolio.py ou ExecutionAgent)."
+            )
         try:
             from alpaca.trading.requests import MarketOrderRequest
             from alpaca.trading.enums import OrderSide, TimeInForce
@@ -380,8 +393,12 @@ class AlpacaClient:
             "paper":     self._paper,
         }
 
-    def close_position(self, symbol: str) -> dict:
+    def close_position(self, symbol: str, _authorized_by: str | None = None) -> dict:
         """Ferme toute la position ouverte sur un symbole."""
+        if _authorized_by is None:
+            raise AlpacaAPIError(
+                f"Ordre REFUSE: close_position({symbol}) sans _authorized_by."
+            )
         client = self._get_trading_client()
         response = client.close_position(symbol)
         logger.info(f"Alpaca : position {symbol} fermée")
@@ -391,8 +408,12 @@ class AlpacaClient:
             "status":  response.status.value,
         }
 
-    def close_all_positions(self) -> list[dict]:
+    def close_all_positions(self, _authorized_by: str | None = None) -> list[dict]:
         """Ferme toutes les positions ouvertes (emergency stop)."""
+        if _authorized_by is None:
+            raise AlpacaAPIError(
+                "Ordre REFUSE: close_all_positions() sans _authorized_by."
+            )
         client = self._get_trading_client()
         responses = client.close_all_positions(cancel_orders=True)
         logger.warning(f"Alpaca : toutes les positions fermées ({len(responses)} ordres)")
