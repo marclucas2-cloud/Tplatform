@@ -29,5 +29,9 @@ pytest-asyncio>=0.21.0
 # --- Données de marché réelles ---
 yfinance>=0.2.40
 
+# --- Dashboard Pro (interface locale) ---
+streamlit>=1.35.0
+plotly>=5.18.0
+
 # --- Optionnel (backtest avancé) ---
 # vectorbt>=0.26.0   # Décommenter pour backtests haute performance
