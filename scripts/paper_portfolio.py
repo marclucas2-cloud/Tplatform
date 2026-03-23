@@ -280,11 +280,30 @@ def signal_vrp(allocated_capital: float, state: dict, force_monthly: bool) -> di
 # EXECUTION (avec circuit-breaker)
 # =============================================================================
 
+def is_us_market_open() -> bool:
+    """Verifie si le marche US est ouvert (9:30-16:00 ET, lun-ven)."""
+    import zoneinfo
+    et = zoneinfo.ZoneInfo("America/New_York")
+    now_et = datetime.now(et)
+    # Weekend
+    if now_et.weekday() >= 5:
+        return False
+    # Horaires reguliers
+    market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
+    market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+    return market_open <= now_et <= market_close
+
+
 def execute_orders(signals: dict, allocations: dict, state: dict,
                    dry_run: bool) -> list[dict]:
     """Execute les ordres via Alpaca avec respect des allocations."""
     if dry_run:
         logger.info("[DRY-RUN] Aucun ordre execute")
+        return []
+
+    if not is_us_market_open():
+        logger.warning("MARCHE US FERME — aucun ordre execute. "
+                       "Reessayer pendant les heures de marche (15:30-22:00 Paris)")
         return []
 
     from core.alpaca_client.client import AlpacaClient

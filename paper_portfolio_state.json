@@ -24,7 +24,7 @@
       "max_position": 29182.88
     }
   },
-  "last_monthly": "2026-03-23T22:54:37.972603+00:00",
+  "last_monthly": "2026-03-23T22:58:25.911983+00:00",
   "daily_capital_start": 100000.0,
   "daily_pnl": 0.0,
   "benchmark_start_price": 655.3800048828125,
@@ -48,6 +48,16 @@
         "vrp_rotation": "rebalance"
       },
       "orders": 1,
+      "capital": 100000.0
+    },
+    {
+      "date": "2026-03-23",
+      "signals": {
+        "momentum_25etf": "sell_all",
+        "pairs_mu_amat": "hold",
+        "vrp_rotation": "rebalance"
+      },
+      "orders": 0,
       "capital": 100000.0
     }
   ],
