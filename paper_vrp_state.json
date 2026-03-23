@@ -1,0 +1,13 @@
+{
+  "holding": "SPY",
+  "last_rebalance": "2026-03-23T22:46:16.649594+00:00",
+  "history": [
+    {
+      "date": "2026-03-23",
+      "holding": "SPY",
+      "vol_20d": 13.7,
+      "vol_trend": "rising",
+      "dry_run": false
+    }
+  ]
+}

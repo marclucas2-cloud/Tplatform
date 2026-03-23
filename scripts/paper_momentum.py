@@ -52,9 +52,16 @@ STATE_FILE = Path(__file__).parent.parent / "paper_momentum_state.json"
 # ─── Configuration ────────────────────────────────────────────────────────────
 
 ETF_UNIVERSE = [
-    "SPY", "QQQ", "IWM", "EFA", "EEM",
-    "TLT", "IEF", "GLD",
-    "XLE", "XLF", "XLK", "XLV", "VNQ",
+    # US Equity
+    "SPY", "QQQ", "IWM", "DIA",
+    # International
+    "EFA", "EEM", "VEA", "VWO",
+    # Obligations
+    "TLT", "IEF", "SHY", "LQD", "HYG", "TIP",
+    # Commodites
+    "GLD", "SLV", "USO", "DBC",
+    # Secteurs
+    "XLE", "XLF", "XLK", "XLV", "XLI", "XLP", "XLU",
 ]
 
 BENCHMARK = "SPY"
