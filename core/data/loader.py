@@ -178,6 +178,26 @@ class OHLCVLoader:
         "NASDAQ":              "^IXIC",
         "CAC40":               "^FCHI",
         "DOW":                 "^DJI",
+        "NIKKEI":              "^N225",
+        "RUSSELL":             "^RUT",
+        "EUROSTOXX":           "^STOXX50E",
+        "VIX":                 "^VIX",
+        # Crypto (symbole court → ticker Yahoo Finance)
+        "BTC":                 "BTC-USD",
+        "ETH":                 "ETH-USD",
+        "SOL":                 "SOL-USD",
+        "BNB":                 "BNB-USD",
+        "XRP":                 "XRP-USD",
+        "ADA":                 "ADA-USD",
+        "AVAX":                "AVAX-USD",
+        "LINK":                "LINK-USD",
+        # Matieres premieres
+        "GOLD":                "GC=F",
+        "SILVER":              "SI=F",
+        "OIL":                 "CL=F",
+        "GAS":                 "NG=F",
+        # Actions europeennes (ticker alternatif)
+        "LVMH":                "MC.PA",
         # Epics IG Markets → ticker YF
         "IX.D.DAX.DAILY.IP":   "^GDAXI",
         "IX.D.DAX.IFD.IP":     "^GDAXI",

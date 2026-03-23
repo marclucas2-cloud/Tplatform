@@ -1,0 +1,43 @@
+{
+  "strategy_id": "rsi_mean_reversion_ftse_opt_v1",
+  "version": "1.0.0",
+  "created_at": "2026-03-22T16:54:00Z",
+  "description": "[OPTIMISE] Mean reversion RSI sur FTSE 1H. Params optimises par grid search IS/OOS (ratio OOS/IS=0.83, robuste). IS Sharpe=2.41, OOS Sharpe=2.00.",
+  "asset": "FTSE",
+  "timeframe": "1H",
+  "parameters": {
+    "rsi_period": 10.0,
+    "oversold": 35.0,
+    "overbought": 75.0,
+    "stop_loss_pct": 0.5,
+    "take_profit_pct": 1.0,
+    "max_position_pct": 0.02
+  },
+  "entry_rules": {
+    "long": "rsi_prev < oversold AND rsi_prev2 >= oversold",
+    "short": "rsi_prev > overbought AND rsi_prev2 <= overbought"
+  },
+  "exit_rules": {
+    "long": "rsi_prev > 50 OR stop_loss hit OR take_profit hit",
+    "short": "rsi_prev < 50 OR stop_loss hit OR take_profit hit"
+  },
+  "cost_model": {
+    "spread_pips": 1.5,
+    "slippage_pips": 0.5,
+    "commission_per_lot": 0.0
+  },
+  "validation_requirements": {
+    "min_trades": 50,
+    "min_sharpe": 0.5,
+    "max_drawdown_pct": 20,
+    "walk_forward_windows": 4,
+    "out_of_sample_pct": 30,
+    "min_profit_factor": 1.1
+  },
+  "risk_management": {
+    "max_position_pct": 0.02,
+    "max_open_trades": 1,
+    "daily_loss_limit_pct": 0.03
+  },
+  "tags": ["mean_reversion", "indices", "oscillator", "rsi", "intraday"]
+}

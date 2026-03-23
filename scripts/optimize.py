@@ -152,13 +152,13 @@ def save_optimized_json(base_strategy: dict, best_params: dict,
         n = int(parts[1]) + 1
         new_id = f"{parts[0]}_opt_v{n}"
     else:
-        # Retirer le _vN final et ajouter _opt_v1
+        # Retirer le _vN final et ajouter _{asset}_opt_v1
         base_no_ver = base_id.rsplit("_v", 1)[0]
-        new_id = f"{base_no_ver}_opt_v1"
+        new_id = f"{base_no_ver}_{asset.lower()}_opt_v1"
 
     s["strategy_id"] = new_id
     s["asset"] = asset
-    s["created_at"] = datetime.datetime.utcnow().strftime("%Y-%m-%dT%H:%M:%SZ")
+    s["created_at"] = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     s["description"] = (
         f"[OPTIMISE] {base_strategy.get('description', base_id)} "
         f"— params optimises par grid search IS/OOS sur {asset}"
@@ -225,7 +225,7 @@ def run_optimization(strategy_path: Path, asset_symbol: str,
 
     # Sauvegarder si demande
     if args.save and best:
-        out_name = f"{sid.rsplit('_v', 1)[0]}_opt_v1.json"
+        out_name = f"{sid.rsplit('_v', 1)[0]}_{asset_symbol.lower()}_opt_v1.json"
         out_path = STRATEGIES_DIR / out_name
         save_optimized_json(strategy, best.params, asset_symbol, out_path)
 
