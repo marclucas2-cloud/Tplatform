@@ -1,0 +1,15 @@
+{
+  "positions": {},
+  "cash": 0.0,
+  "total_equity": 0.0,
+  "last_rebalance": "2026-03-23T22:29:59.965101+00:00",
+  "history": [
+    {
+      "date": "2026-03-23",
+      "holdings": "CASH",
+      "action": "dry-run",
+      "crash_filter": "True",
+      "ranking_top5": {}
+    }
+  ]
+}
