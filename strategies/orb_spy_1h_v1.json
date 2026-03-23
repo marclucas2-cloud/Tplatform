@@ -1,0 +1,50 @@
+{
+  "strategy_id": "orb_spy_1h_v1",
+  "version": "1.0.0",
+  "created_at": "2026-03-23T00:00:00Z",
+  "description": "Opening Range Breakout sur SPY 1H. Trade la cassure du range de la premiere heure (9h30-10h30 EST). Volume confirme > 1.5x moyenne. Excellent en ouverture US quand la volatilite est comprimee dans le range initial.",
+  "asset": "SPY",
+  "timeframe": "1H",
+  "parameters": {
+    "volume_multiplier": 1.5,
+    "volume_lookback": 20,
+    "stop_loss_pct": 0.5,
+    "take_profit_pct": 1.0,
+    "trailing_stop_pct": 0.3,
+    "max_position_pct": 0.01
+  },
+  "entry_rules": {
+    "long": "Close > Opening Range High AND volume > 1.5x average",
+    "short": "Close < Opening Range Low AND volume > 1.5x average"
+  },
+  "exit_rules": {
+    "long": "stop_loss(-0.5%) OR take_profit(+1.0%) OR trailing_stop(0.3%)",
+    "short": "stop_loss(+0.5%) OR take_profit(-1.0%) OR trailing_stop(0.3%)"
+  },
+  "cost_model": {
+    "spread_pct": 0.01,
+    "slippage_pct": 0.02,
+    "commission_per_lot": 0.0
+  },
+  "risk_management": {
+    "max_position_pct": 0.01,
+    "max_open_trades": 1,
+    "daily_loss_limit_pct": 0.02
+  },
+  "validation_requirements": {
+    "min_trades": 30,
+    "min_sharpe": 0.5,
+    "max_drawdown_pct": 20.0,
+    "walk_forward_windows": 4,
+    "out_of_sample_pct": 30,
+    "min_profit_factor": 1.2
+  },
+  "tags": [
+    "orb",
+    "breakout",
+    "intraday",
+    "spy",
+    "sp500",
+    "hourly"
+  ]
+}

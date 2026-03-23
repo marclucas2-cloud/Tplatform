@@ -22,8 +22,8 @@
     "short": "rsi_prev < 50 OR stop_loss hit OR take_profit hit"
   },
   "cost_model": {
-    "spread_pips": 0.8,
-    "slippage_pips": 0.3,
+    "spread_pct": 0.007,
+    "slippage_pct": 0.003,
     "commission_per_lot": 0.0
   },
   "validation_requirements": {

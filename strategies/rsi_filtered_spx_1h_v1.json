@@ -17,16 +17,16 @@
     "max_position_pct": 0.04
   },
   "entry_rules": {
-    "long":  "ADX(14) < 20 AND RSI(8) crosses above 32 (was below)",
+    "long": "ADX(14) < 20 AND RSI(8) crosses above 32 (was below)",
     "short": "ADX(14) < 20 AND RSI(8) crosses below 68 (was above)"
   },
   "exit_rules": {
-    "long":  "stop_loss(-0.6%) OR take_profit(+1.4%) OR trailing_stop(0.4% from peak)",
+    "long": "stop_loss(-0.6%) OR take_profit(+1.4%) OR trailing_stop(0.4% from peak)",
     "short": "stop_loss(+0.6%) OR take_profit(-1.4%) OR trailing_stop(0.4% from trough)"
   },
   "cost_model": {
-    "spread_pips": 0.5,
-    "slippage_pips": 0.3,
+    "spread_pct": 0.01,
+    "slippage_pct": 0.02,
     "commission_per_lot": 0.0
   },
   "risk_management": {
@@ -42,5 +42,13 @@
     "out_of_sample_pct": 30,
     "min_profit_factor": 1.3
   },
-  "tags": ["mean_reversion", "rsi", "adx", "filtered", "spx", "1h", "equity_index"]
+  "tags": [
+    "mean_reversion",
+    "rsi",
+    "adx",
+    "filtered",
+    "spx",
+    "1h",
+    "equity_index"
+  ]
 }

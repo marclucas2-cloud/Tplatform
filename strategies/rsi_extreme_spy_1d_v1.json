@@ -1,0 +1,53 @@
+{
+  "strategy_id": "rsi_extreme_spy_1d_v1",
+  "version": "1.0.0",
+  "created_at": "2026-03-23T00:00:00Z",
+  "description": "RSI(2) Extreme Reversal sur SPY daily. RSI ultra-court (2 periodes) detecte les overshoots court terme. Seuils extremes (5/95) pour ne capter que les vrais extremes. Filtre SMA(200) pour trader dans le sens de la tendance long terme. Win rate attendu ~60%.",
+  "asset": "SPY",
+  "timeframe": "1D",
+  "parameters": {
+    "rsi_period": 2,
+    "oversold": 5,
+    "overbought": 95,
+    "sma_period": 200,
+    "stop_loss_pct": 1.5,
+    "take_profit_pct": 2.0,
+    "trailing_stop_pct": 0.5,
+    "max_position_pct": 0.01
+  },
+  "entry_rules": {
+    "long": "RSI(2) was < 5 and recovering AND close > SMA(200) (uptrend)",
+    "short": "RSI(2) was > 95 and declining AND close < SMA(200) (downtrend)"
+  },
+  "exit_rules": {
+    "long": "stop_loss(-1.5%) OR take_profit(+2.0%) OR trailing_stop(0.5%)",
+    "short": "stop_loss(+1.5%) OR take_profit(-2.0%) OR trailing_stop(0.5%)"
+  },
+  "cost_model": {
+    "spread_pct": 0.01,
+    "slippage_pct": 0.02,
+    "commission_per_lot": 0.0
+  },
+  "risk_management": {
+    "max_position_pct": 0.01,
+    "max_open_trades": 1,
+    "daily_loss_limit_pct": 0.02
+  },
+  "validation_requirements": {
+    "min_trades": 20,
+    "min_sharpe": 0.3,
+    "max_drawdown_pct": 20.0,
+    "walk_forward_windows": 4,
+    "out_of_sample_pct": 30,
+    "min_profit_factor": 1.1
+  },
+  "tags": [
+    "rsi",
+    "extreme",
+    "mean_reversion",
+    "trend_filtered",
+    "spy",
+    "sp500",
+    "daily"
+  ]
+}

@@ -1,0 +1,53 @@
+{
+  "strategy_id": "rel_strength_spy_1d_v1",
+  "version": "1.0.0",
+  "created_at": "2026-03-23T00:00:00Z",
+  "description": "Relative Strength Momentum sur SPY daily. Detecte les accelerations de momentum via ROC(5) court terme + confirmation tendance ROC(20). Les actifs en acceleration continuent dans 60-65% des cas (momentum factor). Volume eleve confirme l'engagement institutionnel.",
+  "asset": "SPY",
+  "timeframe": "1D",
+  "parameters": {
+    "roc_fast_period": 5,
+    "roc_slow_period": 20,
+    "roc_threshold_pct": 2.0,
+    "volume_multiplier": 1.5,
+    "volume_lookback": 20,
+    "stop_loss_pct": 1.5,
+    "take_profit_pct": 3.0,
+    "trailing_stop_pct": 0.6,
+    "max_position_pct": 0.01
+  },
+  "entry_rules": {
+    "long": "ROC(5) > 2% AND ROC(20) > 0 AND volume > 1.5x avg (accelerating uptrend)",
+    "short": "ROC(5) < -2% AND ROC(20) < 0 AND volume > 1.5x avg (accelerating downtrend)"
+  },
+  "exit_rules": {
+    "long": "stop_loss(-1.5%) OR take_profit(+3.0%) OR trailing_stop(0.6%)",
+    "short": "stop_loss(+1.5%) OR take_profit(-3.0%) OR trailing_stop(0.6%)"
+  },
+  "cost_model": {
+    "spread_pct": 0.01,
+    "slippage_pct": 0.02,
+    "commission_per_lot": 0.0
+  },
+  "risk_management": {
+    "max_position_pct": 0.01,
+    "max_open_trades": 1,
+    "daily_loss_limit_pct": 0.02
+  },
+  "validation_requirements": {
+    "min_trades": 20,
+    "min_sharpe": 0.3,
+    "max_drawdown_pct": 25.0,
+    "walk_forward_windows": 4,
+    "out_of_sample_pct": 30,
+    "min_profit_factor": 1.1
+  },
+  "tags": [
+    "momentum",
+    "relative_strength",
+    "acceleration",
+    "spy",
+    "sp500",
+    "daily"
+  ]
+}

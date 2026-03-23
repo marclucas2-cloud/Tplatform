@@ -14,16 +14,16 @@
     "max_position_pct": 0.02
   },
   "entry_rules": {
-    "long":  "close < vwap - entry_std * atr",
+    "long": "close < vwap - entry_std * atr",
     "short": "close > vwap + entry_std * atr"
   },
   "exit_rules": {
-    "long":  "close > vwap - exit_std * atr OR stop_loss OR take_profit",
+    "long": "close > vwap - exit_std * atr OR stop_loss OR take_profit",
     "short": "close < vwap + exit_std * atr OR stop_loss OR take_profit"
   },
   "cost_model": {
-    "spread_pips": 0.8,
-    "slippage_pips": 0.5,
+    "spread_pct": 0.007,
+    "slippage_pct": 0.003,
     "commission_per_lot": 0.0
   },
   "validation_requirements": {
@@ -39,5 +39,11 @@
     "max_open_trades": 1,
     "daily_loss_limit_pct": 0.02
   },
-  "tags": ["mean_reversion", "vwap", "intraday", "forex", "5min"]
+  "tags": [
+    "mean_reversion",
+    "vwap",
+    "intraday",
+    "forex",
+    "5min"
+  ]
 }

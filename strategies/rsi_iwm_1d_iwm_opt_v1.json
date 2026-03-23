@@ -23,8 +23,8 @@
     "short": "stop_loss(+1.0%) OR take_profit(-3.5%) OR trailing_stop(0.6% from trough) OR signal_long"
   },
   "cost_model": {
-    "spread_pips": 0.5,
-    "slippage_pips": 0.3,
+    "spread_pct": 0.01,
+    "slippage_pct": 0.02,
     "commission_per_lot": 0.0
   },
   "risk_management": {

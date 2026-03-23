@@ -113,7 +113,7 @@ class PaperTradingLoop:
 
     def __init__(self, initial_capital: float = 10_000.0, pip_value: float = 0.0001):
         self.initial_capital = initial_capital
-        self.pip_value = pip_value
+        self.pip_value = pip_value  # DEPRECATED — conserve pour backward-compat
         self._feature_store = FeatureStore()
 
     def run(self, data: OHLCVData, strategies: list[dict],
@@ -160,9 +160,15 @@ class PaperTradingLoop:
                 cost_model = strat["cost_model"]
                 enriched = strategy_features[sid]
 
-                spread = cost_model["spread_pips"] * self.pip_value
-                slippage = cost_model["slippage_pips"] * self.pip_value
-                cost_per_side = spread / 2 + slippage
+                # Couts en % du prix (nouveau format) ou pips (ancien format)
+                if "spread_pct" in cost_model:
+                    def _cps(price):
+                        return price * cost_model["spread_pct"] / 200 + price * cost_model["slippage_pct"] / 100
+                else:
+                    _spread_abs = cost_model["spread_pips"] * self.pip_value
+                    _slip_abs = cost_model["slippage_pips"] * self.pip_value
+                    def _cps(price):
+                        return _spread_abs / 2 + _slip_abs
 
                 stop_pct = params.get("stop_loss_pct", 0.5) / 100
                 target_pct = params.get("take_profit_pct", 1.0) / 100
@@ -179,7 +185,7 @@ class PaperTradingLoop:
                     if signal_long or signal_short:
                         direction = "long" if signal_long else "short"
                         entry_p = next_bar["open"]
-                        entry_p += cost_per_side if direction == "long" else -cost_per_side
+                        entry_p += _cps(entry_p) if direction == "long" else -_cps(entry_p)
                         size = (capital * position_pct) / entry_p if entry_p else 0
 
                         if size > 0:
@@ -214,12 +220,12 @@ class PaperTradingLoop:
                             exit_reason = "signal_reverse"
 
                     if exit_reason:
-                        exit_price -= cost_per_side if pos.direction == "long" else -cost_per_side
+                        exit_price -= _cps(exit_price) if pos.direction == "long" else -_cps(exit_price)
                         if pos.direction == "long":
                             gross = (exit_price - pos.entry_price) * pos.size
                         else:
                             gross = (pos.entry_price - exit_price) * pos.size
-                        costs = cost_per_side * 2 * pos.size
+                        costs = _cps(exit_price) * 2 * pos.size
                         net_pnl = gross - costs
                         capital += net_pnl
 

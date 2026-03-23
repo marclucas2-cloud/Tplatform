@@ -65,19 +65,19 @@
     },
     "cost_model": {
       "type": "object",
-      "description": "Modèle de coûts réels — obligatoire, intégré dans chaque backtest",
-      "required": ["spread_pips", "slippage_pips"],
+      "description": "Modele de couts reels en % du prix — obligatoire, integre dans chaque backtest. Ex: spread_pct=0.01 signifie 0.01% du prix.",
+      "required": ["spread_pct", "slippage_pct"],
       "additionalProperties": false,
       "properties": {
-        "spread_pips": {
+        "spread_pct": {
           "type": "number",
           "minimum": 0,
-          "description": "Spread moyen en pips"
+          "description": "Spread moyen en % du prix. Ex: 0.01 = 0.01% = $0.05 sur un actif a $500"
         },
-        "slippage_pips": {
+        "slippage_pct": {
           "type": "number",
           "minimum": 0,
-          "description": "Slippage estimé en pips par ordre"
+          "description": "Slippage estime en % du prix par cote. Ex: 0.02 = 0.02% = $0.10 sur un actif a $500"
         },
         "commission_per_lot": {
           "type": "number",

@@ -16,16 +16,16 @@
     "max_position_pct": 0.02
   },
   "entry_rules": {
-    "long":  "adx < adx_threshold AND rsi crosses above oversold",
+    "long": "adx < adx_threshold AND rsi crosses above oversold",
     "short": "adx < adx_threshold AND rsi crosses below overbought"
   },
   "exit_rules": {
-    "long":  "rsi > 50 OR stop_loss OR take_profit",
+    "long": "rsi > 50 OR stop_loss OR take_profit",
     "short": "rsi < 50 OR stop_loss OR take_profit"
   },
   "cost_model": {
-    "spread_pips": 0.8,
-    "slippage_pips": 0.3,
+    "spread_pct": 0.007,
+    "slippage_pct": 0.003,
     "commission_per_lot": 0.0
   },
   "validation_requirements": {
@@ -41,5 +41,11 @@
     "max_open_trades": 1,
     "daily_loss_limit_pct": 0.02
   },
-  "tags": ["mean_reversion", "forex", "rsi", "adx_filter", "intraday"]
+  "tags": [
+    "mean_reversion",
+    "forex",
+    "rsi",
+    "adx_filter",
+    "intraday"
+  ]
 }

@@ -22,8 +22,8 @@
     "short": "rsi_prev < 50 OR stop_loss hit OR take_profit hit"
   },
   "cost_model": {
-    "spread_pips": 1.5,
-    "slippage_pips": 0.5,
+    "spread_pct": 0.01,
+    "slippage_pct": 0.02,
     "commission_per_lot": 0.0
   },
   "validation_requirements": {
@@ -39,5 +39,11 @@
     "max_open_trades": 1,
     "daily_loss_limit_pct": 0.03
   },
-  "tags": ["mean_reversion", "indices", "oscillator", "rsi", "intraday"]
+  "tags": [
+    "mean_reversion",
+    "indices",
+    "oscillator",
+    "rsi",
+    "intraday"
+  ]
 }

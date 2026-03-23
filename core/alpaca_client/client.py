@@ -150,46 +150,84 @@ class AlpacaClient:
             for p in positions
         ]
 
+    def _get_crypto_client(self):
+        if not hasattr(self, "_crypto") or self._crypto is None:
+            try:
+                from alpaca.data.historical import CryptoHistoricalDataClient
+            except ImportError:
+                raise AlpacaAuthError("alpaca-py non installé — pip install alpaca-py")
+            self._crypto = CryptoHistoricalDataClient(
+                api_key=self._api_key,
+                secret_key=self._secret_key,
+            )
+        return self._crypto
+
+    # ─── Listing dynamique ────────────────────────────────────────────────────
+
+    def list_tradable_assets(self, asset_class: str = "us_equity") -> list[dict]:
+        """
+        Liste tous les actifs tradables sur Alpaca.
+
+        asset_class : "us_equity" ou "crypto"
+        Retourne une liste de dicts {symbol, name, exchange, tradable, fractionable}.
+        """
+        client = self._get_trading_client()
+
+        try:
+            from alpaca.trading.requests import GetAssetsRequest
+            from alpaca.trading.enums import AssetClass, AssetStatus
+        except ImportError:
+            raise AlpacaAPIError("alpaca-py non installé — pip install alpaca-py")
+
+        ac = AssetClass.CRYPTO if asset_class == "crypto" else AssetClass.US_EQUITY
+        request = GetAssetsRequest(asset_class=ac, status=AssetStatus.ACTIVE)
+        assets = client.get_all_assets(request)
+
+        result = []
+        for a in assets:
+            if a.tradable:
+                result.append({
+                    "symbol":       a.symbol,
+                    "name":         a.name,
+                    "exchange":     a.exchange.value if a.exchange else "",
+                    "tradable":     a.tradable,
+                    "fractionable": a.fractionable,
+                })
+
+        logger.info(f"Alpaca : {len(result)} actifs tradables ({asset_class})")
+        return result
+
     # ─── Prix historiques ────────────────────────────────────────────────────
 
-    def get_prices(self, symbol: str, timeframe: str = "1D",
-                   bars: int = 500, start: str = "", end: str = "") -> dict:
-        """
-        Récupère les prix historiques OHLCV.
-
-        symbol    : ticker US (ex: "IWM", "AAPL", "SPY")
-        timeframe : "1M", "5M", "15M", "1H", "4H", "1D", "1W"
-        bars      : nombre de barres (max 10 000)
-        start/end : dates ISO optionnelles "YYYY-MM-DD"
-
-        Retourne un dict {"bars": [...]} pour compatibilité avec OHLCVLoader.
-        """
+    def _build_timeframe(self, timeframe: str):
+        """Convertit un timeframe interne en TimeFrame Alpaca."""
         try:
-            from alpaca.data.requests import StockBarsRequest
             from alpaca.data.timeframe import TimeFrame, TimeFrameUnit
-            import datetime
         except ImportError:
             raise AlpacaAPIError("alpaca-py non installé — pip install alpaca-py")
 
         tf_unit, tf_val = _TF_MAP.get(timeframe, ("Day", 1))
         if tf_unit == "Day":
-            alpaca_tf = TimeFrame.Day
+            return TimeFrame.Day, tf_unit, tf_val
         elif tf_unit == "Hour":
-            alpaca_tf = TimeFrame.Hour
+            return TimeFrame.Hour, tf_unit, tf_val
         elif tf_unit == "Week":
-            alpaca_tf = TimeFrame.Week
+            return TimeFrame.Week, tf_unit, tf_val
         else:
-            alpaca_tf = TimeFrame(tf_val, TimeFrameUnit.Minute)
+            return TimeFrame(tf_val, TimeFrameUnit.Minute), tf_unit, tf_val
 
-        kwargs: dict[str, Any] = {"symbol_or_symbols": symbol, "timeframe": alpaca_tf}
+    def _build_date_kwargs(self, start: str, end: str,
+                           bars: int, tf_unit: str, tf_val: int) -> dict:
+        """Construit les kwargs start/end pour les requetes historiques."""
+        import datetime
+        kwargs: dict[str, Any] = {}
 
         if start:
             kwargs["start"] = datetime.datetime.fromisoformat(start).replace(
                 tzinfo=datetime.timezone.utc)
         else:
-            # Pas de date start → calculer depuis bars estimées
             if tf_unit == "Day":
-                days_back = bars * 1.5  # marge pour weekends/fériés
+                days_back = bars * 1.5
             elif tf_unit == "Hour":
                 days_back = (bars / 6.5) * 1.5
             else:
@@ -203,10 +241,11 @@ class AlpacaClient:
             kwargs["end"] = datetime.datetime.fromisoformat(end).replace(
                 tzinfo=datetime.timezone.utc)
 
-        data_client = self._get_data_client()
-        request = StockBarsRequest(**kwargs)
-        bars_data = data_client.get_stock_bars(request)
+        return kwargs
 
+    @staticmethod
+    def _bars_to_list(bars_data, symbol: str) -> list[dict]:
+        """Convertit les barres Alpaca en liste de dicts OHLCV."""
         result = []
         for bar in bars_data[symbol]:
             result.append({
@@ -217,8 +256,76 @@ class AlpacaClient:
                 "c": float(bar.close),
                 "v": float(bar.volume),
             })
+        return result
+
+    def get_prices(self, symbol: str, timeframe: str = "1D",
+                   bars: int = 500, start: str = "", end: str = "") -> dict:
+        """
+        Récupère les prix historiques OHLCV (actions US + ETFs).
+
+        symbol    : ticker US (ex: "IWM", "AAPL", "SPY")
+        timeframe : "1M", "5M", "15M", "1H", "4H", "1D", "1W"
+        bars      : nombre de barres (max 10 000)
+        start/end : dates ISO optionnelles "YYYY-MM-DD"
+
+        Retourne un dict {"bars": [...]} pour compatibilité avec OHLCVLoader.
+        Pour les crypto, utiliser get_crypto_prices().
+        """
+        try:
+            from alpaca.data.requests import StockBarsRequest
+        except ImportError:
+            raise AlpacaAPIError("alpaca-py non installé — pip install alpaca-py")
+
+        alpaca_tf, tf_unit, tf_val = self._build_timeframe(timeframe)
+        date_kwargs = self._build_date_kwargs(start, end, bars, tf_unit, tf_val)
+
+        request = StockBarsRequest(
+            symbol_or_symbols=symbol,
+            timeframe=alpaca_tf,
+            **date_kwargs,
+        )
+
+        data_client = self._get_data_client()
+        bars_data = data_client.get_stock_bars(request)
+        result = self._bars_to_list(bars_data, symbol)
 
         logger.info(f"Alpaca : {len(result)} barres {timeframe} pour {symbol}")
+        return {"bars": result, "symbol": symbol, "timeframe": timeframe}
+
+    def get_crypto_prices(self, symbol: str, timeframe: str = "1D",
+                          bars: int = 500, start: str = "", end: str = "") -> dict:
+        """
+        Récupère les prix historiques OHLCV crypto.
+
+        symbol    : paire crypto (ex: "BTC/USD", "ETH/USD")
+                    Accepte aussi "BTC", "ETH" (auto-ajoute /USD)
+        timeframe : "1M", "5M", "15M", "1H", "4H", "1D", "1W"
+        bars      : nombre de barres (max 10 000)
+        start/end : dates ISO optionnelles "YYYY-MM-DD"
+        """
+        try:
+            from alpaca.data.requests import CryptoBarsRequest
+        except ImportError:
+            raise AlpacaAPIError("alpaca-py non installé — pip install alpaca-py")
+
+        # Auto-format : BTC -> BTC/USD
+        if "/" not in symbol:
+            symbol = f"{symbol}/USD"
+
+        alpaca_tf, tf_unit, tf_val = self._build_timeframe(timeframe)
+        date_kwargs = self._build_date_kwargs(start, end, bars, tf_unit, tf_val)
+
+        request = CryptoBarsRequest(
+            symbol_or_symbols=symbol,
+            timeframe=alpaca_tf,
+            **date_kwargs,
+        )
+
+        crypto_client = self._get_crypto_client()
+        bars_data = crypto_client.get_crypto_bars(request)
+        result = self._bars_to_list(bars_data, symbol)
+
+        logger.info(f"Alpaca crypto : {len(result)} barres {timeframe} pour {symbol}")
         return {"bars": result, "symbol": symbol, "timeframe": timeframe}
 
     # ─── Ordres ──────────────────────────────────────────────────────────────

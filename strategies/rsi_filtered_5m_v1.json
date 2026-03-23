@@ -25,8 +25,8 @@
     "short": "stop_loss=0.4% OU take_profit=0.8% OU signal long"
   },
   "cost_model": {
-    "spread_pips": 0.8,
-    "slippage_pips": 0.5,
+    "spread_pct": 0.007,
+    "slippage_pct": 0.003,
     "commission_per_lot": 0
   },
   "validation_requirements": {
@@ -42,5 +42,13 @@
     "max_open_trades": 1,
     "daily_loss_limit_pct": 0.03
   },
-  "tags": ["mean_reversion", "rsi", "adx_filter", "forex", "5m", "intraday", "range"]
+  "tags": [
+    "mean_reversion",
+    "rsi",
+    "adx_filter",
+    "forex",
+    "5m",
+    "intraday",
+    "range"
+  ]
 }

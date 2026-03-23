@@ -10,6 +10,7 @@ Sources supportées :
   - CSV local (Dukascopy, Histdata, etc.)
   - API IG Markets (via ig_client)
   - Yahoo Finance (yfinance) — données réelles gratuites
+  - Alpaca Markets (stocks US, ETFs, crypto)
 
 Limites yfinance sur l'historique intraday :
   1M   → 7 jours max
@@ -323,7 +324,9 @@ class OHLCVLoader:
         Avantage vs yfinance : même source de données que l'exécution live.
         Pas de divergence backtest / paper trading.
 
-        asset     : ticker US (ex: "IWM", "SPY", "AAPL")
+        asset     : ticker US ou crypto
+                    Stocks/ETFs : "IWM", "SPY", "AAPL"
+                    Crypto      : "BTC/USD", "ETH/USD" ou "BTC", "ETH"
         timeframe : "1M", "5M", "15M", "1H", "4H", "1D", "1W"
         start/end : dates ISO "YYYY-MM-DD" (optionnel)
         bars      : nombre de barres si pas de start (estimation)
@@ -332,6 +335,8 @@ class OHLCVLoader:
         Exemples :
             OHLCVLoader.from_alpaca("IWM", "1D", start="2019-01-01")
             OHLCVLoader.from_alpaca("SPY", "1H", bars=500)
+            OHLCVLoader.from_alpaca("BTC/USD", "1D", bars=1000)
+            OHLCVLoader.from_alpaca("ETH", "1H", bars=500)
         """
         import os
         key    = api_key    or os.getenv("ALPACA_API_KEY")
@@ -343,9 +348,15 @@ class OHLCVLoader:
             )
 
         from core.alpaca_client.client import AlpacaClient
+        from core.data.universe import is_crypto_symbol
         client = AlpacaClient(api_key=key, secret_key=secret)
-        raw = client.get_prices(symbol=asset, timeframe=timeframe,
-                                bars=bars, start=start or "", end=end or "")
+
+        if is_crypto_symbol(asset):
+            raw = client.get_crypto_prices(symbol=asset, timeframe=timeframe,
+                                           bars=bars, start=start or "", end=end or "")
+        else:
+            raw = client.get_prices(symbol=asset, timeframe=timeframe,
+                                    bars=bars, start=start or "", end=end or "")
 
         bars_list = raw.get("bars", [])
         if not bars_list:

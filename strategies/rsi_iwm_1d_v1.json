@@ -15,16 +15,16 @@
     "max_position_pct": 0.05
   },
   "entry_rules": {
-    "long":  "RSI(10) crosses above 30 — Russell 2000 oversold bounce",
+    "long": "RSI(10) crosses above 30 — Russell 2000 oversold bounce",
     "short": "RSI(10) crosses below 65 — Russell 2000 overbought reversal"
   },
   "exit_rules": {
-    "long":  "stop_loss(-1.0%) OR take_profit(+3.5%) OR trailing_stop(0.6% from peak) OR signal_short",
+    "long": "stop_loss(-1.0%) OR take_profit(+3.5%) OR trailing_stop(0.6% from peak) OR signal_short",
     "short": "stop_loss(+1.0%) OR take_profit(-3.5%) OR trailing_stop(0.6% from trough) OR signal_long"
   },
   "cost_model": {
-    "spread_pips": 0.5,
-    "slippage_pips": 0.3,
+    "spread_pct": 0.01,
+    "slippage_pct": 0.02,
     "commission_per_lot": 0.0
   },
   "risk_management": {
@@ -40,5 +40,13 @@
     "out_of_sample_pct": 30,
     "min_profit_factor": 1.3
   },
-  "tags": ["mean_reversion", "rsi", "iwm", "russell2000", "small_cap", "etf", "daily"]
+  "tags": [
+    "mean_reversion",
+    "rsi",
+    "iwm",
+    "russell2000",
+    "small_cap",
+    "etf",
+    "daily"
+  ]
 }

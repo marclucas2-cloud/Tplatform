@@ -1,0 +1,53 @@
+{
+  "strategy_id": "vwap_spy_1h_v1",
+  "version": "1.0.0",
+  "created_at": "2026-03-23T00:00:00Z",
+  "description": "VWAP Mean Reversion sur SPY 1H. Les market makers utilisent le VWAP comme prix d'equilibre. Les deviations > 1.5 ATR generent un flow de retour vers la moyenne. Sortie quand l'ecart revient a 0.3 ATR.",
+  "asset": "SPY",
+  "timeframe": "1H",
+  "parameters": {
+    "atr_period": 14,
+    "entry_std": 1.5,
+    "exit_std": 0.3,
+    "use_sigma_bands": 0,
+    "sigma_period": 20,
+    "stop_loss_pct": 0.5,
+    "take_profit_pct": 1.0,
+    "trailing_stop_pct": 0.3,
+    "max_position_pct": 0.01
+  },
+  "entry_rules": {
+    "long": "Close < VWAP - 1.5*ATR (oversold vs VWAP) -> mean reversion up",
+    "short": "Close > VWAP + 1.5*ATR (overbought vs VWAP) -> mean reversion down"
+  },
+  "exit_rules": {
+    "long": "deviation > -0.3*ATR (near VWAP) OR stop OR trailing",
+    "short": "deviation < 0.3*ATR (near VWAP) OR stop OR trailing"
+  },
+  "cost_model": {
+    "spread_pct": 0.01,
+    "slippage_pct": 0.02,
+    "commission_per_lot": 0.0
+  },
+  "risk_management": {
+    "max_position_pct": 0.01,
+    "max_open_trades": 1,
+    "daily_loss_limit_pct": 0.02
+  },
+  "validation_requirements": {
+    "min_trades": 30,
+    "min_sharpe": 0.5,
+    "max_drawdown_pct": 20.0,
+    "walk_forward_windows": 4,
+    "out_of_sample_pct": 30,
+    "min_profit_factor": 1.2
+  },
+  "tags": [
+    "vwap",
+    "mean_reversion",
+    "intraday",
+    "spy",
+    "sp500",
+    "hourly"
+  ]
+}

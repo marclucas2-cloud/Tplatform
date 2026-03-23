@@ -13,16 +13,16 @@
     "max_position_pct": 0.015
   },
   "entry_rules": {
-    "long":  "or_established AND close > or_high AND volume > volume_multiplier * avg_volume",
+    "long": "or_established AND close > or_high AND volume > volume_multiplier * avg_volume",
     "short": "or_established AND close < or_low  AND volume > volume_multiplier * avg_volume"
   },
   "exit_rules": {
-    "long":  "stop_loss OR take_profit OR end_of_session",
+    "long": "stop_loss OR take_profit OR end_of_session",
     "short": "stop_loss OR take_profit OR end_of_session"
   },
   "cost_model": {
-    "spread_pips": 1.0,
-    "slippage_pips": 0.5,
+    "spread_pct": 0.01,
+    "slippage_pct": 0.02,
     "commission_per_lot": 0.0
   },
   "validation_requirements": {
@@ -38,5 +38,11 @@
     "max_open_trades": 1,
     "daily_loss_limit_pct": 0.025
   },
-  "tags": ["breakout", "opening_range", "indices", "intraday", "volume_filter"]
+  "tags": [
+    "breakout",
+    "opening_range",
+    "indices",
+    "intraday",
+    "volume_filter"
+  ]
 }

@@ -167,7 +167,7 @@ class BacktestEngine:
 
     def __init__(self, initial_capital: float = 10_000.0, pip_value: float = 0.0001):
         self.initial_capital = initial_capital
-        self.pip_value = pip_value  # Valeur d'un pip (0.0001 pour EUR/USD)
+        self.pip_value = pip_value  # DEPRECATED — conserve pour backward-compat
 
     def run(self, data: OHLCVData, strategy: dict) -> BacktestResult:
         """
@@ -224,9 +224,21 @@ class BacktestEngine:
         NO LOOKAHEAD : signal[t] → ordre exécuté à open[t+1]
         Coûts : spread + slippage appliqués à l'entrée ET à la sortie.
         """
-        spread = cost_model["spread_pips"] * self.pip_value
-        slippage = cost_model["slippage_pips"] * self.pip_value
-        total_cost_per_side = spread / 2 + slippage  # Coût par côté (entrée ou sortie)
+        # Coûts de transaction — nouveau format spread_pct/slippage_pct (% du prix)
+        # Backward-compat : si spread_pips présent, conversion via pip_value
+        use_pct = "spread_pct" in cost_model
+        if use_pct:
+            _spread_pct = cost_model["spread_pct"] / 100
+            _slippage_pct = cost_model["slippage_pct"] / 100
+        else:
+            _spread_abs = cost_model["spread_pips"] * self.pip_value
+            _slippage_abs = cost_model["slippage_pips"] * self.pip_value
+
+        def _cost_per_side(price: float) -> float:
+            """Cout de transaction par cote (entree ou sortie)."""
+            if use_pct:
+                return price * _spread_pct / 2 + price * _slippage_pct
+            return _spread_abs / 2 + _slippage_abs
 
         stop_loss_pct = params.get("stop_loss_pct", 0.5) / 100
         take_profit_pct = params.get("take_profit_pct", 1.0) / 100
@@ -251,7 +263,7 @@ class BacktestEngine:
             if position is None:
                 # Entrée en position
                 if signal_long:
-                    entry_price = next_row["open"] + total_cost_per_side
+                    entry_price = next_row["open"] + _cost_per_side(next_row["open"])
                     size = (capital * position_size) / entry_price
                     position = {
                         "direction": "long",
@@ -264,7 +276,7 @@ class BacktestEngine:
                         "high_watermark": entry_price,  # trailing stop
                     }
                 elif signal_short:
-                    entry_price = next_row["open"] - total_cost_per_side
+                    entry_price = next_row["open"] - _cost_per_side(next_row["open"])
                     size = (capital * position_size) / entry_price
                     position = {
                         "direction": "short",
@@ -337,16 +349,16 @@ class BacktestEngine:
 
                 if exit_reason:
                     exit_price_with_cost = (
-                        exit_price - total_cost_per_side
+                        exit_price - _cost_per_side(exit_price)
                         if position["direction"] == "long"
-                        else exit_price + total_cost_per_side
+                        else exit_price + _cost_per_side(exit_price)
                     )
                     if position["direction"] == "long":
                         gross_pnl = (exit_price - position["entry_price"]) * position["size"]
                     else:
                         gross_pnl = (position["entry_price"] - exit_price) * position["size"]
 
-                    costs = total_cost_per_side * 2 * position["size"]  # entrée + sortie
+                    costs = _cost_per_side(exit_price) * 2 * position["size"]  # entrée + sortie
                     net_pnl = gross_pnl - costs
                     capital += net_pnl
 
@@ -386,7 +398,7 @@ class BacktestEngine:
                 gross_pnl = (exit_price - position["entry_price"]) * position["size"]
             else:
                 gross_pnl = (position["entry_price"] - exit_price) * position["size"]
-            costs = total_cost_per_side * 2 * position["size"]
+            costs = _cost_per_side(exit_price) * 2 * position["size"]
             net_pnl = gross_pnl - costs
             capital += net_pnl
             trade = Trade(
@@ -871,6 +883,188 @@ def momentum_burst_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
     df["ema_slow"]     = ema_s
     df["signal_long"]  = cross_bull & high_vol
     df["signal_short"] = cross_bear & high_vol
+
+    return df
+
+
+@register_strategy("gap_go_")
+def gap_go_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """
+    Gap and Go — continuation momentum apres un gap significatif.
+
+    Logique (daily) :
+      - Detecte un gap > threshold% a l'ouverture
+      - Confirmation : la bougie du gap cloture dans la direction du gap (continuation)
+      - Volume superieur a la moyenne
+      - Signal : continuation probable le(s) jour(s) suivant(s)
+
+    NO LOOKAHEAD : signal utilise shift(1) sur toutes les colonnes.
+    """
+    gap_threshold = params.get("gap_threshold_pct", 2.0) / 100
+    vol_mult = params.get("volume_multiplier", 1.5)
+    vol_lookback = int(params.get("volume_lookback", 20))
+    max_gap = params.get("max_gap_pct", 8.0) / 100  # gaps trop gros = impredictibles
+
+    # Gap : open[t] vs close[t-1]
+    prev_close = df["close"].shift(1)
+    gap_pct = (df["open"] - prev_close) / prev_close
+
+    # Continuation : close dans la direction du gap
+    continuation_bull = df["close"] > df["open"]  # bougie verte apres gap up
+    continuation_bear = df["close"] < df["open"]  # bougie rouge apres gap down
+
+    # Volume
+    vol_avg = df["volume"].rolling(vol_lookback).mean()
+    high_vol = df["volume"] > vol_mult * vol_avg
+
+    # Shift de 1 bar : signal base sur la bougie precedente (fermee)
+    gap_up   = (gap_pct.shift(1) > gap_threshold) & (gap_pct.shift(1) < max_gap)
+    gap_down = (gap_pct.shift(1) < -gap_threshold) & (gap_pct.shift(1) > -max_gap)
+    cont_bull_prev = continuation_bull.shift(1)
+    cont_bear_prev = continuation_bear.shift(1)
+    hv_prev = high_vol.shift(1)
+
+    df = df.copy()
+    df["gap_pct"] = gap_pct
+    df["signal_long"]  = gap_up & cont_bull_prev & hv_prev
+    df["signal_short"] = gap_down & cont_bear_prev & hv_prev
+
+    return df
+
+
+@register_strategy("gap_fill_")
+def gap_fill_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """
+    Gap Fill Mean Reversion — fader les gaps sans catalyst.
+
+    Logique :
+      - Detecte un gap > min_gap% et < max_gap%
+      - Volume FAIBLE (pas de catalyst institutionnel) → gap "technique"
+      - Parie sur le retour vers le close de la veille (gap fill)
+      - Signal inverse du gap : short apres gap up, long apres gap down
+
+    NO LOOKAHEAD : shift(1) systematique.
+    """
+    min_gap = params.get("min_gap_pct", 1.0) / 100
+    max_gap = params.get("max_gap_pct", 3.0) / 100
+    vol_max_mult = params.get("volume_max_multiplier", 1.5)  # volume SOUS ce seuil
+    vol_lookback = int(params.get("volume_lookback", 20))
+
+    prev_close = df["close"].shift(1)
+    gap_pct = (df["open"] - prev_close) / prev_close
+
+    # Volume faible = pas de catalyst → gap technique susceptible de se remplir
+    vol_avg = df["volume"].rolling(vol_lookback).mean()
+    low_vol = df["volume"] < vol_max_mult * vol_avg
+
+    # Shift pour no-lookahead
+    gap_up   = (gap_pct.shift(1) > min_gap) & (gap_pct.shift(1) < max_gap)
+    gap_down = (gap_pct.shift(1) < -min_gap) & (gap_pct.shift(1) > -max_gap)
+    lv_prev = low_vol.shift(1)
+
+    # Si le gap n'a PAS ete rempli dans la journee, la reversion est plus probable le lendemain
+    # Gap up non rempli : close > open de la veille (reste dans le gap)
+    not_filled_up   = (df["close"].shift(1) > prev_close.shift(1))
+    not_filled_down = (df["close"].shift(1) < prev_close.shift(1))
+
+    df = df.copy()
+    df["gap_pct"] = gap_pct
+    # Signal INVERSE : short les gap up, long les gap down
+    df["signal_short"] = gap_up & lv_prev
+    df["signal_long"]  = gap_down & lv_prev
+
+    return df
+
+
+@register_strategy("rsi_extreme_")
+def rsi_extreme_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """
+    RSI(2) Extreme Reversal — entree sur extremes RSI avec filtre tendance.
+
+    Logique :
+      - RSI(2) ultra-court : detecte les overshoots intraday/intraweek
+      - Seuils extremes (< 5 / > 95) pour ne capter que les vrais extremes
+      - Filtre SMA(200) : uniquement long en tendance haussiere,
+        short en tendance baissiere
+
+    Edge : les extremes RSI(2) revertent dans 60-65% des cas sur large caps.
+    NO LOOKAHEAD : shift(1) sur RSI et SMA.
+    """
+    rsi_period = int(params.get("rsi_period", 2))
+    oversold = params.get("oversold", 5)
+    overbought = params.get("overbought", 95)
+    sma_period = int(params.get("sma_period", 200))
+
+    rsi = compute_rsi(df["close"], rsi_period)
+    sma = compute_sma(df["close"], sma_period)
+
+    # Shift pour no-lookahead
+    rsi_prev = rsi.shift(1)
+    sma_prev = sma.shift(1)
+    close_prev = df["close"].shift(1)
+
+    # Filtre tendance : long uniquement en uptrend, short en downtrend
+    uptrend = close_prev > sma_prev
+    downtrend = close_prev < sma_prev
+
+    # RSI extreme + reversal : RSI etait extreme, maintenant revient
+    rsi_prev2 = rsi.shift(2)
+    recovering_from_oversold = (rsi_prev2 < oversold) & (rsi_prev > rsi_prev2)
+    recovering_from_overbought = (rsi_prev2 > overbought) & (rsi_prev < rsi_prev2)
+
+    df = df.copy()
+    df["rsi"] = rsi
+    df["sma_200"] = sma
+    df["signal_long"]  = recovering_from_oversold & uptrend
+    df["signal_short"] = recovering_from_overbought & downtrend
+
+    return df
+
+
+@register_strategy("rel_strength_")
+def rel_strength_strategy(df: pd.DataFrame, params: dict) -> pd.DataFrame:
+    """
+    Relative Strength Momentum — surfer les actifs en acceleration.
+
+    Logique :
+      - ROC court terme (5 bars) detecte l'acceleration recente
+      - ROC moyen terme (20 bars) confirme la tendance
+      - Signal LONG  : ROC_5 > seuil ET ROC_20 > 0 (momentum accelere en uptrend)
+      - Signal SHORT : ROC_5 < -seuil ET ROC_20 < 0 (momentum accelere en downtrend)
+      - Volume : confirmation par volume superieur a la moyenne
+
+    Edge : les actifs en acceleration continuent dans 60-65% des cas (momentum factor).
+    NO LOOKAHEAD : shift(1) systematique.
+    """
+    roc_fast = int(params.get("roc_fast_period", 5))
+    roc_slow = int(params.get("roc_slow_period", 20))
+    roc_threshold = params.get("roc_threshold_pct", 2.0) / 100
+    vol_mult = params.get("volume_multiplier", 1.5)
+    vol_lookback = int(params.get("volume_lookback", 20))
+
+    # Rate of Change
+    close = df["close"]
+    roc_f = (close / close.shift(roc_fast) - 1)
+    roc_s = (close / close.shift(roc_slow) - 1)
+
+    # Volume
+    vol_avg = df["volume"].rolling(vol_lookback).mean()
+    high_vol = df["volume"] > vol_mult * vol_avg
+
+    # Shift pour no-lookahead
+    roc_f_prev = roc_f.shift(1)
+    roc_s_prev = roc_s.shift(1)
+    hv_prev = high_vol.shift(1)
+
+    # Acceleration : ROC court terme fort + tendance moyen terme confirmee
+    accel_bull = (roc_f_prev > roc_threshold) & (roc_s_prev > 0)
+    accel_bear = (roc_f_prev < -roc_threshold) & (roc_s_prev < 0)
+
+    df = df.copy()
+    df["roc_fast"] = roc_f
+    df["roc_slow"] = roc_s
+    df["signal_long"]  = accel_bull & hv_prev
+    df["signal_short"] = accel_bear & hv_prev
 
     return df
 

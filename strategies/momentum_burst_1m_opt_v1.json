@@ -24,8 +24,8 @@
     "short": "trailing_stop=0.15% OU take_profit=0.75% OU stop_loss=0.25%"
   },
   "cost_model": {
-    "spread_pips": 0.8,
-    "slippage_pips": 0.5,
+    "spread_pct": 0.007,
+    "slippage_pct": 0.003,
     "commission_per_lot": 0
   },
   "validation_requirements": {

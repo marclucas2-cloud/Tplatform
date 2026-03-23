@@ -15,16 +15,16 @@
     "max_position_pct": 0.04
   },
   "entry_rules": {
-    "long":  "RSI(10) crosses above 33 (was below) — oversold bounce",
+    "long": "RSI(10) crosses above 33 (was below) — oversold bounce",
     "short": "RSI(10) crosses below 67 (was above) — overbought reversal"
   },
   "exit_rules": {
-    "long":  "stop_loss(-0.9%) OR take_profit(+2.0%) OR trailing_stop(0.6% from peak)",
+    "long": "stop_loss(-0.9%) OR take_profit(+2.0%) OR trailing_stop(0.6% from peak)",
     "short": "stop_loss(+0.9%) OR take_profit(-2.0%) OR trailing_stop(0.6% from trough)"
   },
   "cost_model": {
-    "spread_pips": 1.0,
-    "slippage_pips": 0.5,
+    "spread_pct": 0.01,
+    "slippage_pct": 0.02,
     "commission_per_lot": 0.0
   },
   "risk_management": {
@@ -40,5 +40,13 @@
     "out_of_sample_pct": 30,
     "min_profit_factor": 1.2
   },
-  "tags": ["mean_reversion", "rsi", "qqq", "nasdaq", "etf", "1h", "equity"]
+  "tags": [
+    "mean_reversion",
+    "rsi",
+    "qqq",
+    "nasdaq",
+    "etf",
+    "1h",
+    "equity"
+  ]
 }

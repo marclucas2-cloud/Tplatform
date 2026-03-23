@@ -95,7 +95,12 @@ def scan_asset(asset: Asset, strategy: dict, engine: BacktestEngine,
     # Adapter le cost model au spread de l'actif
     import copy
     s = copy.deepcopy(strategy)
-    s["cost_model"]["spread_pips"] = asset.spread_pips
+    # Convertir le spread de l'actif en % si cost_model utilise le nouveau format
+    if "spread_pct" in s["cost_model"]:
+        # spread_pips * pip_value donne un montant absolu; on garde le default du JSON
+        pass
+    else:
+        s["cost_model"]["spread_pips"] = asset.spread_pips
 
     try:
         result = engine.run(data, s)

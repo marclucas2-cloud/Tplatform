@@ -22,8 +22,8 @@
     "short": "trailing_stop=0.25% OU take_profit=1.2% OU stop_loss=0.5%"
   },
   "cost_model": {
-    "spread_pips": 1.0,
-    "slippage_pips": 0.5,
+    "spread_pct": 0.01,
+    "slippage_pct": 0.02,
     "commission_per_lot": 0
   },
   "validation_requirements": {
@@ -39,5 +39,12 @@
     "max_open_trades": 1,
     "daily_loss_limit_pct": 0.03
   },
-  "tags": ["breakout", "orb", "indices", "5m", "intraday", "volume_filter"]
+  "tags": [
+    "breakout",
+    "orb",
+    "indices",
+    "5m",
+    "intraday",
+    "volume_filter"
+  ]
 }
