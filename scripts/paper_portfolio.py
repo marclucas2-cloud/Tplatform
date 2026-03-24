@@ -471,6 +471,58 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
 
 
 # =============================================================================
+# FERMETURE FORCEE — 15:55 ET
+# =============================================================================
+
+def _close_all_intraday_positions(state: dict, dry_run: bool = False):
+    """Ferme toutes les positions intraday. Appele a 15:55 ET."""
+    intraday_pos = state.get("intraday_positions", {})
+
+    if not intraday_pos:
+        # Fallback : fermer TOUTES les positions Alpaca (intraday = flat overnight)
+        try:
+            from core.alpaca_client.client import AlpacaClient
+            client = AlpacaClient.from_env()
+            positions = client.get_positions()
+            if not positions:
+                print("    Aucune position a fermer")
+                return
+
+            for p in positions:
+                sym = p["symbol"]
+                if dry_run:
+                    print(f"    [DRY-RUN] Fermerait {sym} ({p['qty']} shares, P&L ${p['unrealized_pl']:+.2f})")
+                else:
+                    try:
+                        client.close_position(sym, _authorized_by="paper_portfolio_eod_close")
+                        print(f"    FERME {sym} ({p['qty']} shares, P&L ${p['unrealized_pl']:+.2f})")
+                    except Exception as e:
+                        logger.error(f"    Erreur fermeture {sym}: {e}")
+        except Exception as e:
+            logger.error(f"    Erreur Alpaca: {e}")
+        return
+
+    # Fermer les positions trackees
+    from core.alpaca_client.client import AlpacaClient
+    client = AlpacaClient.from_env()
+
+    closed = []
+    for ticker, pos in intraday_pos.items():
+        if dry_run:
+            print(f"    [DRY-RUN] Fermerait {ticker} ({pos.get('direction', '?')})")
+        else:
+            try:
+                client.close_position(ticker, _authorized_by="paper_portfolio_eod_close")
+                print(f"    FERME {ticker} ({pos.get('direction', '?')})")
+                closed.append(ticker)
+            except Exception as e:
+                logger.error(f"    Erreur fermeture {ticker}: {e}")
+
+    for ticker in closed:
+        intraday_pos.pop(ticker, None)
+
+
+# =============================================================================
 # EXECUTION (avec circuit-breaker)
 # =============================================================================
 
@@ -835,6 +887,20 @@ def run_intraday(dry_run: bool = False):
     print(f"  Capital  : ${total_capital:,.2f}")
     print(f"  Mode     : {'DRY-RUN' if dry_run else 'PAPER TRADING'}")
 
+    # ── Check fermeture forcee a 15:55 ET ──
+    import zoneinfo
+    et = zoneinfo.ZoneInfo("America/New_York")
+    now_et = datetime.now(et)
+    is_close_time = now_et.hour == 15 and now_et.minute >= 55
+    is_after_close = now_et.hour >= 16
+
+    if (is_close_time or is_after_close) and not dry_run:
+        print(f"\n  FERMETURE FORCEE ({now_et.strftime('%H:%M')} ET)")
+        _close_all_intraday_positions(state, dry_run=False)
+        save_state(state)
+        print(f"\n{'='*70}\n")
+        return
+
     # Filtrer seulement les strategies intraday
     intraday_strats = {k: v for k, v in STRATEGIES.items() if v["frequency"] == "intraday"}
 
@@ -860,27 +926,6 @@ def run_intraday(dry_run: bool = False):
                   f"@ ${sig.get('entry_price', 0):.2f}")
         else:
             print(f"    {name:<25} -- {sig.get('reason', 'hold')}")
-
-    # Fermer les positions intraday qui ont atteint leur stop/target
-    # (simplifie : on ferme toutes les positions intraday de > 4h)
-    intraday_pos = state.get("intraday_positions", {})
-    stale_positions = []
-    for ticker, pos in intraday_pos.items():
-        opened_at = datetime.fromisoformat(pos["opened_at"])
-        age_hours = (now - opened_at).total_seconds() / 3600
-        if age_hours > 4:
-            stale_positions.append(ticker)
-
-    if stale_positions and not dry_run and is_us_market_open():
-        from core.alpaca_client.client import AlpacaClient
-        client = AlpacaClient.from_env()
-        for ticker in stale_positions:
-            try:
-                client.close_position(ticker, _authorized_by="paper_portfolio_intraday")
-                logger.info(f"  [INTRADAY] Ferme {ticker} (> 4h)")
-                intraday_pos.pop(ticker, None)
-            except Exception as e:
-                logger.warning(f"  [INTRADAY] Erreur fermeture {ticker}: {e}")
 
     # Executer
     print(f"\n  EXECUTION:")
