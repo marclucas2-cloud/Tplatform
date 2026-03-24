@@ -49,6 +49,7 @@ MAX_ALLOCATION_PER_STRATEGY = 0.40  # 40% max par strategie
 BENCHMARK = "SPY"
 
 STRATEGIES = {
+    # === Daily / Monthly (existantes) ===
     "momentum_25etf": {
         "name": "Momentum 25 ETFs",
         "sharpe": 0.88,           # backtest valide
@@ -66,6 +67,37 @@ STRATEGIES = {
         "sharpe": 0.75,
         "frequency": "monthly",
         "multi_asset": False,
+    },
+    # === Intraday (walk-forward validees 2026-03-24) ===
+    "orb_5min": {
+        "name": "ORB 5-Min Breakout",
+        "sharpe": 3.47,            # backtest 186 tickers, 121j
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
+    "opex_gamma": {
+        "name": "OpEx Gamma Pin",
+        "sharpe": 7.08,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
+    "earnings_drift": {
+        "name": "Earnings Drift",
+        "sharpe": 13.50,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
+    "dow_seasonal": {
+        "name": "Day-of-Week Seasonal",
+        "sharpe": 1.85,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
+    "ml_cluster": {
+        "name": "ML Volume Cluster",
+        "sharpe": 1.13,
+        "frequency": "intraday",
+        "multi_asset": True,
     },
 }
 
@@ -277,6 +309,133 @@ def signal_vrp(allocated_capital: float, state: dict, force_monthly: bool) -> di
 
 
 # =============================================================================
+# INTRADAY SIGNAL GENERATORS
+# =============================================================================
+
+def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> dict:
+    """
+    Genere les signaux intraday en fetchant les barres 5M du jour depuis Alpaca
+    et en executant la strategie correspondante.
+    """
+    import zoneinfo
+    from datetime import date as dt_date
+
+    et = zoneinfo.ZoneInfo("America/New_York")
+    now_et = datetime.now(et)
+    today = now_et.date()
+
+    # Ne trader que pendant les heures de marche
+    if now_et.hour < 9 or (now_et.hour == 9 and now_et.minute < 35):
+        return {"action": "hold", "reason": "avant 9:35 ET"}
+    if now_et.hour >= 16:
+        return {"action": "hold", "reason": "apres 16:00 ET"}
+
+    # Importer les strategies
+    backtester_path = str(Path(__file__).parent.parent / "intraday-backtesterV2")
+    if backtester_path not in sys.path:
+        sys.path.insert(0, backtester_path)
+
+    from strategies import (
+        ORB5MinStrategy,
+        OpExGammaPinStrategy,
+        EarningsDriftStrategy,
+        DayOfWeekSeasonalStrategy,
+        VolumeProfileClusterStrategy,
+    )
+
+    STRAT_MAP = {
+        "orb_5min": ORB5MinStrategy,
+        "opex_gamma": OpExGammaPinStrategy,
+        "earnings_drift": EarningsDriftStrategy,
+        "dow_seasonal": DayOfWeekSeasonalStrategy,
+        "ml_cluster": VolumeProfileClusterStrategy,
+    }
+
+    strat_class = STRAT_MAP.get(strategy_id)
+    if not strat_class:
+        return {"action": "hold", "reason": f"strategie inconnue: {strategy_id}"}
+
+    strategy = strat_class()
+    required_tickers = strategy.get_required_tickers()
+
+    # Fetch les barres 5M du jour depuis Alpaca
+    try:
+        from alpaca.data.historical import StockHistoricalDataClient
+        from alpaca.data.requests import StockBarsRequest
+        from alpaca.data.timeframe import TimeFrame
+        import os
+
+        client = StockHistoricalDataClient(
+            api_key=os.getenv("ALPACA_API_KEY"),
+            secret_key=os.getenv("ALPACA_SECRET_KEY"),
+        )
+
+        start_dt = datetime.combine(today, datetime.min.time()).replace(tzinfo=et)
+        end_dt = now_et
+
+        request = StockBarsRequest(
+            symbol_or_symbols=required_tickers[:50],  # Alpaca max 50/batch
+            timeframe=TimeFrame(5, TimeFrame.Minute.unit),
+            start=start_dt,
+            end=end_dt,
+        )
+        bars = client.get_stock_bars(request)
+
+        # Construire les DataFrames
+        data = {}
+        if bars:
+            for ticker in required_tickers:
+                if ticker in bars.data and bars.data[ticker]:
+                    rows = []
+                    for bar in bars.data[ticker]:
+                        rows.append({
+                            "timestamp": bar.timestamp,
+                            "open": float(bar.open),
+                            "high": float(bar.high),
+                            "low": float(bar.low),
+                            "close": float(bar.close),
+                            "volume": int(bar.volume),
+                            "vwap": float(bar.vwap) if bar.vwap else None,
+                        })
+                    if rows:
+                        df = pd.DataFrame(rows)
+                        df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True)
+                        df = df.set_index("timestamp").sort_index()
+                        df.index = df.index.tz_convert("US/Eastern")
+                        data[ticker] = df
+
+        if not data:
+            return {"action": "hold", "reason": "pas de donnees intraday"}
+
+    except Exception as e:
+        logger.error(f"Erreur fetch intraday: {e}")
+        return {"action": "hold", "reason": f"erreur fetch: {e}"}
+
+    # Generer les signaux
+    try:
+        signals = strategy.generate_signals(data, today)
+    except Exception as e:
+        logger.error(f"Erreur generate_signals {strategy_id}: {e}")
+        return {"action": "hold", "reason": f"erreur signal: {e}"}
+
+    if not signals:
+        return {"action": "hold", "reason": "aucun signal"}
+
+    # Prendre le premier signal (le plus fort)
+    sig = signals[0]
+    return {
+        "action": "intraday_trade",
+        "ticker": sig.ticker,
+        "direction": sig.action,  # "LONG" ou "SHORT"
+        "entry_price": sig.entry_price,
+        "stop_loss": sig.stop_loss,
+        "take_profit": sig.take_profit,
+        "capital": allocated_capital,
+        "metadata": sig.metadata,
+    }
+
+
+# =============================================================================
 # EXECUTION (avec circuit-breaker)
 # =============================================================================
 
@@ -407,6 +566,49 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
                         pass
             orders.append({"sid": sid, "action": "close_pair"})
             state.get("positions", {}).pop(sid, None)
+
+        elif signal["action"] == "intraday_trade":
+            # Intraday : buy/sell avec stop et target
+            ticker = signal["ticker"]
+            direction = signal["direction"]
+            capital = min(signal.get("capital", 5000), max_capital)
+
+            # Ne pas ouvrir si on a deja une position intraday sur ce ticker
+            intraday_pos = state.get("intraday_positions", {})
+            if ticker in intraday_pos:
+                continue
+
+            # Position sizing : max 5% du capital alloue
+            entry_price = signal.get("entry_price", 0)
+            if entry_price <= 0:
+                continue
+            notional = min(capital * 0.05, capital)
+
+            side = "BUY" if direction == "LONG" else "SELL"
+            try:
+                result = client.create_position(
+                    ticker, side, notional=round(notional, 2),
+                    _authorized_by="paper_portfolio_intraday"
+                )
+                orders.append({
+                    "sid": sid, "action": "intraday_open", "symbol": ticker,
+                    "direction": direction, "notional": notional,
+                    "stop_loss": signal.get("stop_loss"),
+                    "take_profit": signal.get("take_profit"),
+                })
+                logger.info(f"  [{sid}] INTRADAY {direction} {ticker} ${notional:,.0f}")
+
+                # Track la position
+                state.setdefault("intraday_positions", {})[ticker] = {
+                    "strategy": sid,
+                    "direction": direction,
+                    "entry_price": entry_price,
+                    "stop_loss": signal.get("stop_loss"),
+                    "take_profit": signal.get("take_profit"),
+                    "opened_at": datetime.now(timezone.utc).isoformat(),
+                }
+            except Exception as e:
+                logger.error(f"  [{sid}] Erreur intraday {ticker}: {e}")
 
     return orders
 
@@ -584,16 +786,92 @@ def show_status():
     print(f"{'='*70}\n")
 
 
+def run_intraday(dry_run: bool = False):
+    """Execute les strategies intraday pendant les heures de marche."""
+    now = datetime.now(timezone.utc)
+    state = load_state()
+    total_capital = state.get("capital", INITIAL_CAPITAL)
+
+    print(f"\n{'='*70}")
+    print(f"  PAPER PORTFOLIO — INTRADAY EXECUTION")
+    print(f"{'='*70}")
+    print(f"  Date     : {now.strftime('%Y-%m-%d %H:%M UTC')}")
+    print(f"  Capital  : ${total_capital:,.2f}")
+    print(f"  Mode     : {'DRY-RUN' if dry_run else 'PAPER TRADING'}")
+
+    # Filtrer seulement les strategies intraday
+    intraday_strats = {k: v for k, v in STRATEGIES.items() if v["frequency"] == "intraday"}
+
+    # Allocations sur l'ensemble du portefeuille (daily + intraday)
+    allocations = compute_allocations(STRATEGIES, total_capital)
+
+    print(f"\n  ALLOCATIONS INTRADAY:")
+    for sid in intraday_strats:
+        alloc = allocations.get(sid, {})
+        name = STRATEGIES[sid]["name"]
+        print(f"    {name:<25} {alloc.get('pct', 0)*100:>5.1f}%  ${alloc.get('capital', 0):>10,.2f}")
+
+    # Generer les signaux intraday
+    print(f"\n  SIGNAUX INTRADAY:")
+    signals = {}
+    for sid in intraday_strats:
+        alloc_capital = allocations.get(sid, {}).get("capital", 0)
+        sig = signal_intraday(sid, alloc_capital, state)
+        signals[sid] = sig
+        name = STRATEGIES[sid]["name"]
+        if sig["action"] == "intraday_trade":
+            print(f"    {name:<25} >> {sig['direction']} {sig['ticker']} "
+                  f"@ ${sig.get('entry_price', 0):.2f}")
+        else:
+            print(f"    {name:<25} -- {sig.get('reason', 'hold')}")
+
+    # Fermer les positions intraday qui ont atteint leur stop/target
+    # (simplifie : on ferme toutes les positions intraday de > 4h)
+    intraday_pos = state.get("intraday_positions", {})
+    stale_positions = []
+    for ticker, pos in intraday_pos.items():
+        opened_at = datetime.fromisoformat(pos["opened_at"])
+        age_hours = (now - opened_at).total_seconds() / 3600
+        if age_hours > 4:
+            stale_positions.append(ticker)
+
+    if stale_positions and not dry_run and is_us_market_open():
+        from core.alpaca_client.client import AlpacaClient
+        client = AlpacaClient.from_env()
+        for ticker in stale_positions:
+            try:
+                client.close_position(ticker, _authorized_by="paper_portfolio_intraday")
+                logger.info(f"  [INTRADAY] Ferme {ticker} (> 4h)")
+                intraday_pos.pop(ticker, None)
+            except Exception as e:
+                logger.warning(f"  [INTRADAY] Erreur fermeture {ticker}: {e}")
+
+    # Executer
+    print(f"\n  EXECUTION:")
+    orders = execute_orders(signals, allocations, state, dry_run)
+
+    if not orders:
+        print(f"    Aucun ordre intraday")
+
+    # Sauvegarder
+    save_state(state)
+    print(f"\n{'='*70}\n")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Paper Portfolio Runner unifie")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument("--status", action="store_true")
     parser.add_argument("--force", action="store_true",
                         help="Forcer le rebalancement mensuel")
+    parser.add_argument("--intraday", action="store_true",
+                        help="Executer les strategies intraday")
     args = parser.parse_args()
 
     if args.status:
         show_status()
+    elif args.intraday:
+        run_intraday(dry_run=args.dry_run)
     else:
         run(dry_run=args.dry_run, force=args.force)
 
