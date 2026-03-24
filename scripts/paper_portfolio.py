@@ -70,49 +70,35 @@ STRATEGIES = {
         "multi_asset": False,
     },
     # === Intraday (walk-forward validees 2026-03-24) ===
-    "orb_5min": {
-        "name": "ORB 5-Min Breakout",
-        "sharpe": 3.47,            # backtest 186 tickers, 121j
-        "frequency": "intraday",
-        "multi_asset": True,
-    },
+    # === Intraday (re-valide avec horaires stricts 9:35-15:55 ET, 2026-03-24) ===
     "opex_gamma": {
         "name": "OpEx Gamma Pin",
-        "sharpe": 7.08,
+        "sharpe": 10.41,           # re-backtest horaires stricts
         "frequency": "intraday",
         "multi_asset": True,
     },
-    "earnings_drift": {
-        "name": "Earnings Drift",
-        "sharpe": 13.50,
+    "gap_continuation": {
+        "name": "Overnight Gap Continuation",
+        "sharpe": 5.22,
         "frequency": "intraday",
         "multi_asset": True,
     },
     "dow_seasonal": {
         "name": "Day-of-Week Seasonal",
-        "sharpe": 1.85,
-        "frequency": "intraday",
-        "multi_asset": True,
-    },
-    "ml_cluster": {
-        "name": "ML Volume Cluster",
-        "sharpe": 1.13,
-        "frequency": "intraday",
-        "multi_asset": True,
-    },
-    # === Batch 3 (research agent, walk-forward validees 2026-03-24) ===
-    "gap_continuation": {
-        "name": "Overnight Gap Continuation",
-        "sharpe": 3.11,
+        "sharpe": 3.42,
         "frequency": "intraday",
         "multi_asset": True,
     },
     "lateday_meanrev": {
         "name": "Late Day Mean Reversion",
-        "sharpe": 0.69,
+        "sharpe": 0.60,
         "frequency": "intraday",
         "multi_asset": True,
     },
+    # RETIRES apres re-backtest horaires stricts :
+    # - ORB 5-Min : Sharpe -0.05 (ne survit pas aux couts sur univers large)
+    # - Earnings Drift : Sharpe -9.55 (overtrade sur small caps)
+    # - ML Volume Cluster : Sharpe -1.36
 }
 
 # ─── Univers ETFs Momentum ───────────────────────────────────────────────────
@@ -365,21 +351,15 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         sys.path.insert(0, backtester_path)
 
     from strategies import (
-        ORB5MinStrategy,
         OpExGammaPinStrategy,
-        EarningsDriftStrategy,
         DayOfWeekSeasonalStrategy,
-        VolumeProfileClusterStrategy,
         OvernightGapContinuationStrategy,
         LateDayMeanReversionStrategy,
     )
 
     STRAT_MAP = {
-        "orb_5min": ORB5MinStrategy,
         "opex_gamma": OpExGammaPinStrategy,
-        "earnings_drift": EarningsDriftStrategy,
         "dow_seasonal": DayOfWeekSeasonalStrategy,
-        "ml_cluster": VolumeProfileClusterStrategy,
         "gap_continuation": OvernightGapContinuationStrategy,
         "lateday_meanrev": LateDayMeanReversionStrategy,
     }

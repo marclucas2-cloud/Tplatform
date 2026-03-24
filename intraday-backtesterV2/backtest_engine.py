@@ -106,10 +106,16 @@ class BacktestEngine:
                 print(f"  [ERROR] {date}: {e}")
                 continue
 
-            # Exécuter les signaux
+            # Exécuter les signaux (avec guard horaires)
+            earliest = dt_time(9, 35)
+            latest = dt_time(15, 55)
             for signal in signals:
                 if len(self.open_positions) >= config.MAX_SIMULTANEOUS:
                     break
+                # Guard : rejeter tout signal hors 9:35-15:55 ET
+                sig_time = signal.timestamp.time() if hasattr(signal.timestamp, 'time') else None
+                if sig_time and (sig_time < earliest or sig_time >= latest):
+                    continue
                 self._open_position(signal, day_data)
 
             # Simuler le reste de la journée — vérifier stops/targets
@@ -154,8 +160,9 @@ class BacktestEngine:
         })
 
     def _simulate_day(self, day_data: dict, date):
-        """Simule barre par barre pour vérifier stops et targets."""
+        """Simule barre par barre pour vérifier stops et targets (jusqu'à 15:55 ET)."""
         closed = []
+        latest_time = dt_time(15, 55)
 
         for pos in self.open_positions:
             ticker = pos["ticker"]
@@ -163,8 +170,8 @@ class BacktestEngine:
                 continue
 
             df = day_data[ticker]
-            # Ne regarder que les barres après l'entrée
-            bars_after = df[df.index > pos["entry_time"]]
+            # Ne regarder que les barres après l'entrée et avant 15:55
+            bars_after = df[(df.index > pos["entry_time"]) & (df.index.time <= latest_time)]
 
             for ts, bar in bars_after.iterrows():
                 # Vérifier stop-loss
@@ -192,15 +199,20 @@ class BacktestEngine:
                 self.open_positions.remove(pos)
 
     def _force_close_all(self, day_data: dict, date):
-        """Ferme toutes les positions ouvertes à 15:59."""
+        """Ferme toutes les positions ouvertes à 15:55 ET (ou dernière barre si pas de 15:55)."""
+        close_time = dt_time(15, 55)
         for pos in self.open_positions[:]:
             ticker = pos["ticker"]
             if ticker in day_data:
                 df = day_data[ticker]
-                # Dernière barre de la journée
                 if not df.empty:
-                    last_bar = df.iloc[-1]
-                    self._close_position(pos, last_bar["close"], df.index[-1], "eod_close")
+                    # Chercher la barre à 15:55 ou la dernière barre avant 15:55
+                    eod_bars = df[df.index.time <= close_time]
+                    if not eod_bars.empty:
+                        last_bar = eod_bars.iloc[-1]
+                    else:
+                        last_bar = df.iloc[-1]
+                    self._close_position(pos, last_bar["close"], eod_bars.index[-1] if not eod_bars.empty else df.index[-1], "eod_close")
             self.open_positions.remove(pos)
 
     def _close_position(self, pos: dict, exit_price: float, exit_time, reason: str):
