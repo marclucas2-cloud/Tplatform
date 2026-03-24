@@ -59,6 +59,9 @@ from strategies import (
     VWAPSDReversalStrategy,
     DayOfWeekSeasonalStrategy,
     MultiTimeframeTrendStrategy,
+    # Nouvelles stratégies (batch 3)
+    OvernightGapContinuationStrategy,
+    LateDayMeanReversionStrategy,
 )
 from utils.metrics import calculate_metrics, print_metrics
 from utils.plotting import (
@@ -106,6 +109,9 @@ STRATEGY_MAP = {
     "dow": DayOfWeekSeasonalStrategy,
     # Multi-Timeframe
     "mttf": MultiTimeframeTrendStrategy,
+    # Batch 3
+    "gapcont": OvernightGapContinuationStrategy,
+    "lateday": LateDayMeanReversionStrategy,
 }
 
 

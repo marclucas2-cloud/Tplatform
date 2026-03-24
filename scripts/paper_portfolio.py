@@ -100,6 +100,19 @@ STRATEGIES = {
         "frequency": "intraday",
         "multi_asset": True,
     },
+    # === Batch 3 (research agent, walk-forward validees 2026-03-24) ===
+    "gap_continuation": {
+        "name": "Overnight Gap Continuation",
+        "sharpe": 3.11,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
+    "lateday_meanrev": {
+        "name": "Late Day Mean Reversion",
+        "sharpe": 0.69,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
 }
 
 # ─── Univers ETFs Momentum ───────────────────────────────────────────────────
@@ -357,6 +370,8 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         EarningsDriftStrategy,
         DayOfWeekSeasonalStrategy,
         VolumeProfileClusterStrategy,
+        OvernightGapContinuationStrategy,
+        LateDayMeanReversionStrategy,
     )
 
     STRAT_MAP = {
@@ -365,6 +380,8 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         "earnings_drift": EarningsDriftStrategy,
         "dow_seasonal": DayOfWeekSeasonalStrategy,
         "ml_cluster": VolumeProfileClusterStrategy,
+        "gap_continuation": OvernightGapContinuationStrategy,
+        "lateday_meanrev": LateDayMeanReversionStrategy,
     }
 
     strat_class = STRAT_MAP.get(strategy_id)

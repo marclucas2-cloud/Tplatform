@@ -25,6 +25,9 @@ from .relative_strength_pairs import RelativeStrengthPairsStrategy
 from .vwap_sd_reversal import VWAPSDReversalStrategy
 from .day_of_week_seasonal import DayOfWeekSeasonalStrategy
 from .multi_timeframe_trend import MultiTimeframeTrendStrategy
+# === Nouvelles stratégies (batch 3 — validated) ===
+from .overnight_gap_continuation import OvernightGapContinuationStrategy
+from .late_day_mean_reversion import LateDayMeanReversionStrategy
 
 ALL_STRATEGIES = [
     # === Classiques ===
@@ -63,4 +66,7 @@ ALL_STRATEGIES = [
     DayOfWeekSeasonalStrategy,
     # === Multi-Timeframe ===
     MultiTimeframeTrendStrategy,
+    # === Batch 3 — Validated Winners ===
+    OvernightGapContinuationStrategy,
+    LateDayMeanReversionStrategy,
 ]
