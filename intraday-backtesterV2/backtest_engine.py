@@ -45,8 +45,13 @@ class BaseStrategy(ABC):
         pass
 
     def get_required_tickers(self) -> list[str]:
-        """Retourne les tickers nécessaires pour cette stratégie."""
-        return config.MOMENTUM_TICKERS
+        """Retourne les tickers nécessaires pour cette stratégie.
+        Override dans les sous-classes. Par défaut, retourne les tickers principaux."""
+        from universe import PERMANENT_TICKERS, SECTOR_MAP
+        tickers = list(PERMANENT_TICKERS)
+        for components in SECTOR_MAP.values():
+            tickers.extend(components[:3])
+        return list(set(tickers))
 
 
 class BacktestEngine:

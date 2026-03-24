@@ -4,7 +4,7 @@ Paper Portfolio Runner — orchestration unifiee des 3 strategies sur Alpaca.
 
 Respecte le pipeline multi-agents :
   1. PortfolioManager : allocation risk-parity (Sharpe-weighted, cap 40%)
-  2. ExecutionManager : circuit-breaker drawdown 5%, sizing par allocated_capital
+  2. ExecutionManager : circuit-breaker drawdown 5%, sizing par allocated_capital (cap 10%)
   3. MonitoringManager : tracking vs benchmark SPY, alpha, P&L consolide
 
 Strategies actives :
@@ -45,7 +45,8 @@ STATE_FILE = Path(__file__).parent.parent / "paper_portfolio_state.json"
 
 INITIAL_CAPITAL = 100_000.0
 MAX_DAILY_DRAWDOWN = 0.05       # 5% circuit-breaker
-MAX_ALLOCATION_PER_STRATEGY = 0.40  # 40% max par strategie
+MAX_ALLOCATION_PER_STRATEGY = 0.20  # 20% max par strategie
+MAX_POSITION_SIZE = 0.10            # 10% max par position individuelle
 BENCHMARK = "SPY"
 
 STRATEGIES = {
@@ -146,21 +147,36 @@ def save_state(state: dict):
 def compute_allocations(strategies: dict, total_capital: float) -> dict[str, dict]:
     """
     Allocation risk-parity basee sur le Sharpe ratio.
-    Cap 40% par strategie. Renormalise apres plafonnement.
+    Cap strict par strategie. Redistribution iterative du surplus.
     """
     sharpes = {sid: max(s["sharpe"], 0.1) for sid, s in strategies.items()}
     total_sharpe = sum(sharpes.values())
 
-    allocations = {}
-    for sid, sharpe in sharpes.items():
-        raw = sharpe / total_sharpe
-        capped = min(raw, MAX_ALLOCATION_PER_STRATEGY)
-        allocations[sid] = capped
+    # Allocation initiale proportionnelle au Sharpe
+    allocations = {sid: sharpe / total_sharpe for sid, sharpe in sharpes.items()}
 
-    # Renormaliser
-    total_alloc = sum(allocations.values())
-    if total_alloc > 0:
-        allocations = {sid: v / total_alloc for sid, v in allocations.items()}
+    # Cap iteratif : redistribuer le surplus aux non-cappes
+    for _ in range(10):  # Max 10 iterations
+        capped = {}
+        uncapped = {}
+        surplus = 0.0
+        for sid, pct in allocations.items():
+            if pct > MAX_ALLOCATION_PER_STRATEGY:
+                capped[sid] = MAX_ALLOCATION_PER_STRATEGY
+                surplus += pct - MAX_ALLOCATION_PER_STRATEGY
+            else:
+                uncapped[sid] = pct
+
+        if surplus == 0:
+            break  # Rien a redistribuer
+
+        # Redistribuer le surplus proportionnellement aux non-cappes
+        uncapped_total = sum(uncapped.values())
+        if uncapped_total > 0:
+            for sid in uncapped:
+                uncapped[sid] += surplus * (uncapped[sid] / uncapped_total)
+
+        allocations = {**capped, **uncapped}
 
     result = {}
     for sid, pct in allocations.items():
@@ -168,7 +184,7 @@ def compute_allocations(strategies: dict, total_capital: float) -> dict[str, dic
         result[sid] = {
             "pct": round(pct, 4),
             "capital": round(allocated, 2),
-            "max_position": round(allocated, 2),  # 100% de l'allocation par strategie
+            "max_position": round(allocated, 2),
         }
 
     return result
@@ -373,11 +389,13 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         start_dt = datetime.combine(today, datetime.min.time()).replace(tzinfo=et)
         end_dt = now_et
 
+        from alpaca.data.enums import DataFeed
         request = StockBarsRequest(
             symbol_or_symbols=required_tickers[:50],  # Alpaca max 50/batch
             timeframe=TimeFrame(5, TimeFrame.Minute.unit),
             start=start_dt,
             end=end_dt,
+            feed=DataFeed.IEX,  # Feed gratuit (SIP necessite abonnement)
         )
         bars = client.get_stock_bars(request)
 
@@ -454,7 +472,7 @@ def is_us_market_open() -> bool:
 
 
 def execute_orders(signals: dict, allocations: dict, state: dict,
-                   dry_run: bool) -> list[dict]:
+                   dry_run: bool, total_capital: float = INITIAL_CAPITAL) -> list[dict]:
     """Execute les ordres via Alpaca avec respect des allocations."""
     if dry_run:
         logger.info("[DRY-RUN] Aucun ordre execute")
@@ -578,11 +596,12 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
             if ticker in intraday_pos:
                 continue
 
-            # Position sizing : max 5% du capital alloue
+            # Position sizing : 15% du capital alloue, max 10% du capital total
             entry_price = signal.get("entry_price", 0)
             if entry_price <= 0:
                 continue
-            notional = min(capital * 0.05, capital)
+            max_pos = total_capital * MAX_POSITION_SIZE  # 10% du capital total
+            notional = min(capital * 0.15, max_pos)
 
             side = "BUY" if direction == "LONG" else "SELL"
             try:
@@ -679,7 +698,7 @@ def run(dry_run: bool = False, force: bool = False):
 
     # 3. Executer avec circuit-breaker
     print(f"\n  EXECUTION:")
-    orders = execute_orders(signals, allocations, state, dry_run)
+    orders = execute_orders(signals, allocations, state, dry_run, total_capital)
 
     if not orders:
         print(f"    Aucun ordre")
@@ -848,7 +867,7 @@ def run_intraday(dry_run: bool = False):
 
     # Executer
     print(f"\n  EXECUTION:")
-    orders = execute_orders(signals, allocations, state, dry_run)
+    orders = execute_orders(signals, allocations, state, dry_run, total_capital)
 
     if not orders:
         print(f"    Aucun ordre intraday")
