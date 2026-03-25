@@ -721,28 +721,40 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
             notional = min(capital * 0.15, max_pos)
 
             side = "BUY" if direction == "LONG" else "SELL"
+            stop_loss = signal.get("stop_loss")
+            take_profit = signal.get("take_profit")
+
             try:
-                if direction == "SHORT":
-                    # Alpaca rejette les shorts fractionnels — convertir en qty entiere
-                    qty = int(notional / entry_price)
-                    if qty < 1:
-                        continue
-                    result = client.create_position(
-                        ticker, side, qty=qty,
-                        _authorized_by="paper_portfolio_intraday"
-                    )
-                else:
-                    result = client.create_position(
-                        ticker, side, notional=round(notional, 2),
-                        _authorized_by="paper_portfolio_intraday"
-                    )
+                # Toujours convertir en qty pour supporter les bracket orders
+                qty = int(notional / entry_price)
+                if qty < 1:
+                    continue
+
+                result = client.create_position(
+                    ticker, side, qty=qty,
+                    stop_loss=stop_loss,
+                    take_profit=take_profit,
+                    _authorized_by="paper_portfolio_intraday"
+                )
+
+                filled_price = result.get("filled_price") or entry_price
+                sl_info = f" SL=${stop_loss:.2f}" if stop_loss else ""
+                tp_info = f" TP=${take_profit:.2f}" if take_profit else ""
+                bracket_info = " [BRACKET]" if result.get("bracket") else ""
+
                 orders.append({
                     "sid": sid, "action": "intraday_open", "symbol": ticker,
-                    "direction": direction, "notional": notional,
-                    "stop_loss": signal.get("stop_loss"),
-                    "take_profit": signal.get("take_profit"),
+                    "direction": direction, "qty": qty,
+                    "entry_price": entry_price,
+                    "filled_price": filled_price,
+                    "stop_loss": stop_loss,
+                    "take_profit": take_profit,
+                    "bracket": result.get("bracket", False),
                 })
-                logger.info(f"  [{sid}] INTRADAY {direction} {ticker} ${notional:,.0f}")
+                logger.info(
+                    f"  [{sid}] INTRADAY {direction} {ticker} "
+                    f"{qty} shares @ ${filled_price:.2f}{sl_info}{tp_info}{bracket_info}"
+                )
 
                 # Track la position
                 state.setdefault("intraday_positions", {})[ticker] = {

@@ -333,19 +333,23 @@ class AlpacaClient:
     def create_position(self, symbol: str, direction: str,
                         qty: float | None = None,
                         notional: float | None = None,
+                        stop_loss: float | None = None,
+                        take_profit: float | None = None,
                         _authorized_by: str | None = None) -> dict:
         """
-        Ouvre une position market order.
+        Ouvre une position avec bracket order optionnel (stop loss + take profit).
 
         IMPORTANT : tout ordre DOIT passer par le pipeline d'allocation.
         Le parametre _authorized_by doit contenir l'identifiant du composant
         appelant (ex: "paper_portfolio", "execution_agent"). Tout appel
         direct sans _authorized_by est refuse.
 
-        symbol    : ticker US
-        direction : "BUY" ou "SELL" (short)
-        qty       : nombre d'actions (ou notional en $)
-        notional  : montant en $ (alternatif à qty)
+        symbol      : ticker US
+        direction   : "BUY" ou "SELL" (short)
+        qty         : nombre d'actions
+        notional    : montant en $ (alternatif a qty, longs uniquement)
+        stop_loss   : prix du stop loss (optionnel)
+        take_profit : prix du take profit (optionnel)
         _authorized_by : identifiant du pipeline appelant (obligatoire)
         """
         if _authorized_by is None:
@@ -355,42 +359,93 @@ class AlpacaClient:
                 f"d'allocation (paper_portfolio.py ou ExecutionAgent)."
             )
         try:
-            from alpaca.trading.requests import MarketOrderRequest
-            from alpaca.trading.enums import OrderSide, TimeInForce
+            from alpaca.trading.requests import (
+                MarketOrderRequest, StopLossRequest, TakeProfitRequest,
+            )
+            from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass
         except ImportError:
-            raise AlpacaAPIError("alpaca-py non installé — pip install alpaca-py")
+            raise AlpacaAPIError("alpaca-py non installe — pip install alpaca-py")
 
         side = OrderSide.BUY if direction.upper() == "BUY" else OrderSide.SELL
 
-        if notional:
+        # Bracket order si stop_loss ou take_profit fourni
+        has_bracket = stop_loss is not None or take_profit is not None
+        order_class = OrderClass.BRACKET if has_bracket and qty else None
+
+        # Construire les legs du bracket
+        sl_request = None
+        tp_request = None
+        if stop_loss is not None and stop_loss > 0:
+            sl_request = StopLossRequest(stop_price=round(stop_loss, 2))
+        if take_profit is not None and take_profit > 0:
+            tp_request = TakeProfitRequest(limit_price=round(take_profit, 2))
+
+        # Bracket orders necessitent qty (pas notional)
+        if has_bracket and notional and not qty:
+            # On ne peut pas faire de bracket avec notional — fallback sans bracket
+            logger.warning(
+                f"  Bracket non supporte avec notional pour {symbol}. "
+                f"Ordre simple sans SL/TP."
+            )
+            order_class = None
+            sl_request = None
+            tp_request = None
+
+        if notional and not order_class:
             request = MarketOrderRequest(
                 symbol=symbol,
                 notional=round(notional, 2),
                 side=side,
                 time_in_force=TimeInForce.DAY,
             )
+        elif qty:
+            kwargs = {
+                "symbol": symbol,
+                "qty": qty,
+                "side": side,
+                "time_in_force": TimeInForce.DAY,
+            }
+            if order_class:
+                kwargs["order_class"] = order_class
+            if sl_request:
+                kwargs["stop_loss"] = sl_request
+            if tp_request:
+                kwargs["take_profit"] = tp_request
+            request = MarketOrderRequest(**kwargs)
         else:
-            request = MarketOrderRequest(
-                symbol=symbol,
-                qty=qty,
-                side=side,
-                time_in_force=TimeInForce.DAY,
-            )
+            raise AlpacaAPIError(f"Ordre {symbol}: ni qty ni notional fourni")
 
         client = self._get_trading_client()
         order = client.submit_order(request)
 
+        bracket_info = ""
+        if sl_request:
+            bracket_info += f" SL=${stop_loss:.2f}"
+        if tp_request:
+            bracket_info += f" TP=${take_profit:.2f}"
+
         logger.info(
             f"Alpaca ordre soumis : {direction} {symbol} "
-            f"qty={qty or ''} notional={notional or ''} — id={order.id}"
+            f"qty={qty or ''} notional={notional or ''}{bracket_info} "
+            f"— id={order.id}"
         )
+
+        filled_price = float(order.filled_avg_price) if order.filled_avg_price else None
+        filled_qty = float(order.filled_qty) if order.filled_qty else None
+
         return {
-            "orderId":   str(order.id),
-            "symbol":    order.symbol,
-            "side":      order.side.value,
-            "status":    order.status.value,
-            "qty":       str(order.qty),
-            "paper":     self._paper,
+            "orderId":       str(order.id),
+            "symbol":        order.symbol,
+            "side":          order.side.value,
+            "status":        order.status.value,
+            "qty":           str(order.qty),
+            "filled_qty":    filled_qty,
+            "filled_price":  filled_price,
+            "stop_loss":     stop_loss,
+            "take_profit":   take_profit,
+            "bracket":       order_class is not None,
+            "paper":         self._paper,
+            "authorized_by": _authorized_by,
         }
 
     def close_position(self, symbol: str, _authorized_by: str | None = None) -> dict:
