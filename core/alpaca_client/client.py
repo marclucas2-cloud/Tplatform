@@ -78,10 +78,20 @@ class AlpacaClient:
 
     def _get_trading_client(self):
         if self._trading is None:
+            # GUARD CRITIQUE : empecher tout ordre live par erreur
+            if not self._paper:
+                logger.critical(
+                    "ABORT: PAPER_TRADING=false detecte. "
+                    "Le trading live n'est PAS autorise sans validation explicite. "
+                    "Settez PAPER_TRADING=true dans l'environnement."
+                )
+                raise AlpacaAuthError(
+                    "Trading LIVE bloque. Settez PAPER_TRADING=true."
+                )
             try:
                 from alpaca.trading.client import TradingClient
             except ImportError:
-                raise AlpacaAuthError("alpaca-py non installé — pip install alpaca-py")
+                raise AlpacaAuthError("alpaca-py non installe — pip install alpaca-py")
             self._trading = TradingClient(
                 api_key=self._api_key,
                 secret_key=self._secret_key,

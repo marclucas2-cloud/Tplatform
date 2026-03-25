@@ -610,6 +610,14 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
     orders = []
     current_positions = {p["symbol"]: p for p in client.get_positions()}
 
+    # Guard : max positions simultanees (CRITIQUE — manquait en live)
+    MAX_LIVE_POSITIONS = 10
+    if len(current_positions) >= MAX_LIVE_POSITIONS:
+        logger.warning(
+            f"MAX POSITIONS ATTEINT ({len(current_positions)}/{MAX_LIVE_POSITIONS}) "
+            f"— aucun nouvel ordre")
+        return []
+
     for sid, signal in signals.items():
         alloc = allocations.get(sid, {})
         max_capital = alloc.get("max_position", 0)
