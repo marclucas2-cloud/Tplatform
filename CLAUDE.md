@@ -2,55 +2,66 @@
 
 ## Stack
 Python 3.11+ · pandas/numpy (calcul quantitatif) · asyncio (orchestration)
-IG Markets API REST + Lightstreamer · Anthropic API (Research Agent)
-SQLite (dev) / PostgreSQL (prod)
+Alpaca API (paper trading US equities) · Anthropic API (Research Agent)
+Railway (worker cloud 24/7)
 
 ## Commandes
 ```bash
-python run.py                          # Lancer l'orchestrator
-python run.py --mode backtest          # Backtest uniquement
-python run.py --mode paper             # Paper trading IG démo
-python -m pytest tests/               # Tests
-python -m pytest tests/ -v --tb=short # Tests verbose
+python scripts/paper_portfolio.py --status       # Dashboard consolide
+python scripts/paper_portfolio.py --dry-run      # Test daily sans ordres
+python scripts/paper_portfolio.py --intraday     # Execution intraday
+python scripts/paper_portfolio.py --intraday --dry-run  # Test intraday
+python worker.py                                 # Worker Railway (24/7)
+python -m pytest tests/ -v --tb=short            # Tests
+```
+
+## Strategies actives (10)
+```
+Daily/Monthly :
+  - Momentum 25 ETFs (mensuel, ROC 3m, crash filter SMA200)
+  - Pairs MU/AMAT (daily, z-score cointegre)
+  - VRP SVXY/SPY/TLT (mensuel, regime de volatilite)
+
+Intraday (7 strategies, cron toutes les 5 min 15:35-22:00 Paris) :
+  - OpEx Gamma Pin (Sharpe 10.41) — vendredis/OpEx, mean reversion round numbers
+  - Overnight Gap Continuation (Sharpe 5.22) — gaps > 1.1% + volume confirmation
+  - Crypto-Proxy Regime V2 (Sharpe 3.49) — decorrelation COIN vs MARA/MSTR
+  - Day-of-Week Seasonal (Sharpe 3.42) — Monday effect, vendredi bullish
+  - ORB 5-Min V2 (Sharpe 2.28) — breakout top stocks in play, gap > 3%
+  - Mean Reversion V2 (Sharpe 1.44) — BB 3.0 std + RSI 12/88 extreme
+  - Late Day Mean Reversion (Sharpe 0.60) — move > 3% + RSI extreme + volume sec
 ```
 
 ## Architecture
 ```
-orchestrator/main.py      # Orchestrator central — bus événements asyncio.Queue
-agents/
-  base_agent.py           # Classe de base — interface commune
-  research/               # LLM → génère JSON stratégie
-  backtest/               # Déclenche le moteur de backtest
-  validation/             # Filtres statistiques stricts (walk-forward)
-  portfolio/              # Allocation de capital (Kelly / risk parity)
-  execution/              # Ordres IG Markets (paper + live)
-  monitoring/             # Métriques, alertes, circuit-breakers
-core/
-  strategy_schema/        # JSON Schema source de vérité
-  data/                   # Loader OHLCV + no-lookahead guard
-  backtest/engine.py      # Moteur pur — ZÉRO LLM, déterministe
-  ig_client/              # Client API IG (auth, prix, ordres)
-  logging/                # Audit trail structuré + reproductibilité
-strategies/               # JSON des stratégies (versionnées en git)
+scripts/paper_portfolio.py    # Pipeline unifie (daily + intraday)
+worker.py                     # Scheduler Railway 24/7
+core/alpaca_client/client.py  # Client Alpaca (bracket orders, guard _authorized_by)
+intraday-backtesterV2/        # Framework backtest (50+ strategies testees)
+  strategies/                 # Toutes les strategies Python
+  backtest_engine.py          # Moteur evenementiel (guard 9:35-15:55 ET)
+  walk_forward.py             # Validation walk-forward automatisee
 ```
 
-## Règles critiques (ne jamais violer)
-- **No lookahead bias** : indicateurs calculés avec `.shift(1)` — signal sur close[t], ordre à open[t+1]
-- **Séparation IA / calcul** : le LLM génère UNIQUEMENT du JSON de paramètres, jamais de calculs
-- **Coûts réels** : chaque backtest inclut spread + slippage du `cost_model` dans le JSON stratégie
-- **Validation obligatoire** : toute stratégie passe walk-forward avant d'accéder à l'Execution Agent
-- **Paper trading d'abord** : `PAPER_TRADING=true` dans .env jusqu'à validation explicite
-
-## Format JSON stratégie
-Voir `core/strategy_schema/schema.json` — toute stratégie doit valider ce schéma.
-Chemin : `strategies/<nom>.json`
+## Risk management
+- **Cap 20%** par strategie, **10%** par position
+- **Circuit-breaker** : DD > 5% journalier = stop tous les ordres
+- **Bracket orders** : SL/TP envoyes a Alpaca (broker-side, survivent aux crashs)
+- **Fermeture forcee 15:55 ET** + annulation ordres pendants
+- **Max 10 positions** simultanees en live
+- **Exposition nette** : max 40% long, 20% short
+- **Guard paper/live** : abort si PAPER_TRADING != true
+- **Guard _authorized_by** : tout ordre doit passer par le pipeline
+- **Jours feries NYSE** : calendrier 2026 dans is_us_market_open()
+- **Lock idempotence** : anti-double execution dans le worker
 
 ## Variables env critiques
-`IG_API_KEY` `IG_USERNAME` `IG_PASSWORD` `IG_ACC_TYPE` `IG_BASE_URL`
-`ANTHROPIC_API_KEY` `PAPER_TRADING` `MAX_RISK_PER_TRADE` `MAX_DAILY_DRAWDOWN`
+`ALPACA_API_KEY` `ALPACA_SECRET_KEY` `PAPER_TRADING=true`
 
-## Pièges connus
-- **IG auth** : X-SECURITY-TOKEN + CST headers valables 6h — à renouveler
-- **IG Streaming** : prix temps réel via Lightstreamer (pas REST) — client séparé requis
-- **Lookahead** : NE PAS utiliser `df['rsi']` pour générer signal sur la même bougie
-- **Paramètres PG** : `$1, $2...` si migration vers PostgreSQL
+## Regles critiques (ne jamais violer)
+- **No lookahead bias** : guard 9:35-15:55 ET dans le moteur de backtest
+- **Couts reels** : $0.005/share + 0.02% slippage dans TOUS les backtests
+- **Walk-forward obligatoire** : >= 50% fenetres OOS profitables (60% pour les V2)
+- **Paper d'abord** : PAPER_TRADING=true obligatoire, guard dans AlpacaClient
+- **Pipeline obligatoire** : scripts standalone DESACTIVES (.DISABLED)
+- **Shorts en qty entiere** : pas de notional pour les SELL

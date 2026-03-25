@@ -47,7 +47,26 @@ INITIAL_CAPITAL = 100_000.0
 MAX_DAILY_DRAWDOWN = 0.05       # 5% circuit-breaker
 MAX_ALLOCATION_PER_STRATEGY = 0.20  # 20% max par strategie
 MAX_POSITION_SIZE = 0.10            # 10% max par position individuelle
+MAX_LIVE_POSITIONS = 10             # Max positions simultanees en live
+MAX_NET_LONG_EXPOSURE = 0.40        # 40% max exposition nette long
+MAX_NET_SHORT_EXPOSURE = 0.20       # 20% max exposition nette short
+MAX_SECTOR_EXPOSURE = 0.40          # 40% max dans un meme secteur
+DAILY_TRAILING_STOP_PCT = 0.05      # 5% trailing stop sur positions daily
 BENCHMARK = "SPY"
+
+# Jours feries NYSE 2026 (marche FERME)
+NYSE_HOLIDAYS_2026 = {
+    "2026-01-01",  # New Year's Day
+    "2026-01-19",  # MLK Day
+    "2026-02-16",  # Presidents Day
+    "2026-04-03",  # Good Friday
+    "2026-05-25",  # Memorial Day
+    "2026-06-19",  # Juneteenth
+    "2026-07-03",  # Independence Day (observed)
+    "2026-09-07",  # Labor Day
+    "2026-11-26",  # Thanksgiving
+    "2026-12-25",  # Christmas
+}
 
 STRATEGIES = {
     # === Daily / Monthly (existantes) ===
@@ -515,51 +534,49 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
 # =============================================================================
 
 def _close_all_intraday_positions(state: dict, dry_run: bool = False):
-    """Ferme toutes les positions intraday. Appele a 15:55 ET."""
-    intraday_pos = state.get("intraday_positions", {})
-
-    if not intraday_pos:
-        # Fallback : fermer TOUTES les positions Alpaca (intraday = flat overnight)
-        try:
-            from core.alpaca_client.client import AlpacaClient
-            client = AlpacaClient.from_env()
-            positions = client.get_positions()
-            if not positions:
-                print("    Aucune position a fermer")
-                return
-
-            for p in positions:
-                sym = p["symbol"]
-                if dry_run:
-                    print(f"    [DRY-RUN] Fermerait {sym} ({p['qty']} shares, P&L ${p['unrealized_pl']:+.2f})")
-                else:
-                    try:
-                        client.close_position(sym, _authorized_by="paper_portfolio_eod_close")
-                        print(f"    FERME {sym} ({p['qty']} shares, P&L ${p['unrealized_pl']:+.2f})")
-                    except Exception as e:
-                        logger.error(f"    Erreur fermeture {sym}: {e}")
-        except Exception as e:
-            logger.error(f"    Erreur Alpaca: {e}")
-        return
-
-    # Fermer les positions trackees
+    """Ferme toutes les positions intraday + annule les ordres pendants. Appele a 15:55 ET."""
     from core.alpaca_client.client import AlpacaClient
     client = AlpacaClient.from_env()
 
-    closed = []
-    for ticker, pos in intraday_pos.items():
-        if dry_run:
-            print(f"    [DRY-RUN] Fermerait {ticker} ({pos.get('direction', '?')})")
-        else:
-            try:
-                client.close_position(ticker, _authorized_by="paper_portfolio_eod_close")
-                print(f"    FERME {ticker} ({pos.get('direction', '?')})")
-                closed.append(ticker)
-            except Exception as e:
-                logger.error(f"    Erreur fermeture {ticker}: {e}")
+    # ETAPE 1 : Annuler TOUS les ordres pendants (CRITIQUE — evite les orphelins)
+    if not dry_run:
+        try:
+            tc = client._get_trading_client()
+            tc.cancel_orders()
+            print("    Ordres pendants annules")
+        except Exception as e:
+            logger.error(f"    Erreur annulation ordres: {e}")
 
-    for ticker in closed:
-        intraday_pos.pop(ticker, None)
+    # ETAPE 2 : Fermer toutes les positions Alpaca
+    try:
+        positions = client.get_positions()
+        if not positions:
+            print("    Aucune position a fermer")
+            # Reset le state intraday
+            state["intraday_positions"] = {}
+            return
+
+        total_pnl = 0.0
+        for p in positions:
+            sym = p["symbol"]
+            pnl = p.get("unrealized_pl", 0)
+            total_pnl += pnl
+            if dry_run:
+                print(f"    [DRY-RUN] Fermerait {sym} ({p['qty']} shares, P&L ${pnl:+.2f})")
+            else:
+                try:
+                    client.close_position(sym, _authorized_by="paper_portfolio_eod_close")
+                    print(f"    FERME {sym} ({p['qty']} shares, P&L ${pnl:+.2f})")
+                except Exception as e:
+                    logger.error(f"    Erreur fermeture {sym}: {e}")
+
+        print(f"    P&L total cloture: ${total_pnl:+.2f}")
+
+    except Exception as e:
+        logger.error(f"    Erreur Alpaca: {e}")
+
+    # Reset le state intraday
+    state["intraday_positions"] = {}
 
 
 # =============================================================================
@@ -567,12 +584,16 @@ def _close_all_intraday_positions(state: dict, dry_run: bool = False):
 # =============================================================================
 
 def is_us_market_open() -> bool:
-    """Verifie si le marche US est ouvert (9:30-16:00 ET, lun-ven)."""
+    """Verifie si le marche US est ouvert (9:30-16:00 ET, lun-ven, hors jours feries)."""
     import zoneinfo
     et = zoneinfo.ZoneInfo("America/New_York")
     now_et = datetime.now(et)
     # Weekend
     if now_et.weekday() >= 5:
+        return False
+    # Jours feries NYSE
+    today_str = now_et.strftime("%Y-%m-%d")
+    if today_str in NYSE_HOLIDAYS_2026:
         return False
     # Horaires reguliers
     market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
@@ -608,15 +629,35 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
             return []
 
     orders = []
-    current_positions = {p["symbol"]: p for p in client.get_positions()}
+    positions_list = client.get_positions()
+    current_positions = {p["symbol"]: p for p in positions_list}
 
-    # Guard : max positions simultanees (CRITIQUE — manquait en live)
-    MAX_LIVE_POSITIONS = 10
+    # Guard : max positions simultanees
     if len(current_positions) >= MAX_LIVE_POSITIONS:
         logger.warning(
             f"MAX POSITIONS ATTEINT ({len(current_positions)}/{MAX_LIVE_POSITIONS}) "
             f"— aucun nouvel ordre")
         return []
+
+    # Guard : exposition directionnelle nette
+    long_exposure = sum(
+        float(p.get("market_val", 0)) for p in positions_list
+        if float(p.get("qty", 0)) > 0
+    )
+    short_exposure = abs(sum(
+        float(p.get("market_val", 0)) for p in positions_list
+        if float(p.get("qty", 0)) < 0
+    ))
+    net_long_pct = long_exposure / equity if equity > 0 else 0
+    net_short_pct = short_exposure / equity if equity > 0 else 0
+
+    exposure_blocked = False
+    if net_long_pct > MAX_NET_LONG_EXPOSURE:
+        logger.warning(f"EXPOSITION LONG {net_long_pct*100:.1f}% > {MAX_NET_LONG_EXPOSURE*100}% — pas de nouveau LONG")
+        exposure_blocked = "LONG"
+    if net_short_pct > MAX_NET_SHORT_EXPOSURE:
+        logger.warning(f"EXPOSITION SHORT {net_short_pct*100:.1f}% > {MAX_NET_SHORT_EXPOSURE*100}% — pas de nouveau SHORT")
+        exposure_blocked = "SHORT"
 
     for sid, signal in signals.items():
         alloc = allocations.get(sid, {})
@@ -716,6 +757,22 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
             direction = signal["direction"]
             capital = min(signal.get("capital", 5000), max_capital)
 
+            # Guard exposition : bloquer si exposition nette depasse le cap
+            if exposure_blocked == "LONG" and direction == "LONG":
+                logger.info(f"  [{sid}] BLOQUE {direction} {ticker} (exposition long max)")
+                continue
+            if exposure_blocked == "SHORT" and direction == "SHORT":
+                logger.info(f"  [{sid}] BLOQUE {direction} {ticker} (exposition short max)")
+                continue
+
+            # Guard conflit : ne pas ouvrir si position existante en sens oppose
+            if ticker in current_positions:
+                existing_qty = float(current_positions[ticker].get("qty", 0))
+                if (direction == "LONG" and existing_qty < 0) or \
+                   (direction == "SHORT" and existing_qty > 0):
+                    logger.warning(f"  [{sid}] CONFLIT {direction} {ticker} — position opposee existante, skip")
+                    continue
+
             # Ne pas ouvrir si on a deja une position intraday sur ce ticker
             intraday_pos = state.get("intraday_positions", {})
             if ticker in intraday_pos:
@@ -809,16 +866,24 @@ def run(dry_run: bool = False, force: bool = False):
         state["daily_pnl"] = 0.0
         state["last_run_date"] = today
 
-    total_capital = state.get("capital", INITIAL_CAPITAL)
+    # Utiliser l'equity ACTUELLE Alpaca (pas le capital initial)
+    try:
+        from core.alpaca_client.client import AlpacaClient
+        _client = AlpacaClient.from_env()
+        _account = _client.authenticate()
+        total_capital = _account["equity"]
+        state["capital"] = total_capital
+    except Exception:
+        total_capital = state.get("capital", INITIAL_CAPITAL)
 
     print(f"\n{'='*70}")
     print(f"  PAPER PORTFOLIO — EXECUTION UNIFIEE")
     print(f"{'='*70}")
     print(f"  Date     : {now.strftime('%Y-%m-%d %H:%M UTC')}")
-    print(f"  Capital  : ${total_capital:,.2f}")
+    print(f"  Capital  : ${total_capital:,.2f} (equity Alpaca)")
     print(f"  Mode     : {'DRY-RUN' if dry_run else 'PAPER TRADING'}")
 
-    # 1. Calculer les allocations
+    # 1. Calculer les allocations sur capital ACTUEL
     allocations = compute_allocations(STRATEGIES, total_capital)
     state["allocations"] = allocations
 
@@ -956,7 +1021,16 @@ def run_intraday(dry_run: bool = False):
     """Execute les strategies intraday pendant les heures de marche."""
     now = datetime.now(timezone.utc)
     state = load_state()
-    total_capital = state.get("capital", INITIAL_CAPITAL)
+
+    # Utiliser l'equity ACTUELLE Alpaca
+    try:
+        from core.alpaca_client.client import AlpacaClient
+        _client = AlpacaClient.from_env()
+        _account = _client.authenticate()
+        total_capital = _account["equity"]
+        state["capital"] = total_capital
+    except Exception:
+        total_capital = state.get("capital", INITIAL_CAPITAL)
 
     print(f"\n{'='*70}")
     print(f"  PAPER PORTFOLIO — INTRADAY EXECUTION")

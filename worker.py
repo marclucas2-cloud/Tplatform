@@ -66,26 +66,40 @@ def is_daily_time():
     return now.hour == DAILY_HOUR and DAILY_MINUTE <= now.minute <= DAILY_MINUTE + 2
 
 
+import threading
+_execution_lock = threading.Lock()
+
+
 def run_daily():
     """Execute le portfolio daily (3 strategies)."""
-    logger.info("=== DAILY RUN ===")
+    if not _execution_lock.acquire(blocking=False):
+        logger.warning("DAILY RUN SKIP — execution deja en cours (lock)")
+        return
     try:
+        logger.info("=== DAILY RUN ===")
         from scripts.paper_portfolio import run
         now = datetime.now(PARIS)
         force = now.day == 1  # Force rebalance le 1er du mois
         run(dry_run=False, force=force)
     except Exception as e:
         logger.error(f"Erreur daily run: {e}", exc_info=True)
+    finally:
+        _execution_lock.release()
 
 
 def run_intraday():
     """Execute les strategies intraday."""
-    logger.info("=== INTRADAY RUN ===")
+    if not _execution_lock.acquire(blocking=False):
+        logger.warning("INTRADAY RUN SKIP — execution deja en cours (lock)")
+        return
     try:
+        logger.info("=== INTRADAY RUN ===")
         from scripts.paper_portfolio import run_intraday
         run_intraday(dry_run=False)
     except Exception as e:
         logger.error(f"Erreur intraday run: {e}", exc_info=True)
+    finally:
+        _execution_lock.release()
 
 
 def main():
