@@ -36,5 +36,10 @@ alpaca-py>=0.20.0
 streamlit>=1.35.0
 plotly>=5.18.0
 
+# --- Intraday backtester ---
+scikit-learn>=1.3.0
+pyarrow>=14.0.0
+ta>=0.11.0
+
 # --- Optionnel (backtest avancé) ---
 # vectorbt>=0.26.0   # Décommenter pour backtests haute performance
