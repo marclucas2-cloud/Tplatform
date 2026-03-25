@@ -1,9 +1,13 @@
-# Secrets
+# === SECRETS (CRITIQUE — ne JAMAIS committer) ===
 .env
-*.env.*
+.env.*
+*.env
 !.env.example
+**/secrets/
+*_credentials*
+*_token*
 
-# Python
+# === Python ===
 __pycache__/
 *.py[cod]
 *.pyo
@@ -14,26 +18,43 @@ env/
 dist/
 build/
 
-# Données locales (ne pas versionner les données de marché)
+# === Donnees locales (ne pas versionner) ===
 data/raw/
 data/cache/
+intraday-backtesterV2/data_cache/
 *.csv
 *.parquet
 !strategies/*.json
 
-# Base de données locale
+# === State files (contiennent des infos de compte) ===
+*_state.json
+paper_portfolio_state.json
+paper_trading_state.json
+
+# === Base de donnees locale ===
 *.db
 *.sqlite
 
-# Logs
+# === Logs ===
 logs/
 *.log
 
-# IDE
+# === IDE ===
 .idea/
 .vscode/
 *.swp
+*.code-workspace
 
-# Résultats de backtest (volumineux)
+# === Resultats de backtest (volumineux) ===
 results/
 _bmad-output/
+intraday-backtesterV2/output/
+intraday-backtester/output/
+
+# === OS ===
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# === Node (si Railway/CI) ===
+node_modules/
