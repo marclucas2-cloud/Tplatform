@@ -142,6 +142,19 @@ STRATEGIES = {
         "frequency": "intraday",
         "multi_asset": True,
     },
+    # === Mission nuit 25-26 mars 2026 — walk-forward valides ===
+    "vwap_micro": {
+        "name": "VWAP Micro-Deviation",
+        "sharpe": 3.08,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
+    "triple_ema": {
+        "name": "Triple EMA Pullback",
+        "sharpe": 1.06,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
     # RETIRES apres re-backtest horaires stricts :
     # - ORB 5-Min : Sharpe -0.05 (ne survit pas aux couts sur univers large)
     # - Earnings Drift : Sharpe -9.55 (overtrade sur small caps)
@@ -441,6 +454,8 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
     from strategies.crypto_proxy_regime_v2 import CryptoProxyRegimeV2Strategy
     from strategies.orb_5min_v2 import ORB5MinV2Strategy
     from strategies.mean_reversion_v2 import MeanReversionV2Strategy
+    from strategies.vwap_micro_reversion import VWAPMicroReversionStrategy
+    from strategies.triple_ema_pullback import TripleEMAPullbackStrategy
 
     STRAT_MAP = {
         "opex_gamma": OpExGammaPinStrategy,
@@ -450,6 +465,8 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         "crypto_proxy_v2": CryptoProxyRegimeV2Strategy,
         "orb_v2": ORB5MinV2Strategy,
         "meanrev_v2": MeanReversionV2Strategy,
+        "vwap_micro": VWAPMicroReversionStrategy,
+        "triple_ema": TripleEMAPullbackStrategy,
     }
 
     strat_class = STRAT_MAP.get(strategy_id)
