@@ -95,6 +95,12 @@ STRATEGIES = {
         "frequency": "intraday",
         "multi_asset": True,
     },
+    "crypto_proxy_v2": {
+        "name": "Crypto-Proxy Regime V2",
+        "sharpe": 3.49,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
     # RETIRES apres re-backtest horaires stricts :
     # - ORB 5-Min : Sharpe -0.05 (ne survit pas aux couts sur univers large)
     # - Earnings Drift : Sharpe -9.55 (overtrade sur small caps)
@@ -356,12 +362,14 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         OvernightGapContinuationStrategy,
         LateDayMeanReversionStrategy,
     )
+    from strategies.crypto_proxy_regime_v2 import CryptoProxyRegimeV2Strategy
 
     STRAT_MAP = {
         "opex_gamma": OpExGammaPinStrategy,
         "dow_seasonal": DayOfWeekSeasonalStrategy,
         "gap_continuation": OvernightGapContinuationStrategy,
         "lateday_meanrev": LateDayMeanReversionStrategy,
+        "crypto_proxy_v2": CryptoProxyRegimeV2Strategy,
     }
 
     strat_class = STRAT_MAP.get(strategy_id)
