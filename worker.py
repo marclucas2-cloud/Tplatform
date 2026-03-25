@@ -99,6 +99,15 @@ def main():
     daily_done_today = False
     last_intraday = 0
 
+    # Verifier que les imports fonctionnent au demarrage
+    try:
+        from scripts.paper_portfolio import run, run_intraday
+        logger.info("  Imports paper_portfolio OK")
+    except Exception as e:
+        logger.error(f"  ERREUR IMPORT: {e}", exc_info=True)
+        logger.error("  Le worker ne peut pas demarrer sans paper_portfolio")
+        sys.exit(1)
+
     while True:
         now_paris = datetime.now(PARIS)
         today = now_paris.date()
