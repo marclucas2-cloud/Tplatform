@@ -101,6 +101,19 @@ STRATEGIES = {
         "frequency": "intraday",
         "multi_asset": True,
     },
+    # === Batch optimisations V2 (25 mars 2026) ===
+    "orb_v2": {
+        "name": "ORB 5-Min V2",
+        "sharpe": 2.28,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
+    "meanrev_v2": {
+        "name": "Mean Reversion V2",
+        "sharpe": 1.44,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
     # RETIRES apres re-backtest horaires stricts :
     # - ORB 5-Min : Sharpe -0.05 (ne survit pas aux couts sur univers large)
     # - Earnings Drift : Sharpe -9.55 (overtrade sur small caps)
@@ -363,6 +376,8 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         LateDayMeanReversionStrategy,
     )
     from strategies.crypto_proxy_regime_v2 import CryptoProxyRegimeV2Strategy
+    from strategies.orb_5min_v2 import ORB5MinV2Strategy
+    from strategies.mean_reversion_v2 import MeanReversionV2Strategy
 
     STRAT_MAP = {
         "opex_gamma": OpExGammaPinStrategy,
@@ -370,6 +385,8 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         "gap_continuation": OvernightGapContinuationStrategy,
         "lateday_meanrev": LateDayMeanReversionStrategy,
         "crypto_proxy_v2": CryptoProxyRegimeV2Strategy,
+        "orb_v2": ORB5MinV2Strategy,
+        "meanrev_v2": MeanReversionV2Strategy,
     }
 
     strat_class = STRAT_MAP.get(strategy_id)
