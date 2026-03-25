@@ -620,8 +620,16 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
                 dir_a, dir_b = "SELL", "BUY"
 
             try:
-                client.create_position(sym_a, dir_a, notional=round(notional, 2), _authorized_by="paper_portfolio")
-                client.create_position(sym_b, dir_b, notional=round(notional, 2), _authorized_by="paper_portfolio")
+                # Pour les shorts, utiliser qty entiere (Alpaca rejette notional short)
+                from core.data.loader import OHLCVLoader
+                for sym, dir_side in [(sym_a, dir_a), (sym_b, dir_b)]:
+                    if dir_side == "SELL":
+                        price = OHLCVLoader.from_yfinance(sym, "1D", period="5d").df["close"].iloc[-1]
+                        qty = int(notional / float(price))
+                        if qty >= 1:
+                            client.create_position(sym, dir_side, qty=qty, _authorized_by="paper_portfolio")
+                    else:
+                        client.create_position(sym, dir_side, notional=round(notional, 2), _authorized_by="paper_portfolio")
                 orders.append({"sid": sid, "action": "open_pair",
                               "direction": direction, "notional_per_leg": notional})
                 logger.info(f"  [{sid}] PAIR {direction}: {sym_a} {dir_a} + {sym_b} {dir_b} ${notional:,.0f}/leg")
@@ -662,10 +670,20 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
 
             side = "BUY" if direction == "LONG" else "SELL"
             try:
-                result = client.create_position(
-                    ticker, side, notional=round(notional, 2),
-                    _authorized_by="paper_portfolio_intraday"
-                )
+                if direction == "SHORT":
+                    # Alpaca rejette les shorts fractionnels — convertir en qty entiere
+                    qty = int(notional / entry_price)
+                    if qty < 1:
+                        continue
+                    result = client.create_position(
+                        ticker, side, qty=qty,
+                        _authorized_by="paper_portfolio_intraday"
+                    )
+                else:
+                    result = client.create_position(
+                        ticker, side, notional=round(notional, 2),
+                        _authorized_by="paper_portfolio_intraday"
+                    )
                 orders.append({
                     "sid": sid, "action": "intraday_open", "symbol": ticker,
                     "direction": direction, "notional": notional,
