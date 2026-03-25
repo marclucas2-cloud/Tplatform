@@ -138,24 +138,59 @@ MOMENTUM_CRASH_SMA = 200
 
 def load_state() -> dict:
     if STATE_FILE.exists():
-        with open(STATE_FILE, "r") as f:
-            return json.load(f)
-    return {
+        try:
+            with open(STATE_FILE, "r") as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            logger.warning("State file corrompu, reconstruction depuis Alpaca")
+
+    # Pas de state file (premier run ou redeploy Railway)
+    # Reconstruire depuis Alpaca
+    logger.info("Reconstruction du state depuis Alpaca...")
+    state = {
         "capital": INITIAL_CAPITAL,
-        "positions": {},           # strategy_id -> {symbols, direction, entry_prices...}
-        "allocations": {},         # strategy_id -> {pct, capital}
+        "positions": {},
+        "allocations": {},
         "last_monthly": None,
         "daily_capital_start": INITIAL_CAPITAL,
         "daily_pnl": 0.0,
         "benchmark_start_price": None,
         "benchmark_start_date": None,
         "history": [],
+        "intraday_positions": {},
     }
+    try:
+        from core.alpaca_client.client import AlpacaClient
+        client = AlpacaClient.from_env()
+        account = client.authenticate()
+        state["capital"] = account["equity"]
+        state["daily_capital_start"] = account["equity"]
+
+        # Reconstruire les positions depuis Alpaca
+        positions = client.get_positions()
+        for p in positions:
+            sym = p["symbol"]
+            # Tracker comme position intraday par defaut
+            state["intraday_positions"][sym] = {
+                "strategy": "unknown",
+                "direction": "LONG" if float(p.get("qty", 0)) > 0 else "SHORT",
+                "entry_price": float(p.get("avg_entry_price", 0)),
+                "opened_at": datetime.now(timezone.utc).isoformat(),
+            }
+        logger.info(f"  Equity: ${account['equity']:,.2f}, {len(positions)} positions")
+    except Exception as e:
+        logger.warning(f"  Impossible de reconstruire depuis Alpaca: {e}")
+
+    save_state(state)
+    return state
 
 
 def save_state(state: dict):
-    with open(STATE_FILE, "w") as f:
-        json.dump(state, f, indent=2, default=str)
+    try:
+        with open(STATE_FILE, "w") as f:
+            json.dump(state, f, indent=2, default=str)
+    except IOError as e:
+        logger.warning(f"Impossible de sauvegarder le state: {e}")
 
 
 # =============================================================================
