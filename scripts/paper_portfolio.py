@@ -68,6 +68,15 @@ NYSE_HOLIDAYS_2026 = {
     "2026-12-25",  # Christmas
 }
 
+# Jours de fermeture anticipee NYSE 2026 (marche ferme a 13:00 ET)
+NYSE_EARLY_CLOSE_2026 = {
+    "2026-11-27",  # Veille de Thanksgiving (lendemain)
+    "2026-12-24",  # Veille de Noel
+}
+
+# Seuil PDT (Pattern Day Trader) : equity minimum pour intraday
+PDT_EQUITY_MINIMUM = 25_000.0
+
 STRATEGIES = {
     # === Daily / Monthly (existantes) ===
     "momentum_25etf": {
@@ -502,7 +511,7 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
             return {"action": "hold", "reason": "pas de donnees intraday"}
 
     except Exception as e:
-        logger.error(f"Erreur fetch intraday: {e}")
+        logger.warning(f"WARNING API ALPACA: erreur fetch intraday — {type(e).__name__}: {e}")
         return {"action": "hold", "reason": f"erreur fetch: {e}"}
 
     # Generer les signaux
@@ -583,8 +592,22 @@ def _close_all_intraday_positions(state: dict, dry_run: bool = False):
 # EXECUTION (avec circuit-breaker)
 # =============================================================================
 
+def get_market_close_hour(date_str: str | None = None) -> tuple[int, int]:
+    """
+    Retourne l'heure de fermeture du marche (hour, minute) en ET.
+    13:00 pour les early close, 16:00 sinon.
+    """
+    if date_str is None:
+        import zoneinfo
+        et = zoneinfo.ZoneInfo("America/New_York")
+        date_str = datetime.now(et).strftime("%Y-%m-%d")
+    if date_str in NYSE_EARLY_CLOSE_2026:
+        return (13, 0)
+    return (16, 0)
+
+
 def is_us_market_open() -> bool:
-    """Verifie si le marche US est ouvert (9:30-16:00 ET, lun-ven, hors jours feries)."""
+    """Verifie si le marche US est ouvert (9:30-fermeture ET, lun-ven, hors jours feries)."""
     import zoneinfo
     et = zoneinfo.ZoneInfo("America/New_York")
     now_et = datetime.now(et)
@@ -595,10 +618,76 @@ def is_us_market_open() -> bool:
     today_str = now_et.strftime("%Y-%m-%d")
     if today_str in NYSE_HOLIDAYS_2026:
         return False
-    # Horaires reguliers
+    # Horaires (avec early close)
+    close_h, close_m = get_market_close_hour(today_str)
     market_open = now_et.replace(hour=9, minute=30, second=0, microsecond=0)
-    market_close = now_et.replace(hour=16, minute=0, second=0, microsecond=0)
+    market_close = now_et.replace(hour=close_h, minute=close_m, second=0, microsecond=0)
     return market_open <= now_et <= market_close
+
+
+def _check_daily_trailing_stops(client, current_positions: dict, state: dict):
+    """
+    Verifie les positions daily/monthly et ferme celles qui depassent
+    le trailing stop de 5% (DAILY_TRAILING_STOP_PCT).
+    Logue un WARNING pour les positions daily sans SL cote Alpaca.
+    """
+    daily_strategies = {sid for sid, s in STRATEGIES.items()
+                        if s["frequency"] in ("daily", "monthly")}
+
+    state_positions = state.get("positions", {})
+    for sid in daily_strategies:
+        pos_info = state_positions.get(sid, {})
+        symbols = pos_info.get("symbols", [])
+        for sym in symbols:
+            if sym not in current_positions:
+                continue
+
+            p = current_positions[sym]
+            avg_entry = float(p.get("avg_entry", 0))
+            qty = float(p.get("qty", 0))
+            market_val = float(p.get("market_val", 0))
+
+            if avg_entry <= 0 or qty == 0:
+                continue
+
+            # Calculer le prix courant implicite
+            current_price = abs(market_val / qty) if qty != 0 else 0
+
+            # Trailing stop check : 5% de perte depuis l'entree
+            if qty > 0:
+                # Long position
+                stop_price = avg_entry * (1 - DAILY_TRAILING_STOP_PCT)
+                if current_price < stop_price:
+                    logger.warning(
+                        f"TRAILING STOP DAILY: {sym} (strat={sid}) "
+                        f"prix=${current_price:.2f} < stop=${stop_price:.2f} "
+                        f"(entree=${avg_entry:.2f}, -5%). FERMETURE."
+                    )
+                    try:
+                        client.close_position(sym, _authorized_by="paper_portfolio_trailing_stop")
+                    except Exception as e:
+                        logger.error(f"  Erreur fermeture trailing stop {sym}: {e}")
+            else:
+                # Short position
+                stop_price = avg_entry * (1 + DAILY_TRAILING_STOP_PCT)
+                if current_price > stop_price:
+                    logger.warning(
+                        f"TRAILING STOP DAILY: {sym} (strat={sid}) "
+                        f"prix=${current_price:.2f} > stop=${stop_price:.2f} "
+                        f"(entree=${avg_entry:.2f}, +5%). FERMETURE."
+                    )
+                    try:
+                        client.close_position(sym, _authorized_by="paper_portfolio_trailing_stop")
+                    except Exception as e:
+                        logger.error(f"  Erreur fermeture trailing stop {sym}: {e}")
+
+            # Avertissement si pas de SL visible
+            logger.info(
+                f"  [{sid}] Position daily {sym}: "
+                f"qty={qty}, entry=${avg_entry:.2f}, "
+                f"current=${current_price:.2f}, "
+                f"trailing_stop=${stop_price:.2f}"
+            )
 
 
 def execute_orders(signals: dict, allocations: dict, state: dict,
@@ -623,14 +712,26 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
     if daily_start > 0:
         daily_dd = (equity - daily_start) / daily_start
         if daily_dd < -MAX_DAILY_DRAWDOWN:
-            logger.warning(
-                f"CIRCUIT-BREAKER: DD journalier {daily_dd*100:.1f}% > {MAX_DAILY_DRAWDOWN*100}%"
-                f" — AUCUN ordre execute")
+            logger.critical(
+                f"CIRCUIT-BREAKER DECLENCHE: DD journalier {daily_dd*100:.1f}% > "
+                f"{MAX_DAILY_DRAWDOWN*100}% — AUCUN ordre execute. "
+                f"Equity=${equity:,.2f}, start=${daily_start:,.2f}")
             return []
 
     orders = []
     positions_list = client.get_positions()
     current_positions = {p["symbol"]: p for p in positions_list}
+
+    # === PDT GUARD : si equity < $25K, bloquer toutes les strategies intraday ===
+    pdt_blocked = equity < PDT_EQUITY_MINIMUM
+    if pdt_blocked:
+        logger.warning(
+            f"PDT GUARD: equity ${equity:,.2f} < ${PDT_EQUITY_MINIMUM:,.2f} — "
+            f"strategies intraday DESACTIVEES"
+        )
+
+    # === CHECK TRAILING STOP sur positions daily/monthly (5%) ===
+    _check_daily_trailing_stops(client, current_positions, state)
 
     # Guard : max positions simultanees
     if len(current_positions) >= MAX_LIVE_POSITIONS:
@@ -756,6 +857,11 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
             ticker = signal["ticker"]
             direction = signal["direction"]
             capital = min(signal.get("capital", 5000), max_capital)
+
+            # PDT Guard : bloquer les intraday si equity < $25K
+            if pdt_blocked:
+                logger.info(f"  [{sid}] BLOQUE {direction} {ticker} (PDT guard: equity < $25K)")
+                continue
 
             # Guard exposition : bloquer si exposition nette depasse le cap
             if exposure_blocked == "LONG" and direction == "LONG":
@@ -1039,12 +1145,18 @@ def run_intraday(dry_run: bool = False):
     print(f"  Capital  : ${total_capital:,.2f}")
     print(f"  Mode     : {'DRY-RUN' if dry_run else 'PAPER TRADING'}")
 
-    # ── Check fermeture forcee a 15:55 ET ──
+    # ── Check fermeture forcee (5 min avant fermeture marche) ──
     import zoneinfo
     et = zoneinfo.ZoneInfo("America/New_York")
     now_et = datetime.now(et)
-    is_close_time = now_et.hour == 15 and now_et.minute >= 55
-    is_after_close = now_et.hour >= 16
+    today_str = now_et.strftime("%Y-%m-%d")
+    close_h, close_m = get_market_close_hour(today_str)
+    # Fermeture forcee 5 min avant la cloture
+    close_time = now_et.replace(hour=close_h, minute=close_m, second=0, microsecond=0)
+    from datetime import timedelta
+    force_close_time = close_time - timedelta(minutes=5)
+    is_close_time = now_et >= force_close_time and now_et < close_time
+    is_after_close = now_et >= close_time
 
     if (is_close_time or is_after_close) and not dry_run:
         print(f"\n  FERMETURE FORCEE ({now_et.strftime('%H:%M')} ET)")

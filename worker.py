@@ -9,6 +9,7 @@ Execute :
 import os
 import sys
 import time
+import json
 import logging
 from datetime import datetime
 from pathlib import Path
@@ -28,7 +29,7 @@ except ImportError:
 
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(message)s",
+    format="%(asctime)s [%(levelname)s][%(name)s] %(message)s",
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger("worker")
@@ -70,6 +71,120 @@ import threading
 _execution_lock = threading.Lock()
 
 
+def reconcile_positions_at_startup():
+    """
+    Reconciliation au demarrage : compare les positions Alpaca vs le state local.
+    Logue les positions orphelines (dans Alpaca mais pas dans le state).
+    """
+    try:
+        from scripts.paper_portfolio import load_state, STATE_FILE
+        from core.alpaca_client.client import AlpacaClient
+
+        state = load_state()
+        client = AlpacaClient.from_env()
+        alpaca_positions = client.get_positions()
+
+        # Positions connues du state (daily + intraday)
+        state_symbols = set()
+        for sid, pos in state.get("positions", {}).items():
+            for sym in pos.get("symbols", []):
+                state_symbols.add(sym)
+        for sym in state.get("intraday_positions", {}).keys():
+            state_symbols.add(sym)
+
+        alpaca_symbols = {p["symbol"] for p in alpaca_positions}
+
+        orphans = alpaca_symbols - state_symbols
+        missing = state_symbols - alpaca_symbols
+
+        if orphans:
+            logger.warning(
+                f"RECONCILIATION: {len(orphans)} position(s) orpheline(s) "
+                f"(dans Alpaca mais pas dans le state): {sorted(orphans)}"
+            )
+            for p in alpaca_positions:
+                if p["symbol"] in orphans:
+                    logger.warning(
+                        f"  ORPHELIN: {p['symbol']} qty={p['qty']} "
+                        f"val=${p['market_val']:,.2f} P&L=${p['unrealized_pl']:+.2f}"
+                    )
+        if missing:
+            logger.warning(
+                f"RECONCILIATION: {len(missing)} position(s) dans le state "
+                f"mais plus dans Alpaca: {sorted(missing)}"
+            )
+
+        if not orphans and not missing:
+            logger.info(
+                f"RECONCILIATION OK: {len(alpaca_symbols)} position(s) Alpaca "
+                f"correspondent au state"
+            )
+
+        account = client.get_account_info()
+        logger.info(
+            f"RECONCILIATION: equity=${account['equity']:,.2f} "
+            f"cash=${account['cash']:,.2f} positions={len(alpaca_positions)}"
+        )
+
+    except Exception as e:
+        logger.error(f"RECONCILIATION ECHOUEE: {e}", exc_info=True)
+
+
+def check_positions_after_close():
+    """
+    Verifie apres 16:00 ET si des positions intraday sont encore ouvertes.
+    Log CRITICAL si c'est le cas.
+    """
+    try:
+        from core.alpaca_client.client import AlpacaClient
+        from scripts.paper_portfolio import load_state
+
+        state = load_state()
+        intraday_pos = state.get("intraday_positions", {})
+        if not intraday_pos:
+            return  # Rien a verifier
+
+        client = AlpacaClient.from_env()
+        alpaca_positions = client.get_positions()
+        alpaca_symbols = {p["symbol"] for p in alpaca_positions}
+
+        # Verifier si des positions intraday sont encore ouvertes
+        still_open = set(intraday_pos.keys()) & alpaca_symbols
+        if still_open:
+            logger.critical(
+                f"POSITIONS INTRADAY NON FERMEES APRES 16:00 ET: {sorted(still_open)}. "
+                f"Action manuelle requise!"
+            )
+            for sym in still_open:
+                for p in alpaca_positions:
+                    if p["symbol"] == sym:
+                        logger.critical(
+                            f"  NON FERME: {sym} qty={p['qty']} "
+                            f"val=${p['market_val']:,.2f} P&L=${p['unrealized_pl']:+.2f}"
+                        )
+    except Exception as e:
+        logger.error(f"Erreur check_positions_after_close: {e}")
+
+
+def log_heartbeat():
+    """Log un heartbeat avec l'etat du worker (positions, equity)."""
+    try:
+        from core.alpaca_client.client import AlpacaClient
+        client = AlpacaClient.from_env()
+        account = client.get_account_info()
+        positions = client.get_positions()
+        equity = account["equity"]
+        n_pos = len(positions)
+
+        total_pnl = sum(p.get("unrealized_pl", 0) for p in positions)
+        logger.info(
+            f"HEARTBEAT: worker alive, {n_pos} position(s), "
+            f"equity=${equity:,.2f}, unrealized P&L=${total_pnl:+.2f}"
+        )
+    except Exception as e:
+        logger.warning(f"HEARTBEAT: worker alive (Alpaca inaccessible: {e})")
+
+
 def run_daily():
     """Execute le portfolio daily (3 strategies)."""
     if not _execution_lock.acquire(blocking=False):
@@ -83,6 +198,7 @@ def run_daily():
         run(dry_run=False, force=force)
     except Exception as e:
         logger.error(f"Erreur daily run: {e}", exc_info=True)
+        logger.warning(f"WARNING API: erreur lors du daily run — {type(e).__name__}: {e}")
     finally:
         _execution_lock.release()
 
@@ -98,6 +214,7 @@ def run_intraday():
         run_intraday(dry_run=False)
     except Exception as e:
         logger.error(f"Erreur intraday run: {e}", exc_info=True)
+        logger.warning(f"WARNING API: erreur lors du intraday run — {type(e).__name__}: {e}")
     finally:
         _execution_lock.release()
 
@@ -112,6 +229,9 @@ def main():
 
     daily_done_today = False
     last_intraday = 0
+    last_heartbeat = 0
+    after_close_checked_today = False
+    HEARTBEAT_INTERVAL = 1800  # 30 min
 
     # Verifier que les imports fonctionnent au demarrage
     try:
@@ -122,18 +242,40 @@ def main():
         logger.error("  Le worker ne peut pas demarrer sans paper_portfolio")
         sys.exit(1)
 
+    # === RECONCILIATION AU DEMARRAGE ===
+    logger.info("  Reconciliation des positions au demarrage...")
+    reconcile_positions_at_startup()
+
+    # Premier heartbeat
+    log_heartbeat()
+    last_heartbeat = time.time()
+
     while True:
         now_paris = datetime.now(PARIS)
+        now_et = datetime.now(ET)
         today = now_paris.date()
 
-        # Reset daily flag au changement de jour
+        # Reset daily flags au changement de jour
         if daily_done_today and now_paris.hour < DAILY_HOUR:
             daily_done_today = False
+            after_close_checked_today = False
 
         # Skip weekends
         if not is_weekday():
             time.sleep(60)
             continue
+
+        # === HEARTBEAT toutes les 30 min ===
+        if time.time() - last_heartbeat >= HEARTBEAT_INTERVAL:
+            log_heartbeat()
+            last_heartbeat = time.time()
+
+        # === CHECK POSITIONS APRES FERMETURE (16:05-16:30 ET) ===
+        if (not after_close_checked_today
+                and now_et.hour == 16 and 5 <= now_et.minute <= 30):
+            logger.info("  Check des positions apres fermeture du marche...")
+            check_positions_after_close()
+            after_close_checked_today = True
 
         # Daily run a 15:35 Paris (une seule fois par jour)
         if is_daily_time() and not daily_done_today:
