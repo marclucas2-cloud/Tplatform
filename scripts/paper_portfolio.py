@@ -157,6 +157,19 @@ STRATEGIES = {
         "frequency": "intraday",
         "multi_asset": True,
     },
+    # === Session 26 mars 2026 — walk-forward valides ===
+    "gold_fear": {
+        "name": "Gold Fear Gauge",
+        "sharpe": 5.01,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
+    "corr_hedge": {
+        "name": "Correlation Regime Hedge",
+        "sharpe": 1.09,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
     # RETIRES apres re-backtest horaires stricts :
     # - ORB 5-Min : Sharpe -0.05 (ne survit pas aux couts sur univers large)
     # - Earnings Drift : Sharpe -9.55 (overtrade sur small caps)
@@ -240,47 +253,145 @@ def save_state(state: dict):
 # PORTFOLIO ALLOCATION (replica de PortfolioManagerAgent._compute_allocations)
 # =============================================================================
 
+# Allocation Tier S/A/B/C — fixe, basee sur la qualite de l'edge
+TIER_ALLOCATION = {
+    # TIER S (edge massif, DD quasi-nul)
+    "opex_gamma":       0.25,
+    # TIER A (edge fort valide)
+    "gap_continuation": 0.15,
+    "vwap_micro":       0.15,
+    "crypto_proxy_v2":  0.12,
+    "dow_seasonal":     0.10,
+    # TIER B (edge modere / diversifiant)
+    "orb_v2":           0.05,
+    "meanrev_v2":       0.04,
+    "corr_hedge":       0.03,
+    "lateday_meanrev":  0.03,
+    "gold_fear":        0.02,
+    "triple_ema":       0.02,
+    # TIER C (daily/monthly, positions longues)
+    "momentum_25etf":   0.03,
+    "pairs_mu_amat":    0.03,
+    "vrp_rotation":     0.03,
+}
+
+
+def get_market_regime() -> dict:
+    """
+    Determine le regime de marche actuel (bull/bear x high/low vol).
+    Utilise SPY close vs SMA200 + ATR 20j.
+    """
+    try:
+        from core.data.loader import OHLCVLoader
+        data = OHLCVLoader.from_yfinance("SPY", "1D", period="2y")
+        close = data.df["close"]
+        spy_close = float(close.iloc[-1])
+        sma200 = float(close.rolling(200).mean().iloc[-1])
+
+        # ATR 20j
+        high = data.df["high"]
+        low = data.df["low"]
+        tr = pd.concat([
+            high - low,
+            (high - close.shift()).abs(),
+            (low - close.shift()).abs(),
+        ], axis=1).max(axis=1)
+        atr_20 = float(tr.rolling(20).mean().iloc[-1])
+        atr_pct = atr_20 / spy_close * 100
+
+        bull = spy_close > sma200
+        high_vol = atr_pct > 2.0
+        low_vol = atr_pct < 0.8
+
+        if bull and high_vol:
+            regime = "BULL_HIGH_VOL"
+        elif bull and low_vol:
+            regime = "BULL_LOW_VOL"
+        elif bull:
+            regime = "BULL_NORMAL"
+        elif high_vol:
+            regime = "BEAR_HIGH_VOL"
+        elif low_vol:
+            regime = "BEAR_LOW_VOL"
+        else:
+            regime = "BEAR_NORMAL"
+
+        return {
+            "spy_close": spy_close,
+            "sma200": sma200,
+            "atr_pct": round(atr_pct, 2),
+            "bull": bull,
+            "high_vol": high_vol,
+            "low_vol": low_vol,
+            "regime": regime,
+        }
+    except Exception as e:
+        logger.warning(f"Regime detection failed: {e}")
+        return {"regime": "BULL_NORMAL", "bull": True, "high_vol": False, "low_vol": False, "atr_pct": 1.5}
+
+
 def compute_allocations(strategies: dict, total_capital: float) -> dict[str, dict]:
     """
-    Allocation risk-parity basee sur le Sharpe ratio.
-    Cap strict par strategie. Redistribution iterative du surplus.
+    Allocation Tier S/A/B/C avec ajustement regime-conditional.
     """
-    sharpes = {sid: max(s["sharpe"], 0.1) for sid, s in strategies.items()}
-    total_sharpe = sum(sharpes.values())
+    # Base allocation
+    base_alloc = {}
+    for sid in strategies:
+        base_alloc[sid] = TIER_ALLOCATION.get(sid, 0.01)
 
-    # Allocation initiale proportionnelle au Sharpe
-    allocations = {sid: sharpe / total_sharpe for sid, sharpe in sharpes.items()}
+    # Regime adjustment
+    regime = get_market_regime()
+    logger.info(f"Regime: {regime['regime']} (ATR={regime.get('atr_pct', '?')}%)")
 
-    # Cap iteratif : redistribuer le surplus aux non-cappes
-    for _ in range(10):  # Max 10 iterations
-        capped = {}
-        uncapped = {}
-        surplus = 0.0
-        for sid, pct in allocations.items():
-            if pct > MAX_ALLOCATION_PER_STRATEGY:
-                capped[sid] = MAX_ALLOCATION_PER_STRATEGY
-                surplus += pct - MAX_ALLOCATION_PER_STRATEGY
-            else:
-                uncapped[sid] = pct
+    multipliers = {sid: 1.0 for sid in strategies}
 
-        if surplus == 0:
-            break  # Rien a redistribuer
+    if not regime.get("bull", True):
+        # BEAR : reduire tout de 30%, desactiver les plus fragiles
+        for sid in multipliers:
+            multipliers[sid] *= 0.70
+        if "triple_ema" in multipliers:
+            multipliers["triple_ema"] = 0  # Desactive en bear
 
-        # Redistribuer le surplus proportionnellement aux non-cappes
-        uncapped_total = sum(uncapped.values())
-        if uncapped_total > 0:
-            for sid in uncapped:
-                uncapped[sid] += surplus * (uncapped[sid] / uncapped_total)
+    if regime.get("high_vol", False):
+        # HIGH VOL : booster OpEx, reduire Day-of-Week
+        if "opex_gamma" in multipliers:
+            multipliers["opex_gamma"] *= 1.30
+        if "dow_seasonal" in multipliers:
+            multipliers["dow_seasonal"] *= 0.50
 
-        allocations = {**capped, **uncapped}
+    if regime.get("low_vol", False):
+        # LOW VOL : reduire tout de 20%
+        for sid in multipliers:
+            multipliers[sid] *= 0.80
+
+    # Appliquer les multipliers
+    adjusted = {}
+    for sid, pct in base_alloc.items():
+        adjusted[sid] = pct * multipliers.get(sid, 1.0)
+
+    # Re-normaliser pour que total = 100%
+    total = sum(adjusted.values())
+    if total > 0:
+        adjusted = {sid: pct / total for sid, pct in adjusted.items()}
+
+    # Cap a MAX_ALLOCATION_PER_STRATEGY (25% pour Tier S)
+    MAX_TIER_S = 0.25
+    for sid, pct in adjusted.items():
+        if pct > MAX_TIER_S:
+            adjusted[sid] = MAX_TIER_S
+
+    # Re-normaliser apres cap
+    total = sum(adjusted.values())
+    if total > 0 and total != 1.0:
+        adjusted = {sid: pct / total for sid, pct in adjusted.items()}
 
     result = {}
-    for sid, pct in allocations.items():
+    for sid, pct in adjusted.items():
         allocated = total_capital * pct
         result[sid] = {
             "pct": round(pct, 4),
             "capital": round(allocated, 2),
-            "max_position": round(allocated, 2),
+            "max_position": round(min(allocated, total_capital * MAX_POSITION_SIZE), 2),
         }
 
     return result
@@ -458,6 +569,8 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
     from strategies.mean_reversion_v2 import MeanReversionV2Strategy
     from strategies.vwap_micro_reversion import VWAPMicroReversionStrategy
     from strategies.triple_ema_pullback import TripleEMAPullbackStrategy
+    from strategies.gold_fear_gauge import GoldFearGaugeStrategy
+    from strategies.correlation_regime_hedge import CorrelationRegimeHedgeStrategy
 
     STRAT_MAP = {
         "opex_gamma": OpExGammaPinStrategy,
@@ -469,6 +582,8 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         "meanrev_v2": MeanReversionV2Strategy,
         "vwap_micro": VWAPMicroReversionStrategy,
         "triple_ema": TripleEMAPullbackStrategy,
+        "gold_fear": GoldFearGaugeStrategy,
+        "corr_hedge": CorrelationRegimeHedgeStrategy,
     }
 
     strat_class = STRAT_MAP.get(strategy_id)

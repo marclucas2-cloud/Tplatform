@@ -15,21 +15,23 @@ python worker.py                                 # Worker Railway (24/7)
 python -m pytest tests/ -v --tb=short            # Tests
 ```
 
-## Strategies actives (12)
+## Strategies actives (14)
 ```
 Daily/Monthly :
   - Momentum 25 ETFs (mensuel, ROC 3m, crash filter SMA200)
   - Pairs MU/AMAT (daily, z-score cointegre)
   - VRP SVXY/SPY/TLT (mensuel, regime de volatilite)
 
-Intraday (9 strategies, cron toutes les 5 min 15:35-22:00 Paris) :
+Intraday (11 strategies, cron toutes les 5 min 15:35-22:00 Paris) :
   - OpEx Gamma Pin (Sharpe 10.41) — vendredis/OpEx, mean reversion round numbers
   - Overnight Gap Continuation (Sharpe 5.22) — gaps > 1.1% + volume confirmation
+  - Gold Fear Gauge (Sharpe 5.01) — GLD up + SPY down = short high-beta
   - Crypto-Proxy Regime V2 (Sharpe 3.49) — decorrelation COIN vs MARA/MSTR
   - Day-of-Week Seasonal (Sharpe 3.42) — Monday effect, vendredi bullish
   - VWAP Micro-Deviation (Sharpe 3.08) — rolling VWAP 20 barres, z-score reversion
   - ORB 5-Min V2 (Sharpe 2.28) — breakout top stocks in play, gap > 3%
   - Mean Reversion V2 (Sharpe 1.44) — BB 3.0 std + RSI 12/88 extreme
+  - Correlation Regime Hedge (Sharpe 1.09) — SPY/TLT + GLD/USO anomaly reversion
   - Triple EMA Pullback (Sharpe 1.06) — EMA 8/13/21 aligned + pullback re-entry
   - Late Day Mean Reversion (Sharpe 0.60) — move > 3% + RSI extreme + volume sec
 ```
@@ -46,7 +48,8 @@ intraday-backtesterV2/        # Framework backtest (83 strategies, 35 testees mi
 ```
 
 ## Risk management
-- **Cap 20%** par strategie, **10%** par position
+- **Allocation Tier S/A/B/C** : Sharpe-weighted avec regime-conditional
+- **Cap 25%** par strategie (Tier S), **10%** par position
 - **Circuit-breaker** : DD > 5% journalier = stop tous les ordres
 - **Bracket orders** : SL/TP envoyes a Alpaca (broker-side, survivent aux crashs)
 - **Fermeture forcee 15:55 ET** + annulation ordres pendants
@@ -56,6 +59,9 @@ intraday-backtesterV2/        # Framework backtest (83 strategies, 35 testees mi
 - **Guard _authorized_by** : tout ordre doit passer par le pipeline
 - **Jours feries NYSE** : calendrier 2026 dans is_us_market_open()
 - **Lock idempotence** : anti-double execution dans le worker
+- **Kill switch** : -2% capital alloue sur 5j rolling = strategie desactivee
+- **Alerting Telegram** : heartbeat 30min + alertes critiques (circuit-breaker, kill switch)
+- **Regime-conditional** : allocation ajustee bear/bull x high/low vol
 
 ## Variables env critiques
 `ALPACA_API_KEY` `ALPACA_SECRET_KEY` `PAPER_TRADING=true`
