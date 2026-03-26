@@ -185,3 +185,153 @@ class DynamicAllocator:
             if strategy_name in tier_config.get("strategies", []):
                 return tier_name
         return "unknown"
+
+    # -----------------------------------------------------------------
+    # ALLOC-1 : Rebalancing automatique EOD
+    # -----------------------------------------------------------------
+
+    def check_rebalance_needed(
+        self,
+        current_weights: dict,
+        target_weights: dict,
+        threshold: float = 0.20,
+    ) -> dict:
+        """Retourne les strategies qui ont drifte de > threshold depuis la cible.
+
+        Le drift est calcule comme |current - target| / target.
+        Un threshold de 0.20 signifie qu'un ecart de 20 % relatif declenche
+        un rebalancing (ex : cible 12 %, actuel > 14.4 % ou < 9.6 %).
+
+        Args:
+            current_weights: {strategy: current_weight} — poids actuels
+            target_weights:  {strategy: target_weight}  — poids cibles
+            threshold:       seuil de drift relatif (defaut 0.20 = 20 %)
+
+        Returns:
+            {strategy: {current, target, drift_pct, action: 'increase'|'decrease'}}
+            Seules les strategies dont |drift| > threshold sont incluses.
+        """
+        rebalance = {}
+        # Union de toutes les strategies referencees
+        all_strategies = set(current_weights.keys()) | set(target_weights.keys())
+
+        for strat in all_strategies:
+            current = current_weights.get(strat, 0.0)
+            target = target_weights.get(strat, 0.0)
+
+            # Si la cible est 0, toute position non-nulle doit etre reduite
+            if target == 0:
+                if current > 0:
+                    rebalance[strat] = {
+                        "current": current,
+                        "target": target,
+                        "drift_pct": float("inf"),
+                        "action": "decrease",
+                    }
+                continue
+
+            drift_pct = abs(current - target) / target
+
+            if drift_pct > threshold:
+                action = "decrease" if current > target else "increase"
+                rebalance[strat] = {
+                    "current": current,
+                    "target": target,
+                    "drift_pct": round(drift_pct, 4),
+                    "action": action,
+                }
+
+        if rebalance:
+            logger.info(
+                "Rebalance needed for %d strategies (threshold=%.0f%%): %s",
+                len(rebalance),
+                threshold * 100,
+                list(rebalance.keys()),
+            )
+        else:
+            logger.debug("No rebalance needed (threshold=%.0f%%)", threshold * 100)
+
+        return rebalance
+
+    # -----------------------------------------------------------------
+    # ALLOC-5 : Allocation bear-specific par bucket
+    # -----------------------------------------------------------------
+
+    REGIME_BUCKET_MULTIPLIERS = {
+        "BULL_NORMAL": {
+            "core_alpha": 1.0,
+            "shorts_bear": 0.5,
+            "diversifiers": 1.0,
+            "satellite": 1.0,
+            "daily_monthly": 1.0,
+        },
+        "BULL_HIGH_VOL": {
+            "core_alpha": 0.8,
+            "shorts_bear": 0.7,
+            "diversifiers": 1.2,
+            "satellite": 0.8,
+            "daily_monthly": 1.0,
+        },
+        "BEAR_NORMAL": {
+            "core_alpha": 0.6,
+            "shorts_bear": 1.5,
+            "diversifiers": 1.0,
+            "satellite": 0.3,
+            "daily_monthly": 0.8,
+        },
+        "BEAR_HIGH_VOL": {
+            "core_alpha": 0.4,
+            "shorts_bear": 2.0,
+            "diversifiers": 1.0,
+            "satellite": 0.0,
+            "daily_monthly": 0.5,
+        },
+    }
+
+    def apply_regime_buckets(self, weights: dict, regime: str) -> dict:
+        """Applique les multiplicateurs de regime par bucket aux poids.
+
+        Chaque strategie est identifiee dans un bucket (via config/allocation.yaml).
+        Le multiplicateur du regime courant est applique, puis les poids sont
+        re-normalises a (1 - cash_reserve).
+
+        Args:
+            weights: {strategy: weight} — poids pre-calcules
+            regime:  un de 'BULL_NORMAL', 'BULL_HIGH_VOL', 'BEAR_NORMAL', 'BEAR_HIGH_VOL'
+
+        Returns:
+            {strategy: adjusted_weight} — re-normalise apres ajustement
+        """
+        if not weights:
+            return {}
+
+        mults = self.REGIME_BUCKET_MULTIPLIERS.get(
+            regime, self.REGIME_BUCKET_MULTIPLIERS["BULL_NORMAL"]
+        )
+
+        # Build strategy -> bucket mapping
+        buckets = self.config.get("buckets", {})
+        strat_to_bucket: Dict[str, str] = {}
+        for bucket_name, bucket_cfg in buckets.items():
+            for strat in bucket_cfg.get("strategies", []):
+                strat_to_bucket[strat] = bucket_name
+
+        adjusted = {}
+        for name, w in weights.items():
+            bucket = strat_to_bucket.get(name)
+            mult = mults.get(bucket, 1.0) if bucket else 1.0
+            adjusted[name] = w * mult
+
+        # Re-normaliser a (1 - cash_reserve)
+        cash_reserve = self.config["portfolio"]["min_cash_reserve"]
+        total = sum(adjusted.values()) or 1.0
+        target = 1.0 - cash_reserve
+        adjusted = {k: v / total * target for k, v in adjusted.items()}
+
+        logger.info(
+            "Applied regime bucket multipliers (regime=%s): %d strategies adjusted",
+            regime,
+            len(adjusted),
+        )
+
+        return adjusted

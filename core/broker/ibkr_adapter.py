@@ -11,11 +11,17 @@ from __future__ import annotations
 
 import logging
 import os
+import time
 from typing import Any
 
 from core.broker.base import BaseBroker, BrokerError
 
 logger = logging.getLogger(__name__)
+
+# Retry config pour reconnexion IBKR
+_MAX_RECONNECT_ATTEMPTS = 5
+_INITIAL_BACKOFF_SECONDS = 1.0
+_MAX_BACKOFF_SECONDS = 30.0
 
 
 class IBKRBroker(BaseBroker):
@@ -42,23 +48,84 @@ class IBKRBroker(BaseBroker):
         self._port = int(os.getenv("IBKR_PORT", "7497" if self._paper else "7496"))
         self._client_id = int(os.getenv("IBKR_CLIENT_ID", "1"))
         self._connected = False
+        self._permanently_down = False
+        self._reconnect_attempts = 0
 
     def _ensure_connected(self):
-        """Connexion lazy — se connecte au premier appel."""
-        if not self._connected or not self._ib.isConnected():
+        """Connexion lazy avec retry backoff exponentiel.
+
+        Tente de se connecter jusqu'a _MAX_RECONNECT_ATTEMPTS fois
+        avec un backoff exponentiel (1s, 2s, 4s, 8s, max 30s).
+        Si toutes les tentatives echouent, marque le broker comme
+        permanently down et leve une BrokerError.
+        """
+        if self._permanently_down:
+            raise BrokerError(
+                "IBKR permanently down — toutes les tentatives de reconnexion "
+                "ont echoue. Redemarrez le worker apres avoir verifie TWS/IB Gateway."
+            )
+
+        if self._connected and self._ib.isConnected():
+            return
+
+        backoff = _INITIAL_BACKOFF_SECONDS
+        last_error = None
+
+        for attempt in range(1, _MAX_RECONNECT_ATTEMPTS + 1):
             try:
                 self._ib.connect(
                     self._host, self._port, clientId=self._client_id,
                     timeout=10,
                 )
                 self._connected = True
+                self._reconnect_attempts = 0
                 mode = "PAPER" if self._paper else "LIVE"
-                logger.info(f"IBKR connecte ({mode}) sur {self._host}:{self._port}")
+                if attempt > 1:
+                    logger.warning(
+                        f"IBKR reconnecte ({mode}) apres {attempt} tentatives "
+                        f"sur {self._host}:{self._port}"
+                    )
+                else:
+                    logger.info(
+                        f"IBKR connecte ({mode}) sur {self._host}:{self._port}"
+                    )
+                return
             except Exception as e:
-                raise BrokerError(
-                    f"Connexion IBKR echouee sur {self._host}:{self._port} — {e}. "
-                    f"Verifiez que TWS/IB Gateway est demarre."
-                )
+                last_error = e
+                self._reconnect_attempts = attempt
+                if attempt < _MAX_RECONNECT_ATTEMPTS:
+                    logger.warning(
+                        f"IBKR connexion echouee (tentative {attempt}/{_MAX_RECONNECT_ATTEMPTS}) "
+                        f"— retry dans {backoff:.0f}s — {e}"
+                    )
+                    time.sleep(backoff)
+                    backoff = min(backoff * 2, _MAX_BACKOFF_SECONDS)
+
+        # Toutes les tentatives ont echoue
+        self._permanently_down = True
+        self._connected = False
+        logger.critical(
+            f"IBKR PERMANENTLY DOWN apres {_MAX_RECONNECT_ATTEMPTS} tentatives. "
+            f"Derniere erreur : {last_error}"
+        )
+        raise BrokerError(
+            f"IBKR permanently down apres {_MAX_RECONNECT_ATTEMPTS} tentatives "
+            f"sur {self._host}:{self._port} — {last_error}. "
+            f"Verifiez que TWS/IB Gateway est demarre."
+        )
+
+    def health_check(self) -> bool:
+        """Verifie si le broker est operationnel.
+
+        Returns:
+            True si connecte et operationnel, False sinon.
+        """
+        if self._permanently_down:
+            return False
+        try:
+            return self._connected and self._ib.isConnected()
+        except Exception:
+            return False
 
     @property
     def name(self) -> str:

@@ -501,6 +501,137 @@ class TestAllocatorEdgeCases:
 # TEST 16 : Sector limit rejects oversized tech (explicit enforcement test)
 # =============================================================================
 
+# =============================================================================
+# TEST VaR Bootstrap
+# =============================================================================
+
+class TestVaRBootstrap:
+    def test_var_bootstrap_positive(self, rm):
+        """VaR bootstrap retourne une valeur positive pour des rendements volatils."""
+        np.random.seed(42)
+        returns = list(np.random.normal(0.0, 0.02, 252))
+        var_boot = rm.calculate_var_bootstrap(returns, confidence=0.99, n_simulations=5000)
+        assert var_boot > 0, f"VaR bootstrap devrait etre > 0, got {var_boot}"
+
+    def test_var_bootstrap_empty_returns(self, rm):
+        """VaR bootstrap retourne 0 pour une liste vide ou trop courte."""
+        assert rm.calculate_var_bootstrap([]) == 0.0
+        assert rm.calculate_var_bootstrap([0.01]) == 0.0
+
+    def test_var_bootstrap_fat_tails_higher(self, rm):
+        """VaR bootstrap devrait capturer des fat tails mieux que la parametrique."""
+        np.random.seed(42)
+        # Creer des rendements avec fat tails (distribution t de Student, df=3)
+        from scipy import stats as sp_stats
+        returns_fat = list(sp_stats.t.rvs(df=3, loc=0, scale=0.02, size=500))
+        var_boot = rm.calculate_var_bootstrap(returns_fat, confidence=0.99, n_simulations=5000)
+        assert var_boot > 0, f"VaR bootstrap fat tails devrait etre > 0"
+
+    def test_var_bootstrap_increases_with_vol(self, rm):
+        """VaR bootstrap augmente avec la volatilite."""
+        np.random.seed(42)
+        returns_low = list(np.random.normal(0.0, 0.005, 252))
+        returns_high = list(np.random.normal(0.0, 0.03, 252))
+        var_low = rm.calculate_var_bootstrap(returns_low, confidence=0.99, n_simulations=5000)
+        var_high = rm.calculate_var_bootstrap(returns_high, confidence=0.99, n_simulations=5000)
+        assert var_high > var_low, (
+            f"VaR high vol {var_high:.4f} devrait etre > VaR low vol {var_low:.4f}"
+        )
+
+
+# =============================================================================
+# TEST VaR Max (conservative)
+# =============================================================================
+
+class TestVaRMax:
+    def test_var_max_at_least_parametric(self, rm):
+        """VaR max doit etre >= VaR parametrique."""
+        np.random.seed(42)
+        returns = list(np.random.normal(0.0, 0.02, 252))
+        var_param = rm.calculate_var(returns, confidence=0.99)
+        var_max = rm.calculate_var_max(returns, confidence=0.99, n_simulations=5000)
+        assert var_max >= var_param - 1e-9, (
+            f"VaR max {var_max:.4f} devrait etre >= VaR param {var_param:.4f}"
+        )
+
+    def test_var_max_at_least_bootstrap(self, rm):
+        """VaR max doit etre >= chacune des deux composantes."""
+        np.random.seed(42)
+        returns = list(np.random.normal(0.0, 0.02, 252))
+        # Calculer var_max avec un seed fixe
+        np.random.seed(99)
+        var_max = rm.calculate_var_max(returns, confidence=0.99, n_simulations=5000)
+        var_param = rm.calculate_var(returns, confidence=0.99)
+        # VaR max = max(param, bootstrap) donc toujours >= param
+        assert var_max >= var_param - 1e-9, (
+            f"VaR max {var_max:.4f} devrait etre >= VaR param {var_param:.4f}"
+        )
+        assert var_max > 0
+
+    def test_var_max_empty_returns(self, rm):
+        """VaR max retourne 0 pour une liste vide."""
+        assert rm.calculate_var_max([]) == 0.0
+
+
+# =============================================================================
+# TEST Deleveraging progressif
+# =============================================================================
+
+class TestProgressiveDeleveraging:
+    def test_level_0_no_reduction(self, rm):
+        """DD < 50% du max backtest → pas de reduction."""
+        level, reduction, msg = rm.check_progressive_deleveraging(0.005)
+        assert level == 0
+        assert reduction == 0.0
+        assert "OK" in msg
+
+    def test_level_1_reduction_30(self, rm):
+        """DD > 0.9% (50% de 1.8%) → reduction 30%."""
+        level, reduction, msg = rm.check_progressive_deleveraging(0.010)
+        assert level == 1
+        assert reduction == 0.30
+        assert "LEVEL 1" in msg
+
+    def test_level_2_reduction_50(self, rm):
+        """DD > 1.35% (75% de 1.8%) → reduction 50%."""
+        level, reduction, msg = rm.check_progressive_deleveraging(0.014)
+        assert level == 2
+        assert reduction == 0.50
+        assert "LEVEL 2" in msg
+
+    def test_level_3_circuit_breaker(self, rm):
+        """DD >= 1.8% (100%) → circuit-breaker complet."""
+        level, reduction, msg = rm.check_progressive_deleveraging(0.020)
+        assert level == 3
+        assert reduction == 1.0
+        assert "CIRCUIT-BREAKER" in msg
+
+    def test_exact_threshold_50_triggers_level_1(self, rm):
+        """DD exactement a 50% du max trigger le level 1."""
+        level, reduction, msg = rm.check_progressive_deleveraging(0.009)
+        assert level == 1
+        assert reduction == 0.30
+
+    def test_exact_threshold_100_triggers_level_3(self, rm):
+        """DD exactement a 100% du max trigger le circuit-breaker."""
+        level, reduction, msg = rm.check_progressive_deleveraging(0.018)
+        assert level == 3
+        assert reduction == 1.0
+
+    def test_custom_max_dd(self, rm):
+        """Verification avec un max_dd_backtest custom."""
+        # max_dd = 4%, seuil 50% = 2%, seuil 75% = 3%, seuil 100% = 4%
+        level, reduction, msg = rm.check_progressive_deleveraging(0.025, max_dd_backtest=0.04)
+        assert level == 1
+        assert reduction == 0.30
+
+    def test_negative_dd_treated_as_absolute(self, rm):
+        """Un DD negatif est traite en valeur absolue."""
+        level, reduction, msg = rm.check_progressive_deleveraging(-0.015)
+        assert level == 2
+        assert reduction == 0.50
+
+
 class TestSectorLimitEnforced:
     def test_sector_limit_rejects_oversized(self, rm):
         """Un ordre qui ferait passer tech > 25% doit etre rejete."""

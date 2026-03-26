@@ -11,15 +11,18 @@ buckets:
   core_alpha:
     target: 0.45
     strategies: [opex_gamma, gap_continuation, vwap_micro, crypto_proxy_v2, dow_seasonal]
+  shorts_bear:
+    target: 0.20
+    strategies: [vix_short, failed_rally_short, crypto_bear, eod_sell_v2, high_beta_short, gold_fear]
   diversifiers:
-    target: 0.25
-    strategies: [gold_fear, corr_hedge, eod_sell_v2, vix_short, failed_rally, crypto_bear]
-  hedges:
     target: 0.10
-    strategies: [corr_hedge, gold_fear]
+    strategies: [corr_hedge, eu_gap_open, eu_stoxx_reversion, pairs_mu_amat]
+  satellite:
+    target: 0.05
+    strategies: [orb_v2, meanrev_v2, triple_ema, lateday_meanrev]
   daily_monthly:
-    target: 0.09
-    strategies: [momentum_25etf, pairs_mu_amat, vrp_rotation]
+    target: 0.05
+    strategies: [momentum_25etf, vrp_rotation]
   cash_reserve:
     target: 0.15
     strategies: []

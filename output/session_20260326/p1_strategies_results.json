@@ -1,0 +1,229 @@
+{
+  "short5": {
+    "total_return_pct": 0.53,
+    "net_pnl": 526.59,
+    "gross_pnl": 584.43,
+    "total_commission": 57.84,
+    "n_trades": 40,
+    "n_trading_days": 40,
+    "trades_per_day": 1.0,
+    "win_rate": 55.0,
+    "profit_factor": 1.73,
+    "sharpe_ratio": 3.88,
+    "max_drawdown_pct": 0.15,
+    "avg_winner": 62.76,
+    "avg_loser": -44.24,
+    "best_trade": 98.3,
+    "worst_trade": -52.27,
+    "avg_rr_ratio": 1.42,
+    "by_weekday": {
+      "sum": {
+        "Friday": 216.62,
+        "Monday": 284.62,
+        "Thursday": 411.45,
+        "Tuesday": -172.12,
+        "Wednesday": -156.14
+      },
+      "count": {
+        "Friday": 9,
+        "Monday": 10,
+        "Thursday": 7,
+        "Tuesday": 7,
+        "Wednesday": 7
+      },
+      "mean": {
+        "Friday": 24.06888888888889,
+        "Monday": 28.462,
+        "Thursday": 58.778571428571425,
+        "Tuesday": -24.58857142857143,
+        "Wednesday": -22.305714285714284
+      }
+    },
+    "by_ticker": {
+      "sum": {
+        "AMD": 106.33999999999999,
+        "COIN": 226.64000000000001,
+        "MARA": 223.10999999999996,
+        "NVDA": 28.339999999999996
+      },
+      "count": {
+        "AMD": 10,
+        "COIN": 10,
+        "MARA": 13,
+        "NVDA": 7
+      },
+      "mean": {
+        "AMD": 10.633999999999999,
+        "COIN": 22.664,
+        "MARA": 17.16230769230769,
+        "NVDA": 4.048571428571428
+      }
+    },
+    "verdict": "WINNER+WF",
+    "walk_forward": {
+      "hit_rate": 50.0,
+      "profitable_windows": 3,
+      "total_windows": 6,
+      "avg_oos_return": 0.05,
+      "avg_oos_sharpe": 14.91,
+      "verdict": "VALIDATED"
+    },
+    "strategy_name": "Cross-Asset Risk-Off Short"
+  },
+  "short6": {
+    "total_return_pct": 0.18,
+    "net_pnl": 183.09,
+    "gross_pnl": 186.96,
+    "total_commission": 3.87,
+    "n_trades": 49,
+    "n_trading_days": 32,
+    "trades_per_day": 1.5,
+    "win_rate": 67.3,
+    "profit_factor": 1.96,
+    "sharpe_ratio": 5.22,
+    "max_drawdown_pct": 0.04,
+    "avg_winner": 11.57,
+    "avg_loser": -12.18,
+    "best_trade": 41.39,
+    "worst_trade": -25.7,
+    "avg_rr_ratio": 0.95,
+    "by_weekday": {
+      "sum": {
+        "Friday": 186.96
+      },
+      "count": {
+        "Friday": 49
+      },
+      "mean": {
+        "Friday": 3.8155102040816327
+      }
+    },
+    "by_ticker": {
+      "sum": {
+        "QQQ": 17.890000000000004,
+        "SPY": 127.68,
+        "TSLA": 41.39
+      },
+      "count": {
+        "QQQ": 23,
+        "SPY": 25,
+        "TSLA": 1
+      },
+      "mean": {
+        "QQQ": 0.7778260869565219,
+        "SPY": 5.107200000000001,
+        "TSLA": 41.39
+      }
+    },
+    "verdict": "WINNER+WF",
+    "walk_forward": {
+      "hit_rate": 83.0,
+      "profitable_windows": 5,
+      "total_windows": 6,
+      "avg_oos_return": 0.03,
+      "avg_oos_sharpe": 4.31,
+      "verdict": "VALIDATED"
+    },
+    "strategy_name": "OpEx Short Extension"
+  },
+  "eu_bce": {
+    "total_return_pct": -5.2,
+    "net_pnl": -10396.85,
+    "gross_pnl": -5712.35,
+    "total_commission": 4684.48,
+    "n_trades": 120,
+    "n_trading_days": 40,
+    "trades_per_day": 3.0,
+    "win_rate": 33.3,
+    "profit_factor": 0.52,
+    "sharpe_ratio": -5.11,
+    "max_drawdown_pct": 5.82,
+    "avg_winner": 280.56,
+    "avg_loser": -270.24,
+    "best_trade": 546.59,
+    "worst_trade": -452.67,
+    "avg_rr_ratio": 1.04,
+    "verdict": "REJETE",
+    "strategy_name": "BCE Rate Decision Drift"
+  },
+  "opt1": {
+    "total_return_pct": -27.01,
+    "net_pnl": -27007.8,
+    "gross_pnl": -26350.0,
+    "total_commission": 657.8,
+    "n_trades": 253,
+    "n_trading_days": 253,
+    "trades_per_day": 1.0,
+    "win_rate": 69.2,
+    "profit_factor": 0.23,
+    "sharpe_ratio": -7.22,
+    "max_drawdown_pct": 27.19,
+    "avg_winner": 47.4,
+    "avg_loser": -452.6,
+    "best_trade": 47.4,
+    "worst_trade": -452.6,
+    "avg_rr_ratio": 0.1,
+    "verdict": "REJETE",
+    "strategy_name": "Put Credit Spread SPY"
+  },
+  "opt2": {
+    "total_return_pct": -3.46,
+    "net_pnl": -3458.92,
+    "gross_pnl": -2756.92,
+    "total_commission": 702.0,
+    "n_trades": 135,
+    "n_trading_days": 102,
+    "trades_per_day": 1.3,
+    "win_rate": 42.2,
+    "profit_factor": 0.54,
+    "sharpe_ratio": -4.03,
+    "max_drawdown_pct": 4.84,
+    "avg_winner": 70.28,
+    "avg_loser": -95.71,
+    "best_trade": 226.39,
+    "worst_trade": -483.89,
+    "avg_rr_ratio": 0.73,
+    "verdict": "REJETE",
+    "strategy_name": "Earnings IV Crush"
+  },
+  "fut1": {
+    "total_return_pct": -1.37,
+    "net_pnl": -1374.58,
+    "gross_pnl": -1355.09,
+    "total_commission": 19.49,
+    "n_trades": 248,
+    "n_trading_days": 214,
+    "trades_per_day": 1.2,
+    "win_rate": 35.9,
+    "profit_factor": 0.79,
+    "sharpe_ratio": -1.69,
+    "max_drawdown_pct": 1.73,
+    "avg_winner": 58.93,
+    "avg_loser": -41.63,
+    "best_trade": 168.37,
+    "worst_trade": -227.25,
+    "avg_rr_ratio": 1.42,
+    "verdict": "REJETE",
+    "strategy_name": "ES Trend Following 1H"
+  },
+  "fx1": {
+    "total_return_pct": 3.6,
+    "net_pnl": 3604.32,
+    "gross_pnl": 4216.7,
+    "total_commission": 612.25,
+    "n_trades": 101,
+    "n_trading_days": 101,
+    "trades_per_day": 1.0,
+    "win_rate": 29.7,
+    "profit_factor": 1.41,
+    "sharpe_ratio": 1.58,
+    "max_drawdown_pct": 2.29,
+    "avg_winner": 412.78,
+    "avg_loser": -123.65,
+    "best_trade": 2153.24,
+    "worst_trade": -372.4,
+    "avg_rr_ratio": 3.34,
+    "verdict": "WINNER",
+    "strategy_name": "Carry Trade AUD/JPY"
+  }
+}

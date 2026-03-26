@@ -132,6 +132,110 @@ class RiskManager:
         # Convertir en ratio
         return {k: v / equity for k, v in sector_expo.items()}
 
+    def calculate_var_bootstrap(
+        self, returns: list, confidence: float = 0.99, n_simulations: int = 10000
+    ) -> float:
+        """VaR bootstrap — resample les vrais returns pour capturer les fat tails.
+
+        Au lieu de supposer une distribution normale, on re-echantillonne
+        les rendements historiques reels (avec remise) pour construire
+        la distribution empirique des pertes cumulees.
+
+        Args:
+            returns: liste de rendements quotidiens (e.g. [-0.01, 0.02, ...])
+            confidence: niveau de confiance (default 0.99)
+            n_simulations: nombre de tirages bootstrap (default 10000)
+
+        Returns:
+            VaR en valeur positive (perte maximale attendue)
+        """
+        arr = np.array(returns, dtype=float)
+        if len(arr) < 2:
+            return 0.0
+        bootstrap_losses = []
+        for _ in range(n_simulations):
+            sample = np.random.choice(arr, size=len(arr), replace=True)
+            bootstrap_losses.append(sample.sum())
+        return -np.percentile(bootstrap_losses, (1 - confidence) * 100)
+
+    def calculate_var_max(
+        self, returns: list, confidence: float = 0.99, horizon: int = 1,
+        n_simulations: int = 10000
+    ) -> float:
+        """VaR conservative — retourne max(VaR parametrique, VaR bootstrap).
+
+        Combine les deux approches pour une estimation robuste :
+        - VaR parametrique capture bien les rendements proches de la normale
+        - VaR bootstrap capture les fat tails et l'asymetrie
+
+        Args:
+            returns: liste de rendements quotidiens
+            confidence: niveau de confiance (default 0.99)
+            horizon: nombre de jours pour la VaR parametrique
+            n_simulations: nombre de tirages bootstrap
+
+        Returns:
+            max(VaR parametrique, VaR bootstrap) en valeur positive
+        """
+        var_param = self.calculate_var(returns, confidence, horizon)
+        var_boot = self.calculate_var_bootstrap(returns, confidence, n_simulations)
+        return max(var_param, var_boot)
+
+    def check_progressive_deleveraging(
+        self, current_dd_pct: float, max_dd_backtest: float = 0.018
+    ) -> Tuple[int, float, str]:
+        """Drawdown-based deleveraging progressif.
+
+        Reduit l'exposition de facon progressive selon le drawdown courant
+        par rapport au max drawdown observe en backtest.
+
+        Niveaux :
+          - DD > 50% du max backtest → reduire 30%
+          - DD > 75% du max backtest → reduire 50%
+          - DD > 100% du max backtest → circuit-breaker complet (100%)
+
+        Args:
+            current_dd_pct: drawdown courant en pourcentage (valeur positive, ex: 0.01 = 1%)
+            max_dd_backtest: max drawdown observe en backtest (default 1.8%)
+
+        Returns:
+            (level: int 0-3, reduction_pct: float, message: str)
+              - level 0: pas de reduction
+              - level 1: reduction 30%
+              - level 2: reduction 50%
+              - level 3: circuit-breaker complet
+        """
+        dd = abs(current_dd_pct)
+        threshold_50 = max_dd_backtest * 0.50   # 0.9% par defaut
+        threshold_75 = max_dd_backtest * 0.75   # 1.35% par defaut
+        threshold_100 = max_dd_backtest * 1.00  # 1.8% par defaut
+
+        if dd >= threshold_100:
+            msg = (
+                f"CIRCUIT-BREAKER: DD {dd:.2%} >= max backtest {threshold_100:.2%}. "
+                f"Fermeture totale des positions."
+            )
+            logger.critical(msg)
+            return 3, 1.0, msg
+
+        if dd >= threshold_75:
+            msg = (
+                f"DELEVERAGING LEVEL 2: DD {dd:.2%} >= 75% max backtest ({threshold_75:.2%}). "
+                f"Reduction 50% de l'exposition."
+            )
+            logger.warning(msg)
+            return 2, 0.50, msg
+
+        if dd >= threshold_50:
+            msg = (
+                f"DELEVERAGING LEVEL 1: DD {dd:.2%} >= 50% max backtest ({threshold_50:.2%}). "
+                f"Reduction 30% de l'exposition."
+            )
+            logger.warning(msg)
+            return 1, 0.30, msg
+
+        return 0, 0.0, "OK — drawdown dans les limites normales"
+
     def check_circuit_breaker(
         self, daily_pnl_pct: float, hourly_pnl_pct: float = None
     ) -> Tuple[bool, str]:
