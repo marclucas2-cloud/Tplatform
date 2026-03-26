@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
 import { TierBadge, StatusDot } from '../components/StrategyBadge'
 import { ChevronDown, ChevronUp, Shield, AlertTriangle } from 'lucide-react'
@@ -9,6 +10,7 @@ export default function Strategies() {
   const [sortDir, setSortDir] = useState('desc')
   const [filterTier, setFilterTier] = useState('all')
   const [filterType, setFilterType] = useState('all')
+  const navigate = useNavigate()
 
   if (loading || !data) return <div className="text-center py-12 text-[var(--color-text-secondary)]">Loading...</div>
 
@@ -86,7 +88,7 @@ export default function Strategies() {
               const killMargin = s.kill_margin_pct
               const killDanger = killMargin < 50
               return (
-                <tr key={s.id} className="border-t border-[var(--color-border)]/50 hover:bg-[var(--color-bg-hover)] transition-colors cursor-pointer">
+                <tr key={s.id} onClick={() => navigate(`/strategies/${s.id}`)} className="border-t border-[var(--color-border)]/50 hover:bg-[var(--color-bg-hover)] transition-colors cursor-pointer">
                   <td className="py-3 px-4"><StatusDot status={s.status} /></td>
                   <td className="py-3"><TierBadge tier={s.tier} /></td>
                   <td className="py-3 font-semibold text-[var(--color-text-primary)]">{s.name}</td>

@@ -6,6 +6,7 @@ import Strategies from './pages/Strategies'
 import Positions from './pages/Positions'
 import Analytics from './pages/Analytics'
 import Allocation from './pages/Allocation'
+import StrategyDetail from './pages/StrategyDetail'
 
 export default function App() {
   const { data: portfolio } = useApi('/portfolio', 30000)
@@ -21,6 +22,7 @@ export default function App() {
           <Routes>
             <Route path="/" element={<Overview />} />
             <Route path="/strategies" element={<Strategies />} />
+            <Route path="/strategies/:id" element={<StrategyDetail />} />
             <Route path="/positions" element={<Positions />} />
             <Route path="/analytics" element={<Analytics />} />
             <Route path="/allocation" element={<Allocation />} />

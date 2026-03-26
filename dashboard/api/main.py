@@ -230,14 +230,19 @@ def get_strategies():
 
 @app.get("/api/strategies/{strategy_id}")
 def get_strategy_detail(strategy_id: str):
-    """Detail complet d'une strategie."""
+    """Detail complet d'une strategie avec registre (edge, parametres, SL/TP)."""
     try:
+        from strategy_registry import STRATEGY_REGISTRY
+
         strategies, tier_alloc = _get_strategies_config()
         if strategy_id not in strategies:
             return {"error": f"Strategy {strategy_id} not found"}
 
         s = strategies[strategy_id]
         tier = _tier_for_strategy(strategy_id, tier_alloc)
+
+        # Registre complet (description, edge, parametres)
+        registry = STRATEGY_REGISTRY.get(strategy_id, {})
 
         # Load trades CSV if exists
         trades = []
@@ -261,6 +266,13 @@ def get_strategy_detail(strategy_id: str):
             "allocation_pct": round(tier_alloc.get(strategy_id, 0) * 100, 1),
             "trades_sample": trades,
             "trades_count": len(trades),
+            # Registre complet
+            "description": registry.get("description", ""),
+            "why_it_works": registry.get("why_it_works", ""),
+            "edge_type": registry.get("edge_type", ""),
+            "parameters": registry.get("parameters", {}),
+            "tickers": registry.get("tickers", []),
+            "backtest": registry.get("backtest", {}),
         }
     except Exception as e:
         return {"error": str(e)}
