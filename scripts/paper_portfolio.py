@@ -189,6 +189,13 @@ STRATEGIES = {
         "frequency": "intraday",
         "multi_asset": True,
     },
+    # === Session 26 mars soiree — Mission Maitre V2 winner ===
+    "eod_sell_v2": {
+        "name": "EOD Sell Pressure V2",
+        "sharpe": 1.97,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
     # RETIRES apres re-backtest horaires stricts :
     # - ORB 5-Min : Sharpe -0.05 (ne survit pas aux couts sur univers large)
     # - Earnings Drift : Sharpe -9.55 (overtrade sur small caps)
