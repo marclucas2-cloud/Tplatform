@@ -1,0 +1,93 @@
+{
+  "run_date": "2026-03-26T23:34:31.009321",
+  "capital": 100000,
+  "total_strategies_available": 23,
+  "scenarios": {
+    "A": {
+      "n_strategies": 14,
+      "sharpe": 6.88,
+      "return_annual_pct": 13.38,
+      "volatility_annual_pct": 1.94,
+      "max_dd_pct": 0.12,
+      "capital_invested_pct": 68.0,
+      "hours_covered": 7,
+      "hours_covered_pct": 29.2,
+      "markets": [
+        "us"
+      ],
+      "avg_inter_strategy_correlation": 0.182,
+      "eu_us_correlation": null,
+      "capital": 100000,
+      "leverage_factor": 1.0,
+      "scenario": "A",
+      "name": "US ONLY (baseline)",
+      "description": "14 strategies US Alpaca (11 intraday + 3 daily/monthly). Allocation Tier S/A/B/C. ~58% du capital investi. Trading 15:30-22:00 CET uniquement."
+    },
+    "B": {
+      "n_strategies": 18,
+      "sharpe": 7.69,
+      "return_annual_pct": 15.88,
+      "volatility_annual_pct": 2.06,
+      "max_dd_pct": 0.11,
+      "capital_invested_pct": 88.0,
+      "hours_covered": 13,
+      "hours_covered_pct": 54.2,
+      "markets": [
+        "eu",
+        "us"
+      ],
+      "avg_inter_strategy_correlation": 0.185,
+      "eu_us_correlation": 0.167,
+      "capital": 100000,
+      "leverage_factor": 1.0,
+      "scenario": "B",
+      "name": "US + EU Actions",
+      "description": "14 US + 4 EU winners (EU Gap Open, BCE Momentum, ASML Chain, Auto German). 2 creneaux horaires (EU matin 9:00-17:00 + US apres-midi 15:30-22:00). Overlap 15:30-17:00."
+    },
+    "C": {
+      "n_strategies": 21,
+      "sharpe": 7.88,
+      "return_annual_pct": 16.45,
+      "volatility_annual_pct": 2.09,
+      "max_dd_pct": 0.1,
+      "capital_invested_pct": 98.0,
+      "hours_covered": 24,
+      "hours_covered_pct": 100.0,
+      "markets": [
+        "eu",
+        "fx",
+        "us"
+      ],
+      "avg_inter_strategy_correlation": 0.164,
+      "eu_us_correlation": 0.167,
+      "capital": 100000,
+      "leverage_factor": 1.0,
+      "scenario": "C",
+      "name": "US + EU + Forex",
+      "description": "14 US + 4 EU + 3 Forex (EUR/USD, EUR/GBP, EUR/JPY). 3 creneaux + FX 24/7. ~78% du capital investi."
+    },
+    "D": {
+      "n_strategies": 23,
+      "sharpe": 8.14,
+      "return_annual_pct": 19.2,
+      "volatility_annual_pct": 2.36,
+      "max_dd_pct": 0.1,
+      "capital_invested_pct": 114.0,
+      "hours_covered": 24,
+      "hours_covered_pct": 100.0,
+      "markets": [
+        "eu",
+        "futures",
+        "fx",
+        "us"
+      ],
+      "avg_inter_strategy_correlation": 0.16,
+      "eu_us_correlation": 0.167,
+      "capital": 100000,
+      "leverage_factor": 2.0,
+      "scenario": "D",
+      "name": "US + EU + FX + Futures + Levier",
+      "description": "Toutes les strategies (14 US + 4 EU + 3 FX + 2 Futures). Levier 2-3:1 sur futures/FX. Allocation cross-timezone dynamique. ~90% du capital utilise avec stacking temporel."
+    }
+  }
+}

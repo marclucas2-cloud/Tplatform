@@ -335,3 +335,165 @@ class DynamicAllocator:
         )
 
         return adjusted
+
+    # -----------------------------------------------------------------
+    # ROC-6 : Allocation cross-timezone
+    # -----------------------------------------------------------------
+
+    # Budget de risque par creneau horaire CET
+    TIMEZONE_ALLOCATIONS = {
+        "EU_ONLY": {
+            "hours": (9, 15),       # 9:00-15:30 CET (EU only)
+            "eu": 0.25,
+            "us": 0.00,
+            "fx": 0.05,
+            "shorts": 0.00,
+            "us_reserve": 0.50,
+            "cash": 0.20,
+        },
+        "OVERLAP": {
+            "hours": (15, 17),      # 15:30-17:30 CET (EU + US overlap)
+            "eu": 0.15,
+            "us": 0.40,
+            "fx": 0.05,
+            "shorts": 0.15,
+            "cash": 0.25,
+        },
+        "US_ONLY": {
+            "hours": (17, 22),      # 17:30-22:00 CET (US only)
+            "eu": 0.00,
+            "us": 0.45,
+            "fx": 0.05,
+            "shorts": 0.20,
+            "cash": 0.30,
+        },
+        "OFF_HOURS": {
+            "hours": (22, 9),       # 22:00-09:00 CET (off-hours)
+            "eu": 0.00,
+            "us": 0.00,
+            "fx": 0.10,
+            "shorts": 0.00,
+            "cash": 0.90,
+        },
+    }
+
+    def get_timezone_allocation(self, hour_cet: int) -> dict:
+        """Le budget de risque se redistribue selon les marches ouverts.
+
+        9:00-15:30 CET (EU only) :
+          EU strategies : 25% du capital
+          FX carry/swing : 5%
+          US reserve : 50% (pret pour ouverture US)
+          Cash : 20%
+
+        15:30-17:30 CET (OVERLAP EU+US) :
+          EU : 15%, US : 40%, FX : 5%, Shorts : 15%, Cash : 25%
+
+        17:30-22:00 CET (US only) :
+          US : 45%, Shorts : 20%, FX : 5%, Cash : 30%
+
+        22:00-9:00 CET (OFF-HOURS) :
+          FX swing : 10%, Cash : 90%
+
+        Args:
+            hour_cet: heure CET (0-23). Ex: 16 pour 16:00 CET.
+
+        Returns:
+            {
+                "timezone": "EU_ONLY"|"OVERLAP"|"US_ONLY"|"OFF_HOURS",
+                "eu": float,
+                "us": float,
+                "fx": float,
+                "shorts": float,
+                "cash": float,
+                "us_reserve": float (only EU_ONLY),
+                "total_invested": float,
+            }
+        """
+        hour = hour_cet % 24
+
+        if 9 <= hour < 15:
+            tz_name = "EU_ONLY"
+        elif 15 <= hour < 17:
+            tz_name = "OVERLAP"
+        elif 17 <= hour < 22:
+            tz_name = "US_ONLY"
+        else:
+            tz_name = "OFF_HOURS"
+
+        alloc = dict(self.TIMEZONE_ALLOCATIONS[tz_name])
+        alloc["timezone"] = tz_name
+
+        # Calculer le total investi (hors cash et reserve)
+        total_invested = sum(
+            v for k, v in alloc.items()
+            if isinstance(v, (int, float)) and k not in ("cash", "us_reserve", "hours")
+        )
+        alloc["total_invested"] = round(total_invested, 4)
+        alloc.pop("hours", None)
+
+        logger.info(
+            "Timezone allocation (hour_cet=%d): %s — %.0f%% invested",
+            hour_cet, tz_name, total_invested * 100,
+        )
+
+        return alloc
+
+    def apply_timezone_weights(
+        self,
+        weights: dict,
+        strategies: dict,
+        hour_cet: int,
+    ) -> dict:
+        """Applique les limites cross-timezone aux poids des strategies.
+
+        Chaque strategie doit avoir un champ 'market' parmi :
+        'us', 'eu', 'fx', 'shorts'.
+
+        Args:
+            weights: {strategy_name: weight} — poids pre-calcules
+            strategies: {strategy_name: {market: 'us'|'eu'|'fx'|'shorts', ...}}
+            hour_cet: heure CET courante
+
+        Returns:
+            {strategy_name: adjusted_weight} — normalise selon les limites TZ
+        """
+        if not weights:
+            return {}
+
+        tz_alloc = self.get_timezone_allocation(hour_cet)
+        adjusted = {}
+
+        # Grouper par market
+        market_totals: Dict[str, float] = {}
+        market_strats: Dict[str, list] = {}
+        for name, w in weights.items():
+            market = strategies.get(name, {}).get("market", "us")
+            market_totals[market] = market_totals.get(market, 0) + w
+            market_strats.setdefault(market, []).append(name)
+
+        # Appliquer les plafonds par market
+        for market, strat_names in market_strats.items():
+            budget = tz_alloc.get(market, 0.0)
+            current_total = market_totals.get(market, 0)
+
+            if current_total <= 0 or budget <= 0:
+                # Marche ferme ou budget nul : poids a zero
+                for name in strat_names:
+                    adjusted[name] = 0.0
+            elif current_total > budget:
+                # Reduire proportionnellement
+                scale = budget / current_total
+                for name in strat_names:
+                    adjusted[name] = weights[name] * scale
+            else:
+                # Sous le plafond : garder tel quel
+                for name in strat_names:
+                    adjusted[name] = weights[name]
+
+        logger.info(
+            "Applied timezone weights (hour_cet=%d, tz=%s): %d strategies",
+            hour_cet, tz_alloc["timezone"], len(adjusted),
+        )
+
+        return adjusted

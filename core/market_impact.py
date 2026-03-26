@@ -275,6 +275,253 @@ class MarketImpactModel:
 
         return results
 
+    # -----------------------------------------------------------------
+    # ROC-3 : Sizing futures avec levier structurel
+    # -----------------------------------------------------------------
+
+    # Specifications des contrats futures principaux
+    FUTURES_SPECS = {
+        "FESX": {
+            "name": "Eurostoxx 50",
+            "point_value": 10.0,       # EUR par point
+            "currency": "EUR",
+            "approx_price": 5000,      # points
+            "notional_approx": 50_000,  # EUR par contrat
+            "margin_approx": 3_000,    # EUR
+            "cost_rt": 0.003,          # 0.3% round-trip
+        },
+        "FDAX": {
+            "name": "DAX",
+            "point_value": 25.0,
+            "currency": "EUR",
+            "approx_price": 18_000,
+            "notional_approx": 450_000,
+            "margin_approx": 25_000,
+            "cost_rt": 0.002,
+        },
+        "FDXM": {
+            "name": "Mini-DAX",
+            "point_value": 5.0,
+            "currency": "EUR",
+            "approx_price": 18_000,
+            "notional_approx": 90_000,
+            "margin_approx": 5_000,
+            "cost_rt": 0.003,
+        },
+        "CL": {
+            "name": "Crude Oil (WTI)",
+            "point_value": 1000.0,     # USD par point (1000 barils)
+            "currency": "USD",
+            "approx_price": 70,        # USD/bbl
+            "notional_approx": 70_000,
+            "margin_approx": 6_000,
+            "cost_rt": 0.005,
+        },
+        "BZ": {
+            "name": "Brent Crude",
+            "point_value": 1000.0,
+            "currency": "USD",
+            "approx_price": 75,
+            "notional_approx": 75_000,
+            "margin_approx": 6_500,
+            "cost_rt": 0.005,
+        },
+        "ES": {
+            "name": "E-mini S&P 500",
+            "point_value": 50.0,
+            "currency": "USD",
+            "approx_price": 5_200,
+            "notional_approx": 260_000,
+            "margin_approx": 13_000,
+            "cost_rt": 0.001,
+        },
+        "MES": {
+            "name": "Micro E-mini S&P 500",
+            "point_value": 5.0,
+            "currency": "USD",
+            "approx_price": 5_200,
+            "notional_approx": 26_000,
+            "margin_approx": 1_300,
+            "cost_rt": 0.002,
+        },
+        "EURUSD": {
+            "name": "EUR/USD Spot FX",
+            "point_value": 100_000,    # 1 lot standard = 100K units
+            "currency": "USD",
+            "approx_price": 1.08,
+            "notional_approx": 108_000,
+            "margin_approx": 3_600,     # 30:1 leverage FX
+            "cost_rt": 0.00005,         # ~0.5 pip spread
+        },
+        "EURGBP": {
+            "name": "EUR/GBP Spot FX",
+            "point_value": 100_000,
+            "currency": "GBP",
+            "approx_price": 0.86,
+            "notional_approx": 86_000,
+            "margin_approx": 2_900,
+            "cost_rt": 0.00008,
+        },
+        "EURJPY": {
+            "name": "EUR/JPY Spot FX",
+            "point_value": 100_000,
+            "currency": "JPY",
+            "approx_price": 163.0,
+            "notional_approx": 16_300_000,  # JPY
+            "margin_approx": 4_000,         # EUR equiv
+            "cost_rt": 0.00012,
+        },
+    }
+
+    def calculate_futures_sizing(
+        self,
+        capital: float,
+        instrument: str,
+        max_leverage: float = 3.0,
+        allocation_pct: float = 1.0,
+    ) -> dict:
+        """Calcule le nombre de contrats futures en respectant le levier max.
+
+        Le levier structurel est le ratio notionnel_total / capital_alloue.
+        On ne depasse jamais max_leverage pour controler le risque de ruine.
+
+        Exemples avec $5K capital et levier 3:1 :
+          FESX : $15K notionnel max -> 0 contrats (EUR50K > $15K) -> micro si dispo
+          EUR/USD : $10K position (levier 2:1) -> 0.1 lot mini
+          MES : $15K notionnel max -> 0 contrats ($26K > $15K)
+
+        Args:
+            capital: capital total du portefeuille en USD
+            instrument: code du contrat (FESX, CL, EURUSD, etc.)
+            max_leverage: levier maximum autorise (defaut 3.0)
+            allocation_pct: fraction du capital allouee a cet instrument (defaut 1.0)
+
+        Returns:
+            {
+                instrument, name, contracts, notional_per_contract,
+                total_notional, margin_required, leverage_effective,
+                capital_allocated, feasible, reason, cost_estimate_rt
+            }
+        """
+        spec = self.FUTURES_SPECS.get(instrument)
+        if spec is None:
+            return {
+                "instrument": instrument,
+                "name": "UNKNOWN",
+                "contracts": 0,
+                "feasible": False,
+                "reason": f"Instrument {instrument} non reconnu",
+            }
+
+        allocated = capital * allocation_pct
+        max_notional = allocated * max_leverage
+        notional_per_contract = spec["notional_approx"]
+        margin_per_contract = spec["margin_approx"]
+
+        # Nombre de contrats = floor(max_notional / notional_per_contract)
+        # Mais aussi contraint par la marge disponible
+        if notional_per_contract <= 0:
+            contracts = 0
+        else:
+            contracts_by_notional = int(max_notional / notional_per_contract)
+            contracts_by_margin = int(allocated / margin_per_contract) if margin_per_contract > 0 else 0
+            contracts = min(contracts_by_notional, contracts_by_margin)
+
+        total_notional = contracts * notional_per_contract
+        margin_required = contracts * margin_per_contract
+        leverage_effective = total_notional / allocated if allocated > 0 else 0
+
+        feasible = contracts > 0
+        if not feasible:
+            reason = (
+                f"Capital alloue ${allocated:,.0f} insuffisant. "
+                f"1 contrat = ${notional_per_contract:,.0f} notionnel, "
+                f"${margin_per_contract:,.0f} margin. "
+                f"Minimum requis: ${notional_per_contract / max_leverage:,.0f}"
+            )
+        else:
+            reason = "OK"
+
+        cost_rt = contracts * notional_per_contract * spec["cost_rt"]
+
+        result = {
+            "instrument": instrument,
+            "name": spec["name"],
+            "contracts": contracts,
+            "notional_per_contract": notional_per_contract,
+            "total_notional": total_notional,
+            "margin_required": margin_required,
+            "leverage_effective": round(leverage_effective, 2),
+            "capital_allocated": round(allocated, 2),
+            "feasible": feasible,
+            "reason": reason,
+            "cost_estimate_rt": round(cost_rt, 2),
+            "currency": spec["currency"],
+        }
+
+        if feasible:
+            logger.info(
+                "Futures sizing %s: %d contracts, notional $%s, leverage %.1fx",
+                instrument, contracts, f"{total_notional:,.0f}", leverage_effective,
+            )
+        else:
+            logger.warning("Futures sizing %s: NOT FEASIBLE — %s", instrument, reason)
+
+        return result
+
+    def simulate_futures_portfolio(
+        self,
+        capital: float,
+        instruments: List[str],
+        max_leverage: float = 3.0,
+    ) -> dict:
+        """Simule le sizing pour un portefeuille de futures.
+
+        Repartit le capital equitablement entre les instruments,
+        puis calcule le sizing pour chacun.
+
+        Args:
+            capital: capital total USD
+            instruments: liste de codes instruments
+            max_leverage: levier max global
+
+        Returns:
+            {
+                instruments: {instrument: sizing_result},
+                total_notional, total_margin, effective_leverage,
+                feasible_count, total_instruments
+            }
+        """
+        n = len(instruments)
+        if n == 0:
+            return {"instruments": {}, "total_notional": 0, "feasible_count": 0}
+
+        alloc_per = 1.0 / n
+        results = {}
+        total_notional = 0
+        total_margin = 0
+        feasible_count = 0
+
+        for inst in instruments:
+            sizing = self.calculate_futures_sizing(
+                capital, inst, max_leverage, alloc_per
+            )
+            results[inst] = sizing
+            if sizing["feasible"]:
+                total_notional += sizing["total_notional"]
+                total_margin += sizing["margin_required"]
+                feasible_count += 1
+
+        return {
+            "instruments": results,
+            "total_notional": total_notional,
+            "total_margin": total_margin,
+            "effective_leverage": round(total_notional / capital, 2) if capital > 0 else 0,
+            "feasible_count": feasible_count,
+            "total_instruments": n,
+            "capital": capital,
+        }
+
     def generate_report(self, scaling_results: Dict[int, Dict[str, dict]]) -> str:
         """Genere un rapport markdown a partir des resultats de simulate_scaling."""
         lines = ["# Market Impact — Rapport de Scaling\n"]

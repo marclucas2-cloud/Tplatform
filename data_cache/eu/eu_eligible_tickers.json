@@ -1,0 +1,547 @@
+{
+  "generated_at": "2026-03-26T23:12:53.896319",
+  "total_universe": 84,
+  "total_fetched": 79,
+  "total_eligible": 77,
+  "tickers": [
+    {
+      "ticker": "MC.PA",
+      "group": "FR",
+      "atr_pct": 3.1233,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "TTE.PA",
+      "group": "FR",
+      "atr_pct": 2.7365,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "SAN.PA",
+      "group": "FR",
+      "atr_pct": 1.9664,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "OR.PA",
+      "group": "FR",
+      "atr_pct": 2.4665,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "AI.PA",
+      "group": "FR",
+      "atr_pct": 2.0638,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "SU.PA",
+      "group": "FR",
+      "atr_pct": 4.0767,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "BNP.PA",
+      "group": "FR",
+      "atr_pct": 3.9017,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "GLE.PA",
+      "group": "FR",
+      "atr_pct": 4.7491,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "RMS.PA",
+      "group": "FR",
+      "atr_pct": 3.7673,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "DSY.PA",
+      "group": "FR",
+      "atr_pct": 3.0983,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "KER.PA",
+      "group": "FR",
+      "atr_pct": 3.7895,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "CAP.PA",
+      "group": "FR",
+      "atr_pct": 3.6145,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "SGO.PA",
+      "group": "FR",
+      "atr_pct": 3.5836,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "VIV.PA",
+      "group": "FR",
+      "atr_pct": 4.4797,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "SAP.DE",
+      "group": "DE",
+      "atr_pct": 4.0959,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "SIE.DE",
+      "group": "DE",
+      "atr_pct": 4.1614,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "ALV.DE",
+      "group": "DE",
+      "atr_pct": 2.3531,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "DTE.DE",
+      "group": "DE",
+      "atr_pct": 2.495,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "BAS.DE",
+      "group": "DE",
+      "atr_pct": 3.2857,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "BMW.DE",
+      "group": "DE",
+      "atr_pct": 2.9602,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "MBG.DE",
+      "group": "DE",
+      "atr_pct": 2.5016,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "DBK.DE",
+      "group": "DE",
+      "atr_pct": 4.2396,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "IFX.DE",
+      "group": "DE",
+      "atr_pct": 5.0736,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "ADS.DE",
+      "group": "DE",
+      "atr_pct": 3.5981,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "VOW3.DE",
+      "group": "DE",
+      "atr_pct": 2.746,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "MUV2.DE",
+      "group": "DE",
+      "atr_pct": 2.2073,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "HEN3.DE",
+      "group": "DE",
+      "atr_pct": 2.7375,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "RWE.DE",
+      "group": "DE",
+      "atr_pct": 3.1837,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "ASML.AS",
+      "group": "NL",
+      "atr_pct": 4.768,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "PRX.AS",
+      "group": "NL",
+      "atr_pct": 5.6835,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "ADYEN.AS",
+      "group": "NL",
+      "atr_pct": 3.5747,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "PHIA.AS",
+      "group": "NL",
+      "atr_pct": 2.8096,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "UNA.AS",
+      "group": "NL",
+      "atr_pct": 2.0273,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "AZN.L",
+      "group": "UK",
+      "atr_pct": 2.2519,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "SHEL.L",
+      "group": "UK",
+      "atr_pct": 2.3523,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "HSBA.L",
+      "group": "UK",
+      "atr_pct": 3.4611,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "ULVR.L",
+      "group": "UK",
+      "atr_pct": 1.9996,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "BP.L",
+      "group": "UK",
+      "atr_pct": 3.2378,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "RIO.L",
+      "group": "UK",
+      "atr_pct": 3.4418,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "GLEN.L",
+      "group": "UK",
+      "atr_pct": 3.4937,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "LSEG.L",
+      "group": "UK",
+      "atr_pct": 2.7412,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "BARC.L",
+      "group": "UK",
+      "atr_pct": 6.6269,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "DGE.L",
+      "group": "UK",
+      "atr_pct": 2.732,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "SAN.MC",
+      "group": "ES",
+      "atr_pct": 4.3456,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "BBVA.MC",
+      "group": "ES",
+      "atr_pct": 3.8301,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "IBE.MC",
+      "group": "ES",
+      "atr_pct": 2.2514,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "ITX.MC",
+      "group": "ES",
+      "atr_pct": 3.021,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "TEF.MC",
+      "group": "ES",
+      "atr_pct": 2.6508,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "UCG.MI",
+      "group": "IT",
+      "atr_pct": 4.8304,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "ISP.MI",
+      "group": "IT",
+      "atr_pct": 3.6679,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "ENEL.MI",
+      "group": "IT",
+      "atr_pct": 3.0234,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "ENI.MI",
+      "group": "IT",
+      "atr_pct": 2.8495,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "STLAM.MI",
+      "group": "IT",
+      "atr_pct": 4.1385,
+      "data_years": 5.0,
+      "reason": "mega_cap"
+    },
+    {
+      "ticker": "^GDAXI",
+      "group": "INDEX",
+      "atr_pct": 2.4858,
+      "data_years": 5.0,
+      "reason": "index"
+    },
+    {
+      "ticker": "^FCHI",
+      "group": "INDEX",
+      "atr_pct": 2.071,
+      "data_years": 5.0,
+      "reason": "index"
+    },
+    {
+      "ticker": "^FTSE",
+      "group": "INDEX",
+      "atr_pct": 1.8118,
+      "data_years": 5.0,
+      "reason": "index"
+    },
+    {
+      "ticker": "^STOXX50E",
+      "group": "INDEX",
+      "atr_pct": 2.4495,
+      "data_years": 5.0,
+      "reason": "index"
+    },
+    {
+      "ticker": "^STOXX",
+      "group": "INDEX",
+      "atr_pct": 2.0563,
+      "data_years": 5.0,
+      "reason": "index"
+    },
+    {
+      "ticker": "EXS1.DE",
+      "group": "ETF",
+      "atr_pct": 2.5332,
+      "data_years": 5.0,
+      "reason": "etf"
+    },
+    {
+      "ticker": "EXSA.DE",
+      "group": "ETF",
+      "atr_pct": 2.1485,
+      "data_years": 5.0,
+      "reason": "etf"
+    },
+    {
+      "ticker": "ISF.L",
+      "group": "ETF",
+      "atr_pct": 1.8729,
+      "data_years": 5.0,
+      "reason": "etf"
+    },
+    {
+      "ticker": "EXV1.DE",
+      "group": "ETF",
+      "atr_pct": 3.3482,
+      "data_years": 5.0,
+      "reason": "etf"
+    },
+    {
+      "ticker": "EXV3.DE",
+      "group": "ETF",
+      "atr_pct": 2.8309,
+      "data_years": 5.0,
+      "reason": "etf"
+    },
+    {
+      "ticker": "EXH1.DE",
+      "group": "ETF",
+      "atr_pct": 2.004,
+      "data_years": 5.0,
+      "reason": "etf"
+    },
+    {
+      "ticker": "EXV4.DE",
+      "group": "ETF",
+      "atr_pct": 1.762,
+      "data_years": 5.0,
+      "reason": "etf"
+    },
+    {
+      "ticker": "EXV5.DE",
+      "group": "ETF",
+      "atr_pct": 2.2806,
+      "data_years": 5.0,
+      "reason": "etf"
+    },
+    {
+      "ticker": "EXH4.DE",
+      "group": "ETF",
+      "atr_pct": 2.8342,
+      "data_years": 5.0,
+      "reason": "etf"
+    },
+    {
+      "ticker": "EURUSD=X",
+      "group": "FX",
+      "atr_pct": 0.8478,
+      "data_years": 5.0,
+      "reason": "filtered"
+    },
+    {
+      "ticker": "GBPUSD=X",
+      "group": "FX",
+      "atr_pct": 0.9006,
+      "data_years": 5.0,
+      "reason": "filtered"
+    },
+    {
+      "ticker": "EURJPY=X",
+      "group": "FX",
+      "atr_pct": 0.5159,
+      "data_years": 5.0,
+      "reason": "filtered"
+    },
+    {
+      "ticker": "AUDJPY=X",
+      "group": "FX",
+      "atr_pct": 1.2238,
+      "data_years": 5.0,
+      "reason": "filtered"
+    },
+    {
+      "ticker": "BZ=F",
+      "group": "COMMODITY",
+      "atr_pct": 11.1711,
+      "data_years": 5.0,
+      "reason": "filtered"
+    },
+    {
+      "ticker": "GC=F",
+      "group": "COMMODITY",
+      "atr_pct": 3.3253,
+      "data_years": 5.0,
+      "reason": "filtered"
+    },
+    {
+      "ticker": "^VIX",
+      "group": "VOL",
+      "atr_pct": 16.1391,
+      "data_years": 5.0,
+      "reason": "filtered"
+    },
+    {
+      "ticker": "^N225",
+      "group": "ASIA",
+      "atr_pct": 3.098,
+      "data_years": 5.0,
+      "reason": "filtered"
+    },
+    {
+      "ticker": "^HSI",
+      "group": "ASIA",
+      "atr_pct": 2.1345,
+      "data_years": 5.0,
+      "reason": "filtered"
+    },
+    {
+      "ticker": "SPY",
+      "group": "US_REF",
+      "atr_pct": 1.5597,
+      "data_years": 4.99,
+      "reason": "us_ref"
+    }
+  ]
+}

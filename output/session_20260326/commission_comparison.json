@@ -1,0 +1,111 @@
+{
+  "generated_at": "2026-03-26",
+  "description": "Comparaison commissions Alpaca vs IBKR Tiered pour les 3 strategies les plus actives",
+  "assumptions": {
+    "capital": 100000,
+    "position_sizing_pct": 0.15,
+    "max_position_pct": 0.10,
+    "avg_notional_per_trade": 10000,
+    "period": "6 mois backtest -> annualise x2",
+    "alpaca_per_share": 0.005,
+    "ibkr_tiered_per_share": 0.0035,
+    "ibkr_tiered_min_per_order": 0.35,
+    "ibkr_tiered_max_pct": 0.01,
+    "note_avg_shares": "Estime via notional $10K / prix moyen du ticker principal trade"
+  },
+  "strategies": {
+    "orb_v2": {
+      "name": "ORB 5-Min V2",
+      "sharpe": 2.28,
+      "trades_6m": 220,
+      "trades_annual": 440,
+      "avg_price_usd": 150,
+      "avg_shares_per_trade": 67,
+      "note": "Stocks in play $50-$300, median ~$150 -> 67 shares pour $10K",
+      "commissions": {
+        "alpaca": {
+          "per_trade": 0.335,
+          "annual": 147.40,
+          "formula": "67 shares x $0.005"
+        },
+        "ibkr_tiered": {
+          "per_trade": 0.35,
+          "annual": 154.00,
+          "formula": "max(67 x $0.0035, $0.35) = max($0.2345, $0.35) = $0.35 (minimum)"
+        },
+        "saving_annual_ibkr_vs_alpaca": -6.60,
+        "saving_pct": -4.5,
+        "verdict": "Alpaca legerement moins cher (trades petits, IBKR minimum $0.35 s'applique)"
+      }
+    },
+    "vwap_micro": {
+      "name": "VWAP Micro-Deviation",
+      "sharpe": 3.08,
+      "trades_6m": 363,
+      "trades_annual": 726,
+      "avg_price_usd": 120,
+      "avg_shares_per_trade": 83,
+      "note": "Large-cap universe $80-$200, median ~$120 -> 83 shares pour $10K",
+      "commissions": {
+        "alpaca": {
+          "per_trade": 0.415,
+          "annual": 301.29,
+          "formula": "83 shares x $0.005"
+        },
+        "ibkr_tiered": {
+          "per_trade": 0.35,
+          "annual": 254.10,
+          "formula": "max(83 x $0.0035, $0.35) = max($0.2905, $0.35) = $0.35 (minimum)"
+        },
+        "saving_annual_ibkr_vs_alpaca": 47.19,
+        "saving_pct": 15.7,
+        "verdict": "IBKR 16% moins cher grace au minimum $0.35 vs $0.415 Alpaca"
+      }
+    },
+    "triple_ema": {
+      "name": "Triple EMA Pullback",
+      "sharpe": 1.06,
+      "trades_6m": 360,
+      "trades_annual": 720,
+      "avg_price_usd": 100,
+      "avg_shares_per_trade": 100,
+      "note": "Mid-large caps $50-$200, median ~$100 -> 100 shares pour $10K",
+      "commissions": {
+        "alpaca": {
+          "per_trade": 0.50,
+          "annual": 360.00,
+          "formula": "100 shares x $0.005"
+        },
+        "ibkr_tiered": {
+          "per_trade": 0.35,
+          "annual": 252.00,
+          "formula": "max(100 x $0.0035, $0.35) = max($0.35, $0.35) = $0.35"
+        },
+        "saving_annual_ibkr_vs_alpaca": 108.00,
+        "saving_pct": 30.0,
+        "verdict": "IBKR 30% moins cher — plus de shares par trade = plus d'economie"
+      }
+    }
+  },
+  "total_annual": {
+    "total_trades_annual": 1886,
+    "alpaca_total_annual": 808.69,
+    "ibkr_total_annual": 660.10,
+    "saving_ibkr_vs_alpaca": 148.59,
+    "saving_pct": 18.4
+  },
+  "conclusion": {
+    "verdict": "Economie IBKR tiered = ~$149/an sur ces 3 strategies (18% moins cher). Impact MARGINAL sur la performance : commissions totales = 0.8% du capital ($809 Alpaca / $100K). Le choix de broker ne se joue PAS sur les commissions pour ce volume de trades. IBKR se justifie pour l'acces aux marches EU, pas pour l'economie de commissions US.",
+    "real_advantage_ibkr": [
+      "Acces direct marches EU (Euronext, Xetra, LSE, etc.)",
+      "Execution EU pre-market (gap open, etc.)",
+      "Forex hedge EUR/USD natif",
+      "Short selling EU plus large"
+    ],
+    "keep_alpaca_for": [
+      "Strategies US intraday (API simple, bracket orders natifs)",
+      "Paper trading US (PDT guard, circuit-breaker en place)",
+      "Pas de migration risquee pour $149/an d'economie"
+    ]
+  }
+}
