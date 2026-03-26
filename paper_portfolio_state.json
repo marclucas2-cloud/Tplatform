@@ -1,30 +1,61 @@
 {
-  "capital": 100000.0,
+  "capital": 100414.46,
   "positions": {
     "vrp_rotation": {
       "symbols": [
         "SPY"
       ]
+    },
+    "momentum_25etf": {
+      "symbols": [
+        "USO",
+        "XLE"
+      ]
     }
   },
   "allocations": {
+    "dow_seasonal": {
+      "pct": 0.2,
+      "capital": 20000.0,
+      "max_position": 20000.0
+    },
+    "crypto_proxy_v2": {
+      "pct": 0.2,
+      "capital": 20000.0,
+      "max_position": 20000.0
+    },
+    "opex_gamma": {
+      "pct": 0.2002,
+      "capital": 20015.57,
+      "max_position": 20015.57
+    },
+    "gap_continuation": {
+      "pct": 0.2002,
+      "capital": 20015.57,
+      "max_position": 20015.57
+    },
     "momentum_25etf": {
-      "pct": 0.3424,
-      "capital": 34241.25,
-      "max_position": 34241.25
+      "pct": 0.0554,
+      "capital": 5543.41,
+      "max_position": 5543.41
     },
     "pairs_mu_amat": {
-      "pct": 0.3658,
-      "capital": 36575.88,
-      "max_position": 36575.88
+      "pct": 0.0592,
+      "capital": 5921.37,
+      "max_position": 5921.37
     },
     "vrp_rotation": {
-      "pct": 0.2918,
-      "capital": 29182.88,
-      "max_position": 29182.88
+      "pct": 0.0472,
+      "capital": 4724.5,
+      "max_position": 4724.5
+    },
+    "lateday_meanrev": {
+      "pct": 0.0378,
+      "capital": 3779.6,
+      "max_position": 3779.6
     }
   },
-  "last_monthly": "2026-03-23T22:58:25.911983+00:00",
+  "last_monthly": "2026-03-25T14:35:02.712510+00:00",
   "daily_capital_start": 100000.0,
   "daily_pnl": 0.0,
   "benchmark_start_price": 655.3800048828125,
@@ -59,7 +90,117 @@
       },
       "orders": 0,
       "capital": 100000.0
+    },
+    {
+      "date": "2026-03-25",
+      "signals": {
+        "momentum_25etf": "rebalance",
+        "pairs_mu_amat": "hold",
+        "vrp_rotation": "rebalance"
+      },
+      "orders": 2,
+      "capital": 100000.0
+    },
+    {
+      "date": "2026-03-25",
+      "signals": {
+        "momentum_25etf": "hold",
+        "pairs_mu_amat": "hold",
+        "vrp_rotation": "hold"
+      },
+      "orders": 0,
+      "capital": 100000.0
     }
   ],
-  "last_run_date": "2026-03-23"
+  "last_run_date": "2026-03-25",
+  "intraday_positions": {
+    "XLF": {
+      "strategy": "orb_5min",
+      "direction": "LONG",
+      "entry_price": 48.96,
+      "stop_loss": 48.79,
+      "take_profit": 49.300000000000004,
+      "opened_at": "2026-03-24T18:33:23.373215+00:00"
+    },
+    "CVX": {
+      "strategy": "orb_5min",
+      "direction": "LONG",
+      "entry_price": 206.82,
+      "stop_loss": 206.11,
+      "take_profit": 208.23999999999995,
+      "opened_at": "2026-03-24T19:17:13.185748+00:00"
+    },
+    "UNH": {
+      "strategy": "orb_5min",
+      "direction": "LONG",
+      "entry_price": 269.58,
+      "stop_loss": 267.78,
+      "take_profit": 273.18,
+      "opened_at": "2026-03-24T19:25:10.900283+00:00"
+    },
+    "AAPL": {
+      "strategy": "orb_5min",
+      "direction": "LONG",
+      "entry_price": 251.42,
+      "stop_loss": 249.665,
+      "take_profit": 254.92999999999998,
+      "opened_at": "2026-03-24T19:40:12.047369+00:00"
+    },
+    "PG": {
+      "strategy": "orb_5min",
+      "direction": "LONG",
+      "entry_price": 143.37,
+      "stop_loss": 142.44,
+      "take_profit": 145.23000000000002,
+      "opened_at": "2026-03-24T19:45:13.849380+00:00"
+    },
+    "XLU": {
+      "strategy": "orb_5min",
+      "direction": "LONG",
+      "entry_price": 44.805,
+      "stop_loss": 44.495,
+      "take_profit": 45.425000000000004,
+      "opened_at": "2026-03-24T19:50:11.821668+00:00"
+    },
+    "HON": {
+      "strategy": "orb_5min",
+      "direction": "LONG",
+      "entry_price": 221.465,
+      "stop_loss": 221.165,
+      "take_profit": 222.06500000000003,
+      "opened_at": "2026-03-24T19:55:13.575449+00:00"
+    },
+    "NVDA": {
+      "strategy": "failed_rally_short",
+      "direction": "SHORT",
+      "entry_price": 173.77,
+      "stop_loss": 175.8309198507123,
+      "take_profit": 173.54,
+      "opened_at": "2026-03-26T15:53:33.117606+00:00"
+    },
+    "QQQ": {
+      "strategy": "vwap_micro",
+      "direction": "LONG",
+      "entry_price": 580.41,
+      "stop_loss": 580.1532319206967,
+      "take_profit": 581.0014524718827,
+      "opened_at": "2026-03-26T16:20:31.298450+00:00"
+    },
+    "AMZN": {
+      "strategy": "vwap_micro",
+      "direction": "LONG",
+      "entry_price": 210.4,
+      "stop_loss": 209.7987719311991,
+      "take_profit": 211.51237538969636,
+      "opened_at": "2026-03-26T16:31:26.307145+00:00"
+    },
+    "MARA": {
+      "strategy": "crypto_proxy_v2",
+      "direction": "SHORT",
+      "entry_price": 8.835,
+      "stop_loss": 8.935285714285715,
+      "take_profit": 8.634428571428572,
+      "opened_at": "2026-03-26T17:34:55.218102+00:00"
+    }
+  }
 }

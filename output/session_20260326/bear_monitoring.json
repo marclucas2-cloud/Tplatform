@@ -1,0 +1,182 @@
+[
+  {
+    "name": "OpEx Gamma Pin",
+    "bull": {
+      "sharpe": 20.41,
+      "pnl": 3.1,
+      "trades": 7,
+      "wr": 71.4,
+      "pf": 1.09
+    },
+    "bear": {
+      "sharpe": 0,
+      "pnl": 0,
+      "trades": 0,
+      "wr": 0,
+      "pf": 0
+    },
+    "category": "BEAR LOSER"
+  },
+  {
+    "name": "Overnight Gap",
+    "bull": {
+      "sharpe": 6.0,
+      "pnl": -42.03,
+      "trades": 4,
+      "wr": 25.0,
+      "pf": 0.91
+    },
+    "bear": {
+      "sharpe": 0,
+      "pnl": 0,
+      "trades": 0,
+      "wr": 0,
+      "pf": 0
+    },
+    "category": "BEAR LOSER"
+  },
+  {
+    "name": "Crypto-Proxy V2",
+    "bull": {
+      "sharpe": 0,
+      "pnl": 0,
+      "trades": 0,
+      "wr": 0,
+      "pf": 0
+    },
+    "bear": {
+      "sharpe": 0,
+      "pnl": 0,
+      "trades": 0,
+      "wr": 0,
+      "pf": 0
+    },
+    "category": "BEAR NEUTRAL"
+  },
+  {
+    "name": "Day-of-Week",
+    "bull": {
+      "sharpe": 4.27,
+      "pnl": 48.66,
+      "trades": 7,
+      "wr": 85.7,
+      "pf": 2.89
+    },
+    "bear": {
+      "sharpe": 0,
+      "pnl": 0,
+      "trades": 0,
+      "wr": 0,
+      "pf": 0
+    },
+    "category": "BEAR LOSER"
+  },
+  {
+    "name": "Late Day MR",
+    "bull": {
+      "sharpe": 11.09,
+      "pnl": 124.96,
+      "trades": 5,
+      "wr": 60.0,
+      "pf": 2.62
+    },
+    "bear": {
+      "sharpe": 0,
+      "pnl": -37.87,
+      "trades": 1,
+      "wr": 0.0,
+      "pf": 0.0
+    },
+    "category": "BEAR LOSER"
+  },
+  {
+    "name": "VWAP Micro",
+    "bull": {
+      "sharpe": 0.35,
+      "pnl": 3.53,
+      "trades": 57,
+      "wr": 52.6,
+      "pf": 1.16
+    },
+    "bear": {
+      "sharpe": 0,
+      "pnl": -0.24,
+      "trades": 3,
+      "wr": 33.3,
+      "pf": 1.06
+    },
+    "category": "BEAR LOSER"
+  },
+  {
+    "name": "Triple EMA",
+    "bull": {
+      "sharpe": -4.56,
+      "pnl": -534.88,
+      "trades": 57,
+      "wr": 33.3,
+      "pf": 0.71
+    },
+    "bear": {
+      "sharpe": 0,
+      "pnl": 46.59,
+      "trades": 3,
+      "wr": 66.7,
+      "pf": 2.38
+    },
+    "category": "BEAR NEUTRAL"
+  },
+  {
+    "name": "Midday Reversal",
+    "bull": {
+      "sharpe": 2.78,
+      "pnl": 238.17,
+      "trades": 57,
+      "wr": 49.1,
+      "pf": 1.28
+    },
+    "bear": {
+      "sharpe": 0,
+      "pnl": -82.43,
+      "trades": 2,
+      "wr": 0.0,
+      "pf": 0.0
+    },
+    "category": "BEAR LOSER"
+  },
+  {
+    "name": "Gold Fear Gauge",
+    "bull": {
+      "sharpe": 9.3,
+      "pnl": 98.19,
+      "trades": 3,
+      "wr": 66.7,
+      "pf": 13.49
+    },
+    "bear": {
+      "sharpe": 0,
+      "pnl": 0,
+      "trades": 0,
+      "wr": 0,
+      "pf": 0
+    },
+    "category": "BEAR LOSER"
+  },
+  {
+    "name": "Corr Regime Hedge",
+    "bull": {
+      "sharpe": -0.53,
+      "pnl": -40.29,
+      "trades": 20,
+      "wr": 45.0,
+      "pf": 0.83
+    },
+    "bear": {
+      "sharpe": 0,
+      "pnl": -14.17,
+      "trades": 1,
+      "wr": 0.0,
+      "pf": 0.0
+    },
+    "category": "BEAR NEUTRAL"
+  }
+]

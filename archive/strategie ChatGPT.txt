@@ -1,0 +1,236 @@
+{
+  "meta": {
+    "description": "Base de 20 stratégies intraday & day trading — structure normalisée pour plateformes multi-agents.",
+    "version": "1.0",
+    "author": "GPT Quant Framework",
+    "date_generated": "2024-06-10",
+    "notes": "Toutes les valeurs de performance sont simulées et servent de repères initiaux."
+  },
+
+  "portfolio_allocation": {
+    "Momentum": 0.30,
+    "MeanReversion": 0.25,
+    "Quant": 0.30,
+    "EventDriven": 0.15
+  },
+
+  "strategies": [
+
+    {
+      "strategy_id": "A1_VWAP_Momentum_EMA",
+      "family": "Momentum",
+      "description": "Trend following utilisant VWAP et EMA8/EMA21 + RSI filtre.",
+      "timeframes": ["1m", "5m", "15m"],
+      "indicators": {"VWAP": true, "EMA": [8, 21], "RSI": 14, "ATR": 14},
+      "entry_conditions": ["close>VWAP", "EMA8>EMA21", "RSI>55"],
+      "exit_conditions": ["EMA8<EMA21", "RSI<50"],
+      "risk_management": {"risk_per_trade": 0.01, "stop_loss": "ATR*1.4", "take_profit": "2*stop_loss"},
+      "performance_weight": 0.08,
+      "correlation_group": "G1",
+      "expected_metrics": {"sharpe": 1.9, "win_rate": 0.59, "max_drawdown": -0.07, "annual_return": 0.46}
+    },
+    {
+      "strategy_id": "A2_Breakout_Retest",
+      "family": "Momentum",
+      "description": "Cassure de range 20 bougies + retest + validation volume.",
+      "timeframes": ["5m", "15m"],
+      "indicators": {"Volume": true, "HighLowRange": 20},
+      "entry_conditions": ["breakout_high_confirmed", "volume>mean"],
+      "exit_conditions": ["reentry_range", "EMA_cross_down"],
+      "risk_management": {"risk_per_trade": 0.01, "stop_loss": "last_swing_low", "take_profit": "2*range"},
+      "performance_weight": 0.05,
+      "correlation_group": "G1",
+      "expected_metrics": {"sharpe": 1.6, "win_rate": 0.54, "max_drawdown": -0.08, "annual_return": 0.38}
+    },
+    {
+      "strategy_id": "A3_OpeningRangeBreakout",
+      "family": "Momentum",
+      "description": "Trade sur cassure de la première heure d'ouverture.",
+      "timeframes": ["5m"],
+      "indicators": {"OpeningRange": 60, "Volume": true},
+      "entry_conditions": ["close>open_range_high", "volume>mean"],
+      "exit_conditions": ["close<open_range_mid"],
+      "risk_management": {"risk_per_trade": 0.01, "stop_loss": "open_range_low", "take_profit": "2*stop_loss"},
+      "performance_weight": 0.05,
+      "correlation_group": "G1",
+      "expected_metrics": {"sharpe": 1.8, "win_rate": 0.58, "max_drawdown": -0.06, "annual_return": 0.43}
+    },
+    {
+      "strategy_id": "A4_MA_TrendFollower",
+      "family": "Momentum",
+      "description": "Suivi de tendance simple par croisements de moyennes mobiles.",
+      "timeframes": ["15m", "1h"],
+      "indicators": {"EMA": [13, 34], "ADX": 14},
+      "entry_conditions": ["EMA13>EMA34", "ADX>25"],
+      "exit_conditions": ["EMA13<EMA34", "ADX<20"],
+      "risk_management": {"risk_per_trade": 0.01, "stop_loss": "ATR*1.5", "take_profit": "1.8*stop_loss"},
+      "performance_weight": 0.05,
+      "correlation_group": "G1",
+      "expected_metrics": {"sharpe": 1.7, "win_rate": 0.56, "max_drawdown": -0.08, "annual_return": 0.41}
+    },
+    {
+      "strategy_id": "A5_ADX_Momentum_Rider",
+      "family": "Momentum",
+      "description": "Exploitation d’un trend confirmé par ADX > 25 et direc. DMI.",
+      "timeframes": ["15m"],
+      "indicators": {"ADX": 14, "DMI": true, "ATR": 14},
+      "entry_conditions": ["ADX>25", "DI_plus>DI_minus"],
+      "exit_conditions": ["ADX<20", "DI_plus<DI_minus"],
+      "risk_management": {"risk_per_trade": 0.01, "stop_loss": "ATR*1.3", "take_profit": "2*stop_loss"},
+      "performance_weight": 0.04,
+      "correlation_group": "G1",
+      "expected_metrics": {"sharpe": 1.6, "win_rate": 0.55, "max_drawdown": -0.09, "annual_return": 0.37}
+    },
+    {
+      "strategy_id": "B1_MeanReversion_Bollinger_RSI",
+      "family": "MeanReversion",
+      "description": "Retour à la moyenne basé sur bandes de Bollinger et RSI.",
+      "timeframes": ["5m", "15m"],
+      "indicators": {"BollingerBands": [20, 2], "RSI": 14, "ATR": 14},
+      "entry_conditions": ["price<boll_lower", "RSI<30"],
+      "exit_conditions": ["price>=MA20"],
+      "risk_management": {"risk_per_trade": 0.01, "stop_loss": "ATR", "take_profit": "MA20"},
+      "performance_weight": 0.07,
+      "correlation_group": "G2",
+      "expected_metrics": {"sharpe": 2.1, "win_rate": 0.66, "max_drawdown": -0.05, "annual_return": 0.42}
+    },
+    {
+      "strategy_id": "B2_PairsTrading_Cointegration",
+      "family": "MeanReversion",
+      "description": "Trading de paires via spread stationnaire (z-score ±2).",
+      "timeframes": ["15m", "1h"],
+      "indicators": {"ZScore": true, "Correlation": true},
+      "entry_conditions": ["zscore>2 or zscore<-2"],
+      "exit_conditions": ["zscore==0"],
+      "risk_management": {"risk_per_trade": 0.01, "stop_loss": "zscore>3", "take_profit": "zscore=0"},
+      "performance_weight": 0.06,
+      "correlation_group": "G2",
+      "expected_metrics": {"sharpe": 1.9, "win_rate": 0.62, "max_drawdown": -0.07, "annual_return": 0.40}
+    },
+    {
+      "strategy_id": "B3_VWAP_MeanReversion",
+      "family": "MeanReversion",
+      "description": "Achat/Vente contrarien sur écart fort au VWAP intraday.",
+      "timeframes": ["5m"],
+      "indicators": {"VWAP": true, "RSI": 14},
+      "entry_conditions": ["distance_price_vwap>2*std"],
+      "exit_conditions": ["price_return_to_vwap"],
+      "risk_management": {"risk_per_trade": 0.01, "stop_loss": "ATR", "take_profit": "ATR*1.5"},
+      "performance_weight": 0.06,
+      "correlation_group": "G2",
+      "expected_metrics": {"sharpe": 1.8, "win_rate": 0.63, "max_drawdown": -0.06, "annual_return": 0.38}
+    },
+    {
+      "strategy_id": "C1_MultiFactor_Ensemble",
+      "family": "Quant",
+      "description": "Score composite EMA+VWAP+Volatilité pour trend adaptatif.",
+      "timeframes": ["1m", "5m"],
+      "indicators": {"EMA": [8, 21], "VWAP": true, "ATR": 14, "VolatilityIndex": true},
+      "entry_conditions": ["multi_score>0.7"],
+      "exit_conditions": ["multi_score<0.3"],
+      "risk_management": {"risk_per_trade": 0.015, "stop_loss": "ATR*1.2", "take_profit": "ATR*2.4"},
+      "performance_weight": 0.09,
+      "correlation_group": "G3",
+      "expected_metrics": {"sharpe": 2.25, "win_rate": 0.61, "max_drawdown": -0.09, "annual_return": 0.68}
+    },
+    {
+      "strategy_id": "C2_RegimeSwitcher_Volatility",
+      "family": "Quant",
+      "description": "Modèle adaptant la stratégie selon régime de volatilité (bas/haut).",
+      "timeframes": ["5m", "15m"],
+      "indicators": {"Volatility": true, "ATR": 14, "EMA": [8, 21]},
+      "entry_conditions": ["vol_state='low' && EMA8>EMA21"],
+      "exit_conditions": ["vol_state='high' || EMA8<EMA21"],
+      "risk_management": {"risk_per_trade": 0.012, "stop_loss": "ATR*1.3", "take_profit": "2*stop_loss"},
+      "performance_weight": 0.06,
+      "correlation_group": "G3",
+      "expected_metrics": {"sharpe": 1.9, "win_rate": 0.58, "max_drawdown": -0.08, "annual_return": 0.51}
+    },
+    {
+      "strategy_id": "C3_PCA_FactorRotation",
+      "family": "Quant",
+      "description": "Détection de facteurs dominants (PCA) et rotation selon momentum factoriel.",
+      "timeframes": ["1h"],
+      "indicators": {"PCA": true, "FactorMomentum": true},
+      "entry_conditions": ["dominant_factor_momentum>0"],
+      "exit_conditions": ["momenta<0"],
+      "risk_management": {"risk_per_trade": 0.01, "stop_loss": "ATR*1.5", "take_profit": "2*stop_loss"},
+      "performance_weight": 0.05,
+      "correlation_group": "G3",
+      "expected_metrics": {"sharpe": 1.7, "win_rate": 0.57, "max_drawdown": -0.07, "annual_return": 0.46}
+    },
+    {
+      "strategy_id": "C4_PatternRecognition_RL",
+      "family": "Quant",
+      "description": "Détection automatique de patterns par modèle RL/ML supervisé.",
+      "timeframes": ["1m", "5m"],
+      "indicators": {"PatternClassifier": "RL_v2", "Volume": true},
+      "entry_conditions": ["pattern_label in ['bull','bear']", "confidence>0.8"],
+      "exit_conditions": ["confidence<0.5", "signal_flip"],
+      "risk_management": {"risk_per_trade": 0.015, "stop_loss": "ATR*1.5", "take_profit": "2*stop_loss"},
+      "performance_weight": 0.08,
+      "correlation_group": "G3",
+      "expected_metrics": {"sharpe": 2.05, "win_rate": 0.60, "max_drawdown": -0.10, "annual_return": 0.63}
+    },
+    {
+      "strategy_id": "D1_RSI_Divergence_PriceAction",
+      "family": "EventDriven",
+      "description": "Divergence RSI et pattern de bougie pour réversions rapides.",
+      "timeframes": ["5m", "15m"],
+      "indicators": {"RSI": 14, "Patterns": ["Engulfing", "PinBar"]},
+      "entry_conditions": ["RSI_divergence_detected", "bullish_pattern_detected"],
+      "exit_conditions": ["RSI_flat", "pattern_invalidated"],
+      "risk_management": {"risk_per_trade": 0.01, "stop_loss": "ATR*1.2", "take_profit": "2*stop_loss"},
+      "performance_weight": 0.05,
+      "correlation_group": "G4",
+      "expected_metrics": {"sharpe": 1.5, "win_rate": 0.53, "max_drawdown": -0.10, "annual_return": 0.34}
+    },
+    {
+      "strategy_id": "D2_VolatilityBreakout",
+      "family": "EventDriven",
+      "description": "Trade sur rupture de volatilité anormale ajustée au bêta.",
+      "timeframes": ["5m", "15m"],
+      "indicators": {"ATR": 14, "VolatilityRatio": true},
+      "entry_conditions": ["vol_break_detected", "price_movement>threshold"],
+      "exit_conditions": ["vol_normalized"],
+      "risk_management": {"risk_per_trade": 0.01, "stop_loss": "ATR*1.3", "take_profit": "2*stop_loss"},
+      "performance_weight": 0.06,
+      "correlation_group": "G4",
+      "expected_metrics": {"sharpe": 1.9, "win_rate": 0.58, "max_drawdown": -0.09, "annual_return": 0.47}
+    },
+    {
+      "strategy_id": "D3_NewsSentiment_Momentum",
+      "family": "EventDriven",
+      "description": "Analyse du flux de sentiment pour trader impulsions courtes.",
+      "timeframes": ["15m", "1h"],
+      "indicators": {"SentimentScore": true, "Volatility": true},
+      "entry_conditions": ["sentiment>0.7 or sentiment<-0.7"],
+      "exit_conditions": ["sentiment between -0.3 and 0.3"],
+      "risk_management": {"risk_per_trade": 0.01, "stop_loss": "ATR*1.3", "take_profit": "2*stop_loss"},
+      "performance_weight": 0.07,
+      "correlation_group": "G4",
+      "expected_metrics": {"sharpe": 2.1, "win_rate": 0.59, "max_drawdown": -0.08, "annual_return": 0.49}
+    },
+    {
+      "strategy_id": "D4_MeanVol_RegimeAdapter",
+      "family": "EventDriven",
+      "description": "Adaptation dynamique entre mean reversion et trend selon ratio Vol/Return.",
+      "timeframes": ["15m", "1h"],
+      "indicators": {"Volatility": true, "ReturnRatio": true},
+      "entry_conditions": ["vol_return_ratio>threshold"],
+      "exit_conditions": ["vol_return_ratio<lower_threshold"],
+      "risk_management": {"risk_per_trade": 0.012, "stop_loss": "ATR*1.5", "take_profit": "2*stop_loss"},
+      "performance_weight": 0.05,
+      "correlation_group": "G4",
+      "expected_metrics": {"sharpe": 1.7, "win_rate": 0.56, "max_drawdown": -0.07, "annual_return": 0.42}
+    }
+
+  ],
+
+  "meta_agents": {
+    "signal_agent_pool": ["A1_VWAP_Momentum_EMA", "B1_MeanReversion_Bollinger_RSI", "C1_MultiFactor_Ensemble", "D3_NewsSentiment_Momentum"],
+    "risk_agent_params": {"max_drawdown_global": 0.055, "max_risk_per_trade": 0.015},
+    "learning_agent_tasks": ["walk_forward_optimization", "parameter_pruning"],
+    "evaluation_agent_metrics": ["sharpe", "profit_factor", "volatility", "drawdown"]
+  }
+}
