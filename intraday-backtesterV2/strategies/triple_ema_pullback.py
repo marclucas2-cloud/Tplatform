@@ -28,6 +28,19 @@ class TripleEMAPullbackStrategy(BaseStrategy):
     VOL_RATIO_MIN = 1.0
     MIN_EMA_SPREAD = 0.001      # EMAs doivent etre espacees de >0.1%
 
+    # Top liquid tickers pour le live
+    LIVE_TICKERS = [
+        "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "AMD",
+        "NFLX", "AVGO", "CRM", "ORCL", "QCOM", "INTC", "BA",
+        "JPM", "GS", "MS", "BAC", "C",
+        "XOM", "CVX", "COP", "OXY",
+        "SPY", "QQQ", "IWM", "DIA",
+        "COIN", "MARA", "MSTR",
+    ]
+
+    def get_required_tickers(self) -> list[str]:
+        return self.LIVE_TICKERS
+
     def generate_signals(self, data: dict[str, pd.DataFrame], date) -> list[Signal]:
         candidates = []
 

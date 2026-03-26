@@ -28,6 +28,19 @@ class VWAPMicroReversionStrategy(BaseStrategy):
     MAX_TRADES_PER_DAY = 3
     MIN_VOLUME = 20_000        # Assoupli
 
+    # Top liquid tickers pour le live (evite de scanner 200+ tickers via API)
+    LIVE_TICKERS = [
+        "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "TSLA", "AMD",
+        "NFLX", "AVGO", "CRM", "ORCL", "QCOM", "INTC", "BA",
+        "JPM", "GS", "MS", "BAC", "C",
+        "XOM", "CVX", "COP", "OXY",
+        "SPY", "QQQ", "IWM", "DIA",
+        "COIN", "MARA", "MSTR",
+    ]
+
+    def get_required_tickers(self) -> list[str]:
+        return self.LIVE_TICKERS
+
     def generate_signals(self, data: dict[str, pd.DataFrame], date) -> list[Signal]:
         signals = []
         trades_today = 0
