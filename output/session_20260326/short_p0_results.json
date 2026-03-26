@@ -1,0 +1,80 @@
+{
+  "sector_weakness": {
+    "n_trades": 131,
+    "net_pnl": -323.29,
+    "total_return_pct": -0.32,
+    "sharpe_ratio": -1.29,
+    "win_rate": 45.0,
+    "profit_factor": 0.87,
+    "max_drawdown_pct": 0.67,
+    "avg_winner": 27.36,
+    "avg_loser": -25.84,
+    "avg_rr_ratio": 1.06,
+    "n_short": 131,
+    "n_long": 0,
+    "verdict": "REJETE",
+    "walk_forward": {
+      "hit_rate": 33.33333333333333,
+      "avg_oos_return": -0.08,
+      "avg_oos_sharpe": -4.39,
+      "wf_verdict": "REJECTED"
+    }
+  },
+  "high_beta_underperf": {
+    "n_trades": 72,
+    "net_pnl": 1430.57,
+    "total_return_pct": 1.43,
+    "sharpe_ratio": 2.65,
+    "win_rate": 51.4,
+    "profit_factor": 1.69,
+    "max_drawdown_pct": 0.5,
+    "avg_winner": 102.57,
+    "avg_loser": -64.31,
+    "avg_rr_ratio": 1.59,
+    "n_short": 72,
+    "n_long": 0,
+    "verdict": "WINNER+WF",
+    "walk_forward": {
+      "hit_rate": 66.66666666666666,
+      "avg_oos_return": 0.13,
+      "avg_oos_sharpe": 2.8,
+      "wf_verdict": "VALIDATED"
+    }
+  },
+  "trend_exhaustion": {
+    "n_trades": 231,
+    "net_pnl": -795.67,
+    "total_return_pct": -0.8,
+    "sharpe_ratio": -1.31,
+    "win_rate": 41.6,
+    "profit_factor": 0.85,
+    "max_drawdown_pct": 0.93,
+    "avg_winner": 41.36,
+    "avg_loser": -34.61,
+    "avg_rr_ratio": 1.2,
+    "n_short": 231,
+    "n_long": 0,
+    "verdict": "REJETE",
+    "walk_forward": {
+      "hit_rate": 33.33333333333333,
+      "avg_oos_return": -0.13,
+      "avg_oos_sharpe": -2.24,
+      "wf_verdict": "REJECTED"
+    }
+  },
+  "late_day_bear_accel": {
+    "n_trades": 9,
+    "net_pnl": -25.35,
+    "total_return_pct": -0.03,
+    "sharpe_ratio": -4.32,
+    "win_rate": 55.6,
+    "profit_factor": 0.76,
+    "max_drawdown_pct": 0.09,
+    "avg_winner": 15.39,
+    "avg_loser": -25.37,
+    "avg_rr_ratio": 0.61,
+    "n_short": 9,
+    "n_long": 0,
+    "verdict": "REJETE"
+  }
+}

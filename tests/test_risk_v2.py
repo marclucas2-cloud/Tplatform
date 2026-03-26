@@ -495,3 +495,57 @@ class TestAllocatorEdgeCases:
         assert allocator.get_tier_for_strategy("opex_gamma") == "S"
         assert allocator.get_tier_for_strategy("gold_fear") == "B"
         assert allocator.get_tier_for_strategy("unknown_strat") == "unknown"
+
+
+# =============================================================================
+# TEST 16 : Sector limit rejects oversized tech (explicit enforcement test)
+# =============================================================================
+
+class TestSectorLimitEnforced:
+    def test_sector_limit_rejects_oversized(self, rm):
+        """Un ordre qui ferait passer tech > 25% doit etre rejete."""
+        portfolio = {
+            "equity": 100000,
+            "positions": [
+                {"symbol": "AAPL", "notional": 12000, "side": "long"},
+                {"symbol": "MSFT", "notional": 10000, "side": "long"},
+            ],
+            "cash": 78000,
+        }
+        order = {"symbol": "NVDA", "direction": "BUY", "notional": 5000, "strategy": "test"}
+        # Tech exposure serait 12K + 10K + 5K = 27K = 27% > 25% -> REJET
+        passed, msg = rm.validate_order(order, portfolio)
+        assert not passed
+        assert "sector" in msg.lower()
+
+    def test_sector_limit_allows_just_under(self, rm):
+        """Un ordre qui laisse le secteur a exactement 25% passe."""
+        portfolio = {
+            "equity": 100000,
+            "positions": [
+                {"symbol": "AAPL", "notional": 12000, "side": "long"},
+                {"symbol": "MSFT", "notional": 10000, "side": "long"},
+            ],
+            "cash": 78000,
+        }
+        order = {"symbol": "NVDA", "direction": "BUY", "notional": 3000, "strategy": "test"}
+        # Tech exposure serait 12K + 10K + 3K = 25K = 25% = limite exacte -> OK
+        passed, msg = rm.validate_order(order, portfolio)
+        assert passed, f"L'ordre devrait passer (25% = limite exacte): {msg}"
+
+    def test_sector_limit_rejects_via_validate_order(self, rm):
+        """Verifie que _check_sector_limit est bien appelee dans validate_order (pas bypassee)."""
+        portfolio = {
+            "equity": 100000,
+            "positions": [
+                {"symbol": "AAPL", "notional": 9000, "side": "LONG"},
+                {"symbol": "MSFT", "notional": 9000, "side": "LONG"},
+                {"symbol": "NVDA", "notional": 6000, "side": "LONG"},
+            ],
+            "cash": 76000,
+        }
+        # Tech deja a 24K. Ajouter 2K -> 26K = 26% > 25%
+        order = {"symbol": "AMD", "direction": "BUY", "notional": 2000, "strategy": "test"}
+        passed, msg = rm.validate_order(order, portfolio)
+        assert not passed, f"Sector limit devrait rejeter: tech serait a 26%"
+        assert "Sector limit" in msg

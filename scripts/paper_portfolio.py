@@ -196,6 +196,13 @@ STRATEGIES = {
         "frequency": "intraday",
         "multi_asset": True,
     },
+    # === P0 TODO V3 — High-Beta Underperformance Short ===
+    "high_beta_short": {
+        "name": "High-Beta Underperformance Short",
+        "sharpe": 2.65,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
     # RETIRES apres re-backtest horaires stricts :
     # - ORB 5-Min : Sharpe -0.05 (ne survit pas aux couts sur univers large)
     # - Earnings Drift : Sharpe -9.55 (overtrade sur small caps)

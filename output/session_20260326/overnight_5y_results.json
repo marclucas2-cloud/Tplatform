@@ -1,0 +1,49 @@
+{
+  "generated_at": "2026-03-26T21:43:24.809692",
+  "period": "5y",
+  "interval": "1d",
+  "costs": {
+    "commission_per_trade_usd": 0.1,
+    "slippage_roundtrip_pct": 0.0005
+  },
+  "strategies": [
+    {
+      "strategy": "Overnight SPY (buy close, sell open)",
+      "n_trades": 1254,
+      "years": 4.98,
+      "sharpe": -0.7,
+      "win_rate": 0.5072,
+      "profit_factor": 0.88,
+      "max_drawdown": -0.3592,
+      "cumulative_return": -0.3158,
+      "cagr": -0.0734,
+      "avg_return_per_trade": -0.000282,
+      "std_return_per_trade": 0.006375,
+      "total_gross_profit": 2.5542,
+      "total_gross_loss": -2.9081,
+      "best_trade": 0.036678,
+      "worst_trade": -0.040414
+    },
+    {
+      "strategy": "Overnight Sector Winner (best 5d rel strength)",
+      "n_trades": 1249,
+      "years": 4.96,
+      "sharpe": -0.87,
+      "win_rate": 0.474,
+      "profit_factor": 0.85,
+      "max_drawdown": -0.5306,
+      "cumulative_return": -0.4327,
+      "cagr": -0.1081,
+      "avg_return_per_trade": -0.000424,
+      "std_return_per_trade": 0.007708,
+      "total_gross_profit": 2.9788,
+      "total_gross_loss": -3.5083,
+      "best_trade": 0.041368,
+      "worst_trade": -0.058209
+    }
+  ],
+  "verdict": {
+    "overnight_spy": "REJECT",
+    "overnight_sector": "REJECT"
+  }
+}
