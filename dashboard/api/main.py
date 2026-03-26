@@ -230,15 +230,35 @@ def get_strategies():
         return {"error": str(e), "strategies": []}
 
 
+def _load_strategy_registry() -> dict:
+    """Charge le registre des strategies depuis le fichier Python (exec safe)."""
+    # Essayer plusieurs chemins possibles
+    candidates = [
+        API_DIR / "strategy_registry.py",
+        ROOT / "dashboard" / "api" / "strategy_registry.py",
+        Path(__file__).parent / "strategy_registry.py",
+    ]
+    for registry_path in candidates:
+        try:
+            registry_path = registry_path.resolve()
+            if registry_path.exists():
+                ns = {}
+                exec(registry_path.read_text(encoding="utf-8"), ns)
+                reg = ns.get("STRATEGY_REGISTRY", {})
+                if reg:
+                    logger.info(f"Strategy registry loaded: {len(reg)} strategies from {registry_path}")
+                    return reg
+        except Exception as e:
+            logger.warning(f"Failed to load registry from {registry_path}: {e}")
+    logger.error("Strategy registry NOT FOUND in any candidate path")
+    return {}
+
+
 @app.get("/api/strategies/{strategy_id}")
 def get_strategy_detail(strategy_id: str):
     """Detail complet d'une strategie avec registre (edge, parametres, SL/TP)."""
     try:
-        # Import absolu depuis API_DIR (ajoute au sys.path en haut du fichier)
-        import importlib
-        import strategy_registry
-        importlib.reload(strategy_registry)  # Force reload pour dev
-        STRATEGY_REGISTRY = strategy_registry.STRATEGY_REGISTRY
+        STRATEGY_REGISTRY = _load_strategy_registry()
 
         strategies, tier_alloc = _get_strategies_config()
         if strategy_id not in strategies:
