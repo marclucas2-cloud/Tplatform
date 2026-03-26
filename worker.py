@@ -155,6 +155,11 @@ def check_positions_after_close():
                 f"POSITIONS INTRADAY NON FERMEES APRES 16:00 ET: {sorted(still_open)}. "
                 f"Action manuelle requise!"
             )
+            try:
+                from core.telegram_alert import send_position_not_closed
+                send_position_not_closed(sorted(still_open))
+            except Exception:
+                pass
             for sym in still_open:
                 for p in alpaca_positions:
                     if p["symbol"] == sym:
@@ -181,6 +186,12 @@ def log_heartbeat():
             f"HEARTBEAT: worker alive, {n_pos} position(s), "
             f"equity=${equity:,.2f}, unrealized P&L=${total_pnl:+.2f}"
         )
+        # Telegram heartbeat (silencieux si non configure)
+        try:
+            from core.telegram_alert import send_heartbeat
+            send_heartbeat(equity, n_pos, total_pnl, n_strategies=12)
+        except Exception:
+            pass
     except Exception as e:
         logger.warning(f"HEARTBEAT: worker alive (Alpaca inaccessible: {e})")
 

@@ -52,6 +52,8 @@ MAX_NET_LONG_EXPOSURE = 0.40        # 40% max exposition nette long
 MAX_NET_SHORT_EXPOSURE = 0.20       # 20% max exposition nette short
 MAX_SECTOR_EXPOSURE = 0.40          # 40% max dans un meme secteur
 DAILY_TRAILING_STOP_PCT = 0.05      # 5% trailing stop sur positions daily
+STRATEGY_KILL_SWITCH_PCT = 0.02     # -2% du capital alloue sur 5j rolling = desactive
+STRATEGY_KILL_SWITCH_DAYS = 5       # Fenetre rolling pour le kill switch
 BENCHMARK = "SPY"
 
 # Jours feries NYSE 2026 (marche FERME)
@@ -598,6 +600,17 @@ def _close_all_intraday_positions(state: dict, dry_run: bool = False):
 
         print(f"    P&L total cloture: ${total_pnl:+.2f}")
 
+        # Logger le PnL par strategie pour le kill switch
+        intraday_pos = state.get("intraday_positions", {})
+        for p in positions:
+            sym = p["symbol"]
+            pnl = p.get("unrealized_pl", 0)
+            # Trouver quelle strategie a ouvert cette position
+            pos_info = intraday_pos.get(sym, {})
+            sid = pos_info.get("strategy", "unknown")
+            if sid != "unknown":
+                log_strategy_daily_pnl(state, sid, pnl)
+
     except Exception as e:
         logger.error(f"    Erreur Alpaca: {e}")
 
@@ -707,6 +720,56 @@ def _check_daily_trailing_stops(client, current_positions: dict, state: dict):
             )
 
 
+def check_strategy_kill_switch(state: dict, strategy_id: str, allocated_capital: float) -> bool:
+    """
+    Kill switch par strategie : si PnL rolling sur N jours < -2% du capital alloue,
+    la strategie est desactivee.
+    Retourne True si la strategie est KILL (ne doit pas trader).
+    """
+    kill_log = state.get("strategy_pnl_log", {}).get(strategy_id, [])
+    if len(kill_log) < STRATEGY_KILL_SWITCH_DAYS:
+        return False  # Pas assez d'historique
+
+    # Prendre les N derniers jours
+    recent = kill_log[-STRATEGY_KILL_SWITCH_DAYS:]
+    rolling_pnl = sum(entry.get("pnl", 0) for entry in recent)
+    threshold = -allocated_capital * STRATEGY_KILL_SWITCH_PCT
+
+    if rolling_pnl < threshold:
+        logger.critical(
+            f"KILL SWITCH [{strategy_id}]: PnL rolling {STRATEGY_KILL_SWITCH_DAYS}j = "
+            f"${rolling_pnl:,.2f} < seuil ${threshold:,.2f} "
+            f"(-{STRATEGY_KILL_SWITCH_PCT*100}% de ${allocated_capital:,.0f}). "
+            f"Strategie DESACTIVEE."
+        )
+        try:
+            from core.telegram_alert import send_kill_switch
+            strat_name = STRATEGIES.get(strategy_id, {}).get("name", strategy_id)
+            send_kill_switch(strat_name, rolling_pnl, threshold)
+        except Exception:
+            pass
+        return True
+    return False
+
+
+def log_strategy_daily_pnl(state: dict, strategy_id: str, daily_pnl: float):
+    """Enregistre le PnL quotidien d'une strategie pour le kill switch."""
+    from datetime import date as dt_date
+    today = dt_date.today().isoformat()
+    state.setdefault("strategy_pnl_log", {}).setdefault(strategy_id, [])
+    log = state["strategy_pnl_log"][strategy_id]
+
+    # Eviter les doublons
+    if log and log[-1].get("date") == today:
+        log[-1]["pnl"] = log[-1].get("pnl", 0) + daily_pnl
+    else:
+        log.append({"date": today, "pnl": round(daily_pnl, 2)})
+
+    # Garder max 30 jours
+    if len(log) > 30:
+        state["strategy_pnl_log"][strategy_id] = log[-30:]
+
+
 def execute_orders(signals: dict, allocations: dict, state: dict,
                    dry_run: bool, total_capital: float = INITIAL_CAPITAL) -> list[dict]:
     """Execute les ordres via Alpaca avec respect des allocations."""
@@ -733,6 +796,11 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
                 f"CIRCUIT-BREAKER DECLENCHE: DD journalier {daily_dd*100:.1f}% > "
                 f"{MAX_DAILY_DRAWDOWN*100}% — AUCUN ordre execute. "
                 f"Equity=${equity:,.2f}, start=${daily_start:,.2f}")
+            try:
+                from core.telegram_alert import send_circuit_breaker
+                send_circuit_breaker(equity, daily_start, daily_dd)
+            except Exception:
+                pass
             return []
 
     orders = []
@@ -809,15 +877,42 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
                     except Exception as e:
                         logger.error(f"  [{sid}] Erreur vente {sym}: {e}")
 
-            # Acheter les nouveaux targets
+            # Acheter les nouveaux targets — avec bracket SL broker-side
             notional_each = max_capital / len(targets) * 0.95 if targets else 0
             for sym in target_set - current_syms:
                 if notional_each > 10:
                     try:
-                        result = client.create_position(sym, "BUY", notional=round(notional_each, 2), _authorized_by="paper_portfolio")
+                        # Fetch prix actuel pour convertir notional -> qty (bracket exige qty)
+                        positions_data = client.get_positions()
+                        # Utiliser le dernier prix connu via Alpaca
+                        from alpaca.data.historical import StockHistoricalDataClient
+                        import os
+                        data_client = StockHistoricalDataClient(
+                            api_key=os.getenv("ALPACA_API_KEY"),
+                            secret_key=os.getenv("ALPACA_SECRET_KEY"),
+                        )
+                        from alpaca.data.requests import StockLatestQuoteRequest
+                        quote = data_client.get_stock_latest_quote(
+                            StockLatestQuoteRequest(symbol_or_symbols=sym)
+                        )
+                        price = float(quote[sym].ask_price or quote[sym].bid_price or 0)
+                        if price <= 0:
+                            # Fallback sans bracket
+                            result = client.create_position(sym, "BUY", notional=round(notional_each, 2), _authorized_by="paper_portfolio")
+                        else:
+                            qty = int(notional_each / price)
+                            if qty < 1:
+                                continue
+                            stop_loss = round(price * (1 - DAILY_TRAILING_STOP_PCT), 2)  # SL a -5%
+                            result = client.create_position(
+                                sym, "BUY", qty=qty,
+                                stop_loss=stop_loss,
+                                _authorized_by="paper_portfolio"
+                            )
+                            sl_info = f" SL=${stop_loss:.2f}" if result.get("bracket") else " (no bracket)"
+                            logger.info(f"  [{sid}] ACHETE {sym} {qty} shares @ ~${price:.2f}{sl_info}")
                         orders.append({"sid": sid, "action": "buy", "symbol": sym,
                                       "notional": notional_each})
-                        logger.info(f"  [{sid}] ACHETE {sym} ${notional_each:,.0f}")
                     except Exception as e:
                         logger.error(f"  [{sid}] Erreur achat {sym}: {e}")
 
@@ -840,15 +935,22 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
 
             try:
                 # Pour les shorts, utiliser qty entiere (Alpaca rejette notional short)
+                # Ajout SL broker-side a 5% pour chaque jambe
                 from core.data.loader import OHLCVLoader
                 for sym, dir_side in [(sym_a, dir_a), (sym_b, dir_b)]:
+                    price = float(OHLCVLoader.from_yfinance(sym, "1D", period="5d").df["close"].iloc[-1])
+                    qty = int(notional / price)
+                    if qty < 1:
+                        continue
                     if dir_side == "SELL":
-                        price = OHLCVLoader.from_yfinance(sym, "1D", period="5d").df["close"].iloc[-1]
-                        qty = int(notional / float(price))
-                        if qty >= 1:
-                            client.create_position(sym, dir_side, qty=qty, _authorized_by="paper_portfolio")
+                        stop_loss = round(price * (1 + DAILY_TRAILING_STOP_PCT), 2)
                     else:
-                        client.create_position(sym, dir_side, notional=round(notional, 2), _authorized_by="paper_portfolio")
+                        stop_loss = round(price * (1 - DAILY_TRAILING_STOP_PCT), 2)
+                    client.create_position(
+                        sym, dir_side, qty=qty,
+                        stop_loss=stop_loss,
+                        _authorized_by="paper_portfolio"
+                    )
                 orders.append({"sid": sid, "action": "open_pair",
                               "direction": direction, "notional_per_leg": notional})
                 logger.info(f"  [{sid}] PAIR {direction}: {sym_a} {dir_a} + {sym_b} {dir_b} ${notional:,.0f}/leg")
@@ -1194,14 +1296,21 @@ def run_intraday(dry_run: bool = False):
         name = STRATEGIES[sid]["name"]
         print(f"    {name:<25} {alloc.get('pct', 0)*100:>5.1f}%  ${alloc.get('capital', 0):>10,.2f}")
 
-    # Generer les signaux intraday
+    # Generer les signaux intraday (avec kill switch check)
     print(f"\n  SIGNAUX INTRADAY:")
     signals = {}
     for sid in intraday_strats:
         alloc_capital = allocations.get(sid, {}).get("capital", 0)
+        name = STRATEGIES[sid]["name"]
+
+        # Kill switch : verifier si la strategie est desactivee
+        if check_strategy_kill_switch(state, sid, alloc_capital):
+            print(f"    {name:<25} !! KILL SWITCH (-2% sur 5j)")
+            signals[sid] = {"action": "hold", "reason": "kill switch"}
+            continue
+
         sig = signal_intraday(sid, alloc_capital, state)
         signals[sid] = sig
-        name = STRATEGIES[sid]["name"]
         if sig["action"] == "intraday_trade":
             print(f"    {name:<25} >> {sig['direction']} {sig['ticker']} "
                   f"@ ${sig.get('entry_price', 0):.2f}")
