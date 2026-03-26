@@ -170,6 +170,25 @@ STRATEGIES = {
         "frequency": "intraday",
         "multi_asset": True,
     },
+    # === Session 26 mars 2026 (bear mission) — short strategies WF valides ===
+    "vix_short": {
+        "name": "VIX Expansion Short",
+        "sharpe": 3.61,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
+    "failed_rally_short": {
+        "name": "Failed Rally Short",
+        "sharpe": 1.49,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
+    "crypto_bear": {
+        "name": "Crypto Bear Cascade",
+        "sharpe": 3.95,
+        "frequency": "intraday",
+        "multi_asset": True,
+    },
     # RETIRES apres re-backtest horaires stricts :
     # - ORB 5-Min : Sharpe -0.05 (ne survit pas aux couts sur univers large)
     # - Earnings Drift : Sharpe -9.55 (overtrade sur small caps)
@@ -269,6 +288,9 @@ TIER_ALLOCATION = {
     "lateday_meanrev":  0.03,
     "gold_fear":        0.02,
     "triple_ema":       0.02,
+    "vix_short":        0.03,
+    "failed_rally_short": 0.02,
+    "crypto_bear":      0.02,
     # TIER C (daily/monthly, positions longues)
     "momentum_25etf":   0.03,
     "pairs_mu_amat":    0.03,
@@ -571,6 +593,9 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
     from strategies.triple_ema_pullback import TripleEMAPullbackStrategy
     from strategies.gold_fear_gauge import GoldFearGaugeStrategy
     from strategies.correlation_regime_hedge import CorrelationRegimeHedgeStrategy
+    from strategies.vix_expansion_short import VIXExpansionShortStrategy
+    from strategies.failed_rally_short import FailedRallyShortStrategy
+    from strategies.crypto_bear_cascade import CryptoBearCascadeStrategy
 
     STRAT_MAP = {
         "opex_gamma": OpExGammaPinStrategy,
@@ -584,6 +609,9 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         "triple_ema": TripleEMAPullbackStrategy,
         "gold_fear": GoldFearGaugeStrategy,
         "corr_hedge": CorrelationRegimeHedgeStrategy,
+        "vix_short": VIXExpansionShortStrategy,
+        "failed_rally_short": FailedRallyShortStrategy,
+        "crypto_bear": CryptoBearCascadeStrategy,
     }
 
     strat_class = STRAT_MAP.get(strategy_id)

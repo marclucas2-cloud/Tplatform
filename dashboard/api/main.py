@@ -20,8 +20,10 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Setup paths
 ROOT = Path(__file__).resolve().parent.parent.parent
+API_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(API_DIR))  # Pour strategy_registry
 
 # Load .env
 try:
@@ -232,7 +234,11 @@ def get_strategies():
 def get_strategy_detail(strategy_id: str):
     """Detail complet d'une strategie avec registre (edge, parametres, SL/TP)."""
     try:
-        from strategy_registry import STRATEGY_REGISTRY
+        # Import absolu depuis API_DIR (ajoute au sys.path en haut du fichier)
+        import importlib
+        import strategy_registry
+        importlib.reload(strategy_registry)  # Force reload pour dev
+        STRATEGY_REGISTRY = strategy_registry.STRATEGY_REGISTRY
 
         strategies, tier_alloc = _get_strategies_config()
         if strategy_id not in strategies:
