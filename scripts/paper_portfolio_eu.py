@@ -4,7 +4,9 @@ Paper Portfolio EU — strategies europeennes sur IBKR paper.
 
 Strategies actives :
   - EU Gap Open (Sharpe 8.56, WF 4/4) — gap EU basé sur close US veille
-  - EU Stoxx/SPY Mean Reversion Weekly (Sharpe 33.44) — weekly rebalance
+
+Strategies RETIREES (audit CRO 27 mars 2026) :
+  - EU Stoxx/SPY Mean Reversion Weekly — ARTEFACT (Sharpe 33.44 sur 18 trades / 6 jours)
 
 Usage :
     python scripts/paper_portfolio_eu.py              # execution
@@ -58,14 +60,18 @@ EU_STRATEGIES = {
             "BMW": ("DTBX", "EUR"), "ASML": ("AEB", "EUR"),
         },
     },
-    "eu_stoxx_reversion": {
-        "name": "EU Stoxx/SPY Mean Reversion Weekly",
-        "sharpe": 33.44,
-        "frequency": "weekly",
-        "allocation_pct": 5.0,
-        "tickers": ["EXS1"],  # iShares DAX ETF comme proxy Eurostoxx
-        "exchanges": {"EXS1": ("DTBX", "EUR")},
-    },
+    # RETIRE — Audit CRO 27 mars 2026
+    # Raison : Sharpe 33.44 est un ARTEFACT (18 trades sur 6 jours seulement).
+    # PF 25.28, Max DD 0.00% = overfitting flagrant.
+    # Ne pas reactiver sans 200+ trades sur 2+ ans de backtest.
+    # "eu_stoxx_reversion": {
+    #     "name": "EU Stoxx/SPY Mean Reversion Weekly",
+    #     "sharpe": 33.44,
+    #     "frequency": "weekly",
+    #     "allocation_pct": 5.0,
+    #     "tickers": ["EXS1"],
+    #     "exchanges": {"EXS1": ("DTBX", "EUR")},
+    # },
 }
 
 # =============================================================================
@@ -325,7 +331,8 @@ def run_eu(dry_run: bool = False):
     # Generer les signaux
     all_signals = []
     all_signals.extend(signal_eu_gap_open(ibkr, capital, dry_run))
-    all_signals.extend(signal_eu_stoxx_reversion(ibkr, capital, dry_run))
+    # RETIRE — Audit CRO 27 mars 2026 (artefact : 18 trades / 6 jours)
+    # all_signals.extend(signal_eu_stoxx_reversion(ibkr, capital, dry_run))
 
     logger.info(f"  Total signaux EU: {len(all_signals)}")
 

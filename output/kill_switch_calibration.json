@@ -1,0 +1,62 @@
+{
+  "opex_gamma": {
+    "strategy": "opex_gamma",
+    "current_threshold": -0.02,
+    "optimal_threshold": -0.018609,
+    "false_positive_rate_current": 0.0326,
+    "false_positive_rate_optimal": 0.05,
+    "detection_rate_optimal": 1.0,
+    "percentile_5": -0.018609,
+    "percentile_1": -0.023127,
+    "n_observations": 252,
+    "recommendation": "Seuil actuel adequat — pas de changement necessaire"
+  },
+  "vwap_micro": {
+    "strategy": "vwap_micro",
+    "current_threshold": -0.02,
+    "optimal_threshold": -0.025353,
+    "false_positive_rate_current": 0.3221,
+    "false_positive_rate_optimal": 0.05,
+    "detection_rate_optimal": 0.9994,
+    "percentile_5": -0.025353,
+    "percentile_1": -0.028677,
+    "n_observations": 252,
+    "recommendation": "RELACHER le seuil de -2.000% a -2.535% — le seuil actuel declenche trop souvent (FP=32.2%)"
+  },
+  "orb_v2": {
+    "strategy": "orb_v2",
+    "current_threshold": -0.02,
+    "optimal_threshold": -0.02398,
+    "false_positive_rate_current": 0.2273,
+    "false_positive_rate_optimal": 0.05,
+    "detection_rate_optimal": 0.9965,
+    "percentile_5": -0.02398,
+    "percentile_1": -0.027429,
+    "n_observations": 252,
+    "recommendation": "RELACHER le seuil de -2.000% a -2.398% — le seuil actuel declenche trop souvent (FP=22.7%)"
+  },
+  "dow_seasonal": {
+    "strategy": "dow_seasonal",
+    "current_threshold": -0.02,
+    "optimal_threshold": -0.019774,
+    "false_positive_rate_current": 0.0449,
+    "false_positive_rate_optimal": 0.05,
+    "detection_rate_optimal": 0.9998,
+    "percentile_5": -0.019774,
+    "percentile_1": -0.022587,
+    "n_observations": 252,
+    "recommendation": "Seuil actuel adequat — pas de changement necessaire"
+  },
+  "gap_continuation": {
+    "strategy": "gap_continuation",
+    "current_threshold": -0.02,
+    "optimal_threshold": -0.028642,
+    "false_positive_rate_current": 0.4748,
+    "false_positive_rate_optimal": 0.05,
+    "detection_rate_optimal": 0.9961,
+    "percentile_5": -0.028642,
+    "percentile_1": -0.033068,
+    "n_observations": 252,
+    "recommendation": "RELACHER le seuil de -2.000% a -2.864% — le seuil actuel declenche trop souvent (FP=47.5%)"
+  }
+}

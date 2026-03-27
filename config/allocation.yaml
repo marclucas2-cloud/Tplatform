@@ -1,5 +1,9 @@
-# Allocation V2 — Risk Parity + Buckets + Tier caps
-# Derniere mise a jour : 2026-03-26
+# Allocation V3 — POST-PURGE STATISTIQUE (CRO Audit 27 mars 2026)
+# Critere : TOUTE strategie avec < 30 trades = allocation 0% (monitoring only)
+# Strategies retirees : gold_fear(16t), crypto_bear(17t), vix_short(26t),
+#   crypto_proxy_v2(20t), pairs_mu_amat(18t), momentum_25etf(24t), vrp_rotation(12t)
+# EU Stoxx Reversion (18t, Sharpe 33.44 = artefact) retire du pipeline EU.
+# Derniere mise a jour : 2026-03-27
 
 portfolio:
   target_gross_exposure: 0.80
@@ -9,26 +13,29 @@ portfolio:
 
 buckets:
   core_alpha:
-    target: 0.45
-    strategies: [opex_gamma, gap_continuation, vwap_micro, crypto_proxy_v2, dow_seasonal]
+    target: 0.61
+    strategies: [opex_gamma, gap_continuation, vwap_micro, dow_seasonal]
   shorts_bear:
-    target: 0.20
-    strategies: [vix_short, failed_rally_short, crypto_bear, eod_sell_v2, high_beta_short, gold_fear]
-  diversifiers:
-    target: 0.10
-    strategies: [corr_hedge, eu_gap_open, eu_stoxx_reversion, pairs_mu_amat]
-  satellite:
-    target: 0.05
-    strategies: [orb_v2, meanrev_v2, triple_ema, lateday_meanrev]
-  daily_monthly:
-    target: 0.05
-    strategies: [momentum_25etf, vrp_rotation]
-  cash_reserve:
     target: 0.15
+    strategies: [high_beta_short, eod_sell_v2, failed_rally_short]
+  diversifiers:
+    target: 0.03
+    strategies: [corr_hedge]
+  satellite:
+    target: 0.16
+    strategies: [orb_v2, meanrev_v2, triple_ema, lateday_meanrev]
+  monitoring_only:
+    # Strategies avec < 30 trades — gardees dans le code mais allocation 0%
+    # A re-backtester sur 1-2 ans avant reintegration
+    target: 0.00
+    strategies: [gold_fear, crypto_bear, vix_short, crypto_proxy_v2, pairs_mu_amat, momentum_25etf, vrp_rotation]
+  cash_reserve:
+    target: 0.05
     strategies: []
 
 tiers:
-  S: {max_alloc: 0.12, strategies: [opex_gamma]}
-  A: {max_alloc: 0.12, strategies: [gap_continuation, vwap_micro, crypto_proxy_v2, dow_seasonal]}
-  B: {max_alloc: 0.06, strategies: [gold_fear, orb_v2, meanrev_v2, corr_hedge, triple_ema, lateday_meanrev, vix_short, failed_rally, crypto_bear, eod_sell_v2]}
-  C: {max_alloc: 0.03, strategies: [momentum_25etf, pairs_mu_amat, vrp_rotation]}
+  S: {max_alloc: 0.22, strategies: [opex_gamma]}
+  A: {max_alloc: 0.15, strategies: [gap_continuation, vwap_micro, dow_seasonal]}
+  B: {max_alloc: 0.06, strategies: [high_beta_short, orb_v2, meanrev_v2, corr_hedge, triple_ema, lateday_meanrev, eod_sell_v2, failed_rally_short]}
+  # Tier C vide post-purge — les strategies daily/monthly n'ont pas assez de trades
+  C: {max_alloc: 0.00, strategies: [gold_fear, crypto_bear, vix_short, crypto_proxy_v2, pairs_mu_amat, momentum_25etf, vrp_rotation]}

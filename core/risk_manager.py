@@ -4,6 +4,7 @@ Risk Manager V2 — Validation pre-ordre + VaR + limites sectorielles.
 Ajoute par-dessus le pipeline existant (paper_portfolio.py non modifie) :
   - Validation multi-criteres avant chaque ordre
   - VaR parametrique + CVaR (Expected Shortfall)
+  - VaR portfolio-level avec matrice de correlation (RISK-001)
   - Exposition sectorielle avec sector_map configurable
   - Circuit-breaker horaire (en plus du daily existant)
 """
@@ -13,7 +14,7 @@ from scipy import stats
 import yaml
 import logging
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -260,6 +261,138 @@ class RiskManager:
                 f"CIRCUIT BREAKER HOURLY: DD {hourly_pnl_pct:.2%} > {hourly_limit:.0%}"
             )
         return False, "OK"
+
+    # ------------------------------------------------------------------
+    # RISK-001 : VaR portfolio-level avec matrice de correlation
+    # ------------------------------------------------------------------
+
+    def calculate_portfolio_var(
+        self,
+        strategy_returns: Dict[str, List[float]],
+        weights: Dict[str, float],
+        confidence: float = 0.99,
+        horizon: int = 1,
+        stress_correlation: float = 0.8,
+    ) -> dict:
+        """VaR portfolio-level avec matrice de correlation.
+
+        En crise, les correlations convergent vers 1.0 et la somme naive
+        des VaR individuels sous-estime le risque de 30-50%.
+        Cette methode calcule le VaR reel en tenant compte des correlations.
+
+        Args:
+            strategy_returns: {strategy_name: [daily_returns]}
+            weights: {strategy_name: allocation_pct} (somme <= 1.0)
+            confidence: niveau de confiance (default 0.99)
+            horizon: nombre de jours (scaling sqrt)
+            stress_correlation: correlation forcee en scenario stress (default 0.8)
+
+        Returns:
+            {
+                var_individual_sum: float,   # somme naive des VaR individuels
+                var_portfolio: float,        # VaR avec correlations (plus conservateur)
+                var_stressed: float,         # VaR avec correlations stress
+                correlation_matrix: dict,    # matrice de correlation {(i,j): rho}
+                diversification_benefit: float,  # (individual - portfolio) / individual
+                risk_contribution: dict,     # contribution au risque par strategie
+            }
+        """
+        # Filtrer les strategies presentes dans les deux dicts
+        common = sorted(
+            k for k in strategy_returns if k in weights and len(strategy_returns[k]) >= 2
+        )
+        if not common:
+            return {
+                "var_individual_sum": 0.0,
+                "var_portfolio": 0.0,
+                "var_stressed": 0.0,
+                "correlation_matrix": {},
+                "diversification_benefit": 0.0,
+                "risk_contribution": {},
+            }
+
+        # 1. Construire la matrice de rendements (aligner les longueurs)
+        min_len = min(len(strategy_returns[k]) for k in common)
+        returns_matrix = np.array(
+            [np.array(strategy_returns[k][-min_len:], dtype=float) for k in common]
+        )  # shape: (n_strategies, n_obs)
+
+        # 2. Vecteur de poids normalise
+        w = np.array([weights[k] for k in common], dtype=float)
+        w_sum = w.sum()
+        if w_sum <= 0:
+            w = np.ones(len(common)) / len(common)
+        else:
+            w = w / w_sum  # normaliser pour que somme = 1
+
+        # 3. Volatilites individuelles
+        vols = returns_matrix.std(axis=1, ddof=1)  # shape: (n_strategies,)
+
+        # 4. Matrice de covariance historique
+        cov_matrix = np.cov(returns_matrix)  # shape: (n,n)
+        if cov_matrix.ndim == 0:
+            cov_matrix = np.array([[float(cov_matrix)]])
+
+        # 5. Matrice de correlation historique
+        std_outer = np.outer(vols, vols)
+        # Eviter division par zero
+        safe_std = np.where(std_outer > 0, std_outer, 1.0)
+        corr_matrix = cov_matrix / safe_std
+        np.fill_diagonal(corr_matrix, 1.0)
+
+        # 6. z-score pour le niveau de confiance
+        z = stats.norm.ppf(confidence)
+
+        # 7. VaR individuels (somme naive)
+        individual_vars = z * vols * np.sqrt(horizon)
+        var_individual_sum = float(np.dot(w, individual_vars))
+
+        # 8. VaR portfolio = z * sqrt(w' * Sigma * w) * sqrt(horizon)
+        portfolio_variance = float(w @ cov_matrix @ w)
+        portfolio_vol = np.sqrt(max(portfolio_variance, 0.0))
+        var_portfolio = float(z * portfolio_vol * np.sqrt(horizon))
+
+        # 9. VaR stressed : forcer les correlations hors-diag a stress_correlation
+        n = len(common)
+        stressed_corr = np.full((n, n), stress_correlation)
+        np.fill_diagonal(stressed_corr, 1.0)
+        stressed_cov = stressed_corr * std_outer
+        stressed_variance = float(w @ stressed_cov @ w)
+        stressed_vol = np.sqrt(max(stressed_variance, 0.0))
+        var_stressed = float(z * stressed_vol * np.sqrt(horizon))
+
+        # 10. Diversification benefit
+        if var_individual_sum > 0:
+            diversification_benefit = (var_individual_sum - var_portfolio) / var_individual_sum
+        else:
+            diversification_benefit = 0.0
+
+        # 11. Risk contribution (Euler decomposition)
+        # RC_i = w_i * (Sigma @ w)_i / portfolio_vol
+        marginal = cov_matrix @ w  # shape: (n,)
+        if portfolio_vol > 0:
+            risk_contrib = (w * marginal) / portfolio_vol
+            # Normaliser pour que la somme = var_portfolio
+            rc_sum = risk_contrib.sum()
+            if rc_sum > 0:
+                risk_contrib = risk_contrib * (var_portfolio / rc_sum)
+        else:
+            risk_contrib = np.zeros(n)
+
+        # 12. Formater la matrice de correlation en dict lisible
+        corr_dict = {}
+        for i, ki in enumerate(common):
+            for j, kj in enumerate(common):
+                corr_dict[f"{ki}/{kj}"] = round(float(corr_matrix[i, j]), 4)
+
+        return {
+            "var_individual_sum": round(var_individual_sum, 6),
+            "var_portfolio": round(var_portfolio, 6),
+            "var_stressed": round(var_stressed, 6),
+            "correlation_matrix": corr_dict,
+            "diversification_benefit": round(diversification_benefit, 4),
+            "risk_contribution": {k: round(float(risk_contrib[i]), 6) for i, k in enumerate(common)},
+        }
 
     # ------------------------------------------------------------------
     # Private checks
