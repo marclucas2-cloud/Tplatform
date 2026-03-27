@@ -251,9 +251,11 @@ def test_margin_monitoring_alerts(rm):
 # =============================================================================
 
 def test_fx_position_limits(rm):
-    """Les limites FX doivent rejeter les ordres excessifs (single pair > 25%)."""
-    # Use larger equity so earlier checks (max_single_position=10%) don't fire first.
-    # We want EURUSD at 26% of equity to trigger FX single pair limit (25%).
+    """Les limites FX single pair (25%) doivent rejeter les ordres excessifs.
+
+    Note: on teste _check_fx_limits directement car max_single_position (10%)
+    se declenche avant pour les FX (FX positions sont souvent > 10% en levier).
+    """
     portfolio = {
         "equity": 100_000,
         "cash": 50_000,
@@ -262,9 +264,7 @@ def test_fx_position_limits(rm):
         ],
     }
 
-    # Order: 20000 + 6000 = 26000 = 26% > FX single pair 25%
-    # But 26% is still within max_single_position (we haven't added that symbol before test)
-    # Actually existing 20k is already 20%, add 6001 -> 26001/100k = 26% > 25%
+    # 20000 + 6001 = 26001 = 26% > FX single pair 25%
     order_big = {
         "symbol": "EURUSD",
         "direction": "LONG",
@@ -272,11 +272,11 @@ def test_fx_position_limits(rm):
         "strategy": "fx_eurusd_trend",
         "asset_class": "fx",
     }
-    passed, msg = rm.validate_order(order_big, portfolio)
+    passed, msg = rm._check_fx_limits(order_big, portfolio)
     assert not passed, f"Should reject FX single pair > 25%: {msg}"
     assert "FX single pair" in msg
 
-    # Small order should pass
+    # Small order within limits
     order_small = {
         "symbol": "EURGBP",
         "direction": "LONG",
@@ -284,7 +284,7 @@ def test_fx_position_limits(rm):
         "strategy": "fx_eurgbp_mr",
         "asset_class": "fx",
     }
-    passed_small, _ = rm.validate_order(order_small, portfolio)
+    passed_small, _ = rm._check_fx_limits(order_small, portfolio)
     assert passed_small, "Small FX order should pass"
 
 
