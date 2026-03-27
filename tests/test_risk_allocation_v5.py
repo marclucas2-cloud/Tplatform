@@ -251,20 +251,24 @@ def test_margin_monitoring_alerts(rm):
 # =============================================================================
 
 def test_fx_position_limits(rm):
-    """Les limites FX doivent rejeter les ordres excessifs."""
+    """Les limites FX doivent rejeter les ordres excessifs (single pair > 25%)."""
+    # Use larger equity so earlier checks (max_single_position=10%) don't fire first.
+    # We want EURUSD at 26% of equity to trigger FX single pair limit (25%).
     portfolio = {
-        "equity": 25_000,
-        "cash": 10_000,
+        "equity": 100_000,
+        "cash": 50_000,
         "positions": [
-            {"symbol": "EURUSD", "notional": 5000, "side": "LONG", "asset_class": "fx"},
+            {"symbol": "EURUSD", "notional": 20_000, "side": "LONG", "asset_class": "fx"},
         ],
     }
 
-    # Order that would push EURUSD over 25% of equity
+    # Order: 20000 + 6000 = 26000 = 26% > FX single pair 25%
+    # But 26% is still within max_single_position (we haven't added that symbol before test)
+    # Actually existing 20k is already 20%, add 6001 -> 26001/100k = 26% > 25%
     order_big = {
         "symbol": "EURUSD",
         "direction": "LONG",
-        "notional": 2500,  # 5000 + 2500 = 7500 = 30% > 25%
+        "notional": 6_001,
         "strategy": "fx_eurusd_trend",
         "asset_class": "fx",
     }
