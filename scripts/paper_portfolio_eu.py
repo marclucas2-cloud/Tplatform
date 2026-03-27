@@ -31,7 +31,7 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, date as dt_date, timedelta
+from datetime import datetime, date as dt_date, timedelta, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -174,7 +174,7 @@ def load_state() -> dict:
                 "strategy": "unknown",
                 "direction": "LONG" if float(p.get("qty", 0)) > 0 else "SHORT",
                 "entry_price": float(p.get("avg_entry", 0)),
-                "opened_at": datetime.utcnow().isoformat(),
+                "opened_at": datetime.now(timezone.utc).isoformat(),
             }
         logger.info("  Equity IBKR: $%.2f, %d positions", info["equity"], len(positions))
     except Exception as e:
@@ -893,7 +893,7 @@ def execute_eu_signals(
                     "entry_price": sig.get("entry_price", 0),
                     "stop_loss": sl,
                     "take_profit": tp,
-                    "opened_at": datetime.utcnow().isoformat(),
+                    "opened_at": datetime.now(timezone.utc).isoformat(),
                     "broker": getattr(exec_broker, 'name', 'unknown'),
                 }
 
