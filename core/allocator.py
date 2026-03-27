@@ -328,76 +328,54 @@ class DynamicAllocator:
         return adjusted
 
     # -----------------------------------------------------------------
-    # ROC-6 : Allocation cross-timezone
+    # ROC-6 : Allocation cross-timezone (V5 multi-asset)
     # -----------------------------------------------------------------
 
-    # Budget de risque par creneau horaire CET
+    # Budget de risque par creneau horaire CET (legacy fallback)
     TIMEZONE_ALLOCATIONS = {
         "EU_ONLY": {
-            "hours": (9, 15),       # 9:00-15:30 CET (EU only)
-            "eu": 0.25,
-            "us": 0.00,
-            "fx": 0.05,
-            "shorts": 0.00,
-            "us_reserve": 0.50,
-            "cash": 0.20,
+            "hours": (9, 15),
+            "eu_intraday": 0.25, "eu_event": 0.10, "fx_swing": 0.05,
         },
         "OVERLAP": {
-            "hours": (15, 17),      # 15:30-17:30 CET (EU + US overlap)
-            "eu": 0.15,
-            "us": 0.40,
-            "fx": 0.05,
-            "shorts": 0.15,
-            "cash": 0.25,
+            "hours": (15, 17),
+            "eu_intraday": 0.15, "us_intraday": 0.25, "us_event": 0.08, "fx_swing": 0.05,
         },
         "US_ONLY": {
-            "hours": (17, 22),      # 17:30-22:00 CET (US only)
-            "eu": 0.00,
-            "us": 0.45,
-            "fx": 0.05,
-            "shorts": 0.20,
-            "cash": 0.30,
+            "hours": (17, 22),
+            "us_intraday": 0.25, "us_daily": 0.07, "futures_trend": 0.07, "fx_swing": 0.05,
         },
         "OFF_HOURS": {
-            "hours": (22, 9),       # 22:00-09:00 CET (off-hours)
-            "eu": 0.00,
-            "us": 0.00,
-            "fx": 0.10,
-            "shorts": 0.00,
-            "cash": 0.90,
+            "hours": (22, 9),
+            "fx_swing": 0.15, "futures_trend": 0.05,
         },
     }
 
     def get_timezone_allocation(self, hour_cet: int) -> dict:
         """Le budget de risque se redistribue selon les marches ouverts.
 
-        9:00-15:30 CET (EU only) :
-          EU strategies : 25% du capital
-          FX carry/swing : 5%
-          US reserve : 50% (pret pour ouverture US)
-          Cash : 20%
+        Reads timezone_allocation from config YAML if available,
+        otherwise uses hardcoded TIMEZONE_ALLOCATIONS.
 
-        15:30-17:30 CET (OVERLAP EU+US) :
-          EU : 15%, US : 40%, FX : 5%, Shorts : 15%, Cash : 25%
+        09:00-15:30 CET (EU only):
+          eu_intraday: 25%, eu_event: 10%, fx_swing: 5%
 
-        17:30-22:00 CET (US only) :
-          US : 45%, Shorts : 20%, FX : 5%, Cash : 30%
+        15:30-17:30 CET (OVERLAP EU+US):
+          eu_intraday: 15%, us_intraday: 25%, us_event: 8%, fx_swing: 5%
 
-        22:00-9:00 CET (OFF-HOURS) :
-          FX swing : 10%, Cash : 90%
+        17:30-22:00 CET (US only):
+          us_intraday: 25%, us_daily: 7%, futures_trend: 7%, fx_swing: 5%
+
+        22:00-09:00 CET (OFF-HOURS):
+          fx_swing: 15%, futures_trend: 5%
 
         Args:
-            hour_cet: heure CET (0-23). Ex: 16 pour 16:00 CET.
+            hour_cet: heure CET (0-23).
 
         Returns:
             {
                 "timezone": "EU_ONLY"|"OVERLAP"|"US_ONLY"|"OFF_HOURS",
-                "eu": float,
-                "us": float,
-                "fx": float,
-                "shorts": float,
-                "cash": float,
-                "us_reserve": float (only EU_ONLY),
+                "buckets": {bucket_name: allocation_pct},
                 "total_invested": float,
             }
         """
@@ -412,23 +390,39 @@ class DynamicAllocator:
         else:
             tz_name = "OFF_HOURS"
 
-        alloc = dict(self.TIMEZONE_ALLOCATIONS[tz_name])
-        alloc["timezone"] = tz_name
+        # Try to use YAML config timezone_allocation
+        yaml_tz = self.config.get("timezone_allocation", {})
+        tz_key_map = {
+            "EU_ONLY": "09:00-15:30",
+            "OVERLAP": "15:30-17:30",
+            "US_ONLY": "17:30-22:00",
+            "OFF_HOURS": "22:00-09:00",
+        }
+        yaml_key = tz_key_map.get(tz_name)
+        if yaml_tz and yaml_key and yaml_key in yaml_tz:
+            bucket_alloc = dict(yaml_tz[yaml_key])
+        else:
+            # Fallback to hardcoded
+            raw = dict(self.TIMEZONE_ALLOCATIONS[tz_name])
+            raw.pop("hours", None)
+            bucket_alloc = raw
 
-        # Calculer le total investi (hors cash et reserve)
         total_invested = sum(
-            v for k, v in alloc.items()
-            if isinstance(v, (int, float)) and k not in ("cash", "us_reserve", "hours")
+            v for v in bucket_alloc.values() if isinstance(v, (int, float))
         )
-        alloc["total_invested"] = round(total_invested, 4)
-        alloc.pop("hours", None)
+
+        result = {
+            "timezone": tz_name,
+            "buckets": bucket_alloc,
+            "total_invested": round(total_invested, 4),
+        }
 
         logger.info(
             "Timezone allocation (hour_cet=%d): %s — %.0f%% invested",
             hour_cet, tz_name, total_invested * 100,
         )
 
-        return alloc
+        return result
 
     def apply_timezone_weights(
         self,
@@ -438,47 +432,52 @@ class DynamicAllocator:
     ) -> dict:
         """Applique les limites cross-timezone aux poids des strategies.
 
-        Chaque strategie doit avoir un champ 'market' parmi :
-        'us', 'eu', 'fx', 'shorts'.
+        Each strategy is mapped to a bucket (from config/allocation.yaml).
+        The timezone allocation sets budgets per bucket for the current time slot.
 
         Args:
-            weights: {strategy_name: weight} — poids pre-calcules
-            strategies: {strategy_name: {market: 'us'|'eu'|'fx'|'shorts', ...}}
+            weights: {strategy_name: weight} -- poids pre-calcules
+            strategies: {strategy_name: {market: str, ...}} -- metadata
             hour_cet: heure CET courante
 
         Returns:
-            {strategy_name: adjusted_weight} — normalise selon les limites TZ
+            {strategy_name: adjusted_weight} -- normalise selon les limites TZ
         """
         if not weights:
             return {}
 
         tz_alloc = self.get_timezone_allocation(hour_cet)
+        bucket_budgets = tz_alloc.get("buckets", {})
         adjusted = {}
 
-        # Grouper par market
-        market_totals: Dict[str, float] = {}
-        market_strats: Dict[str, list] = {}
-        for name, w in weights.items():
-            market = strategies.get(name, {}).get("market", "us")
-            market_totals[market] = market_totals.get(market, 0) + w
-            market_strats.setdefault(market, []).append(name)
+        # Build strategy -> bucket mapping from config
+        buckets_cfg = self.config.get("buckets", {})
+        strat_to_bucket: Dict[str, str] = {}
+        for bucket_name, bucket_cfg in buckets_cfg.items():
+            for strat in bucket_cfg.get("strategies", []):
+                strat_to_bucket[strat] = bucket_name
 
-        # Appliquer les plafonds par market
-        for market, strat_names in market_strats.items():
-            budget = tz_alloc.get(market, 0.0)
-            current_total = market_totals.get(market, 0)
+        # Group strategies by bucket
+        bucket_totals: Dict[str, float] = {}
+        bucket_strats: Dict[str, list] = {}
+        for name, w in weights.items():
+            bucket = strat_to_bucket.get(name, "other")
+            bucket_totals[bucket] = bucket_totals.get(bucket, 0) + w
+            bucket_strats.setdefault(bucket, []).append(name)
+
+        # Apply bucket budgets
+        for bucket, strat_names in bucket_strats.items():
+            budget = bucket_budgets.get(bucket, 0.0)
+            current_total = bucket_totals.get(bucket, 0)
 
             if current_total <= 0 or budget <= 0:
-                # Marche ferme ou budget nul : poids a zero
                 for name in strat_names:
                     adjusted[name] = 0.0
             elif current_total > budget:
-                # Reduire proportionnellement
                 scale = budget / current_total
                 for name in strat_names:
                     adjusted[name] = weights[name] * scale
             else:
-                # Sous le plafond : garder tel quel
                 for name in strat_names:
                     adjusted[name] = weights[name]
 
