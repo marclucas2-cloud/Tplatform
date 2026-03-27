@@ -138,3 +138,80 @@ Ajouter dans le worker ou en tache planifiee :
 | Missing             | critical  | Position state sans broker         |
 | Direction mismatch  | critical  | Long/short inverse                 |
 | API error           | critical  | Broker inaccessible                |
+
+---
+
+## INFRA-004 : Evaluation Migration VPS
+
+> Date : 2026-03-27
+
+### Comparaison Railway vs VPS dedie
+
+| Critere | Railway (actuel) | VPS Hetzner ($5/mois) |
+|---------|-----------------|----------------------|
+| **Cout** | ~$5/mois (Hobby plan) | $4.15/mois (CX22: 2 vCPU, 4GB RAM) |
+| **Setup** | Zero config, deploy via GitHub | Config manuelle (OS, Python, systemd) |
+| **Scaling** | Auto-scale (inutile pour nous) | Manuel (upgrade plan) |
+| **Uptime SLA** | 99.9% (constate ~99.5%) | 99.9% (Hetzner historique excellent) |
+| **Localisation** | US-West ou EU | Falkenstein/Nuremberg/Helsinki (EU) |
+| **Latence Alpaca** | ~20ms (US-West) | ~120ms (EU vers Alpaca US) |
+| **Latence IBKR EU** | ~120ms (US vers EU) | ~5ms (EU vers IBKR EU) |
+| **Persistance disque** | Ephemere (redeploy = perte) | Persistant (SSD 40GB) |
+| **Cron natif** | Non (scheduler Python) | Oui (crontab systeme) |
+| **SSH acces** | Non | Oui (debug en direct) |
+| **Monitoring** | Railway Metrics (basique) | Libre (Grafana, htop, journalctl) |
+| **CI/CD** | GitHub Actions -> Railway | GitHub Actions -> rsync/docker |
+| **Securite** | Geree par Railway | A configurer (firewall, SSH keys, fail2ban) |
+| **Backup** | Pas de volume persistant | Snapshots Hetzner ($1.20/mois) |
+| **Multi-process** | 1 service = 1 process | Illimite (worker + healthcheck + cron) |
+
+### Pour Railway (garder l'actuel)
+
+- **Zero maintenance** : pas de mise a jour OS, pas de securite a gerer
+- **Deploy instantane** : git push = deploy en 30s
+- **Ideal pour la phase paper** : on ne veut pas perdre du temps sur l'infra
+- **Rollback facile** : revenir a un deploy precedent en 1 clic
+
+### Pour VPS Hetzner (migrer)
+
+- **Persistance** : les fichiers state et SQLite survivent aux redeploys
+- **Latence IBKR** : critique pour le live EU (5ms vs 120ms)
+- **Multi-process natif** : worker + healthcheck + cron + dashboard en parallele
+- **SSH debug** : inspecter les logs en temps reel, attacher un debugger
+- **Cron natif** : plus fiable que le scheduler Python APScheduler
+- **Cout fixe** : pas de surprise de facturation
+- **Snapshots** : backup complet du serveur en 1 clic
+
+### Contre Railway
+
+- **Pas de volume persistant** : le SQLite (ml_features.db) est perdu a chaque redeploy
+- **Pas de cron systeme** : depend du scheduler Python (single point of failure)
+- **Pas de SSH** : impossible de debugger en direct
+- **Latence EU** : penalisante pour IBKR EU
+
+### Contre Hetzner VPS
+
+- **Maintenance OS** : mises a jour, securite, firewall a gerer soi-meme
+- **CI/CD a configurer** : pas de deploy automatique sans effort
+- **Latence Alpaca** : 120ms vs 20ms pour les ordres intraday US
+- **Temps de setup** : 2-4h pour la premiere configuration
+
+### Recommandation
+
+| Phase | Recommandation | Raison |
+|-------|---------------|--------|
+| **Paper (actuel)** | Rester sur Railway | Zero maintenance, focus sur les strategies |
+| **Live L1** ($25K) | Rester sur Railway | Le risque infra est faible a ce capital |
+| **Live L2** ($50K) | **Migrer vers Hetzner** | Persistance + latence EU + multi-process |
+| **Live L3+** ($100K) | Hetzner + Railway backup | Redundance : VPS principal + Railway fallback |
+
+### Plan de migration (quand le moment viendra)
+
+1. Commander un CX22 chez Hetzner (Falkenstein, EU)
+2. Installer Ubuntu 22.04 LTS, Python 3.11, pip, git
+3. Cloner le repo, installer les dependances
+4. Configurer systemd services : `trading-worker.service`, `trading-healthcheck.service`
+5. Configurer le firewall (ufw) : ouvrir uniquement SSH + port healthcheck
+6. Tester pendant 7 jours en parallele avec Railway
+7. Basculer le monitoring UptimeRobot vers le VPS
+8. Desactiver le worker Railway (garder comme backup froid)
