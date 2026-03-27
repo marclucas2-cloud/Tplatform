@@ -1,0 +1,41 @@
+{
+  "meta": {
+    "timestamp": "2026-03-27T01:17:23.734155",
+    "strategies_tested": 3
+  },
+  "results": {
+    "gbpusd_trend": {
+      "n_trades": 72,
+      "win_rate": 0.4028,
+      "total_pnl": -1322.59,
+      "avg_pnl": -18.37,
+      "sharpe": -1.89,
+      "max_dd_pct": -1.89,
+      "profit_factor": 0.73,
+      "avg_win": 125.7,
+      "avg_loss": 115.53
+    },
+    "usdchf_mean_reversion": {
+      "n_trades": 41,
+      "win_rate": 0.3659,
+      "total_pnl": -710.69,
+      "avg_pnl": -17.33,
+      "sharpe": -1.84,
+      "max_dd_pct": -1.59,
+      "profit_factor": 0.74,
+      "avg_win": 135.49,
+      "avg_loss": 105.5
+    },
+    "fomc_reaction": {
+      "n_trades": 28,
+      "win_rate": 0.6071,
+      "total_pnl": 285.77,
+      "avg_pnl": 10.21,
+      "sharpe": 1.74,
+      "max_dd_pct": -0.35,
+      "profit_factor": 1.33,
+      "avg_win": 68.43,
+      "avg_loss": 79.77
+    }
+  }
+}

@@ -15,6 +15,7 @@ from pathlib import Path
 from datetime import datetime, timezone
 from typing import Optional
 
+import numpy as np
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -446,6 +447,142 @@ async def websocket_live(websocket: WebSocket):
     finally:
         if websocket in connected_clients:
             connected_clients.remove(websocket)
+
+
+# ── Walk-Forward Results ─────────────────────────────────────────────────────
+
+def _load_walk_forward() -> dict:
+    """Charge les resultats walk-forward depuis output/walk_forward_results.json."""
+    wf_path = ROOT / "output" / "walk_forward_results.json"
+    if not wf_path.exists():
+        return {}
+    try:
+        return json.loads(wf_path.read_text(encoding="utf-8"))
+    except Exception as e:
+        logger.error(f"Failed to load walk-forward results: {e}")
+        return {}
+
+
+@app.get("/api/walk-forward")
+def get_walk_forward():
+    """Resultats walk-forward par strategie."""
+    wf = _load_walk_forward()
+    if not wf:
+        return {"error": "Walk-forward results not found", "strategies": []}
+
+    results = []
+    for name, r in wf.get("results", {}).items():
+        results.append({
+            "strategy": name,
+            "verdict": r.get("verdict", "UNKNOWN"),
+            "n_trades": r.get("n_trades", 0),
+            "n_windows": r.get("n_windows", 0),
+            "avg_oos_sharpe": round(r.get("avg_oos_sharpe", 0), 2),
+            "avg_is_sharpe": round(r.get("avg_is_sharpe", 0), 2),
+            "avg_ratio": round(r.get("avg_ratio", 0), 2),
+            "pct_oos_profitable": round(r.get("pct_oos_profitable", 0) * 100, 1),
+            "pct_oos_sharpe_positive": round(r.get("pct_oos_sharpe_positive", 0) * 100, 1),
+            "reason": r.get("reason", ""),
+            "windows": r.get("windows", []),
+        })
+
+    # Trier par verdict (VALIDATED > BORDERLINE > REJECTED) puis par Sharpe OOS
+    verdict_order = {"VALIDATED": 0, "BORDERLINE": 1, "REJECTED": 2}
+    results.sort(key=lambda x: (verdict_order.get(x["verdict"], 3), -x["avg_oos_sharpe"]))
+
+    meta = wf.get("meta", {})
+    return {
+        "strategies": results,
+        "meta": {
+            "timestamp": meta.get("timestamp", ""),
+            "n_total": meta.get("n_strategies_total", 0),
+            "n_validated": meta.get("n_strategies_validated", 0),
+            "n_borderline": meta.get("n_strategies_borderline", 0),
+            "n_rejected": meta.get("n_strategies_rejected", 0),
+            "parameters": meta.get("parameters", {}),
+        },
+    }
+
+
+@app.get("/api/confidence")
+def get_confidence():
+    """Metriques de confiance par strategie : trades, verdict WF, alpha decay trend."""
+    wf = _load_walk_forward()
+    if not wf:
+        return {"error": "Walk-forward results not found", "strategies": []}
+
+    results = []
+    for name, r in wf.get("results", {}).items():
+        windows = r.get("windows", [])
+        verdict = r.get("verdict", "UNKNOWN")
+
+        # Alpha decay trend : comparer OOS Sharpe des dernieres fenetres
+        alpha_decay = "stable"
+        if len(windows) >= 3:
+            oos_sharpes = [w.get("oos_sharpe", 0) for w in windows]
+            first_half = np.mean(oos_sharpes[:len(oos_sharpes) // 2]) if oos_sharpes else 0
+            second_half = np.mean(oos_sharpes[len(oos_sharpes) // 2:]) if oos_sharpes else 0
+
+            if second_half < first_half * 0.5:
+                alpha_decay = "declining"
+            elif second_half > first_half * 1.3:
+                alpha_decay = "improving"
+            else:
+                alpha_decay = "stable"
+
+        # Confidence score (0-100)
+        confidence = 0
+        if verdict == "VALIDATED":
+            confidence = 70
+        elif verdict == "BORDERLINE":
+            confidence = 40
+        else:
+            confidence = 10
+
+        # Boost confidence based on trade count
+        n_trades = r.get("n_trades", 0)
+        if n_trades >= 100:
+            confidence += 15
+        elif n_trades >= 50:
+            confidence += 10
+        elif n_trades >= 25:
+            confidence += 5
+
+        # Boost for high OOS Sharpe
+        avg_oos = r.get("avg_oos_sharpe", 0)
+        if avg_oos > 3:
+            confidence += 15
+        elif avg_oos > 1.5:
+            confidence += 10
+        elif avg_oos > 0:
+            confidence += 5
+
+        confidence = min(confidence, 100)
+
+        results.append({
+            "strategy": name,
+            "n_trades": n_trades,
+            "verdict": verdict,
+            "alpha_decay": alpha_decay,
+            "confidence_score": confidence,
+            "avg_oos_sharpe": round(r.get("avg_oos_sharpe", 0), 2),
+            "pct_oos_profitable": round(r.get("pct_oos_profitable", 0) * 100, 1),
+            "last_window_oos_sharpe": round(windows[-1]["oos_sharpe"], 2) if windows else None,
+            "last_window_oos_pnl": round(windows[-1]["oos_pnl"], 2) if windows else None,
+        })
+
+    results.sort(key=lambda x: -x["confidence_score"])
+
+    return {
+        "strategies": results,
+        "summary": {
+            "avg_confidence": round(np.mean([r["confidence_score"] for r in results]), 1) if results else 0,
+            "n_high_confidence": sum(1 for r in results if r["confidence_score"] >= 70),
+            "n_medium_confidence": sum(1 for r in results if 40 <= r["confidence_score"] < 70),
+            "n_low_confidence": sum(1 for r in results if r["confidence_score"] < 40),
+            "n_declining_alpha": sum(1 for r in results if r["alpha_decay"] == "declining"),
+        },
+    }
 
 
 # ── Startup ──────────────────────────────────────────────────────────────────
