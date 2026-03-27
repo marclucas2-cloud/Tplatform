@@ -585,11 +585,218 @@ def get_confidence():
     }
 
 
+# ── Multi-Market (DASH-002) ──────────────────────────────────────────────────
+
+def _load_eu_state() -> dict:
+    state_file = ROOT / "paper_portfolio_eu_state.json"
+    if state_file.exists():
+        try:
+            return json.loads(state_file.read_text())
+        except Exception:
+            pass
+    return {}
+
+
+def _load_eu_strategies() -> dict:
+    import yaml
+    config_path = ROOT / "config" / "strategies_eu.yaml"
+    if config_path.exists():
+        try:
+            return yaml.safe_load(config_path.read_text(encoding="utf-8")).get("strategies", {})
+        except Exception:
+            pass
+    return {}
+
+
+@app.get("/api/markets")
+def get_markets_overview():
+    """Vue multi-marche : P&L par marche, allocation, heures actives."""
+    from datetime import datetime
+    import pytz
+
+    now_cet = datetime.now(pytz.timezone("Europe/Paris"))
+    hour_cet = now_cet.hour
+
+    # US state
+    us_state = _load_state()
+    us_pnl = us_state.get("daily_pnl", 0)
+
+    # EU state
+    eu_state = _load_eu_state()
+    eu_pnl = eu_state.get("daily_pnl", 0)
+
+    # Determine active markets
+    markets = {
+        "us": {
+            "name": "US Equities (Alpaca)",
+            "broker": "alpaca",
+            "active": 15 <= hour_cet < 22,
+            "hours": "15:30-22:00 CET",
+            "pnl_today": round(us_pnl, 2),
+            "strategies_count": len(us_state.get("allocations", {})),
+            "positions_count": len(us_state.get("intraday_positions", {})),
+            "allocation_target_pct": 40,
+        },
+        "eu": {
+            "name": "EU Equities (IBKR)",
+            "broker": "ibkr",
+            "active": 9 <= hour_cet < 18,
+            "hours": "09:00-17:30 CET",
+            "pnl_today": round(eu_pnl, 2),
+            "strategies_count": len(_load_eu_strategies()),
+            "positions_count": len(eu_state.get("intraday_positions", {})),
+            "allocation_target_pct": 25,
+        },
+        "fx": {
+            "name": "FX (IBKR)",
+            "broker": "ibkr",
+            "active": True,  # FX trades ~22h/day
+            "hours": "00:00-22:00 CET (sauf rollover)",
+            "pnl_today": 0,
+            "strategies_count": 7,
+            "positions_count": 0,
+            "allocation_target_pct": 18,
+        },
+        "futures": {
+            "name": "Futures Micro (IBKR)",
+            "broker": "ibkr",
+            "active": hour_cet >= 1 or hour_cet <= 23,
+            "hours": "01:00-23:00 CET (quasi 24h)",
+            "pnl_today": 0,
+            "strategies_count": 4,
+            "positions_count": 0,
+            "allocation_target_pct": 10,
+        },
+    }
+
+    total_pnl = sum(m["pnl_today"] for m in markets.values())
+    active_count = sum(1 for m in markets.values() if m["active"])
+
+    return {
+        "markets": markets,
+        "total_pnl_today": round(total_pnl, 2),
+        "active_markets": active_count,
+        "current_hour_cet": hour_cet,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+@app.get("/api/markets/heatmap")
+def get_capital_heatmap():
+    """Heatmap 24h : capital actif par creneau horaire (CET)."""
+    heatmap = []
+    strategies_eu = _load_eu_strategies()
+
+    for hour in range(24):
+        active_capital_pct = 0
+        active_strategies = []
+
+        # FX (quasi 24h sauf 22-23 rollover)
+        if hour < 22 or hour >= 23:
+            active_capital_pct += 15
+            active_strategies.extend(["EUR/USD", "EUR/GBP", "EUR/JPY", "AUD/JPY", "GBP/USD", "USD/CHF", "NZD/USD"])
+
+        # Futures (quasi 24h sauf 23-01)
+        if 1 <= hour <= 23:
+            active_capital_pct += 8
+            active_strategies.extend(["MES Trend", "MNQ MR", "MCL Brent"])
+
+        # EU (09:00-17:30)
+        if 9 <= hour < 18:
+            active_capital_pct += 20
+            for sid, s in strategies_eu.items():
+                start_h = int(s.get("market_hours", {}).get("start", "09:00").split(":")[0])
+                end_h = int(s.get("market_hours", {}).get("end", "17:30").split(":")[0])
+                if start_h <= hour < end_h:
+                    active_strategies.append(s.get("name", sid))
+
+        # US (15:30-22:00 CET)
+        if 15 <= hour < 22:
+            active_capital_pct += 35
+            active_strategies.extend(["US Intraday", "US Shorts", "FOMC (si event)"])
+
+        heatmap.append({
+            "hour_cet": f"{hour:02d}:00",
+            "capital_active_pct": min(active_capital_pct, 90),
+            "strategies_active": list(set(active_strategies)),
+            "strategies_count": len(set(active_strategies)),
+        })
+
+    total_active_hours = sum(1 for h in heatmap if h["capital_active_pct"] > 10)
+    avg_utilization = round(sum(h["capital_active_pct"] for h in heatmap) / 24, 1)
+
+    return {
+        "heatmap": heatmap,
+        "summary": {
+            "hours_active": total_active_hours,
+            "avg_utilization_pct": avg_utilization,
+            "peak_hour": max(heatmap, key=lambda h: h["capital_active_pct"])["hour_cet"],
+            "dead_zones": [h["hour_cet"] for h in heatmap if h["capital_active_pct"] < 10],
+        },
+    }
+
+
+@app.get("/api/markets/correlation")
+def get_cross_asset_correlation():
+    """Matrice de correlation entre classes d'actifs (estimee)."""
+    # Correlations estimees basees sur donnees historiques
+    # En conditions normales vs en crise
+    normal = {
+        "us_equity": {"us_equity": 1.0, "eu_equity": 0.65, "fx": 0.15, "futures_index": 0.90, "futures_energy": 0.30, "gold": -0.15},
+        "eu_equity": {"us_equity": 0.65, "eu_equity": 1.0, "fx": 0.25, "futures_index": 0.60, "futures_energy": 0.35, "gold": -0.10},
+        "fx":        {"us_equity": 0.15, "eu_equity": 0.25, "fx": 1.0, "futures_index": 0.10, "futures_energy": 0.20, "gold": 0.30},
+        "futures_index": {"us_equity": 0.90, "eu_equity": 0.60, "fx": 0.10, "futures_index": 1.0, "futures_energy": 0.25, "gold": -0.20},
+        "futures_energy": {"us_equity": 0.30, "eu_equity": 0.35, "fx": 0.20, "futures_index": 0.25, "futures_energy": 1.0, "gold": 0.15},
+        "gold":      {"us_equity": -0.15, "eu_equity": -0.10, "fx": 0.30, "futures_index": -0.20, "futures_energy": 0.15, "gold": 1.0},
+    }
+
+    crisis = {
+        "us_equity": {"us_equity": 1.0, "eu_equity": 0.90, "fx": 0.40, "futures_index": 0.95, "futures_energy": 0.70, "gold": -0.30},
+        "eu_equity": {"us_equity": 0.90, "eu_equity": 1.0, "fx": 0.45, "futures_index": 0.85, "futures_energy": 0.65, "gold": -0.25},
+        "fx":        {"us_equity": 0.40, "eu_equity": 0.45, "fx": 1.0, "futures_index": 0.35, "futures_energy": 0.30, "gold": 0.50},
+        "futures_index": {"us_equity": 0.95, "eu_equity": 0.85, "fx": 0.35, "futures_index": 1.0, "futures_energy": 0.60, "gold": -0.35},
+        "futures_energy": {"us_equity": 0.70, "eu_equity": 0.65, "fx": 0.30, "futures_index": 0.60, "futures_energy": 1.0, "gold": 0.10},
+        "gold":      {"us_equity": -0.30, "eu_equity": -0.25, "fx": 0.50, "futures_index": -0.35, "futures_energy": 0.10, "gold": 1.0},
+    }
+
+    return {
+        "normal": normal,
+        "crisis": crisis,
+        "note": "Correlations estimees — normales vs mars 2020 stress",
+    }
+
+
+@app.get("/api/markets/var")
+def get_portfolio_var():
+    """VaR portfolio multi-asset avec contribution par classe."""
+    allocation = {"us_equity": 0.40, "eu_equity": 0.25, "fx": 0.18, "futures": 0.10, "cash": 0.07}
+    vol_annual = {"us_equity": 0.18, "eu_equity": 0.20, "fx": 0.08, "futures": 0.22, "cash": 0.0}
+
+    # VaR parametrique 99% daily
+    var_by_class = {}
+    total_var = 0
+    for ac, alloc in allocation.items():
+        vol = vol_annual.get(ac, 0)
+        daily_vol = vol / (252 ** 0.5)
+        var_99 = alloc * daily_vol * 2.33  # 99% z-score
+        var_by_class[ac] = round(var_99 * 100, 2)  # en %
+        total_var += var_99 ** 2
+
+    portfolio_var = round((total_var ** 0.5) * 100, 2)  # diversification benefit
+
+    return {
+        "var_99_daily_pct": portfolio_var,
+        "var_by_class": var_by_class,
+        "diversification_benefit_pct": round(sum(var_by_class.values()) - portfolio_var, 2),
+        "allocation": allocation,
+    }
+
+
 # ── Startup ──────────────────────────────────────────────────────────────────
 
 @app.on_event("startup")
 async def startup():
-    logger.info("Trading Dashboard API started")
+    logger.info("Trading Dashboard API started — Multi-Market V5")
     logger.info(f"Root: {ROOT}")
 
 
