@@ -8,6 +8,7 @@ Supporte 3 modes :
 
 Smart routing rules :
   - US equities intraday → Alpaca (simple, fiable, REST stateless)
+  - Futures (MES/MNQ/MCL/MGC) → IBKR (seul broker supportant les futures)
   - Options              → IBKR (Alpaca ne supporte pas)
   - High-frequency (>200 trades/mois) → IBKR (commissions 7x moins cheres)
   - Crypto-proxies       → Alpaca (short plus simple)
@@ -66,12 +67,21 @@ def get_broker(broker_type: str | None = None) -> BaseBroker:
     return broker
 
 
+
+# Symboles futures reconnus par le SmartRouter
+FUTURES_SYMBOLS = {"MES", "MNQ", "MCL", "MGC", "ES", "NQ", "CL", "GC"}
+
+
 class SmartRouter:
     """Route les ordres vers le meilleur broker selon l'actif et la strategie.
 
     Usage:
         router = SmartRouter()
         broker = router.route(symbol="AAPL", strategy="opex_gamma", asset_type="equity")
+
+        # Futures routing automatique par symbole
+        broker = router.route(symbol="MES")  # → IBKR automatiquement
+        client = router.get_futures_client()  # → IBKRFuturesClient
     """
 
     # Regles de routage par defaut
@@ -95,6 +105,7 @@ class SmartRouter:
     def __init__(self):
         self._brokers: dict[str, BaseBroker] = {}
         self._available: set[str] = set()
+        self._futures_client = None
         self._init_available_brokers()
 
     def _init_available_brokers(self):
@@ -116,11 +127,28 @@ class SmartRouter:
             self._brokers[broker_type] = get_broker(broker_type)
         return self._brokers[broker_type]
 
+    @staticmethod
+    def detect_asset_type(symbol: str) -> str:
+        """Detecte le type d'actif a partir du symbole.
+
+        Reconnait automatiquement les symboles futures (MES, MNQ, MCL, MGC, etc.)
+        pour eviter de devoir passer asset_type="future" explicitement.
+
+        Args:
+            symbol: ticker
+
+        Returns:
+            "future", "equity", etc.
+        """
+        if symbol.upper() in FUTURES_SYMBOLS:
+            return "future"
+        return "equity"
+
     def route(
         self,
         symbol: str,
         strategy: str = "",
-        asset_type: str = "equity",
+        asset_type: str | None = None,
     ) -> BaseBroker:
         """Determine le meilleur broker pour cet ordre.
 
@@ -128,10 +156,24 @@ class SmartRouter:
             symbol: ticker
             strategy: nom de la strategie (pour override)
             asset_type: "equity", "option", "future", "forex", "crypto"
+                        Si None, detecte automatiquement (futures par symbole)
 
         Returns:
             Le broker optimal
         """
+        # Auto-detect asset type si non fourni
+        if asset_type is None:
+            asset_type = self.detect_asset_type(symbol)
+
+        # 0. Futures symbols → IBKR obligatoire (pas de fallback Alpaca)
+        if asset_type == "future":
+            if "ibkr" not in self._available:
+                raise BrokerError(
+                    f"Futures ({symbol}) requiert IBKR. "
+                    f"Configurez IBKR_HOST/IBKR_PORT."
+                )
+            return self._get_broker("ibkr")
+
         # 1. Check strategy override
         if strategy in self.STRATEGY_OVERRIDE:
             preferred = self.STRATEGY_OVERRIDE[strategy]
@@ -152,6 +194,36 @@ class SmartRouter:
         raise BrokerError(
             "Aucun broker disponible. Configurez ALPACA_API_KEY ou IBKR_HOST."
         )
+
+    def get_futures_client(self):
+        """Retourne un IBKRFuturesClient pour les ordres futures.
+
+        Cree le client une seule fois (cache singleton).
+        Necessite qu'IBKR soit configure et disponible.
+
+        Returns:
+            IBKRFuturesClient
+
+        Raises:
+            BrokerError: si IBKR n'est pas disponible
+        """
+        if self._futures_client is not None:
+            return self._futures_client
+
+        if "ibkr" not in self._available:
+            raise BrokerError(
+                "Futures client requiert IBKR. Configurez IBKR_HOST/IBKR_PORT."
+            )
+
+        from core.broker.ibkr_futures import IBKRFuturesClient
+        ibkr_broker = self._get_broker("ibkr")
+        self._futures_client = IBKRFuturesClient(ibkr_broker)
+        logger.info("SmartRouter: IBKRFuturesClient instancie")
+        return self._futures_client
+
+    def is_futures_symbol(self, symbol: str) -> bool:
+        """Verifie si un symbole est un contrat futures."""
+        return symbol.upper() in FUTURES_SYMBOLS
 
     def get_all_brokers(self) -> dict[str, BaseBroker]:
         """Retourne tous les brokers connectes (pour le dashboard)."""

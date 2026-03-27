@@ -1,0 +1,87 @@
+# =============================================================================
+# EU Strategies Registry — config/strategies_eu.yaml
+#
+# Chaque strategie EU validee walk-forward est declaree ici.
+# Le pipeline paper_portfolio_eu.py charge ce fichier au demarrage.
+#
+# Champs obligatoires :
+#   name, enabled, sharpe, trades, wf_status, edge_type,
+#   market_hours (start, end, tz), tickers,
+#   allocation_pct, max_position_pct, sl_pct, tp_pct
+#
+# Champs optionnels :
+#   execution_broker — pour routage cross-broker (default: ibkr)
+#   exchanges — mapping ticker -> (exchange, currency) pour IBKR
+# =============================================================================
+
+strategies:
+  bce_momentum_drift:
+    name: "BCE Momentum Drift v2"
+    enabled: true
+    sharpe: 14.93
+    trades: 99
+    wf_status: "VALIDATED"
+    edge_type: "event"
+    market_hours: {start: "13:45", end: "17:30", tz: "Europe/Paris"}
+    tickers: ["BNP.PA", "GLE.PA", "DBK.DE", "ING.AS"]
+    allocation_pct: 0.06
+    max_position_pct: 0.03
+    sl_pct: 0.015
+    tp_pct: 0.03
+
+  auto_sector_german:
+    name: "Auto Sector German"
+    enabled: true
+    sharpe: 13.43
+    trades: 97
+    wf_status: "VALIDATED"
+    edge_type: "event"
+    market_hours: {start: "09:00", end: "17:30", tz: "Europe/Paris"}
+    tickers: ["CON.DE", "SHA.DE", "ZIL.DE"]
+    allocation_pct: 0.05
+    max_position_pct: 0.03
+    sl_pct: 0.02
+    tp_pct: 0.035
+
+  brent_lag_play:
+    name: "Brent Lag Play"
+    enabled: true
+    sharpe: 4.08
+    trades: 729
+    wf_status: "VALIDATED"
+    edge_type: "momentum"
+    market_hours: {start: "15:30", end: "20:00", tz: "Europe/Paris"}
+    tickers: ["BP.L", "SHEL.L", "TTE.PA"]
+    allocation_pct: 0.06
+    max_position_pct: 0.03
+    sl_pct: 0.015
+    tp_pct: 0.025
+
+  eu_close_us_afternoon:
+    name: "EU Close -> US Afternoon"
+    enabled: true
+    sharpe: 2.43
+    trades: 113
+    wf_status: "VALIDATED"
+    edge_type: "cross_timezone"
+    market_hours: {start: "15:30", end: "21:00", tz: "Europe/Paris"}
+    tickers: ["SPY", "QQQ", "IWM"]  # Executed on US side
+    execution_broker: "alpaca"  # Cross-broker: signal EU, execution US
+    allocation_pct: 0.05
+    max_position_pct: 0.03
+    sl_pct: 0.01
+    tp_pct: 0.02
+
+  eu_gap_open:
+    name: "EU Gap Open"
+    enabled: true
+    sharpe: 8.56
+    trades: 150
+    wf_status: "VALIDATED"
+    edge_type: "gap"
+    market_hours: {start: "09:05", end: "12:00", tz: "Europe/Paris"}
+    tickers: ["MC.PA", "SAP.DE", "ASML.AS", "TTE.PA", "SIE.DE", "ALV.DE", "BNP.PA", "BMW.DE"]
+    allocation_pct: 0.06
+    max_position_pct: 0.03
+    sl_pct: 0.01
+    tp_pct: 0.02

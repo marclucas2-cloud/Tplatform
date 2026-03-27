@@ -97,8 +97,19 @@ class DynamicAllocator:
 
         return weights
 
+    # Fallback regime multipliers if not in YAML config
+    _DEFAULT_REGIME_MULTIPLIERS = {
+        "BULL_NORMAL": {"momentum": 1.0, "mean_reversion": 1.0, "event": 0.8, "short": 0.5, "carry": 1.2},
+        "BULL_HIGH_VOL": {"momentum": 0.7, "mean_reversion": 1.3, "event": 1.2, "short": 0.8, "carry": 0.8},
+        "BEAR_NORMAL": {"momentum": 0.6, "mean_reversion": 0.8, "event": 1.0, "short": 1.5, "carry": 0.6},
+        "BEAR_HIGH_VOL": {"momentum": 0.3, "mean_reversion": 0.5, "event": 1.5, "short": 2.0, "carry": 0.3},
+    }
+
     def get_regime_multipliers(self, regime: str) -> dict:
         """Retourne les multiplicateurs par type d'edge selon le regime de marche.
+
+        Reads from config/allocation.yaml regime_multipliers if available,
+        otherwise falls back to hardcoded defaults.
 
         Args:
             regime: un de 'BULL_NORMAL', 'BULL_HIGH_VOL', 'BEAR_NORMAL', 'BEAR_HIGH_VOL'
@@ -106,33 +117,13 @@ class DynamicAllocator:
         Returns:
             {edge_type: multiplier} pour ajuster les poids
         """
-        multipliers = {
-            "BULL_NORMAL": {
-                "momentum": 1.0,
-                "mean_reversion": 1.0,
-                "event": 1.0,
-                "short": 0.5,
-            },
-            "BULL_HIGH_VOL": {
-                "momentum": 0.8,
-                "mean_reversion": 1.2,
-                "event": 1.3,
-                "short": 0.7,
-            },
-            "BEAR_NORMAL": {
-                "momentum": 0.7,
-                "mean_reversion": 0.8,
-                "event": 0.9,
-                "short": 1.5,
-            },
-            "BEAR_HIGH_VOL": {
-                "momentum": 0.5,
-                "mean_reversion": 0.6,
-                "event": 0.8,
-                "short": 2.0,
-            },
-        }
-        return multipliers.get(regime, multipliers["BULL_NORMAL"])
+        config_mults = self.config.get("regime_multipliers", {})
+        if config_mults:
+            default = config_mults.get("BULL_NORMAL", self._DEFAULT_REGIME_MULTIPLIERS["BULL_NORMAL"])
+            return config_mults.get(regime, default)
+        return self._DEFAULT_REGIME_MULTIPLIERS.get(
+            regime, self._DEFAULT_REGIME_MULTIPLIERS["BULL_NORMAL"]
+        )
 
     def apply_regime(self, weights: dict, strategies: dict, regime: str) -> dict:
         """Applique les multiplicateurs de regime aux poids.

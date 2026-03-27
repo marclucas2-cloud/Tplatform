@@ -1,17 +1,17 @@
-# Limites de risque V2
-# Derniere mise a jour : 2026-03-26
+# Limites de risque V5 — Multi-Asset Expansion
+# Derniere mise a jour : 2026-03-27
 
 position_limits:
   max_single_position: 0.10
   max_single_strategy: 0.15
   max_sector_exposure: 0.25
-  max_single_broker: 0.70
+  max_single_broker: 0.60
 
 exposure_limits:
   max_long_net: 0.60
   max_short_net: 0.30
   max_gross: 0.90
-  min_cash: 0.10
+  min_cash: 0.07
 
 risk_limits:
   max_var_95_daily: 0.02
@@ -30,3 +30,23 @@ sector_map:
   crypto: [COIN, MARA, MSTR, RIOT, BITF]
   consumer: [AMZN, TSLA, NKE, SBUX, HD, WMT]
   industrial: [CAT, DE, HON, UPS, BA]
+  futures_index: [MES, MNQ]
+  futures_energy: [MCL]
+  futures_metals: [MGC]
+
+futures_limits:
+  max_total_margin_pct: 0.30
+  max_single_contract_margin_pct: 0.10
+  max_contracts_per_symbol: 5
+  margin_alert_yellow: 0.50
+  margin_alert_red: 0.70
+
+fx_limits:
+  max_single_pair_exposure: 0.25
+  max_total_fx_exposure: 0.60
+  max_fx_leverage: 5.0  # Conservative for $25K
+
+cross_asset_limits:
+  max_correlated_exposure: 0.35  # Corr > 0.7 positions
+  max_single_broker: 0.60
+  max_single_timezone: 0.50

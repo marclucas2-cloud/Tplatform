@@ -1,41 +1,62 @@
-# Allocation V3 — POST-PURGE STATISTIQUE (CRO Audit 27 mars 2026)
-# Critere : TOUTE strategie avec < 30 trades = allocation 0% (monitoring only)
-# Strategies retirees : gold_fear(16t), crypto_bear(17t), vix_short(26t),
-#   crypto_proxy_v2(20t), pairs_mu_amat(18t), momentum_25etf(24t), vrp_rotation(12t)
-# EU Stoxx Reversion (18t, Sharpe 33.44 = artefact) retire du pipeline EU.
+# Allocation V5 — Multi-Asset Expansion (22 strategies, 4 asset classes)
+# US 40% / EU 25% / FX 18% / Futures 10% / Cash 7%
 # Derniere mise a jour : 2026-03-27
 
 portfolio:
-  target_gross_exposure: 0.80
-  min_cash_reserve: 0.15
-  target_volatility: 0.12
-  rebalance_threshold: 0.20
+  target_gross_exposure: 0.85
+  min_cash_reserve: 0.07
+  max_single_bucket: 0.45
+  max_single_broker: 0.60
 
 buckets:
-  core_alpha:
-    target: 0.61
-    strategies: [opex_gamma, gap_continuation, vwap_micro, dow_seasonal]
-  shorts_bear:
+  us_intraday:
+    target: 0.25
+    broker: alpaca
+    strategies: [dow_seasonal, corr_regime_hedge, vix_expansion_short, high_beta_short, late_day_mr, failed_rally, eod_sell_v2]
+  us_event:
+    target: 0.08
+    broker: alpaca
+    strategies: [fomc_reaction]
+  us_daily:
+    target: 0.07
+    broker: alpaca
+    strategies: [momentum_etf, pairs_mu_amat, vrp_regime]
+  eu_intraday:
     target: 0.15
-    strategies: [high_beta_short, eod_sell_v2, failed_rally_short]
-  diversifiers:
+    broker: ibkr
+    strategies: [eu_gap_open, brent_lag_play, eu_close_us_afternoon]
+  eu_event:
+    target: 0.10
+    broker: ibkr
+    strategies: [bce_momentum_drift, auto_sector_german, bce_press_conference]
+  fx_swing:
+    target: 0.18
+    broker: ibkr
+    strategies: [fx_eurusd_trend, fx_eurgbp_mr, fx_eurjpy_carry, fx_audjpy_carry, fx_gbpusd_trend, fx_usdchf_mr, fx_nzdusd_carry]
+  futures_trend:
+    target: 0.07
+    broker: ibkr
+    strategies: [futures_mes_trend, futures_mnq_mr]
+  futures_energy:
     target: 0.03
-    strategies: [corr_hedge]
-  satellite:
-    target: 0.16
-    strategies: [orb_v2, meanrev_v2, triple_ema, lateday_meanrev]
-  monitoring_only:
-    # Strategies avec < 30 trades — gardees dans le code mais allocation 0%
-    # A re-backtester sur 1-2 ans avant reintegration
-    target: 0.00
-    strategies: [gold_fear, crypto_bear, vix_short, crypto_proxy_v2, pairs_mu_amat, momentum_25etf, vrp_rotation]
-  cash_reserve:
-    target: 0.05
-    strategies: []
+    broker: ibkr
+    strategies: [brent_lag_futures]
+
+timezone_allocation:
+  # CET hours
+  "09:00-15:30": {eu_intraday: 0.25, eu_event: 0.10, fx_swing: 0.05}
+  "15:30-17:30": {eu_intraday: 0.15, us_intraday: 0.25, us_event: 0.08, fx_swing: 0.05}
+  "17:30-22:00": {us_intraday: 0.25, us_daily: 0.07, futures_trend: 0.07, fx_swing: 0.05}
+  "22:00-09:00": {fx_swing: 0.15, futures_trend: 0.05}
+
+regime_multipliers:
+  BULL_NORMAL: {momentum: 1.0, mean_reversion: 1.0, short: 0.5, carry: 1.2, event: 0.8}
+  BULL_HIGH_VOL: {momentum: 0.7, mean_reversion: 1.3, short: 0.8, carry: 0.8, event: 1.2}
+  BEAR_NORMAL: {momentum: 0.6, mean_reversion: 0.8, short: 1.5, carry: 0.6, event: 1.0}
+  BEAR_HIGH_VOL: {momentum: 0.3, mean_reversion: 0.5, short: 2.0, carry: 0.3, event: 1.5}
 
 tiers:
-  S: {max_alloc: 0.22, strategies: [opex_gamma]}
-  A: {max_alloc: 0.15, strategies: [gap_continuation, vwap_micro, dow_seasonal]}
-  B: {max_alloc: 0.06, strategies: [high_beta_short, orb_v2, meanrev_v2, corr_hedge, triple_ema, lateday_meanrev, eod_sell_v2, failed_rally_short]}
-  # Tier C vide post-purge — les strategies daily/monthly n'ont pas assez de trades
-  C: {max_alloc: 0.00, strategies: [gold_fear, crypto_bear, vix_short, crypto_proxy_v2, pairs_mu_amat, momentum_25etf, vrp_rotation]}
+  S: {max_alloc: 0.15, strategies: [eu_gap_open, bce_momentum_drift]}
+  A: {max_alloc: 0.10, strategies: [brent_lag_play, dow_seasonal, fx_eurusd_trend, futures_mes_trend]}
+  B: {max_alloc: 0.06, strategies: [corr_regime_hedge, vix_expansion_short, high_beta_short, auto_sector_german, fx_eurjpy_carry, fx_audjpy_carry]}
+  C: {max_alloc: 0.04, strategies: [late_day_mr, failed_rally, eod_sell_v2, eu_close_us_afternoon, fx_eurgbp_mr, fx_gbpusd_trend, fx_usdchf_mr, fx_nzdusd_carry, futures_mnq_mr, brent_lag_futures, fomc_reaction, bce_press_conference]}

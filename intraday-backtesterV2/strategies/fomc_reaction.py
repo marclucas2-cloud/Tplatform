@@ -1,34 +1,49 @@
 """
-STRAT-005 : FOMC Reaction — Next-Day Continuation
+STRAT-009 : FOMC Reaction Strategy (intraday, BaseStrategy)
 
-Edge structurel :
-La reaction du marche le jour de l'annonce FOMC predit souvent la
-direction du lendemain. Les recherches academiques montrent qu'un
-"FOMC drift" existe : une reaction forte le jour J est suivie d'une
-continuation le jour J+1, alimentee par le repositionnement
-institutionnel post-annonce.
+Edge:
+    La Fed annonce sa decision de taux a 14:00 ET, 8 fois par an.
+    La volatilite est comprimee les heures precedant l'annonce (dealers
+    couvrent leur gamma). A 14:00, la compression explose. Les 2 premieres
+    heures post-annonce montrent un biais de continuation : historiquement
+    65% du temps, la direction initiale (5 premieres minutes) se prolonge
+    jusqu'a la cloture.
 
-Regles :
-- Identifier les ~40 jours FOMC (8/an x 5 ans) sur SPY
-- Calculer le return open-to-close du jour FOMC (J+0)
-- Si return J+0 > +0.3% (bullish), LONG SPY le jour J+1
-- Si return J+0 < -0.3% (bearish), SHORT SPY le jour J+1
-- Holding : open-to-close J+1
-- Couts Alpaca standard : $0.005/share + 0.02% slippage
+    On attend 5 minutes pour laisser le bruit initial s'installer, puis on
+    entre dans la direction du mouvement si celui-ci est > 0.3%.
+    Mouvements < 0.1% = "non-event" — on skip.
 
-Donnees : yfinance SPY daily 5 ans
+Regles:
+    - Jour FOMC uniquement (EventCalendar.is_fomc_day)
+    - Filtre VIX > 35 : marche trop chaotique pour un directionnel, skip
+    - Entree a 14:05 ET dans la direction du move initial (14:00 -> 14:05)
+    - Stop-loss : 1.5x la taille du move initial, contre la position
+    - Take-profit : 2.0x la taille du move initial (ou fermeture 15:55 ET)
+    - Tickers : SPY (primaire), QQQ (confirmation secondaire)
+    - ~8 events/an x 6 ans = 48 trades potentiels
 """
 import pandas as pd
 import numpy as np
+from datetime import time as dt_time, date as dt_date
+from backtest_engine import BaseStrategy, Signal
 
-INITIAL_CAPITAL = 100_000
-POSITION_SIZE_PCT = 0.10       # 10% du capital par trade
-THRESHOLD_PCT = 0.003          # 0.3% minimum move
-COMMISSION_PER_SHARE = 0.005   # $0.005/share
-SLIPPAGE_PCT = 0.0002          # 0.02%
+# Import optionnel du calendrier centralise — fallback sur dates hard-coded
+try:
+    import sys
+    from pathlib import Path
+    _root = Path(__file__).resolve().parent.parent.parent
+    if str(_root) not in sys.path:
+        sys.path.insert(0, str(_root))
+    from core.event_calendar import EventCalendar
+    _default_calendar = EventCalendar()
+except Exception:
+    _default_calendar = None
 
-# Calendrier FOMC 2021-2026 (dates des decisions)
-FOMC_DATES = [
+# Fallback : dates FOMC 2020-2026 si EventCalendar indisponible
+FOMC_DATES_FALLBACK = [
+    # 2020
+    "2020-01-29", "2020-03-03", "2020-03-15", "2020-04-29", "2020-06-10",
+    "2020-07-29", "2020-09-16", "2020-11-05", "2020-12-16",
     # 2021
     "2021-01-27", "2021-03-17", "2021-04-28", "2021-06-16",
     "2021-07-28", "2021-09-22", "2021-11-03", "2021-12-15",
@@ -45,141 +60,200 @@ FOMC_DATES = [
     "2025-01-29", "2025-03-19", "2025-05-07", "2025-06-18",
     "2025-07-30", "2025-09-17", "2025-10-29", "2025-12-17",
     # 2026
-    "2026-01-28", "2026-03-18",
+    "2026-01-28", "2026-03-18", "2026-05-06", "2026-06-17",
+    "2026-07-29", "2026-09-16", "2026-11-04", "2026-12-16",
 ]
 
 
-class FOMCReactionStrategy:
+class FOMCReactionStrategy(BaseStrategy):
+    """FOMC Reaction — continuation intraday post-annonce avec filtre VIX.
+
+    Herite de BaseStrategy et implemente generate_signals() pour le moteur
+    de backtest evenementiel.
     """
-    Standalone daily strategy for FOMC day reaction -> next-day continuation.
-    Does NOT inherit BaseStrategy (daily yfinance data, event-driven).
-    """
+
     name = "FOMC Reaction"
 
-    def __init__(self, threshold_pct: float = THRESHOLD_PCT):
-        self.threshold_pct = threshold_pct
-        self.fomc_set = set(pd.to_datetime(d).date() for d in FOMC_DATES)
+    # --- Parametres ---
+    MIN_MOVE_PCT = 0.003       # 0.3% minimum pour entrer (continuation)
+    SKIP_MOVE_PCT = 0.001      # < 0.1% = skip (non-event)
+    STOP_MULTIPLIER = 1.5      # Stop = 1.5x le move initial
+    TP_MULTIPLIER = 2.0        # TP = 2.0x le move initial
+    VIX_MAX = 35.0             # Skip si VIX > 35
+    MAX_TRADES_PER_DAY = 2     # SPY + QQQ max
 
-    def backtest(self, spy_df: pd.DataFrame) -> pd.DataFrame:
+    def __init__(self, calendar=None):
         """
-        Run the FOMC reaction backtest on SPY daily data.
-
-        spy_df: DataFrame with columns [Open, High, Low, Close, Volume]
-                and a DatetimeIndex (from yfinance).
-
-        Returns: DataFrame of trades.
+        Args:
+            calendar: EventCalendar instance (optionnel, fallback sur dates hard-coded)
         """
-        if spy_df.empty or len(spy_df) < 30:
-            return pd.DataFrame()
+        self._calendar = calendar if calendar is not None else _default_calendar
+        if self._calendar is None:
+            self._fomc_dates = set(
+                pd.to_datetime(d).date() for d in FOMC_DATES_FALLBACK
+            )
+        else:
+            self._fomc_dates = None  # utilise le calendrier
 
-        df = spy_df.copy()
+    def _is_fomc_day(self, d) -> bool:
+        """Verifie si c'est un jour FOMC."""
+        if self._calendar is not None:
+            return self._calendar.is_fomc_day(d)
+        if isinstance(d, pd.Timestamp):
+            d = d.date()
+        return d in self._fomc_dates
 
-        # Normaliser les colonnes (yfinance utilise majuscules)
-        col_map = {}
-        for c in df.columns:
-            col_map[c] = c.lower()
-        df = df.rename(columns=col_map)
+    def get_required_tickers(self) -> list[str]:
+        return ["SPY", "QQQ", "VIX"]
 
-        if "close" not in df.columns or "open" not in df.columns:
-            return pd.DataFrame()
+    def _get_vix_level(self, data: dict[str, pd.DataFrame], timestamp) -> float:
+        """Retourne le niveau VIX a un timestamp donne. -1 si indisponible."""
+        for vix_ticker in ["^VIX", "VIX", "VIXY"]:
+            if vix_ticker not in data:
+                continue
+            vix_df = data[vix_ticker]
+            if vix_df.empty:
+                continue
+            vix_at = vix_df[vix_df.index <= timestamp]
+            if not vix_at.empty:
+                return vix_at.iloc[-1]["close"]
+        return -1.0  # VIX non disponible — on ne filtre pas
 
-        # S'assurer que l'index est datetime
-        if not isinstance(df.index, pd.DatetimeIndex):
-            df.index = pd.to_datetime(df.index)
+    def generate_signals(self, data: dict[str, pd.DataFrame], date) -> list[Signal]:
+        """
+        Genere des signaux FOMC Reaction pour un jour donne.
 
-        # ── Identifier les jours FOMC dans les donnees ──
-        df["date"] = df.index.date
-        trading_dates = sorted(df["date"].unique())
-        date_to_idx = {d: i for i, d in enumerate(trading_dates)}
+        Logique :
+        1. Verifier que c'est un jour FOMC
+        2. Verifier VIX < 35
+        3. Mesurer le move initial SPY 14:00->14:05
+        4. Si move > 0.3%, entrer en continuation
+        5. Stop = 1.5x move, TP = 2.0x move
 
-        trades = []
-        capital = INITIAL_CAPITAL
+        Args:
+            data: {ticker: DataFrame intraday du jour} avec colonnes OHLCV
+            date: date du jour de trading
 
-        fomc_found = 0
-        signals_generated = 0
+        Returns:
+            Liste de Signal objects (0-2 max: SPY et/ou QQQ)
+        """
+        signals = []
 
-        for fomc_date in sorted(self.fomc_set):
-            if fomc_date not in date_to_idx:
+        # Guard : FOMC day only
+        if not self._is_fomc_day(date):
+            return signals
+
+        # Guard : SPY requis au minimum
+        if "SPY" not in data:
+            return signals
+
+        spy_df = data["SPY"]
+        if len(spy_df) < 20:
+            return signals
+
+        # --- Filtre VIX ---
+        pre_announcement = spy_df[spy_df.index.time <= dt_time(14, 0)]
+        if not pre_announcement.empty:
+            vix_level = self._get_vix_level(data, pre_announcement.index[-1])
+            if vix_level > 0 and vix_level > self.VIX_MAX:
+                return signals  # VIX trop eleve — skip
+        else:
+            vix_level = -1.0
+
+        # --- Generer signaux pour SPY et QQQ ---
+        for ticker in ["SPY", "QQQ"]:
+            if ticker not in data:
                 continue
 
-            fomc_found += 1
-            fomc_idx = date_to_idx[fomc_date]
-
-            # Besoin du jour suivant
-            if fomc_idx + 1 >= len(trading_dates):
+            df = data[ticker]
+            if len(df) < 20:
                 continue
 
-            next_date = trading_dates[fomc_idx + 1]
+            # Prix juste avant l'annonce (derniere barre <= 14:00)
+            pre_bars = df[df.index.time <= dt_time(14, 0)]
+            if pre_bars.empty:
+                continue
+            pre_price = pre_bars.iloc[-1]["close"]
 
-            # Donnees jour FOMC
-            fomc_day = df[df["date"] == fomc_date]
-            if fomc_day.empty:
+            # Prix 5 min apres (14:05-14:10)
+            post_bars = df.between_time("14:05", "14:10")
+            if post_bars.empty:
+                continue
+            post_price = post_bars.iloc[0]["close"]
+
+            # Calculer le move initial
+            initial_move_pct = (post_price - pre_price) / pre_price
+            initial_move_abs = abs(initial_move_pct)
+
+            # Skip si move trop faible (non-event)
+            if initial_move_abs < self.SKIP_MOVE_PCT:
                 continue
 
-            day_open = fomc_day.iloc[0]["open"]
-            day_close = fomc_day.iloc[-1]["close"]
-            fomc_return = (day_close - day_open) / day_open
-
-            # Filter: mouvement suffisant
-            if abs(fomc_return) < self.threshold_pct:
+            # Skip si move dans la zone grise (entre 0.1% et 0.3%)
+            if initial_move_abs < self.MIN_MOVE_PCT:
                 continue
 
-            signals_generated += 1
+            # --- Signal de continuation ---
+            entry_price = post_price
+            ts = post_bars.index[0]
 
-            # Donnees jour suivant
-            next_day = df[df["date"] == next_date]
-            if next_day.empty:
-                continue
+            # Stop et TP bases sur la taille du move initial
+            move_size = abs(post_price - pre_price)
+            stop_distance = move_size * self.STOP_MULTIPLIER
+            tp_distance = move_size * self.TP_MULTIPLIER
 
-            next_open = next_day.iloc[0]["open"]
-            next_close = next_day.iloc[-1]["close"]
-
-            # Direction
-            if fomc_return > 0:
-                direction = "LONG"
+            # Determiner la confidence
+            if initial_move_abs > 0.008:
+                confidence = "high"
+            elif initial_move_abs > 0.005:
+                confidence = "medium-high"
             else:
-                direction = "SHORT"
+                confidence = "medium"
 
-            # Position sizing
-            allocated = capital * POSITION_SIZE_PCT
-            shares = int(allocated / next_open)
-            if shares < 1:
-                continue
+            # QQQ confirme la direction de SPY ?
+            qqq_confirms = False
+            if ticker == "SPY" and "QQQ" in data:
+                qqq_df = data["QQQ"]
+                qqq_pre = qqq_df[qqq_df.index.time <= dt_time(14, 0)]
+                qqq_post = qqq_df.between_time("14:05", "14:10")
+                if not qqq_pre.empty and not qqq_post.empty:
+                    qqq_move = (
+                        qqq_post.iloc[0]["close"] - qqq_pre.iloc[-1]["close"]
+                    ) / qqq_pre.iloc[-1]["close"]
+                    qqq_confirms = (qqq_move > 0) == (initial_move_pct > 0)
 
-            # Slippage
-            if direction == "LONG":
-                actual_entry = next_open * (1 + SLIPPAGE_PCT)
-                actual_exit = next_close * (1 - SLIPPAGE_PCT)
-                pnl = (actual_exit - actual_entry) * shares
-            else:
-                actual_entry = next_open * (1 - SLIPPAGE_PCT)
-                actual_exit = next_close * (1 + SLIPPAGE_PCT)
-                pnl = (actual_entry - actual_exit) * shares
-
-            commission = shares * COMMISSION_PER_SHARE * 2  # entry + exit
-            net_pnl = pnl - commission
-
-            trades.append({
-                "ticker": "SPY",
-                "date": next_date,
-                "direction": direction,
-                "entry_price": round(actual_entry, 4),
-                "exit_price": round(actual_exit, 4),
-                "shares": shares,
-                "pnl": round(pnl, 2),
-                "commission": round(commission, 2),
-                "net_pnl": round(net_pnl, 2),
-                "entry_time": pd.Timestamp(next_date),
-                "exit_time": pd.Timestamp(next_date),
-                "exit_reason": "eod_close",
+            metadata = {
                 "strategy": self.name,
-                "fomc_date": str(fomc_date),
-                "fomc_return_pct": round(fomc_return * 100, 3),
-            })
-            capital += net_pnl
+                "event_type": "FOMC",
+                "initial_move_pct": round(initial_move_pct * 100, 4),
+                "initial_move_abs": round(move_size, 4),
+                "confidence": confidence,
+                "qqq_confirms": qqq_confirms,
+                "vix_level": round(vix_level, 2) if vix_level > 0 else None,
+                "reaction_magnitude": round(initial_move_abs * 100, 4),
+            }
 
-        print(f"  [FOMC Reaction] FOMC dates found in data: {fomc_found}")
-        print(f"  [FOMC Reaction] Signals generated (|return| > {self.threshold_pct*100:.1f}%): {signals_generated}")
-        print(f"  [FOMC Reaction] Trades executed: {len(trades)}")
+            if initial_move_pct > 0:
+                # Mouvement haussier → LONG continuation
+                signals.append(Signal(
+                    action="LONG",
+                    ticker=ticker,
+                    entry_price=entry_price,
+                    stop_loss=entry_price - stop_distance,
+                    take_profit=entry_price + tp_distance,
+                    timestamp=ts,
+                    metadata=metadata,
+                ))
+            else:
+                # Mouvement baissier → SHORT continuation
+                signals.append(Signal(
+                    action="SHORT",
+                    ticker=ticker,
+                    entry_price=entry_price,
+                    stop_loss=entry_price + stop_distance,
+                    take_profit=entry_price - tp_distance,
+                    timestamp=ts,
+                    metadata=metadata,
+                ))
 
-        return pd.DataFrame(trades)
+        return signals[:self.MAX_TRADES_PER_DAY]

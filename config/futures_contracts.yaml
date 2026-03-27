@@ -1,0 +1,151 @@
+# Contract specifications — Futures supportes
+# Derniere mise a jour : 2026-03-27
+#
+# MICRO CONTRACTS UNIQUEMENT pour capital < $100K
+# Full-size desactive par securite (multiplicateurs trop gros pour $25K)
+
+micro_contracts:
+  MES:
+    description: "Micro E-mini S&P 500"
+    exchange: CME
+    multiplier: 5
+    currency: USD
+    tick_size: 0.25
+    tick_value: 1.25
+    months: HMUZ          # Mars, Juin, Sept, Dec
+    trading_hours: "18:00-17:00 ET"  # Sun-Fri
+    margin_initial: 1400
+    margin_maintenance: 1200
+    etf_proxy: SPY
+    full_size_equivalent: ES
+    point_value: 5.0      # 1 point = $5
+
+  MNQ:
+    description: "Micro E-mini Nasdaq-100"
+    exchange: CME
+    multiplier: 2
+    currency: USD
+    tick_size: 0.25
+    tick_value: 0.50
+    months: HMUZ
+    trading_hours: "18:00-17:00 ET"
+    margin_initial: 1800
+    margin_maintenance: 1500
+    etf_proxy: QQQ
+    full_size_equivalent: NQ
+    point_value: 2.0
+
+  MCL:
+    description: "Micro WTI Crude Oil"
+    exchange: NYMEX
+    multiplier: 100
+    currency: USD
+    tick_size: 0.01
+    tick_value: 1.00
+    months: all           # Tous les mois (FGHJKMNQUVXZ)
+    trading_hours: "18:00-17:00 ET"
+    margin_initial: 600
+    margin_maintenance: 500
+    etf_proxy: USO
+    full_size_equivalent: CL
+    point_value: 100.0
+
+  MGC:
+    description: "Micro Gold"
+    exchange: COMEX
+    multiplier: 10
+    currency: USD
+    tick_size: 0.10
+    tick_value: 1.00
+    months: GJMQVZ        # Feb, Avr, Juin, Aout, Oct, Dec
+    trading_hours: "18:00-17:00 ET"
+    margin_initial: 1000
+    margin_maintenance: 850
+    etf_proxy: GLD
+    full_size_equivalent: GC
+    point_value: 10.0
+
+# Full-size — reference uniquement, INTERDIT pour trading $25K
+full_size_contracts:
+  ES:
+    description: "E-mini S&P 500"
+    exchange: CME
+    multiplier: 50
+    currency: USD
+    tick_size: 0.25
+    tick_value: 12.50
+    months: HMUZ
+    margin_initial: 12650
+    margin_maintenance: 11500
+    etf_proxy: SPY
+    point_value: 50.0
+
+  NQ:
+    description: "E-mini Nasdaq-100"
+    exchange: CME
+    multiplier: 20
+    currency: USD
+    tick_size: 0.25
+    tick_value: 5.00
+    months: HMUZ
+    margin_initial: 17600
+    margin_maintenance: 16000
+    etf_proxy: QQQ
+    point_value: 20.0
+
+  CL:
+    description: "WTI Crude Oil"
+    exchange: NYMEX
+    multiplier: 1000
+    currency: USD
+    tick_size: 0.01
+    tick_value: 10.00
+    months: all
+    margin_initial: 6600
+    margin_maintenance: 6000
+    etf_proxy: USO
+    point_value: 1000.0
+
+  GC:
+    description: "Gold"
+    exchange: COMEX
+    multiplier: 100
+    currency: USD
+    tick_size: 0.10
+    tick_value: 10.00
+    months: GJMQVZ
+    margin_initial: 10000
+    margin_maintenance: 8500
+    etf_proxy: GLD
+    point_value: 100.0
+
+# Risk limits specifiques futures
+futures_risk:
+  max_margin_per_position: 0.10     # 10% du capital par position
+  max_total_futures_margin: 0.30    # 30% du capital total en futures
+  max_capital_for_micro_only: 100000  # < $100K = micro uniquement
+  min_capital_for_full_size: 100000   # >= $100K = full-size autorise
+  roll_days_before_expiry: 5        # Roll 5 jours avant expiration
+
+# Quarterly expiry calendar 2026 (3eme vendredi du mois d'expiration)
+expiry_calendar_2026:
+  H: "2026-03-20"    # Mars
+  M: "2026-06-19"    # Juin
+  U: "2026-09-18"    # Sept
+  Z: "2026-12-18"    # Dec
+
+# Monthly CL/MCL expiry calendar 2026
+# (CL expire le 3eme jour ouvre avant le 25eme jour calendaire du mois precedent)
+monthly_expiry_2026:
+  F: "2025-12-19"    # Jan contract
+  G: "2026-01-20"    # Feb
+  H: "2026-02-20"    # Mar
+  J: "2026-03-20"    # Apr
+  K: "2026-04-21"    # May
+  M: "2026-05-19"    # Jun
+  N: "2026-06-22"    # Jul
+  Q: "2026-07-21"    # Aug
+  U: "2026-08-20"    # Sep
+  V: "2026-09-22"    # Oct
+  X: "2026-10-20"    # Nov
+  Z: "2026-11-20"    # Dec
