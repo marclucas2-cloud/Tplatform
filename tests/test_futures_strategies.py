@@ -296,19 +296,19 @@ class TestBrentLagFutures:
 
     def test_max_contracts_respected(self, strategy):
         """Le nombre de contrats ne doit pas depasser max_contracts."""
-        n_bars = 80
-        df_cl = make_ohlcv(n_bars, start="2026-03-15 09:30", freq="5min", base_price=70.0, seed=10)
+        n_bars = 120
+        df_cl = make_ohlcv(n_bars, start="2026-03-15 08:00", freq="5min", base_price=70.0, seed=10)
         open_price = df_cl.iloc[0]["open"]
         target_price = open_price * 1.01
         entry_mask = (df_cl.index.time >= dt_time(9, 35)) & (df_cl.index.time <= dt_time(10, 0))
         df_cl.loc[entry_mask, "close"] = target_price
-        vix_df = make_vix_data(20.0, n_bars, start="2026-03-15 09:30")
+        vix_df = make_vix_data(20.0, n_bars, start="2026-03-15 08:00")
 
         data = {"CL": df_cl, "VIX": vix_df}
         signals = strategy.generate_signals(data, dt_date(2026, 3, 15))
 
-        if signals:
-            assert signals[0].metadata["contracts"] <= 4
+        assert len(signals) == 1
+        assert signals[0].metadata["contracts"] <= 4
 
 
 # ══════════════════════════════════════════════════════════════════════════
