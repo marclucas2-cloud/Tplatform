@@ -1212,8 +1212,25 @@ def system_status():
 
         # Check Binance
         binance_ok = False
+        binance_latency = None
         binance_key = os.environ.get("BINANCE_API_KEY", "")
+        binance_secret = os.environ.get("BINANCE_API_SECRET", "")
         binance_testnet = os.environ.get("BINANCE_TESTNET", "true")
+        if binance_key and binance_secret:
+            try:
+                import hashlib, hmac
+                import time as _time
+                _base = "https://testnet.binance.vision" if binance_testnet.lower() == "true" else "https://api.binance.com"
+                t0 = _time.monotonic()
+                _ts = int(_time.time() * 1000)
+                _q = f"timestamp={_ts}"
+                _sig = hmac.new(binance_secret.encode(), _q.encode(), hashlib.sha256).hexdigest()
+                _r = requests.get(f"{_base}/api/v3/account?{_q}&signature={_sig}",
+                                  headers={"X-MBX-APIKEY": binance_key}, timeout=8)
+                binance_latency = round((_time.monotonic() - t0) * 1000, 1)
+                binance_ok = _r.status_code == 200
+            except Exception:
+                pass
 
         # Worker uptime
         engine_state_path = DATA_DIR / "engine_state.json"
@@ -1246,7 +1263,7 @@ def system_status():
                     "connected": binance_ok,
                     "has_api_key": bool(binance_key),
                     "testnet": binance_testnet.lower() == "true",
-                    "latency_ms": None,
+                    "latency_ms": binance_latency,
                 },
             },
             "worker": uptime_info,
