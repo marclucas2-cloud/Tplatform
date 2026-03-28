@@ -1,30 +1,28 @@
-# SYNTHESE COMPLETE — TRADING PLATFORM V8.0 (INSTITUTIONAL FOUNDATIONS)
-## Portefeuille Quantitatif — 5 classes d'actifs, 16+16 strategies (live+V2), ~22h/24h
-### Date : 28 mars 2026 | 1,978 tests | ~75 fichiers test | CRO 9.5/10 APPROUVE
+# SYNTHESE COMPLETE — TRADING PLATFORM V8.5 (LIVE CRYPTO + DASHBOARD XL + ROC)
+## Portefeuille Quantitatif — 5 classes d'actifs, 16+8 strategies live, ~22h/24h
+### Date : 28 mars 2026 | 2,103 tests | ~85 fichiers test | CRO 9.5/10 APPROUVE
 
 ---
 
 ## 1. RESUME EXECUTIF
 
-| Indicateur | V7.3 | V7.6 (CRO) | **V8.0 (institutional)** |
-|-----------|:---:|:---:|:---:|
-| Classes d'actifs | 4 | 5 | **5** |
-| Strategies live | 8 IBKR | 8 IBKR + 8 crypto | **16 live + 16 migrées V2** |
-| Tests | 1,561 | 1,700 | **1,978** |
-| Modules core | 39 | 47 | **~70** (+BacktesterV2 24 fichiers) |
-| Backtester | V1 (6/10 CRO) | V1 | **V2 event-driven (9/10)** |
-| Anti-lookahead | partiel | partiel | **28 tests prouvent l'impossibilite** |
-| Walk-Forward | module externe | module externe | **integre au BacktesterV2** |
-| Monte Carlo | module externe | module externe | **integre (10K simulations)** |
-| Fuzzing | 0 scenarios | 0 | **28 scenarios PASS** |
-| Stress tests historiques | 4 scenarios | 4 | **9 crises PASS** (COVID, LUNA, SNB...) |
-| Resilience | non teste | basique | **5 tests (thread safety, deadlock, persistence)** |
-| Calendars multi-marche | hardcode | hardcode | **5 calendriers (US/EU/FX/Futures/Crypto)** |
-| Cost models | parametres fixes | fixes | **3 modeles realistes (IBKR/Binance/Funding)** |
-| Execution simulator | slippage statistique | statistique | **Almgren-Chriss, latence, spread dynamique** |
-| CRO score | 8.5/10 | 9/10 | **9.5/10** |
+| Indicateur | V8.0 | **V8.5 (live crypto + dashboard)** |
+|-----------|:---:|:---:|
+| Classes d'actifs | 5 | **5** |
+| Strategies live | 16 (IBKR+crypto code) | **8 crypto LIVE Binance + 16 IBKR (paper)** |
+| Tests | 1,978 | **2,103** |
+| Modules core | ~70 | **~80** (+9 ROC modules) |
+| Dashboard | 6 pages basiques | **11 pages (Crypto, Risk, Journal, Tax, Cross...)** |
+| API endpoints | ~15 | **43 endpoints** (main + routes_v2) |
+| Charts Recharts | 0 | **5** (EquityCurve, Drawdown, Distribution, Sharpe, Heatmap) |
+| Binance | config only | **LIVE connecte** (20K EUR, spot+margin+earn) |
+| Alpaca paper | 0 trades | **44 trades, +$422, 68% WR** |
+| ROC optimisations | 0 | **9 modules** (conviction, carry, sniper, correlation...) |
+| SAFE-003 auto-disable | code mort | **branche dans worker** |
+| VIX stress guard | non | **actif** (VIX>30 = -50%, SPY DD>5% = HALT) |
+| CRO score | 9.5/10 | **9.5/10** |
 
-**V7.6→V8.0 : BacktesterV2 institutional-grade + hardening complet + 16 strategies migrées. +278 tests.**
+**V8.0→V8.5 : Dashboard XL 11 pages + 8 crypto LIVE Binance + 9 ROC optimisations + 44 trades paper analyses. +125 tests.**
 
 ---
 
@@ -799,21 +797,50 @@ Ce projet a traverse 14 phases en 6 jours :
 
 ### Prochain pas concret
 
+**Binance (20K EUR) — LIVE :**
+- API connectee (canTrade=true, spot+margin+earn)
+- 8 strategies branchees dans worker.py, cycle toutes les 15 min 24/7
+- Portefeuille : BTC 0.27 en Earn (15.5K), USDC 1978 en Earn (1.7K), EUR 3359 spot
+- Altcoins poussiere liquidees (ADA, LINK, DOT, UNI, CHZ, VET → EUR/BTC)
+- Sizing : 1/8 Kelly, levier max 1.5x, toutes strats actives
+- Kill switch + risk manager verifies avant chaque trade
+
+**Alpaca Paper ($100K) — 44 trades :**
+- +$422.46 en 4 jours, 68% win rate, 22 round-trips
+- Meilleurs : USO +$168, MARA +$88, HON +$39, UNH +$36
+- Signaux : AMZN double exposition detecte, 0 trades lundi a investiguer
+
 **IBKR ($10K) — Track 1 (Marc pilote) :**
 1. Setup Hetzner CPX32 + IB Gateway + SSH
-2. DRILL-002 (backup restore) + DRILL-003 (kill switch)
-3. Go/No-Go → premier trade live J4 (5 FX 1/8 Kelly + EU Gap 1/4 Kelly)
-4. Jour 5 : futures MCL + MES si paper OK
-5. Gate M1 semaine 3-4 (15 trades, DD < 5%)
+2. DRILL-002 + DRILL-003 (kill switch)
+3. Go/No-Go → premier trade live J4
 
-**Binance France ($15K) — Track 1 (Marc pilote) :**
-6. Activer Margin + quiz + API keys (Spot+Margin, PAS Futures/Withdrawal)
-7. Collecte historique 3 ans + paper 7 jours
-8. Soft launch semaine 1 : $10K spot+earn, PAS de margin
-9. Semaine 2 : $12.5K + margin 1.5x
-10. Semaine 3 : $15K complet
+**Dashboard XL (React + FastAPI) :**
+- 11 pages : Overview, Positions, Strategies, **Crypto**, Risk, Journal, PaperVsLive, Analytics, System, Tax, CrossPortfolio
+- 43 endpoints API (main.py 15 + routes_v2.py 28)
+- 5 charts Recharts (EquityCurve, Drawdown, Distribution, RollingSharpe, HeatmapCalendar)
+- WebSocket hook avec reconnexion automatique
+- Sidebar navigation + responsive mobile
+- Donnees reelles : Alpaca API (44 trades), Binance API (balances live)
+- Filtre broker Alpaca/Binance dans le Journal
 
-**Fondations V8 — Track 2 (sessions futures si besoin) :**
+**9 optimisations ROC (99 tests) :**
+- ROC-001 Cash Sweep Earn (yield sur cash idle)
+- ROC-002 Conviction Sizer (sizing dynamique 0.7x-1.5x)
+- ROC-003 Continuous Gate M1 (14j au lieu de 21j)
+- ROC-004 Carry FX Optimizer ($256/an gratuit)
+- ROC-005 Implementation Shortfall (mesure fuites P&L)
+- ROC-006 Realtime Correlation (clusters, N_eff)
+- ROC-007 Sniper Entries MR (+3-5 bps/trade)
+- ROC-008 Timezone Allocator (capital par creneau)
+- ROC-009 Progressive Scaler (sizing graduel)
+
+**Corrections critiques :**
+- SAFE-003 (LivePerformanceGuard) etait du code mort → branche dans worker
+- VixStressGuard ajoute (VIX>30=-50%, SPY DD>5%=HALT)
+- Trades dashboard : Alpaca API reelle (plus de CSV backtest melanges)
+
+**Fondations V9 — Track 2 (sessions futures) :**
 - Session 4-5 : ML Pipeline (apres 200+ trades live)
 - Session 6-7 : Alpha Research (apres Gate M1)
 - Session 8 : Options Overlay (apres $50K IBKR)
@@ -821,11 +848,11 @@ Ce projet a traverse 14 phases en 6 jours :
 
 ---
 
-*Synthese V8.0 (institutional foundations) generee le 28 mars 2026*
-*16 strategies live + 16 migrées V2 | 1,978 tests | ~75 fichiers test*
-*~135K lignes | ~70 modules | 5 classes d'actifs | 3 brokers*
-*BacktesterV2 : event-driven, anti-lookahead prouve, WF+MC integres*
-*Hardening : 28 fuzzing + 9 stress historiques + 5 resilience = PASS*
-*Capital : $10K IBKR + $15K Binance FR = $25K total*
-*CRO 9.5/10 — GO-LIVE AUTORISE*
-*"Le code est l'arme. Le test est le cran de surete. Le backtest V2 est le champ de tir."*
+*Synthese V8.5 (live crypto + dashboard XL + ROC) generee le 28 mars 2026*
+*8 crypto LIVE + 16 IBKR paper | 2,103 tests | ~85 fichiers test*
+*~150K lignes | ~80 modules | 5 classes d'actifs | 3 brokers*
+*Dashboard XL : 11 pages, 43 endpoints, 5 charts, donnees reelles*
+*ROC : 9 optimisations, +15-25% Sharpe estime, +$1K-1.5K/an*
+*Capital : 20K EUR Binance LIVE + $100K Alpaca paper + $10K IBKR (a venir)*
+*CRO 9.5/10 — CRYPTO GO-LIVE EFFECTIF*
+*"Le capital ne dort plus. Le dashboard montre tout. Les strategies tournent."*
