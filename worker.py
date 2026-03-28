@@ -20,8 +20,10 @@ import zoneinfo
 
 # Setup paths
 ROOT = Path(__file__).parent
-sys.path.insert(0, str(ROOT))
+# ROOT doit etre AVANT intraday-backtesterV2 dans sys.path
+# sinon intraday-backtesterV2/strategies/ masque strategies/crypto/
 sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(ROOT))
 
 # Charger .env si present (dev local)
 try:
@@ -545,9 +547,54 @@ def run_crypto_cycle():
         if broker:
             try:
                 acct = broker.get_account_info()
-                current_equity = float(acct.get("equity", total_capital))
+                spot_equity = float(acct.get("equity", 0))
                 cash_available = float(acct.get("cash", 0))
                 positions = broker.get_positions()
+
+                # Inclure les positions Earn dans l'equity totale
+                # (LDBTC, LDUSDC, LDETH = Earn Flexible, pas dans equity spot)
+                try:
+                    earn_positions = broker.get_earn_positions()
+                    for ep in earn_positions:
+                        asset = ep.get("asset", "")
+                        amount = float(ep.get("amount", 0))
+                        if amount > 0:
+                            # Estimer la valeur USD de chaque earn position
+                            if asset in ("USDT", "USDC", "BUSD"):
+                                earn_total += amount
+                            elif asset == "BTC":
+                                try:
+                                    btc_ticker = broker.get_ticker_24h("BTCUSDT")
+                                    btc_price = float(btc_ticker.get("last_price", 0))
+                                    earn_total += amount * btc_price
+                                except Exception:
+                                    earn_total += amount * 85000  # Fallback
+                            elif asset == "ETH":
+                                try:
+                                    eth_ticker = broker.get_ticker_24h("ETHUSDT")
+                                    eth_price = float(eth_ticker.get("last_price", 0))
+                                    earn_total += amount * eth_price
+                                except Exception:
+                                    earn_total += amount * 2000  # Fallback
+                except Exception as e:
+                    logger.warning(f"Earn positions indisponibles: {e}")
+
+                current_equity = spot_equity + earn_total
+
+                # Les stablecoins en Earn Flexible sont recuperables en < 1 min
+                # Ils comptent comme cash disponible pour le risk check
+                stable_earn = sum(
+                    float(ep.get("amount", 0))
+                    for ep in earn_positions
+                    if ep.get("asset") in ("USDT", "USDC", "BUSD")
+                ) if earn_positions else 0
+                cash_available = float(acct.get("cash", 0)) + spot_equity + stable_earn
+
+                logger.info(
+                    f"  Equity: spot=${spot_equity:,.0f} + earn=${earn_total:,.0f} "
+                    f"= total=${current_equity:,.0f} "
+                    f"(cash_available=${cash_available:,.0f})"
+                )
             except Exception as e:
                 logger.warning(f"Binance account info indisponible: {e}")
 

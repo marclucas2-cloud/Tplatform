@@ -89,7 +89,7 @@ class CryptoRiskLimits:
     MARGIN_LEVEL_LIQUIDATION = 1.1     # Binance liquidates here
 
     # Earn
-    MAX_EARN_PCT = 30                  # Max 30% in earn
+    MAX_EARN_PCT = 100                 # Earn Flexible = redemption instantanee, pas de risque
 
     # Cash reserve
     MIN_CASH_RESERVE_PCT = 10          # Always keep 10% cash
