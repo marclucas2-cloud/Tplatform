@@ -1,28 +1,29 @@
-# SYNTHESE COMPLETE — TRADING PLATFORM V8.5 (LIVE CRYPTO + DASHBOARD XL + ROC)
+# SYNTHESE COMPLETE — TRADING PLATFORM V9.0 (CRO AUDIT COMPLET + CRYPTO ROC + MONITORING)
 ## Portefeuille Quantitatif — 5 classes d'actifs, 16+8 strategies live, ~22h/24h
-### Date : 28 mars 2026 | 2,103 tests | ~85 fichiers test | CRO 9.5/10 APPROUVE
+### Date : 28 mars 2026 | 2,166 tests | ~90 fichiers test | CRO 9/10 APPROUVE
 
 ---
 
 ## 1. RESUME EXECUTIF
 
-| Indicateur | V8.0 | **V8.5 (live crypto + dashboard)** |
+| Indicateur | V8.5 | **V9.0 (CRO audit + crypto ROC)** |
 |-----------|:---:|:---:|
 | Classes d'actifs | 5 | **5** |
-| Strategies live | 16 (IBKR+crypto code) | **8 crypto LIVE Binance + 16 IBKR (paper)** |
-| Tests | 1,978 | **2,103** |
-| Modules core | ~70 | **~80** (+9 ROC modules) |
-| Dashboard | 6 pages basiques | **11 pages (Crypto, Risk, Journal, Tax, Cross...)** |
-| API endpoints | ~15 | **43 endpoints** (main + routes_v2) |
-| Charts Recharts | 0 | **5** (EquityCurve, Drawdown, Distribution, Sharpe, Heatmap) |
-| Binance | config only | **LIVE connecte** (20K EUR, spot+margin+earn) |
-| Alpaca paper | 0 trades | **44 trades, +$422, 68% WR** |
-| ROC optimisations | 0 | **9 modules** (conviction, carry, sniper, correlation...) |
-| SAFE-003 auto-disable | code mort | **branche dans worker** |
-| VIX stress guard | non | **actif** (VIX>30 = -50%, SPY DD>5% = HALT) |
-| CRO score | 9.5/10 | **9.5/10** |
+| Strategies live | 8 crypto + 16 IBKR paper | **8 crypto LIVE + 16 IBKR (worker fixe)** |
+| Tests | 2,103 | **2,166** (+63 nouveaux) |
+| Modules core | ~80 | **~90** (+10 modules crypto ROC/monitoring) |
+| Dashboard | 11 pages | **11 pages** (inchange) |
+| API endpoints | 43 | **43** (inchange) |
+| ROC crypto | 0 | **5 modules** (conviction, borrow monitor, regime, timing, live monitor) |
+| Telegram crypto | 0 | **12 commandes** (code pret, pas active) |
+| Kill switch e2e | 0 tests | **33 tests** (6 triggers, idempotence, sequence) |
+| Data collection | 0 scripts | **2 scripts** (candles 12 symboles + borrow rates + dominance) |
+| Walk-forward crypto | 0 | **Script pret** (8 strats, Binance costs) |
+| Bugs CRO fixes | 0 | **27 fixes** (7 CRIT + 7 HIGH + 7 MED + 3 LOW + 3 worker) |
+| Worker crypto | BROKEN (sys.path) | **FONCTIONNEL** (8 strats, equity $23.7K correcte) |
+| CRO score | 9.5/10 | **9/10** (audit 12 domaines complet) |
 
-**V8.0→V8.5 : Dashboard XL 11 pages + 8 crypto LIVE Binance + 9 ROC optimisations + 44 trades paper analyses. +125 tests.**
+**V8.5→V9.0 : Session crypto ROC (13 taches, 10 modules) + audit CRO 12 domaines (27 fixes) + worker crypto fonctionnel. +63 tests.**
 
 ---
 
@@ -201,7 +202,7 @@ Cout : ~0.02-0.07%/jour BTC, ~0.05-0.24%/jour altcoins. Previsible (vs funding r
 1. Position max 15% | 2. Strategie max 30% | 3. Gross long 80%, short 40%, net 60%
 4. Levier BTC/ETH 2.5x, alt 1.5x, portfolio 1.8x | 5. Borrow rate<0.1%/j, total<50%, cout mensuel<2%
 6. DD daily 5%, weekly 10%, monthly 15%, max 20% | 7. Margin health (reduce@1.5, close@1.3, Binance liquide@1.1)
-8. Cout emprunts (ferme les shorts les plus chers si>2%/mois) | 9. Earn exposure max 30%
+8. Cout emprunts (ferme les shorts les plus chers si>2%/mois) | 9. Earn exposure max 100% (Earn Flexible = redemption instantanee)
 10. Perte position max 8% | 11. Correlation BTC<70% | 12. Reserve cash min 10%
 
 **Kill switch V2 (6 triggers, actions prioritisees)** :
@@ -257,10 +258,12 @@ Le risk manager V2 ferme auto les shorts si cout mensuel > 2% (check #8).
 **Fichiers (30+ nouveaux/reecrits)** :
 - `core/broker/binance_broker.py` — V2 margin borrow/repay/short + Earn subscribe/redeem
 - `core/broker/binance_ws.py` — WebSocket manager
-- `core/crypto/` — data_pipeline, backtest_engine, risk_manager_crypto, allocator_crypto, order_manager, monitoring, **capital_manager**
+- `core/crypto/` — data_pipeline, backtest_engine, risk_manager_crypto, allocator_crypto, order_manager, monitoring, **capital_manager**, **conviction_sizer** (ROC-C02), **borrow_monitor** (ROC-C03), **regime_detector** (ROC-C04), **entry_timing** (ROC-C05), **live_monitor** (MON-001), cash_sweep
+- `core/telegram/` — **crypto_bot.py** (TG-001, 12 commandes, code pret non active)
 - `strategies/crypto/` — btc_eth_dual_momentum, altcoin_relative_strength, btc_mean_reversion, vol_breakout, btc_dominance_v2, borrow_rate_carry, liquidation_momentum, weekend_gap
+- `scripts/` — **collect_crypto_history.py** (HIST-001, spot+futures, tier1+tier2), **collect_crypto_borrow_rates.py** (HIST-002, HMAC, CoinGecko), **wf_crypto_all.py** (WF-001, 8 strats)
 - `config/` — **crypto_wallets**, crypto_limits, crypto_kill_switch, crypto_allocation, crypto_universe, binance_config, binance_security, binance_testnet
-- **139 tests** (7 fichiers)
+- **~200 tests** (12+ fichiers)
 
 ---
 
@@ -509,13 +512,13 @@ Interets Earn = pas imposables tant que non convertis en EUR.
 
 ## 8. TESTS ET QUALITE
 
-| Metrique | V7.3 | V7.6 | **V8.0** |
+| Metrique | V7.6 | V8.0 | **V9.0** |
 |----------|:--:|:--:|:------:|
-| Tests total | 1,561 | 1,700 | **1,978** |
+| Tests total | 1,700 | 1,978 | **2,166** |
 | Echecs | 0 | 0 | **0** |
-| Fichiers test | 58 | 65 | **~75** |
-| Lignes de code | ~106,000 | ~118,000 | **~135,000** |
-| Fichiers Python | 375 | 410 | **~460** |
+| Fichiers test | 65 | ~75 | **~90** |
+| Lignes de code | ~118,000 | ~135,000 | **~160,000** |
+| Fichiers Python | 410 | ~460 | **~490** |
 | CI/CD | GitHub Actions | GitHub Actions |
 | Tests bypass risk | 20 | 20 |
 | Tests VaR portfolio | 19 | **19 + 28 VaR live** |
@@ -561,8 +564,10 @@ Interets Earn = pas imposables tant que non convertis en EUR.
 | **Tests Fuzzing (Hardening)** | — | **28** (prix NaN, broker down, margin call) |
 | **Tests Stress Historique** | — | **9** (COVID, LUNA, SNB, FTX, flash crash) |
 | **Tests Resilience** | — | **5** (thread safety, deadlock, persistence) |
-| Docs | 21 | **22** |
-| Audit CRO | — | **9.5/10 APPROUVE** |
+| **Tests Kill Switch Crypto E2E** | — | — | **33** (6 triggers, idempotence, sequence) |
+| **Tests ROC Crypto** | — | — | **30** (conviction, borrow, regime, timing) |
+| Docs | 21 | 22 | **22** |
+| Audit CRO | — | 9.5/10 | **9/10 (12 domaines, 27 fixes)** |
 
 ---
 
@@ -750,13 +755,17 @@ les criteres fiables sont : max_drawdown, bugs, reconciliation, execution qualit
 | **27 mars soir+** | **V7.6 CRO AUDIT : 2 critiques + 5 hauts + 3 moyens fixes, score 9/10** |
 | **27-28 mars nuit** | **V8.0 SESSION 1 : BacktesterV2 event-driven + anti-lookahead + hardening (174 tests)** |
 | **28 mars matin** | **V8.0 SESSION 2 : WalkForward + MonteCarlo + 16 strategies migrées (104 tests)** |
-| **28 mars** | **CRO 9.5/10 + nettoyage final — repo propre, 1,978 tests, 0 regession** |
+| **28 mars** | **CRO 9.5/10 + nettoyage final — repo propre, 1,978 tests, 0 regression** |
+| **28 mars PM** | **V8.5 : Dashboard XL 11 pages + 8 crypto LIVE + 9 ROC US + 44 trades paper** |
+| **28 mars PM+** | **SESSION CRYPTO ROC : 13 taches, 10 modules, 63 tests (conviction, borrow, regime, timing, monitor, telegram)** |
+| **28 mars PM++** | **FIX WORKER : sys.path, equity Earn ($19.8K invisible), ticker key — cycle crypto FONCTIONNEL** |
+| **28 mars soir** | **AUDIT CRO 12 DOMAINES : 27 fixes (7 CRIT + 7 HIGH + 7 MED + 3 LOW + 3 worker), score 9/10** |
 
 ---
 
 ## 12. VERDICT FINAL
 
-Ce projet a traverse 14 phases en 6 jours :
+Ce projet a traverse 18 phases en 7 jours :
 
 1. **Expansion** (22-26 mars) : de 3 a 34 strategies
 2. **Critique** (27 mars AM) : 9/16 overfittees, purge
@@ -771,29 +780,40 @@ Ce projet a traverse 14 phases en 6 jours :
 11. **BacktesterV2 S1** (27-28 mars nuit) : engine event-driven, anti-lookahead, execution simulator
 12. **Hardening S3** (28 mars nuit) : 28 fuzzing + 9 stress tests + 5 resilience
 13. **BacktesterV2 S2** (28 mars matin) : WF + MC integres + 16 strategies migrees
-14. **CRO Final** (28 mars) : score 9.5/10, repo propre
+14. **CRO 9.5/10** (28 mars) : repo propre, 1978 tests
+15. **Dashboard XL + Crypto LIVE V8.5** (28 mars PM) : 11 pages, 43 endpoints, 8 crypto live, 9 ROC US
+16. **Session Crypto ROC V9.0** (28 mars PM) : 13 taches, 10 modules, 63 tests nouveaux
+17. **Fix Worker Crypto** (28 mars PM) : sys.path, equity Earn, ticker — cycle fonctionnel
+18. **Audit CRO V9.0** (28 mars soir) : 27 fixes (7 CRIT + 7 HIGH + 7 MED + 3 LOW), score 9/10
 
-### AUDIT CRO V8.0 — Score 9.5/10
+### AUDIT CRO V9.0 — Score 9/10 (27 fixes appliques)
 
-| Domaine | V7.2 | **V8.0** | Amelioration cle |
+| Domaine | V8.0 | **V9.0** | Amelioration cle |
 |---------|:----:|:-------:|-----------------|
-| D1 Execution ordres | 8/10 | **9/10** | SL broker-side Binance spot + cancel_all guard |
-| D2 Gestion risque | 9/10 | **10/10** | 12 checks IBKR + 12 checks crypto + cross-portfolio |
-| D3 Integrite donnees | 8/10 | **10/10** | **DataFeed anti-lookahead prouve par 28 tests** |
-| D4 Coherence BT/live | 5/10 | **9/10** | **BacktesterV2 = meme risk manager que live** |
-| D5 Securite | 8/10 | **9.5/10** | _authorized_by sur 3 brokers, testnet default |
-| D6 Moteur backtest | 6/10 | **9.5/10** | **Event-driven, Almgren-Chriss, calendars, WF+MC** |
-| D7 Strategies actives | 8/10 | **9/10** | 16 strats migrées StrategyBase, parameter grids |
-| D8 Pipeline | 7/10 | **8/10** | Order manager V2, capital manager persiste |
-| D9 Monitoring | 8.5/10 | **9/10** | Margin alerts, borrow spike, recon V2 9 checks |
-| D10 Infrastructure | 8.5/10 | **9/10** | Cross-portfolio guard integre worker |
-| D11 Compliance | 8/10 | **8.5/10** | Fiscalite crypto FR documentee (2086 + 3916-bis) |
-| D12 Documentation | 8.5/10 | **9.5/10** | CLAUDE.md + synthese a jour, repo propre |
+| D1 Execution ordres | 9/10 | **9.5/10** | Rate limiter Alpaca, error alerting, emergency close margin SL, SL -5% defaut |
+| D2 Gestion risque | 10/10 | **10/10** | Kill switch idempotent, cooldown 30min, auto-deleverage L2/L3, lock separee risk |
+| D3 Integrite donnees | 10/10 | **10/10** | DST fixe (zoneinfo), empty response guard Binance |
+| D4 Coherence BT/live | 9/10 | **9/10** | ExecutionSimulator seed=42 par defaut |
+| D5 Securite | 9.5/10 | **10/10** | BINANCE_LIVE_CONFIRMED guard, *.key/*.pem gitignore, fractional shorts guard |
+| D6 Moteur backtest | 9.5/10 | **9.5/10** | Inchange |
+| D7 Strategies actives | 9/10 | **9.5/10** | STRAT-004 SL absolu 2xATR, worker SL defaut -5% |
+| D8 Pipeline | 8/10 | **9/10** | trading_paused_until verifie partout, per-strategy timeout 30s, alerting unifie |
+| D9 Monitoring | 9/10 | **9.5/10** | Live monitor JSONL, Telegram bot 12 cmds, auto-close 15:55 |
+| D10 Infrastructure | 9/10 | **9.5/10** | Railway healthcheckPath=/health, crypto recon au demarrage |
+| D11 Compliance | 8.5/10 | **8.5/10** | Inchange |
+| D12 Documentation | 9.5/10 | **9.5/10** | Synthese V9.0 a jour |
+
+**27 fixes CRO appliques :**
+- 7 CRITIQUES : ordres sans SL, retry 429 signature, kill switch _authorized_by, emergency close margin
+- 7 HAUTS : rate limiter Alpaca, PnL kill switch, trading_paused_until, FX margin_used, STRAT-004 SL, timeout
+- 7 MOYENS : fractional shorts, lock separee risk, auto-deleverage, cooldown, alerting unifie, auto-close, recon crypto
+- 3 BAS : seed, empty response, DST
+- 3 WORKER : sys.path, equity Earn, ticker key
 
 **Reserves CRO restantes (non bloquantes) :**
 - D1 : partial fills non geres — faible risque sur lots minimum
-- D4 : sizing BT historique ≠ sizing live futur — a harmoniser apres Gate M1
-- D8 : TradingEngine._generate_signal() = placeholder pour le moment
+- D4 : sizing BT $100K ≠ live $10K — a harmoniser apres Gate M1
+- D10 : SL crypto sont script-side (pas broker-side OCO) — risque si worker crash
 
 ### Prochain pas concret
 
@@ -824,7 +844,7 @@ Ce projet a traverse 14 phases en 6 jours :
 - Donnees reelles : Alpaca API (44 trades), Binance API (balances live)
 - Filtre broker Alpaca/Binance dans le Journal
 
-**9 optimisations ROC (99 tests) :**
+**9 optimisations ROC US (99 tests) :**
 - ROC-001 Cash Sweep Earn (yield sur cash idle)
 - ROC-002 Conviction Sizer (sizing dynamique 0.7x-1.5x)
 - ROC-003 Continuous Gate M1 (14j au lieu de 21j)
@@ -835,7 +855,34 @@ Ce projet a traverse 14 phases en 6 jours :
 - ROC-008 Timezone Allocator (capital par creneau)
 - ROC-009 Progressive Scaler (sizing graduel)
 
-**Corrections critiques :**
+**5 optimisations ROC Crypto (63 tests) :**
+- ROC-C02 CryptoConvictionSizer (5 signaux ponderes, 4 tiers STRONG/NORMAL/WEAK/SKIP)
+- ROC-C03 BorrowRateMonitor (auto-close shorts chers, spike 3x detection, cost tracking)
+- ROC-C04 CryptoRegimeDetector V2 (4 signaux: trend/momentum/vol/breadth, weighted vote)
+- ROC-C05 CryptoEntryTiming (spread curves par session, delay logic, max 6h)
+- MON-001 CryptoLiveMonitor (JSONL snapshots, 4 types alertes, drawdown/margin/borrow/pnl)
+
+**Bot Telegram Crypto (TG-001, code pret, pas active) :**
+- 12 commandes : /status, /positions, /pnl, /risk, /earn, /regime, /borrow, /kill, /alerts, /strats, /sweep, /help
+- Auth par chat_id, rate limit 5/min, /kill double confirmation
+- Alertes auto : INFO/WARNING/CRITICAL avec cooldown
+
+**Data Collection (HIST-001 + HIST-002) :**
+- Candles historiques : 12 symboles, 3 timeframes (1h/4h/1d), spot+futures, tier1 3 ans + tier2 2 ans
+- Borrow rates : 11 assets, HMAC-SHA256, pagination 100j, 2 ans d'historique
+- BTC dominance : CoinGecko free API, proxy market cap
+
+**Walk-Forward Crypto (WF-001) :**
+- Script pret pour validation des 8 strats avec couts Binance France (0.10% + slippage tiered)
+- Tier1 : 6m train / 2m test, Tier2 : 4m train / 1.5m test, Low-freq : bootstrap
+- Verdict : VALIDATED/BORDERLINE/REJECTED, minimum 4/8 pour maintenir portefeuille
+
+**Corrections critiques V9.0 (27 fixes CRO) :**
+- Worker crypto : sys.path (strategies masquees), equity Earn ($19.8K invisible), ticker key
+- Ordres : rate limiter Alpaca, error alerting Telegram, emergency close si SL margin echoue
+- Kill switch : idempotent, cooldown 30min, _authorized_by, methodes BinanceBroker reelles
+- Risk : auto-deleverage L2/L3, lock separee risk, FX margin_used estime, trading_paused_until
+- Securite : BINANCE_LIVE_CONFIRMED guard, DST zoneinfo, shorts fractionnels, *.key gitignore
 - SAFE-003 (LivePerformanceGuard) etait du code mort → branche dans worker
 - VixStressGuard ajoute (VIX>30=-50%, SPY DD>5%=HALT)
 - Trades dashboard : Alpaca API reelle (plus de CSV backtest melanges)
@@ -848,11 +895,12 @@ Ce projet a traverse 14 phases en 6 jours :
 
 ---
 
-*Synthese V8.5 (live crypto + dashboard XL + ROC) generee le 28 mars 2026*
-*8 crypto LIVE + 16 IBKR paper | 2,103 tests | ~85 fichiers test*
-*~150K lignes | ~80 modules | 5 classes d'actifs | 3 brokers*
+*Synthese V9.0 (CRO audit complet + crypto ROC + monitoring) generee le 28 mars 2026*
+*8 crypto LIVE + 16 IBKR paper | 2,166 tests | ~90 fichiers test*
+*~160K lignes | ~90 modules | 5 classes d'actifs | 3 brokers*
 *Dashboard XL : 11 pages, 43 endpoints, 5 charts, donnees reelles*
-*ROC : 9 optimisations, +15-25% Sharpe estime, +$1K-1.5K/an*
+*ROC : 9 US + 5 crypto + monitoring + Telegram bot (12 cmds)*
+*CRO : 27 fixes (7 CRIT + 7 HIGH + 7 MED + 3 LOW), score 9/10*
 *Capital : 20K EUR Binance LIVE + $100K Alpaca paper + $10K IBKR (a venir)*
-*CRO 9.5/10 — CRYPTO GO-LIVE EFFECTIF*
-*"Le capital ne dort plus. Le dashboard montre tout. Les strategies tournent."*
+*Worker crypto FONCTIONNEL : 8 strats, equity $23.7K, 0 risk check failed*
+*"Le risque est borne. Le monitoring veille. Les strategies tournent."*
