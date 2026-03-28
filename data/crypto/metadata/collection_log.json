@@ -1,0 +1,204 @@
+[
+  {
+    "timestamp": "2026-03-28T23:12:16.247949+00:00",
+    "script": "collect_crypto_borrow_rates.py",
+    "borrow_rates": [
+      {
+        "asset": "BTC",
+        "status": "OK",
+        "rows": 146,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 20:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "ETH",
+        "status": "OK",
+        "rows": 309,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 23:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "SOL",
+        "status": "OK",
+        "rows": 200,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 15:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "BNB",
+        "status": "OK",
+        "rows": 182,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 17:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "XRP",
+        "status": "OK",
+        "rows": 303,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 18:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "DOGE",
+        "status": "OK",
+        "rows": 377,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 23:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "AVAX",
+        "status": "OK",
+        "rows": 213,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 16:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "LINK",
+        "status": "OK",
+        "rows": 291,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 10:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "ADA",
+        "status": "OK",
+        "rows": 360,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 21:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "DOT",
+        "status": "OK",
+        "rows": 191,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 13:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "USDT",
+        "status": "NO_DATA",
+        "rows": 0,
+        "issues": []
+      }
+    ],
+    "btc_dominance": {
+      "status": "ERROR",
+      "rows": 0,
+      "error": "CoinGecko API 401: {\"error\":{\"status\":{\"timestamp\":\"2026-03-28T23:12:16.187+00:00\",\"error_code\":10012,\"error_message\":\"Your request exceeds the allowed time range. Public API users are limited to querying historical dat"
+    }
+  },
+  {
+    "timestamp": "2026-03-28T23:14:27.134213+00:00",
+    "script": "collect_crypto_borrow_rates.py",
+    "borrow_rates": [
+      {
+        "asset": "BTC",
+        "status": "OK",
+        "rows": 146,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 20:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "ETH",
+        "status": "OK",
+        "rows": 309,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 23:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "SOL",
+        "status": "OK",
+        "rows": 200,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 15:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "BNB",
+        "status": "OK",
+        "rows": 182,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 17:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "XRP",
+        "status": "OK",
+        "rows": 303,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 18:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "DOGE",
+        "status": "OK",
+        "rows": 377,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 23:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "AVAX",
+        "status": "OK",
+        "rows": 213,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 16:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "LINK",
+        "status": "OK",
+        "rows": 291,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 10:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "ADA",
+        "status": "OK",
+        "rows": 360,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 21:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "DOT",
+        "status": "OK",
+        "rows": 191,
+        "start": "2026-02-26 00:00:00+00:00",
+        "end": "2026-03-28 13:00:00+00:00",
+        "issues": []
+      },
+      {
+        "asset": "USDT",
+        "status": "NO_DATA",
+        "rows": 0,
+        "issues": []
+      }
+    ],
+    "btc_dominance": null
+  },
+  {
+    "timestamp": "2026-03-28T23:14:39.198008+00:00",
+    "script": "collect_crypto_borrow_rates.py",
+    "borrow_rates": [],
+    "btc_dominance": {
+      "status": "OK",
+      "rows": 366,
+      "start": "2025-03-29 00:00:00+00:00",
+      "end": "2026-03-28 23:14:01+00:00",
+      "file": "C:\\Users\\barqu\\trading-platform\\data\\crypto\\dominance\\btc_dominance.parquet"
+    }
+  }
+]

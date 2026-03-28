@@ -79,9 +79,46 @@ try:
 except Exception as e:
     logger.warning(f"Failed to load STRAT-008 (weekend_gap): {e}")
 
-logger.info(f"Loaded {len(CRYPTO_STRATEGIES)}/8 crypto strategies")
+try:
+    from strategies.crypto.funding_rate_divergence import (
+        STRATEGY_CONFIG as STRAT_009_CONFIG,
+        signal_fn as strat_009_signal,
+    )
+    CRYPTO_STRATEGIES["STRAT-009"] = {"config": STRAT_009_CONFIG, "signal_fn": strat_009_signal}
+except Exception as e:
+    logger.warning(f"Failed to load STRAT-009 (funding_rate_divergence): {e}")
 
-# Total allocation: 20+15+12+10+10+13+10+10 = 100%
+try:
+    from strategies.crypto.stablecoin_supply_flow import (
+        STRATEGY_CONFIG as STRAT_010_CONFIG,
+        signal_fn as strat_010_signal,
+    )
+    CRYPTO_STRATEGIES["STRAT-010"] = {"config": STRAT_010_CONFIG, "signal_fn": strat_010_signal}
+except Exception as e:
+    logger.warning(f"Failed to load STRAT-010 (stablecoin_supply_flow): {e}")
+
+try:
+    from strategies.crypto.eth_btc_ratio_breakout import (
+        STRATEGY_CONFIG as STRAT_011_CONFIG,
+        signal_fn as strat_011_signal,
+    )
+    CRYPTO_STRATEGIES["STRAT-011"] = {"config": STRAT_011_CONFIG, "signal_fn": strat_011_signal}
+except Exception as e:
+    logger.warning(f"Failed to load STRAT-011 (eth_btc_ratio_breakout): {e}")
+
+try:
+    from strategies.crypto.monthly_turn_of_month import (
+        STRATEGY_CONFIG as STRAT_012_CONFIG,
+        signal_fn as strat_012_signal,
+    )
+    CRYPTO_STRATEGIES["STRAT-012"] = {"config": STRAT_012_CONFIG, "signal_fn": strat_012_signal}
+except Exception as e:
+    logger.warning(f"Failed to load STRAT-012 (monthly_turn_of_month): {e}")
+
+logger.info(f"Loaded {len(CRYPTO_STRATEGIES)}/12 crypto strategies")
+
+# Total allocation: 20+15+12+10+10+13+10+10 + 8+7+6+5 = 126%
+# New strategies draw from expanded capital or require rebalancing
 TOTAL_ALLOCATION = sum(
     s["config"]["allocation_pct"] for s in CRYPTO_STRATEGIES.values()
 ) if CRYPTO_STRATEGIES else 0
