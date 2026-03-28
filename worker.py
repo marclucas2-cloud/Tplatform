@@ -419,6 +419,33 @@ def run_live_risk_cycle():
         if delev.get("level", 0) > 0:
             logger.warning(f"DELEVERAGING LEVEL {delev['level']}: {delev['message']}")
 
+        # --- SAFE-003 : LivePerformanceGuard (auto-disable strats) ---
+        try:
+            from core.live_performance_guard import LivePerformanceGuard, DISABLE, ALERT
+            guard = LivePerformanceGuard()
+            state = json.loads((ROOT / "paper_portfolio_state.json").read_text(encoding="utf-8")) if (ROOT / "paper_portfolio_state.json").exists() else {}
+            pnl_log = state.get("strategy_pnl_log", {})
+            for strat_id, entries in pnl_log.items():
+                trades = [{"pnl": e.get("pnl", 0)} for e in entries]
+                if len(trades) >= 10:
+                    action, reason = guard.evaluate(strat_id, trades)
+                    if action == DISABLE:
+                        logger.critical(f"SAFE-003 AUTO-DISABLE: {strat_id} — {reason}")
+                    elif action == ALERT:
+                        logger.warning(f"SAFE-003 ALERT: {strat_id} — {reason}")
+        except Exception as e:
+            logger.debug(f"LivePerformanceGuard skip: {e}")
+
+        # --- VIX/SPY stress guard (sizing reduction) ---
+        try:
+            from core.vix_stress_guard import VixStressGuard
+            vix_guard = VixStressGuard()
+            stress = vix_guard.check()
+            if stress["level"] != "NORMAL":
+                logger.warning(f"VIX STRESS: {stress['level']} — sizing {stress['sizing_factor']:.0%} — {stress['reason']}")
+        except Exception as e:
+            logger.debug(f"VixStressGuard skip: {e}")
+
         logger.info(f"Live risk cycle OK — equity=${equity:,.0f}, daily_pnl={daily_pnl_pct:.2%}")
 
     except Exception as e:
