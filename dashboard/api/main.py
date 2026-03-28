@@ -366,33 +366,27 @@ def get_regime():
 # ── Trades ───────────────────────────────────────────────────────────────────
 
 @app.get("/api/trades")
-def get_trades(strategy: Optional[str] = None, limit: int = 50):
-    """Historique des trades."""
-    import pandas as pd
-    output_dir = ROOT / "intraday-backtesterV2" / "output"
-    all_trades = []
+def get_trades(strategy: Optional[str] = None, limit: int = 50, source: str = "real"):
+    """Historique des trades.
 
-    for csv_file in output_dir.glob("trades_*.csv"):
-        try:
-            df = pd.read_csv(csv_file)
-            if df.empty:
-                continue
-            df["source_file"] = csv_file.stem
-            all_trades.append(df)
-        except Exception:
-            continue
+    source: "real" (Alpaca API + journals), "backtest" (simulations CSV), "all"
+    """
+    try:
+        # Deleguer a routes_v2 qui a le helper _load_all_trades avec cache Alpaca
+        from routes_v2 import _load_all_trades
+        all_trades = _load_all_trades(source=source)
+    except ImportError:
+        all_trades = []
 
-    if not all_trades:
-        return {"trades": [], "count": 0}
-
-    combined = pd.concat(all_trades, ignore_index=True)
-    if "date" in combined.columns:
-        combined = combined.sort_values("date", ascending=False)
     if strategy:
-        combined = combined[combined.get("source_file", "").str.contains(strategy, case=False, na=False)]
+        all_trades = [
+            t for t in all_trades
+            if strategy.lower() in str(
+                t.get("strategy", t.get("symbol", t.get("source", "")))
+            ).lower()
+        ]
 
-    trades = combined.head(limit).to_dict(orient="records")
-    return {"trades": trades, "count": len(combined)}
+    return {"trades": all_trades[:limit], "count": len(all_trades), "source": source}
 
 
 # ── System Health ────────────────────────────────────────────────────────────
@@ -792,11 +786,21 @@ def get_portfolio_var():
     }
 
 
+# ── Routes V2 (risk, analytics, tax, cross-portfolio, system) ────────────────
+
+try:
+    from routes_v2 import router as v2_router
+    app.include_router(v2_router)
+    logger.info("Routes V2 loaded successfully")
+except Exception as e:
+    logger.error(f"Failed to load routes_v2: {e}")
+
+
 # ── Startup ──────────────────────────────────────────────────────────────────
 
 @app.on_event("startup")
 async def startup():
-    logger.info("Trading Dashboard API started — Multi-Market V5")
+    logger.info("Trading Dashboard API started — Multi-Market V5 + Routes V2")
     logger.info(f"Root: {ROOT}")
 
 

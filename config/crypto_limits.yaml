@@ -1,0 +1,58 @@
+# Crypto risk limits — Binance France Margin + Spot + Earn (NO futures perp)
+
+mode: LIVE_CRYPTO_MARGIN
+capital: 15000
+
+position_limits:
+  max_position_pct: 15             # Max 15% per position ($2,250)
+  max_strategy_pct: 25             # Max 25% per strategy ($3,750)
+  max_gross_long_pct: 80           # Max 80% gross long exposure
+  max_gross_short_pct: 40          # Max 40% gross short exposure (margin shorts)
+  max_net_pct: 60                  # Max 60% net directional exposure
+  max_positions: 15                # Total concurrent positions
+
+leverage_limits:
+  btc_eth: 2.5                     # BTC/ETH: max 2.5x isolated
+  altcoin: 1.5                     # Altcoins: max 1.5x isolated
+  portfolio_weighted_max: 1.8      # Portfolio-weighted average max 1.8x
+  margin_mode: "ISOLATED"          # NEVER CROSS — hard rule
+
+borrow_limits:
+  max_borrow_rate_daily_pct: 0.1   # Max 0.1%/day borrow rate accepted
+  max_total_borrowed_pct: 50       # Max 50% of capital borrowed
+  max_monthly_borrow_cost_pct: 2.0 # Max 2% monthly cost on borrows
+  rate_check_frequency: "hourly"   # Check borrow rates every hour
+
+circuit_breakers:
+  daily_max_loss_pct: 5.0          # -5% daily -> kill switch
+  weekly_max_loss_pct: 10.0        # -10% weekly -> kill switch
+  monthly_max_loss_pct: 15.0       # -15% monthly -> kill switch
+  max_drawdown_pct: 20.0           # -20% from peak -> kill switch
+
+margin_rules:
+  min_margin_level: 1.5            # Minimum margin level (assets / liabilities)
+  warning_margin_level: 1.8        # Warning alert at this level
+  min_free_collateral_pct: 30      # Always keep 30% collateral unborrowed
+  margin_type: "ISOLATED"          # NEVER CROSS — enforced by reconciliation
+  auto_repay_on_close: true        # Auto-repay borrow when closing margin position
+
+deleveraging:
+  level_1:
+    drawdown_pct: 3
+    sizing_multiplier: 0.7
+  level_2:
+    drawdown_pct: 7
+    sizing_multiplier: 0.5
+  level_3:
+    drawdown_pct: 12
+    sizing_multiplier: 0.25
+  level_4:
+    drawdown_pct: 18
+    sizing_multiplier: 0.1
+
+crypto_specific:
+  max_unrealized_loss_per_position_pct: 8
+  max_btc_correlated_pct: 70       # Max 70% positions correlated > 0.7 with BTC
+  min_liquidation_margin_buffer: 1.5  # Min 1.5x distance from liquidation
+  earn_max_single_asset_pct: 50    # Max 50% of earn in one asset
+  stablecoin_reserve_min_pct: 20   # Always keep 20% in stablecoins

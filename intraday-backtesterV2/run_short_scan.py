@@ -19,7 +19,7 @@ from strategies.overnight_short_bear import OvernightShortBearStrategy
 from strategies.defensive_rotation_long import DefensiveRotationLongStrategy
 from strategies.squeeze_fade import SqueezeFadeStrategy
 from strategies.eod_sell_pressure import EODSellPressureStrategy
-from strategies.crypto_bear_cascade import CryptoBearCascadeStrategy
+# ARCHIVED: from strategies.crypto_bear_cascade import CryptoBearCascadeStrategy
 
 STRATEGIES = [
     ("bear_fade", BearMorningFadeStrategy),
@@ -31,7 +31,7 @@ STRATEGIES = [
     ("defensive_long", DefensiveRotationLongStrategy),
     ("squeeze_fade", SqueezeFadeStrategy),
     ("eod_sell", EODSellPressureStrategy),
-    ("crypto_bear", CryptoBearCascadeStrategy),
+    # ("crypto_bear", CryptoBearCascadeStrategy),  # ARCHIVED (WF-rejected)
 ]
 
 def get_tickers():

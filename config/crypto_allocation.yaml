@@ -1,0 +1,117 @@
+# Crypto allocation V2 — Binance France Margin + Spot + Earn (NO futures perp)
+# Regime-based allocation across 8 strategies with wallet distribution
+
+crypto_allocation:
+  version: 2
+  total_capital: 15000
+
+  # --- Wallet Distribution ---
+  wallets:
+    spot: 6000                     # Spot trading wallet
+    margin: 4000                   # Margin (isolated) wallet
+    earn: 3000                     # Earn flexible (yield)
+    cash: 2000                     # Reserve USDT
+
+  # --- 8 Strategies with Regime Allocations ---
+  # Weights are % of DEPLOYED capital (excludes cash reserve)
+  # Deployed = spot + margin = $10K active, earn = $3K passive
+
+  regime_allocations:
+    BULL:                          # BTC > EMA50 AND positive momentum
+      btc_eth_trend:        0.25   # Long BTC/ETH trend following (spot)
+      margin_mean_reversion: 0.10  # Short-term mean reversion (margin)
+      altcoin_momentum:     0.20   # Top altcoin momentum (spot)
+      btc_dominance:        0.10   # BTC dominance rotation (spot)
+      spot_dca_accumulate:  0.10   # DCA accumulate during dips (spot)
+      margin_short_hedge:   0.05   # Hedge shorts in margin (margin)
+      earn_yield:           0.15   # Earn yield on idle USDT/BTC (earn)
+      vol_regime:           0.05   # Volatility regime trades (spot)
+
+    BEAR:                          # BTC < EMA50 AND negative momentum
+      btc_eth_trend:        0.10   # Reduced long trend (spot)
+      margin_mean_reversion: 0.20  # Increased mean reversion shorts (margin)
+      altcoin_momentum:     0.05   # Minimal altcoin exposure (spot)
+      btc_dominance:        0.10   # BTC dominance rotation (spot)
+      spot_dca_accumulate:  0.15   # Accumulate during bear (spot)
+      margin_short_hedge:   0.15   # Increased short hedge (margin)
+      earn_yield:           0.20   # More capital in earn (earn)
+      vol_regime:           0.05   # Vol regime trades (spot)
+
+    CHOP:                          # Range, no clear direction
+      btc_eth_trend:        0.10   # Minimal trend (spot)
+      margin_mean_reversion: 0.20  # Mean reversion works in chop (margin)
+      altcoin_momentum:     0.10   # Reduced momentum (spot)
+      btc_dominance:        0.10   # Dominance rotation (spot)
+      spot_dca_accumulate:  0.10   # Steady DCA (spot)
+      margin_short_hedge:   0.10   # Balanced hedging (margin)
+      earn_yield:           0.25   # Maximum earn in choppy market (earn)
+      vol_regime:           0.05   # Vol regime (spot)
+
+  # --- Strategy Wallet Mapping ---
+  strategy_wallet:
+    btc_eth_trend: "spot"
+    margin_mean_reversion: "margin"
+    altcoin_momentum: "spot"
+    btc_dominance: "spot"
+    spot_dca_accumulate: "spot"
+    margin_short_hedge: "margin"
+    earn_yield: "earn"
+    vol_regime: "spot"
+
+  # --- Transition Speed ---
+  transition_speed: 0.10           # Max 10%/day allocation change (anti-whipsaw)
+
+  # --- Soft Launch Phases ---
+  phases:
+    week_1:
+      capital: 10000               # $10K deployed
+      strategies:
+        - "btc_eth_trend"
+        - "earn_yield"
+        - "spot_dca_accumulate"
+      kelly_fraction: 0.125        # 1/8 Kelly
+      max_leverage: 1.0            # No leverage week 1
+      earn_type: "FLEXIBLE"
+      margin_enabled: false        # No margin trading week 1
+
+    week_2:
+      capital: 12500               # $12.5K deployed
+      strategies:
+        - "btc_eth_trend"
+        - "earn_yield"
+        - "spot_dca_accumulate"
+        - "altcoin_momentum"
+        - "margin_mean_reversion"
+      kelly_fraction: 0.25         # 1/4 Kelly
+      max_leverage: 1.5            # Light leverage
+      earn_type: "FLEXIBLE"
+      margin_enabled: true         # Margin enabled with 1.5x max
+
+    week_3_plus:
+      capital: 15000               # Full $15K
+      strategies: "all_validated"
+      kelly_fraction: 0.25         # 1/4 Kelly
+      max_leverage: 2.5            # Full leverage per limits
+      earn_type: "FLEXIBLE"
+      margin_enabled: true
+
+  # --- Scaling Gates ---
+  gates:
+    week_1_to_2:
+      minimum_trades: 15
+      minimum_days: 7
+      min_sharpe: 0.0
+      max_dd_pct: 5
+      max_kill_switch_activations: 0
+      margin_level_avg: 2.0        # Average margin level > 2.0
+      borrow_cost_within_budget: true
+
+    week_2_to_3:
+      minimum_trades: 30
+      minimum_days: 14
+      min_sharpe: 0.5
+      max_dd_pct: 10
+      max_kill_switch_activations: 1
+      margin_level_avg: 1.8
+      all_strategies_profitable: false  # At least 60% profitable
+      min_profitable_pct: 60

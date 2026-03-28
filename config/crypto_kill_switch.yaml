@@ -1,0 +1,142 @@
+# Crypto kill switch V2 — Binance France Margin + Spot + Earn (NO futures perp)
+# 6 triggers, prioritized action sequence
+
+crypto_kill_switch:
+  version: 2
+
+  # --- 6 Triggers ---
+
+  triggers:
+    daily_loss:
+      threshold_pct: 5.0           # -5% daily equity -> KILL
+      action: "full_kill"
+      severity: "CRITICAL"
+
+    hourly_loss:
+      threshold_pct: 3.0           # -3% hourly equity -> PAUSE + close shorts
+      action: "pause_and_reduce"
+      severity: "CRITICAL"
+
+    max_drawdown:
+      threshold_pct: 20.0          # -20% from peak -> FULL KILL
+      action: "full_kill"
+      severity: "CRITICAL"
+
+    api_down:
+      threshold_minutes: 10        # Binance API down > 10 min -> PAUSE
+      action: "pause_and_reduce"
+      severity: "WARNING"
+      escalate_to_kill_minutes: 30 # Escalate to full kill after 30 min
+
+    margin_level_critical:
+      threshold: 1.2               # Margin level < 1.2 -> EMERGENCY
+      action: "emergency_margin"
+      severity: "CRITICAL"
+      description: "Near Binance liquidation threshold"
+
+    borrow_rate_spike:
+      multiplier: 3.0              # Rate jumps 3x in 1 hour -> close margin positions
+      window_minutes: 60
+      action: "close_margin"
+      severity: "WARNING"
+
+  # --- Prioritized Actions ---
+  # Execute in this exact order for maximum capital protection
+
+  action_sequences:
+    full_kill:
+      priority: 1
+      steps:
+        - action: "close_shorts"
+          description: "Close all margin short positions first (highest risk)"
+          timeout_seconds: 30
+        - action: "cancel_orders"
+          description: "Cancel all open orders (spot + margin)"
+          timeout_seconds: 10
+        - action: "close_longs"
+          description: "Close all long positions (spot + margin)"
+          timeout_seconds: 60
+        - action: "repay_borrows"
+          description: "Repay all outstanding borrows"
+          timeout_seconds: 30
+        - action: "redeem_earn"
+          description: "Redeem all flexible earn positions"
+          timeout_seconds: 120
+        - action: "alert_telegram"
+          description: "Send critical alert via Telegram"
+          timeout_seconds: 5
+        - action: "convert_to_usdt"
+          description: "Convert remaining assets to USDT"
+          timeout_seconds: 60
+        - action: "set_state_KILLED"
+          description: "Set system state to KILLED, require manual restart"
+
+    pause_and_reduce:
+      priority: 2
+      steps:
+        - action: "close_shorts"
+          description: "Close margin shorts immediately"
+          timeout_seconds: 30
+        - action: "cancel_orders"
+          description: "Cancel pending orders"
+          timeout_seconds: 10
+        - action: "alert_telegram"
+          description: "Send warning alert"
+          timeout_seconds: 5
+        - action: "set_state_PAUSED"
+          description: "Pause for 1 hour, then re-evaluate"
+          pause_duration_minutes: 60
+
+    emergency_margin:
+      priority: 0                  # Highest priority
+      steps:
+        - action: "close_shorts"
+          description: "Close all shorts to free margin"
+          timeout_seconds: 15
+        - action: "cancel_orders"
+          description: "Cancel all orders"
+          timeout_seconds: 5
+        - action: "repay_borrows"
+          description: "Emergency repay all borrows"
+          timeout_seconds: 15
+        - action: "transfer_to_margin"
+          description: "Transfer spot USDT to margin as collateral"
+          timeout_seconds: 10
+        - action: "redeem_earn"
+          description: "Emergency redeem earn for collateral"
+          timeout_seconds: 120
+        - action: "alert_telegram"
+          description: "CRITICAL margin alert"
+          timeout_seconds: 5
+
+    close_margin:
+      priority: 3
+      steps:
+        - action: "close_shorts"
+          description: "Close margin shorts due to rate spike"
+          timeout_seconds: 30
+        - action: "repay_borrows"
+          description: "Repay borrows to stop interest accrual"
+          timeout_seconds: 30
+        - action: "alert_telegram"
+          description: "Borrow rate spike alert"
+          timeout_seconds: 5
+
+  # --- Recovery ---
+  recovery:
+    auto_restart: false            # NEVER auto restart after kill
+    manual_reset_required: true
+    cooldown_minutes: 60           # Minimum 1h before any restart
+    post_kill_checks:
+      - "all_borrows_repaid"
+      - "margin_level_above_2.0"
+      - "no_open_orders"
+      - "api_healthy"
+
+  # --- Telegram ---
+  telegram:
+    enabled: true
+    critical_prefix: "CRYPTO KILL SWITCH"
+    warning_prefix: "CRYPTO WARNING"
+    include_balances: true         # Include wallet balances in alert
+    include_positions: true        # Include open positions summary

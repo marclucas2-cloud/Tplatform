@@ -45,6 +45,9 @@ logs/
 *.swp
 *.code-workspace
 
+# === Backups (archives quotidiennes) ===
+backup/
+
 # === Resultats de backtest (volumineux) ===
 results/
 _bmad-output/

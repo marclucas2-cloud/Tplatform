@@ -1,0 +1,93 @@
+# Crypto wallets — Binance France (Margin + Spot + Earn, NO futures perp)
+# Capital $15K split across 4 wallets with strict rules
+
+wallets:
+  total_capital: 15000
+
+  spot:
+    balance: 6000
+    description: "Trading spot (BUY/SELL direct)"
+    min_balance: 500               # Never empty the spot wallet
+    allowed_operations:
+      - "buy_spot"
+      - "sell_spot"
+      - "transfer_to_margin"
+      - "transfer_to_earn"
+
+  margin:
+    balance: 4000
+    description: "Margin trading ISOLATED only (short + leverage)"
+    margin_mode: "ISOLATED"        # NEVER CROSS — hard rule
+    max_borrow_ratio: 3.0          # Max 3x collateral borrowed
+    allowed_operations:
+      - "margin_buy"
+      - "margin_sell"
+      - "margin_borrow"
+      - "margin_repay"
+      - "transfer_from_spot"
+      - "transfer_to_spot"
+
+  earn_flexible:
+    balance: 3000
+    description: "Binance Earn flexible (retirable < 1 min)"
+    product_type: "FLEXIBLE"       # Phase 1: FLEXIBLE only
+    redemption_time: "instant"     # < 1 minute withdrawal
+    allowed_assets:
+      - "USDT"
+      - "USDC"
+      - "BTC"
+      - "ETH"
+    allowed_operations:
+      - "subscribe_earn"
+      - "redeem_earn"
+
+  cash:
+    balance: 2000
+    description: "Reserve cash USDT — emergency buffer"
+    min_pct: 13.3                  # 2K / 15K = 13.3%, floor 10%
+    allowed_operations:
+      - "emergency_deploy"         # Only in drawdown recovery
+
+# Transfer rules
+transfers:
+  spot_to_margin:
+    fee: 0                         # Free internal transfer
+    delay_seconds: 0
+    requires_check: true           # Must pass risk check before transfer
+
+  margin_to_spot:
+    fee: 0
+    delay_seconds: 0
+    requires_repay_first: true     # Must repay all borrows before withdrawing collateral
+
+  spot_to_earn:
+    fee: 0
+    delay_seconds: 0
+    max_pct_of_spot: 50            # Never move more than 50% of spot to earn at once
+
+  earn_to_spot:
+    fee: 0
+    delay_seconds: 60              # Flexible = < 1 min redemption
+    auto_redeem_on_kill_switch: true
+
+  cash_deploy:
+    requires_authorization: true   # Manual or kill-switch recovery only
+    min_remaining_cash_pct: 10     # Always keep at least 10% total as cash
+
+# Rebalancing rules
+rebalancing:
+  frequency: "daily"
+  target_ratios:
+    spot: 0.40                     # 40% in spot
+    margin: 0.267                  # 26.7% in margin
+    earn: 0.20                     # 20% in earn
+    cash: 0.133                    # 13.3% cash reserve
+  max_drift_pct: 10                # Rebalance if drift > 10% from target
+  min_transfer: 100                # Minimum $100 per transfer (avoid dust)
+
+# Phase 1 restrictions
+phase_1:
+  earn_type: "FLEXIBLE"            # No locked earn in phase 1
+  margin_mode: "ISOLATED"          # Isolated only, no cross
+  min_cash_pct: 20                 # Keep 20% minimum in cash during phase 1
+  max_margin_utilization_pct: 60   # Don't use more than 60% of margin wallet

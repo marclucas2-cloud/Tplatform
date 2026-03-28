@@ -214,10 +214,15 @@ class IBKRBroker(BaseBroker):
                 f"Ordre REFUSE pour {symbol}: create_position() sans _authorized_by."
             )
 
-        # GUARD paper
+        # GUARD live — pipeline authorization required
         if not self._paper:
-            logger.critical("ABORT: IBKR LIVE trading bloque.")
-            raise BrokerError("Trading LIVE bloque. Settez IBKR_PAPER=true.")
+            if not _authorized_by:
+                logger.critical("ABORT: IBKR LIVE order without _authorized_by. Rejected.")
+                raise BrokerError(
+                    "IBKR LIVE trading requires _authorized_by parameter. "
+                    "Orders must come through the authorized pipeline."
+                )
+            logger.info(f"IBKR LIVE order authorized by: {_authorized_by}")
 
         self._ensure_connected()
         from ib_insync import Stock, MarketOrder, StopOrder, LimitOrder

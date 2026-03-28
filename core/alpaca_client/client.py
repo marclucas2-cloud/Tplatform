@@ -377,6 +377,7 @@ class AlpacaClient:
             raise AlpacaAPIError("alpaca-py non installe — pip install alpaca-py")
 
         side = OrderSide.BUY if direction.upper() == "BUY" else OrderSide.SELL
+        notional_orig = notional  # sauvegarde pour logs conversion
 
         # Bracket order si stop_loss ou take_profit fourni
         has_bracket = stop_loss is not None or take_profit is not None
@@ -391,15 +392,45 @@ class AlpacaClient:
             tp_request = TakeProfitRequest(limit_price=round(take_profit, 2))
 
         # Bracket orders necessitent qty (pas notional)
+        # FIX CRO H-1 : convertir notional → qty au lieu de supprimer le bracket
         if has_bracket and notional and not qty:
-            # On ne peut pas faire de bracket avec notional — fallback sans bracket
-            logger.warning(
-                f"  Bracket non supporte avec notional pour {symbol}. "
-                f"Ordre simple sans SL/TP."
-            )
-            order_class = None
-            sl_request = None
-            tp_request = None
+            try:
+                data_client = self._get_data_client()
+                from alpaca.data.requests import StockLatestQuoteRequest
+                quote = data_client.get_stock_latest_quote(
+                    StockLatestQuoteRequest(symbol_or_symbols=symbol)
+                )
+                price = float(quote[symbol].ask_price or quote[symbol].bid_price or 0)
+                if price > 0:
+                    qty = int(notional / price)
+                    notional = None  # switch to qty mode
+                    order_class = OrderClass.BRACKET if qty > 0 else None
+                    if qty < 1:
+                        logger.warning(
+                            f"  Notional ${notional_orig:.2f} trop petit pour {symbol} "
+                            f"@ ${price:.2f} — ordre annule."
+                        )
+                        return {"status": "cancelled", "reason": "qty < 1 after notional conversion"}
+                    logger.info(
+                        f"  Notional→qty conversion: {symbol} ${notional_orig:.2f} → "
+                        f"{qty} shares @ ${price:.2f} (bracket preserved)"
+                    )
+                else:
+                    # If we can't set up bracket protection, REFUSE the order entirely
+                    # A position without SL is unacceptable
+                    logger.critical(
+                        f"REFUSING order for {symbol}: cannot create bracket "
+                        f"(price fetch returned 0) — position without SL is unacceptable"
+                    )
+                    return None
+            except Exception as e:
+                # If we can't set up bracket protection, REFUSE the order entirely
+                # A position without SL is unacceptable
+                logger.critical(
+                    f"REFUSING order for {symbol}: cannot create bracket "
+                    f"(price fetch failed: {e}) — position without SL is unacceptable"
+                )
+                return None
 
         if notional and not order_class:
             request = MarketOrderRequest(

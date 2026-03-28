@@ -1,0 +1,18 @@
+# Kill switch thresholds calibrated per strategy type
+# Portfolio-level thresholds override individual strategy thresholds
+
+strategy_thresholds:
+  fx_swing:
+    strategies: [fx_eurusd_trend, fx_eurgbp_mr, fx_eurjpy_carry, fx_audjpy_carry, fx_gbpusd_trend]
+    per_strategy_max_loss_pct: 3.0    # -$300 per strategy (200 pips = $250 on $12K notional)
+  eu_intraday:
+    strategies: [eu_gap_open]
+    per_strategy_max_loss_pct: 1.5    # -$150 per strategy (intraday, should be tighter)
+  futures_micro:
+    strategies: [brent_lag_mcl, mes_trend]
+    per_strategy_max_loss_pct: 2.5    # -$250 per strategy
+
+portfolio_thresholds:
+  daily_max_loss_pct: 4.0             # -$400/day -> close all
+  weekly_max_loss_pct: 5.0            # -$500/week -> close all (= gate M1 abort)
+  hourly_max_loss_pct: 2.5            # -$250/hour -> pause 1h

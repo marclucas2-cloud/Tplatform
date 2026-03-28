@@ -20,7 +20,7 @@ buckets:
   us_daily:
     target: 0.07
     broker: alpaca
-    strategies: [momentum_etf, pairs_mu_amat, vrp_regime]
+    strategies: [momentum_etf, pairs_mu_amat, vrp_regime]  # MONITORING-ONLY, 0% live alloc
   eu_intraday:
     target: 0.15
     broker: ibkr

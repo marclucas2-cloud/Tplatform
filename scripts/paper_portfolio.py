@@ -8,9 +8,10 @@ Respecte le pipeline multi-agents :
   3. MonitoringManager : tracking vs benchmark SPY, alpha, P&L consolide
 
 Strategies actives :
-  - Momentum Rotation 25 ETFs (mensuel, ROC 3m, crash filter)
-  - Pairs Trading MU/AMAT (daily, z-score cointegre)
-  - VRP Rotation SVXY/SPY/TLT (mensuel, regime de volatilite)
+  - Day-of-Week Seasonal, Corr Regime Hedge, VIX Short, Failed Rally Short
+  - EOD Sell V2, High-Beta Short, Late Day Mean Reversion
+  Monitoring-only (0% live) :
+  - Momentum 25 ETFs, Pairs MU/AMAT, VRP SVXY/SPY/TLT
 
 Usage :
     python scripts/paper_portfolio.py              # execution quotidienne
@@ -24,7 +25,7 @@ import argparse
 import json
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -76,11 +77,35 @@ NYSE_EARLY_CLOSE_2026 = {
     "2026-12-24",  # Veille de Noel
 }
 
+# EU market holidays 2026 (Euronext + XETRA combined)
+EU_HOLIDAYS_2026 = {
+    date(2026, 1, 1),    # New Year's Day
+    date(2026, 4, 3),    # Good Friday
+    date(2026, 4, 6),    # Easter Monday
+    date(2026, 5, 1),    # Labour Day
+    date(2026, 12, 24),  # Christmas Eve (early close → treat as holiday)
+    date(2026, 12, 25),  # Christmas Day
+    date(2026, 12, 31),  # New Year's Eve (early close → treat as holiday)
+}
+
+def is_eu_market_open(now_cet=None):
+    """Check if European markets are open (Euronext/XETRA hours)."""
+    import zoneinfo
+    if now_cet is None:
+        now_cet = datetime.now(zoneinfo.ZoneInfo("Europe/Paris"))
+    if now_cet.weekday() >= 5:  # Saturday/Sunday
+        return False
+    if now_cet.date() in EU_HOLIDAYS_2026:
+        return False
+    market_open = now_cet.replace(hour=9, minute=0, second=0)
+    market_close = now_cet.replace(hour=17, minute=30, second=0)
+    return market_open <= now_cet <= market_close
+
 # Seuil PDT (Pattern Day Trader) : equity minimum pour intraday
 PDT_EQUITY_MINIMUM = 25_000.0
 
 STRATEGIES = {
-    # === Daily / Monthly (existantes) ===
+    # === Daily / Monthly — MONITORING-ONLY (0% live, < 30 trades) ===
     "momentum_25etf": {
         "name": "Momentum 25 ETFs",
         "sharpe": 0.88,           # backtest valide
@@ -99,20 +124,7 @@ STRATEGIES = {
         "frequency": "monthly",
         "multi_asset": False,
     },
-    # === Intraday (walk-forward validees 2026-03-24) ===
-    # === Intraday (re-valide avec horaires stricts 9:35-15:55 ET, 2026-03-24) ===
-    "opex_gamma": {
-        "name": "OpEx Gamma Pin",
-        "sharpe": 10.41,           # re-backtest horaires stricts
-        "frequency": "intraday",
-        "multi_asset": True,
-    },
-    "gap_continuation": {
-        "name": "Overnight Gap Continuation",
-        "sharpe": 5.22,
-        "frequency": "intraday",
-        "multi_asset": True,
-    },
+    # === Intraday (walk-forward validees) ===
     "dow_seasonal": {
         "name": "Day-of-Week Seasonal",
         "sharpe": 3.42,
@@ -125,45 +137,9 @@ STRATEGIES = {
         "frequency": "intraday",
         "multi_asset": True,
     },
-    "crypto_proxy_v2": {
-        "name": "Crypto-Proxy Regime V2",
-        "sharpe": 3.49,
-        "frequency": "intraday",
-        "multi_asset": True,
-    },
-    # === Batch optimisations V2 (25 mars 2026) ===
-    "orb_v2": {
-        "name": "ORB 5-Min V2",
-        "sharpe": 2.28,
-        "frequency": "intraday",
-        "multi_asset": True,
-    },
-    "meanrev_v2": {
-        "name": "Mean Reversion V2",
-        "sharpe": 1.44,
-        "frequency": "intraday",
-        "multi_asset": True,
-    },
-    # === Mission nuit 25-26 mars 2026 — walk-forward valides ===
-    "vwap_micro": {
-        "name": "VWAP Micro-Deviation",
-        "sharpe": 3.08,
-        "frequency": "intraday",
-        "multi_asset": True,
-    },
-    "triple_ema": {
-        "name": "Triple EMA Pullback",
-        "sharpe": 1.06,
-        "frequency": "intraday",
-        "multi_asset": True,
-    },
-    # === Session 26 mars 2026 — walk-forward valides ===
-    "gold_fear": {
-        "name": "Gold Fear Gauge",
-        "sharpe": 5.01,
-        "frequency": "intraday",
-        "multi_asset": True,
-    },
+    # ARCHIVED (WF-rejected 27 mars 2026): opex_gamma, gap_continuation,
+    # crypto_proxy_v2, orb_v2, meanrev_v2, vwap_micro, triple_ema, gold_fear,
+    # crypto_bear — voir archive/rejected/WHY_REJECTED.md
     "corr_hedge": {
         "name": "Correlation Regime Hedge",
         "sharpe": 1.09,
@@ -180,12 +156,6 @@ STRATEGIES = {
     "failed_rally_short": {
         "name": "Failed Rally Short",
         "sharpe": 1.49,
-        "frequency": "intraday",
-        "multi_asset": True,
-    },
-    "crypto_bear": {
-        "name": "Crypto Bear Cascade",
-        "sharpe": 3.95,
         "frequency": "intraday",
         "multi_asset": True,
     },
@@ -274,12 +244,24 @@ def load_state() -> dict:
     return state
 
 
-def save_state(state: dict):
+def save_state(state: dict, path=None):
+    """Save state atomically (tmpfile + os.replace)."""
+    import tempfile
+    import os as _os
+    target = str(path or STATE_FILE)
     try:
-        with open(STATE_FILE, "w") as f:
-            json.dump(state, f, indent=2, default=str)
-    except IOError as e:
-        logger.warning(f"Impossible de sauvegarder le state: {e}")
+        parent = str(Path(target).parent) or "."
+        tmp_fd, tmp_path = tempfile.mkstemp(dir=parent, suffix='.tmp')
+        try:
+            with _os.fdopen(tmp_fd, 'w') as f:
+                json.dump(state, f, indent=2, default=str)
+            _os.replace(tmp_path, target)
+        except:
+            if _os.path.exists(tmp_path):
+                _os.unlink(tmp_path)
+            raise
+    except Exception as e:
+        logger.error(f"Failed to save state: {e}")
 
 
 # =============================================================================
@@ -288,27 +270,19 @@ def save_state(state: dict):
 
 # Allocation Tier S/A/B/C — fixe, basee sur la qualite de l'edge
 TIER_ALLOCATION = {
-    # TIER S (edge massif, DD quasi-nul)
-    "opex_gamma":       0.25,
     # TIER A (edge fort valide)
-    "gap_continuation": 0.15,
-    "vwap_micro":       0.15,
-    "crypto_proxy_v2":  0.12,
-    "dow_seasonal":     0.10,
+    "dow_seasonal":     0.25,
     # TIER B (edge modere / diversifiant)
-    "orb_v2":           0.05,
-    "meanrev_v2":       0.04,
-    "corr_hedge":       0.03,
-    "lateday_meanrev":  0.03,
-    "gold_fear":        0.02,
-    "triple_ema":       0.02,
-    "vix_short":        0.03,
-    "failed_rally_short": 0.02,
-    "crypto_bear":      0.02,
-    # TIER C (daily/monthly, positions longues)
-    "momentum_25etf":   0.03,
-    "pairs_mu_amat":    0.03,
-    "vrp_rotation":     0.03,
+    "corr_hedge":       0.15,
+    "lateday_meanrev":  0.10,
+    "vix_short":        0.15,
+    "failed_rally_short": 0.10,
+    "eod_sell_v2":      0.10,
+    "high_beta_short":  0.08,
+    # TIER C (daily/monthly, monitoring-only — 0% live perspective)
+    "momentum_25etf":   0.03,  # MONITORING-ONLY
+    "pairs_mu_amat":    0.03,  # MONITORING-ONLY
+    "vrp_rotation":     0.01,  # MONITORING-ONLY
 }
 
 
@@ -382,16 +356,12 @@ def compute_allocations(strategies: dict, total_capital: float) -> dict[str, dic
     multipliers = {sid: 1.0 for sid in strategies}
 
     if not regime.get("bull", True):
-        # BEAR : reduire tout de 30%, desactiver les plus fragiles
+        # BEAR : reduire tout de 30%
         for sid in multipliers:
             multipliers[sid] *= 0.70
-        if "triple_ema" in multipliers:
-            multipliers["triple_ema"] = 0  # Desactive en bear
 
     if regime.get("high_vol", False):
-        # HIGH VOL : booster OpEx, reduire Day-of-Week
-        if "opex_gamma" in multipliers:
-            multipliers["opex_gamma"] *= 1.30
+        # HIGH VOL : reduire Day-of-Week
         if "dow_seasonal" in multipliers:
             multipliers["dow_seasonal"] *= 0.50
 
@@ -595,37 +565,19 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         sys.path.insert(0, backtester_path)
 
     from strategies import (
-        OpExGammaPinStrategy,
         DayOfWeekSeasonalStrategy,
-        OvernightGapContinuationStrategy,
         LateDayMeanReversionStrategy,
     )
-    from strategies.crypto_proxy_regime_v2 import CryptoProxyRegimeV2Strategy
-    from strategies.orb_5min_v2 import ORB5MinV2Strategy
-    from strategies.mean_reversion_v2 import MeanReversionV2Strategy
-    from strategies.vwap_micro_reversion import VWAPMicroReversionStrategy
-    from strategies.triple_ema_pullback import TripleEMAPullbackStrategy
-    from strategies.gold_fear_gauge import GoldFearGaugeStrategy
     from strategies.correlation_regime_hedge import CorrelationRegimeHedgeStrategy
     from strategies.vix_expansion_short import VIXExpansionShortStrategy
     from strategies.failed_rally_short import FailedRallyShortStrategy
-    from strategies.crypto_bear_cascade import CryptoBearCascadeStrategy
 
     STRAT_MAP = {
-        "opex_gamma": OpExGammaPinStrategy,
         "dow_seasonal": DayOfWeekSeasonalStrategy,
-        "gap_continuation": OvernightGapContinuationStrategy,
         "lateday_meanrev": LateDayMeanReversionStrategy,
-        "crypto_proxy_v2": CryptoProxyRegimeV2Strategy,
-        "orb_v2": ORB5MinV2Strategy,
-        "meanrev_v2": MeanReversionV2Strategy,
-        "vwap_micro": VWAPMicroReversionStrategy,
-        "triple_ema": TripleEMAPullbackStrategy,
-        "gold_fear": GoldFearGaugeStrategy,
         "corr_hedge": CorrelationRegimeHedgeStrategy,
         "vix_short": VIXExpansionShortStrategy,
         "failed_rally_short": FailedRallyShortStrategy,
-        "crypto_bear": CryptoBearCascadeStrategy,
     }
 
     strat_class = STRAT_MAP.get(strategy_id)
@@ -953,11 +905,27 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
                 f"CIRCUIT-BREAKER DECLENCHE: DD journalier {daily_dd*100:.1f}% > "
                 f"{MAX_DAILY_DRAWDOWN*100}% — AUCUN ordre execute. "
                 f"Equity=${equity:,.2f}, start=${daily_start:,.2f}")
+            # FIX CRO H-2 : fermer les positions ET annuler les ordres pendants
+            # close_all_positions(cancel_orders=True) annule les ordres ET ferme les positions
+            try:
+                closed = client.close_all_positions(_authorized_by="circuit_breaker")
+                logger.critical(
+                    f"  Circuit-breaker: {len(closed)} positions fermees "
+                    f"+ ordres pendants annules (cancel_orders=True)"
+                )
+            except Exception as e:
+                logger.error(f"  Circuit-breaker: erreur fermeture positions: {e}")
             try:
                 from core.telegram_alert import send_circuit_breaker
                 send_circuit_breaker(equity, daily_start, daily_dd)
             except Exception:
                 pass
+            # FIX CRO: persist trading pause until next market open (~8h)
+            import zoneinfo as _zi
+            _et = _zi.ZoneInfo("America/New_York")
+            from datetime import timedelta as _td
+            state["trading_paused_until"] = (datetime.now(_et) + _td(hours=8)).isoformat()
+            save_state(state)
             return []
 
     orders = []
@@ -1403,6 +1371,20 @@ def run_intraday(dry_run: bool = False):
     """Execute les strategies intraday pendant les heures de marche."""
     now = datetime.now(timezone.utc)
     state = load_state()
+
+    # FIX CRO: check circuit-breaker pause flag
+    import zoneinfo as _zi_intra
+    _et_intra = _zi_intra.ZoneInfo("America/New_York")
+    paused_until = state.get("trading_paused_until")
+    if paused_until:
+        paused_dt = datetime.fromisoformat(paused_until)
+        if datetime.now(_et_intra) < paused_dt:
+            logger.warning(f"Trading PAUSED until {paused_until} (circuit breaker)")
+            return
+        else:
+            # Clear the pause
+            state.pop("trading_paused_until", None)
+            save_state(state)
 
     # Utiliser l'equity ACTUELLE Alpaca
     try:

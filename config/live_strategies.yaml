@@ -1,0 +1,133 @@
+# Live strategies configuration for $10K IBKR
+# Only strategies viable at this capital level
+# Last updated: 2026-03-27
+
+tier1_fx:
+  enabled: true
+  allocation_pct: 40
+  strategies:
+    fx_eurusd_trend:
+      sharpe: 4.62
+      trades_5y: 47
+      notional: 30000
+      margin: 900
+
+    fx_eurgbp_mr:
+      sharpe: 3.65
+      trades_5y: 32
+      notional: 25000
+      margin: 750
+
+    fx_eurjpy_carry:
+      sharpe: 2.50
+      trades_5y: 91
+      notional: 25000
+      margin: 750
+
+    fx_audjpy_carry:
+      sharpe: 1.58
+      trades_5y: 101
+      notional: 25000        # IBKR minimum lot
+      margin: 750             # Updated for 25K
+
+tier2_futures:
+  enabled: false  # Enable when FUT-001 is ready
+  allocation_pct: 25
+  strategies:
+    brent_lag_mcl:
+      contracts: 2
+      margin_per_contract: 600
+    mes_trend:
+      contracts: 1
+      margin_per_contract: 1400
+
+tier3_us_equity:
+  enabled: false  # Enable when capital > $15K
+  allocation_pct: 20
+  strategies:
+    day_of_week_seasonal:
+      min_capital: 15000
+    vix_expansion_short:
+      min_capital: 15000
+
+# BOOST-001: GBP/USD Trend (FX-002) — Sharpe 2.0
+tier1_fx_boost:
+  strategies:
+    fx_gbpusd_trend:
+      sharpe: 2.0
+      trades_5y: 38
+      notional: 24000
+      margin: 720
+      schedule:
+        market_hours: "SUN 17:00 - FRI 17:00 ET"
+        signal_frequency: "4H"
+      bracket:
+        stop_pips: 60
+        tp_pips: 120
+
+# BOOST-002: Borderline US strategies (1/16 Kelly, probationary)
+borderline_us:
+  enabled: false  # Disabled for live phase 1 — commissions IBKR kill P&L on $500 positions. Paper only.
+  tag: BORDERLINE
+  allocation_pct: 10
+  strategies:
+    late_day_mr:
+      sizing: sixteenth_kelly
+      max_loss_per_trade_pct: 0.5
+    failed_rally_short:
+      sizing: sixteenth_kelly
+      max_loss_per_trade_pct: 0.5
+    eod_sell_pressure_v2:
+      sizing: sixteenth_kelly
+      max_loss_per_trade_pct: 0.5
+  rules:
+    max_combined_exposure_pct: 10
+    review_after_trades: 20
+    auto_disable_if:
+      - "sharpe < -0.5 after 15 trades"
+      - "max_dd > 3% on borderline bucket"
+
+# BOOST-003: EU Gap Open (Sharpe 8.56, WF 4/4 PASS)
+tier1_eu:
+  enabled: true
+  allocation_pct: 15
+  strategies:
+    eu_gap_open:
+      sharpe: 8.56
+      trades_5y: 72
+      broker: ibkr
+      market: EU
+      sizing: eighth_kelly
+      schedule:
+        signal_window: "09:00-09:30 CET"
+        max_holding: "17:30 CET"
+      bracket:
+        stop_pct: 0.5
+        tp_pct: 1.5
+
+# BOOST-004: Futures MCL + MES paper setup (live day 5)
+tier2_futures_paper:
+  enabled: true
+  mode: PAPER
+  # Paper validation: day 1-4. Live from day 5 if:
+  # - 3+ MCL trades reconciled
+  # - 2+ MES trades reconciled
+  # - Brackets survive maintenance window
+  # - 0 critical bugs
+  go_live_day: 5
+  strategies:
+    brent_lag_mcl:
+      contracts: 2
+      margin_per_contract: 600
+      tick_value: 10.0
+      roll_frequency: monthly
+    mes_trend:
+      contracts: 1
+      margin_per_contract: 1400
+      tick_value: 1.25
+      roll_frequency: quarterly
+  paper_to_live_conditions:
+    min_trades_mcl: 3
+    min_trades_mes: 2
+    max_reconciliation_errors: 0
+    bracket_survival_test: true

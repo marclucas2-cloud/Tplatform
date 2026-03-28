@@ -1,0 +1,32 @@
+# Binance configuration — Crypto trading
+# NEVER commit API keys here — use environment variables
+
+binance:
+  testnet: true                    # ALWAYS testnet first
+  api_base_spot: "https://api.binance.com"
+  api_base_futures: "https://fapi.binance.com"
+  testnet_spot: "https://testnet.binance.vision"
+  testnet_futures: "https://testnet.binancefuture.com"
+
+  rate_limit:
+    max_requests_per_minute: 1200
+    max_orders_per_second: 10
+    max_orders_per_day: 200000
+
+  websocket:
+    futures: "wss://fstream.binance.com/ws"
+    futures_testnet: "wss://stream.binancefuture.com/ws"
+    heartbeat_interval: 30         # seconds
+    reconnect_max_retries: 10
+    reconnect_backoff_base: 1      # seconds
+    reconnect_backoff_max: 30
+
+  margin:
+    default_type: "ISOLATED"       # NEVER use CROSS in phase 1
+    max_leverage_default: 2
+
+  maintenance:
+    # Binance typically does maintenance on Tuesdays ~06:00 UTC
+    weekly_pause_day: "tuesday"
+    weekly_pause_hour_utc: 6
+    weekly_pause_duration_min: 30

@@ -1,0 +1,29 @@
+# FX Signal Schedule — Peak hours evaluation at 1H, off-peak at 4H
+# Peak hours based on session overlaps for maximum volatility
+
+fx_signal_frequency:
+  EUR_USD:
+    peak_hours_start: "07:00"   # CET
+    peak_hours_end: "17:00"     # London + NY overlap
+    peak_frequency_minutes: 60
+    off_peak_frequency_minutes: 240
+  EUR_GBP:
+    peak_hours_start: "08:00"
+    peak_hours_end: "16:30"     # London session
+    peak_frequency_minutes: 60
+    off_peak_frequency_minutes: 240
+  EUR_JPY:
+    peak_hours_start: "07:00"
+    peak_hours_end: "16:00"     # Tokyo PM + London
+    peak_frequency_minutes: 60
+    off_peak_frequency_minutes: 240
+  AUD_JPY:
+    peak_hours_start: "00:00"
+    peak_hours_end: "08:00"     # Asian session
+    peak_frequency_minutes: 60
+    off_peak_frequency_minutes: 240
+  GBP_USD:
+    peak_hours_start: "08:00"
+    peak_hours_end: "17:00"     # London + NY overlap
+    peak_frequency_minutes: 60
+    off_peak_frequency_minutes: 240

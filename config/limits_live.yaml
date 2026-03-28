@@ -1,0 +1,71 @@
+# Limites de risque LIVE — IBKR $10K capital reel
+# Derniere mise a jour : 2026-03-27
+
+capital: 10000
+mode: LIVE
+
+position_limits:
+  max_position_pct: 0.15          # $1,500 max par position
+  max_strategy_pct: 0.20          # $2,000 max par strategie
+  max_long_pct: 0.60              # $6,000 max long
+  max_short_pct: 0.40             # $4,000 max short
+  max_gross_pct: 1.20             # $12,000 max gross (levier 1.5x mois 1)
+  max_positions: 6                # Max 6 positions simultanees
+  min_cash_pct: 0.15              # $1,500 minimum en cash
+
+margin_limits:
+  max_margin_used_pct: 0.70       # Alerte
+  block_margin_pct: 0.85          # Block new trades
+
+circuit_breakers:
+  daily_loss_pct: 0.015           # -$150 -> stop trading today
+  hourly_loss_pct: 0.01           # -$100 -> pause 30 min
+  weekly_loss_pct: 0.03           # -$300 -> reduce sizing 50%
+
+kill_switch:
+  trailing_5d_loss_pct: 0.03      # -$300 sur 5j -> tout fermer
+  max_monthly_loss_pct: 0.05      # -$500 sur le mois -> tout fermer, review
+
+deleveraging:
+  level_1_dd_pct: 0.009            # -$90 -> reduce 30%
+  level_1_action: 0.30
+  level_2_dd_pct: 0.0135           # -$135 -> reduce 50%
+  level_2_action: 0.50
+  level_3_dd_pct: 0.018            # -$180 -> close all
+  level_3_action: 1.00
+
+sector_limits:
+  max_sector_pct: 0.30
+  max_fx_pair_pct: 0.25
+  max_futures_instrument_pct: 0.25
+
+# FX-specific limits
+fx_limits:
+  max_fx_notional_pct: 15.0         # $150K notional max (15x capital)
+  max_fx_margin_pct: 0.40           # $4,000 margin FX max (40% capital)
+  max_single_pair_notional: 40000   # $40K max per pair
+  max_single_pair_margin_pct: 0.15  # $1,500 margin max per pair
+
+# Futures-specific limits
+futures_limits:
+  max_futures_margin_pct: 0.35      # $3,500 margin futures max (35% capital)
+  max_single_contract_margin_pct: 0.20  # $2,000 max per contract type
+  allowed_contracts: [MCL, MES]
+  max_contracts_per_symbol: 2
+
+# Combined limits
+combined_limits:
+  max_total_margin_pct: 0.80        # Total margin (equity+FX+futures) < 80%
+  min_cash_pct: 0.20                # Always keep 20% cash free
+
+# Same sector map as paper
+sector_map:
+  tech: [AAPL, MSFT, NVDA, AMD, AVGO]
+  finance: [JPM, BAC, WFC, GS]
+  energy: [XOM, CVX, COP, XLE, USO]
+  crypto: [COIN, MARA, MSTR]
+  futures_index: [MES, MNQ]
+  futures_energy: [MCL]
+  futures_metals: [MGC]
+  fx_eur: [EUR.USD, EUR.GBP, EUR.JPY, EURUSD, EURGBP, EURJPY]
+  fx_commodity: [AUD.JPY, GBP.USD, AUDJPY, GBPUSD]

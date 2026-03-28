@@ -59,8 +59,11 @@ def get_broker(broker_type: str | None = None) -> BaseBroker:
     elif broker_type == "ibkr":
         from core.broker.ibkr_adapter import IBKRBroker
         broker = IBKRBroker()
+    elif broker_type == "binance":
+        from core.broker.binance_broker import BinanceBroker
+        broker = BinanceBroker()
     else:
-        raise BrokerError(f"Broker inconnu: {broker_type}. Utiliser 'alpaca' ou 'ibkr'.")
+        raise BrokerError(f"Broker inconnu: {broker_type}. Utiliser 'alpaca', 'ibkr' ou 'binance'.")
 
     _broker_cache[broker_type] = broker
     logger.info(f"Broker instancie: {broker.name} (paper={broker.is_paper})")
@@ -91,7 +94,9 @@ class SmartRouter:
         "future": "ibkr",       # Futures = IBKR obligatoire
         "forex": "ibkr",        # Forex = IBKR obligatoire
         "equity": "alpaca",     # Equities US = Alpaca par defaut
-        "crypto": "alpaca",     # Crypto = Alpaca
+        "crypto_spot": "binance",    # Crypto spot = Binance
+        "crypto_margin": "binance",  # Crypto margin isolated = Binance (PAS de perp en France)
+        "crypto": "binance",         # Crypto generic = Binance
     }
 
     # Override par strategie (high-freq → IBKR pour commissions)
@@ -118,6 +123,10 @@ class SmartRouter:
         # Note: on ne teste pas la connexion ici (TWS pourrait ne pas tourner)
         if os.getenv("IBKR_HOST") or os.getenv("IBKR_PORT"):
             self._available.add("ibkr")
+
+        # Binance : disponible si les cles API sont presentes
+        if os.getenv("BINANCE_API_KEY"):
+            self._available.add("binance")
 
         logger.info(f"SmartRouter: brokers disponibles = {self._available or {'aucun'}}")
 

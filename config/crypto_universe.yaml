@@ -1,0 +1,43 @@
+# Crypto trading universe — symbols and filters
+
+universe:
+  tier_1:
+    symbols: ["BTCUSDT", "ETHUSDT"]
+    description: "Always traded — highest liquidity"
+    min_volume_24h: 500000000    # $500M
+    min_oi: 100000000            # $100M
+
+  tier_2:
+    symbols: ["SOLUSDT", "BNBUSDT", "XRPUSDT"]
+    description: "Top 5 market cap"
+    min_volume_24h: 100000000    # $100M
+    min_oi: 50000000             # $50M
+
+  tier_3:
+    symbols:
+      - "AVAXUSDT"
+      - "DOTUSDT"
+      - "LINKUSDT"
+      - "ADAUSDT"
+      - "NEARUSDT"
+      - "ATOMUSDT"
+      - "ARBUSDT"
+      - "OPUSDT"
+      - "DOGEUSDT"
+      - "SUIUSDT"
+      - "INJUSDT"
+      - "SEIUSDT"
+    description: "Top 20, filtered by volume and OI"
+    min_volume_24h: 50000000     # $50M
+    min_oi: 20000000             # $20M
+
+  excluded:
+    - "USDTUSDT"
+    - "BUSDUSDT"
+    - "USDCUSDT"
+    - "WBTCUSDT"
+    description: "Stablecoins and wrapped tokens"
+
+  filters:
+    max_spread_bps: 5            # 0.05%
+    min_market_cap_usd: 1000000000  # $1B for momentum strategy

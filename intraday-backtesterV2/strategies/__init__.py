@@ -5,7 +5,8 @@ from .correlation_breakdown import CorrelationBreakdownStrategy
 from .power_hour import PowerHourStrategy
 from .mean_reversion import MeanReversionStrategy
 from .fomc_cpi_drift import FOMCDriftStrategy
-from .opex_gamma_pin import OpExGammaPinStrategy
+# ARCHIVED (WF-rejected) — see archive/rejected/
+# from .opex_gamma_pin import OpExGammaPinStrategy
 from .tick_imbalance import TickImbalanceStrategy
 from .dark_pool_blocks import DarkPoolBlockStrategy
 from .ml_volume_cluster import VolumeProfileClusterStrategy
@@ -18,6 +19,7 @@ from .volume_climax_reversal import VolumeClimaxReversalStrategy
 from .sector_rotation_momentum import SectorRotationMomentumStrategy
 from .etf_nav_premium import ETFNavPremiumStrategy
 from .momentum_exhaustion import MomentumExhaustionStrategy
+# NOTE: V1 crypto_proxy_regime kept (not rejected), V2 archived
 from .crypto_proxy_regime import CryptoProxyRegimeStrategy
 from .moc_imbalance import MOCImbalanceStrategy
 from .opening_drive import OpeningDriveStrategy
@@ -26,7 +28,7 @@ from .vwap_sd_reversal import VWAPSDReversalStrategy
 from .day_of_week_seasonal import DayOfWeekSeasonalStrategy
 from .multi_timeframe_trend import MultiTimeframeTrendStrategy
 # === Nouvelles stratégies (batch 3 — validated) ===
-from .overnight_gap_continuation import OvernightGapContinuationStrategy
+# ARCHIVED (WF-rejected): from .overnight_gap_continuation import OvernightGapContinuationStrategy
 from .late_day_mean_reversion import LateDayMeanReversionStrategy
 # === V2 strategies (filtres assouplis) ===
 from .initial_balance_extension_v2 import InitialBalanceExtensionV2Strategy
@@ -38,7 +40,7 @@ from .correlation_breakdown_v2 import CorrelationBreakdownV2Strategy
 from .volatility_squeeze_breakout import VolatilitySqueezeBreakoutStrategy
 from .rsi_divergence import RSIDivergenceStrategy
 from .opening_volume_surge import OpeningVolumeSurgeStrategy
-from .vwap_micro_reversion import VWAPMicroReversionStrategy
+# ARCHIVED (WF-rejected): from .vwap_micro_reversion import VWAPMicroReversionStrategy
 from .intraday_momentum_persistence import IntradayMomentumPersistenceStrategy
 
 # === Phase 2 — P1 structural strategies (mission nuit) ===
@@ -71,7 +73,7 @@ from .macd_divergence import MACDDivergenceStrategy
 from .hammer_engulfing import HammerEngulfingStrategy
 from .range_bound_scalp import RangeBoundScalpStrategy
 from .pre_market_volume_leader import PreMarketVolumeLeaderStrategy
-from .triple_ema_pullback import TripleEMAPullbackStrategy
+# ARCHIVED (WF-rejected): from .triple_ema_pullback import TripleEMAPullbackStrategy
 from .overnight_range_breakout import OvernightRangeBreakoutStrategy
 from .tlt_spy_divergence import TLTSPYDivergenceStrategy
 from .consecutive_bar_reversal import ConsecutiveBarReversalStrategy
@@ -87,7 +89,7 @@ ALL_STRATEGIES = [
     MeanReversionStrategy,
     # === Macro / Event-Driven ===
     FOMCDriftStrategy,
-    OpExGammaPinStrategy,
+    # OpExGammaPinStrategy,  # ARCHIVED (WF-rejected)
     EarningsDriftStrategy,
     # === Microstructure ===
     TickImbalanceStrategy,
@@ -115,13 +117,13 @@ ALL_STRATEGIES = [
     # === Multi-Timeframe ===
     MultiTimeframeTrendStrategy,
     # === Batch 3 — Validated Winners ===
-    OvernightGapContinuationStrategy,
+    # OvernightGapContinuationStrategy,  # ARCHIVED (WF-rejected)
     LateDayMeanReversionStrategy,
     # === Phase 2 — P0 strategies ===
     VolatilitySqueezeBreakoutStrategy,
     RSIDivergenceStrategy,
     OpeningVolumeSurgeStrategy,
-    VWAPMicroReversionStrategy,
+    # VWAPMicroReversionStrategy,  # ARCHIVED (WF-rejected)
     IntradayMomentumPersistenceStrategy,
     # === Phase 3 — Batch 11 strategies ===
     MeanReversion3SigmaStrategy,
@@ -130,7 +132,7 @@ ALL_STRATEGIES = [
     HammerEngulfingStrategy,
     RangeBoundScalpStrategy,
     PreMarketVolumeLeaderStrategy,
-    TripleEMAPullbackStrategy,
+    # TripleEMAPullbackStrategy,  # ARCHIVED (WF-rejected)
     OvernightRangeBreakoutStrategy,
     TLTSPYDivergenceStrategy,
     ConsecutiveBarReversalStrategy,

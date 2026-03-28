@@ -1,12 +1,20 @@
+import { useState } from 'react'
 import { useApi } from '../hooks/useApi'
 import MetricCard from '../components/MetricCard'
 import { TierBadge, StatusDot } from '../components/StrategyBadge'
-import { ArrowUpRight, ArrowDownRight, Clock } from 'lucide-react'
+import EquityCurve from '../components/charts/EquityCurve'
+import PeriodSelector from '../components/common/PeriodSelector'
+import { ArrowUpRight, ArrowDownRight, Clock, AlertTriangle, AlertCircle, Info, CheckCircle } from 'lucide-react'
+
+const PERIOD_MAP = { '7j': '7d', '30j': '30d', '90j': '90d', 'YTD': 'ytd' }
 
 export default function Overview() {
+  const [period, setPeriod] = useState('30j')
   const { data: portfolio, loading: pLoad } = useApi('/portfolio', 30000)
   const { data: posData } = useApi('/positions', 15000)
   const { data: stratData } = useApi('/strategies', 60000)
+  const { data: equityData } = useApi(`/equity-curve?period=${PERIOD_MAP[period] || '30d'}`, 60000)
+  const { data: alertsData } = useApi('/alerts', 30000)
 
   if (pLoad || !portfolio) {
     return (
@@ -51,6 +59,19 @@ export default function Overview() {
           label="CRO Score"
           value="9.5/10"
         />
+      </div>
+
+      {/* Equity Curve */}
+      <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Courbe d'Equity</h2>
+          <PeriodSelector
+            value={period}
+            onChange={setPeriod}
+            options={['7j', '30j', '90j', 'YTD']}
+          />
+        </div>
+        <EquityCurve data={equityData?.curve || []} period={period} showBrokers={true} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
@@ -160,6 +181,55 @@ export default function Overview() {
             Capital Initial: <span className="font-mono text-[var(--color-text-primary)]">$100,000</span>
           </span>
         </div>
+      </div>
+
+      {/* Dernieres Alertes */}
+      <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
+        <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">Alertes Recentes</h2>
+        {(alertsData?.alerts || []).length === 0 ? (
+          <div className="text-center py-6 text-[var(--color-text-secondary)] text-sm">
+            Aucune alerte recente
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {(alertsData?.alerts || []).slice(0, 5).map((alert, i) => {
+              const levelConfig = {
+                critical: { icon: AlertTriangle, color: 'text-[var(--color-loss)]', bg: 'bg-red-500/5' },
+                warning: { icon: AlertCircle, color: 'text-[var(--color-warning)]', bg: 'bg-yellow-500/5' },
+                info: { icon: Info, color: 'text-[var(--color-info)]', bg: 'bg-blue-500/5' },
+                success: { icon: CheckCircle, color: 'text-[var(--color-profit)]', bg: 'bg-green-500/5' },
+              }
+              const cfg = levelConfig[alert.level] || levelConfig.info
+              const Icon = cfg.icon
+              return (
+                <div
+                  key={i}
+                  className={`flex items-start gap-3 py-2 px-3 rounded-lg ${cfg.bg}`}
+                >
+                  <Icon size={14} className={`mt-0.5 shrink-0 ${cfg.color}`} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-sm text-[var(--color-text-primary)] truncate">
+                        {alert.message}
+                      </span>
+                      <span className="text-xs font-mono text-[var(--color-text-secondary)] shrink-0">
+                        {alert.timestamp
+                          ? new Date(alert.timestamp).toLocaleTimeString('fr-FR', {
+                              hour: '2-digit',
+                              minute: '2-digit',
+                            })
+                          : ''}
+                      </span>
+                    </div>
+                    {alert.source && (
+                      <span className="text-xs text-[var(--color-text-secondary)]">{alert.source}</span>
+                    )}
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        )}
       </div>
     </div>
   )

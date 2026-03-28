@@ -1,0 +1,43 @@
+# PAPER-001 — Binance Testnet configuration
+
+testnet:
+  enabled: true
+  spot_api: "https://testnet.binance.vision"
+  futures_api: "https://testnet.binancefuture.com"
+  ws_futures: "wss://stream.binancefuture.com/ws"
+
+  # Testnet API keys (from testnet.binancefuture.com)
+  # Actual keys in BINANCE_TESTNET_API_KEY / BINANCE_TESTNET_API_SECRET env vars
+
+  # Paper trading KPI targets
+  kpi:
+    min_duration_days: 7
+    min_trades: 10
+    min_sharpe: 0.0
+    max_drawdown_pct: 15
+    min_win_rate_trend: 35
+    min_win_rate_arb: 60
+    max_slippage_vs_model: 3.0     # Real slippage < 3x modeled
+    max_api_errors: 0              # Zero unhandled API errors
+    require_stop_loss: true        # Every position must have SL
+    require_reconciliation_clean: true
+    require_kill_switch_test: true  # At least 1 manual test
+
+  # Soft launch phases
+  soft_launch:
+    week_1:
+      capital_pct: 50
+      strategies: ["btc_eth_trend", "funding_arb"]
+      sizing: "1/8 Kelly"
+      max_leverage: 1
+      target_trades: "5-10"
+    week_2:
+      capital_pct: 75
+      strategies: ["btc_eth_trend", "funding_arb", "altcoin_momentum"]
+      sizing: "1/4 Kelly"
+      max_leverage: 2
+    week_3:
+      capital_pct: 100
+      strategies: "all_wf_validated"
+      sizing: "1/4 Kelly"
+      max_leverage: "per_strategy"

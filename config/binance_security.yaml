@@ -1,0 +1,32 @@
+# Binance security configuration
+
+security:
+  # API key permissions (verification)
+  required_permissions:
+    - "SPOT"
+    - "FUTURES"
+  forbidden_permissions:
+    - "WITHDRAWAL"       # NEVER allow withdrawals via API
+    - "INTERNAL_TRANSFER"
+
+  # IP whitelist (must be configured on Binance)
+  ip_whitelist_enabled: true
+  # Actual IPs in environment, not here
+
+  # Key rotation reminder
+  key_rotation_days: 90
+
+  # 2FA requirement
+  require_2fa: true
+
+  # Capital isolation
+  isolation:
+    crypto_capital_usd: 10000      # Separate from IBKR $10K
+    max_crypto_allocation_pct: 100 # Can use 100% of crypto capital
+    no_transfer_to_ibkr: true      # No automatic transfers
+    no_transfer_from_ibkr: true
+    independent_kill_switch: true   # Crypto kill != IBKR kill
+
+  # Audit
+  log_all_api_requests: true
+  log_retention_days: 90

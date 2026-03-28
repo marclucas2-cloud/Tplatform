@@ -1,0 +1,55 @@
+# Leverage schedule by phase
+# Each phase has max leverage and conditions to advance
+# Derniere mise a jour : 2026-03-27
+
+phases:
+  SOFT_LAUNCH:
+    max_leverage: 1.0
+    min_duration_days: 5
+    sizing:
+      tier1: eighth_kelly          # 1/8 Kelly for validated strategies
+      borderline: sixteenth_kelly   # 1/16 Kelly for borderline
+    overrides:
+      eu_gap_open:
+        kelly_fraction: 0.25    # 1/4 Kelly — intraday, no overnight risk, WF 4/4
+        max_position_pct: 0.08  # $800 max position
+    advance_conditions:
+      min_trades: 5
+      max_drawdown_pct: 2.0
+      zero_critical_bugs: true
+      zero_reconciliation_errors: true
+    advance_to: PHASE_1
+    advance_sizing:
+      tier1: quarter_kelly
+      borderline: eighth_kelly
+
+  PHASE_1:
+    max_leverage: 1.5
+    min_duration_days: 30
+    advance_conditions:
+      min_sharpe_30d: 1.0
+      max_drawdown_pct: 3.0
+      min_trades: 50
+      zero_critical_bugs: true
+
+  PHASE_2:
+    max_leverage: 2.0
+    min_duration_days: 30
+    advance_conditions:
+      min_sharpe_60d: 1.0
+      max_drawdown_pct: 5.0
+      min_trades: 100
+      max_cost_ratio: 0.25
+
+  PHASE_3:
+    max_leverage: 2.5
+    min_duration_days: 30
+    advance_conditions:
+      min_sharpe_90d: 1.2
+      min_capital: 20000
+
+  PHASE_4:
+    max_leverage: 3.0
+    advance_conditions:
+      min_capital: 25000
+      min_sharpe_90d: 1.5

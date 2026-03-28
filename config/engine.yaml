@@ -1,0 +1,72 @@
+# Trading Engine Configuration -- Dual Mode (Live + Paper)
+# Last updated: 2026-03-27
+
+engine:
+  name: "trading-platform-v5"
+  mode: "DUAL"  # LIVE_ONLY, PAPER_ONLY, DUAL
+
+pipelines:
+  live_ibkr:
+    mode: LIVE
+    broker: ibkr
+    port: 4001  # IB Gateway live
+    capital: 10000
+    risk_limits: config/limits_live.yaml
+    log_dir: logs/live
+    strategies:
+      # Tier 1 -- FX (immediate, costs ~0.01%)
+      - fx_eurusd_trend
+      - fx_eurgbp_mr
+      - fx_eurjpy_carry
+      - fx_audjpy_carry
+      # Tier 2 -- Futures (post FUT-001)
+      # - brent_lag_futures_live
+      # - futures_mes_trend_live
+      # BOOST-001 — GBP/USD Trend
+      - fx_gbpusd_trend
+      # BOOST-003 — EU Gap Open (routed to IBKR live)
+      - eu_gap_open
+
+  paper_us:
+    mode: PAPER
+    broker: alpaca
+    capital: 100000
+    risk_limits: config/limits.yaml
+    log_dir: logs/paper_us
+    strategies:
+      - day_of_week_seasonal
+      - correlation_regime_hedge
+      - vix_expansion_short
+      - high_beta_short
+      - late_day_mean_reversion
+      - failed_rally_short
+      - eod_sell_pressure_v2
+      # Borderline US — paper only (commissions IBKR les tuent sur positions $500)
+      - late_day_mr_borderline
+      - failed_rally_short_borderline
+      - eod_sell_pressure_v2_borderline
+
+  paper_futures:
+    mode: PAPER
+    broker: ibkr
+    port: 7497
+    capital: 10000
+    risk_limits: config/limits_live.yaml
+    log_dir: logs/paper_futures
+    strategies:
+      - brent_lag_futures_paper
+      - mes_trend_paper
+
+  paper_eu:
+    mode: PAPER
+    broker: ibkr
+    port: 7497  # IB Gateway paper
+    capital: 1000000
+    risk_limits: config/limits.yaml
+    log_dir: logs/paper_eu
+    strategies:
+      - eu_gap_open
+      - bce_momentum_drift_v2
+      - auto_sector_german
+      - brent_lag_play
+      - eu_close_us_afternoon

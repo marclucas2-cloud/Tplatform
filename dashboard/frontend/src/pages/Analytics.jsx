@@ -1,10 +1,55 @@
 import { useApi } from '../hooks/useApi'
 import { TierBadge } from '../components/StrategyBadge'
+import DistributionChart from '../components/charts/DistributionChart'
+import RollingSharpeChart from '../components/charts/RollingSharpeChart'
+import {
+  ResponsiveContainer,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  CartesianGrid,
+  Cell,
+} from 'recharts'
+import { TrendingUp, TrendingDown, Flame, Snowflake } from 'lucide-react'
+
+const DAY_COLORS = {
+  positive: 'var(--color-profit, #22c55e)',
+  negative: 'var(--color-loss, #ef4444)',
+}
+
+function DayTooltip({ active, payload }) {
+  if (!active || !payload?.length) return null
+  const d = payload[0].payload
+  return (
+    <div
+      style={{
+        background: '#1a1a2e',
+        border: '1px solid #333',
+        borderRadius: 8,
+        padding: '10px 14px',
+      }}
+    >
+      <div style={{ color: '#6b7280', fontSize: 12, marginBottom: 4 }}>{d.day}</div>
+      <div style={{ color: '#e1e2e8', fontFamily: 'monospace', fontSize: 13 }}>
+        P&L moyen: ${d.avg_pnl >= 0 ? '+' : ''}{d.avg_pnl?.toFixed(2)}
+      </div>
+      <div style={{ color: '#6b7280', fontFamily: 'monospace', fontSize: 11 }}>
+        {d.trades} trades | WR {d.win_rate?.toFixed(0)}%
+      </div>
+    </div>
+  )
+}
 
 export default function Analytics() {
   const { data: stratData } = useApi('/strategies', 60000)
   const { data: regime } = useApi('/regime', 60000)
   const { data: alloc } = useApi('/allocation', 60000)
+  const { data: distData } = useApi('/analytics/distribution', 120000)
+  const { data: sharpeData } = useApi('/analytics/rolling-sharpe', 120000)
+  const { data: dayData } = useApi('/analytics/by-day', 120000)
+  const { data: streaksData } = useApi('/analytics/streaks', 120000)
 
   const strategies = stratData?.strategies || []
 
@@ -143,6 +188,156 @@ export default function Analytics() {
           })}
         </div>
       </div>
+
+      {/* P&L par jour de la semaine */}
+      <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-5">
+        <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">P&L par Jour de la Semaine</h2>
+        {dayData?.days && dayData.days.length > 0 ? (
+          <ResponsiveContainer width="100%" height={250}>
+            <BarChart
+              data={dayData.days}
+              layout="vertical"
+              margin={{ top: 5, right: 30, bottom: 5, left: 60 }}
+            >
+              <CartesianGrid strokeDasharray="3 3" stroke="#2a2b3d" horizontal={false} />
+              <XAxis
+                type="number"
+                tick={{ fill: '#6b7280', fontSize: 11 }}
+                stroke="#2a2b3d"
+                tickFormatter={(v) => `$${v >= 0 ? '+' : ''}${v.toFixed(0)}`}
+              />
+              <YAxis
+                type="category"
+                dataKey="day"
+                tick={{ fill: '#6b7280', fontSize: 12 }}
+                stroke="#2a2b3d"
+                width={55}
+              />
+              <Tooltip content={<DayTooltip />} />
+              <Bar dataKey="avg_pnl" radius={[0, 4, 4, 0]} maxBarSize={28}>
+                {(dayData.days || []).map((entry, index) => (
+                  <Cell
+                    key={index}
+                    fill={entry.avg_pnl >= 0 ? DAY_COLORS.positive : DAY_COLORS.negative}
+                    fillOpacity={0.8}
+                  />
+                ))}
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
+        ) : (
+          <div className="flex items-center justify-center h-[250px] text-[var(--color-text-secondary)] text-sm">
+            Aucune donnee
+          </div>
+        )}
+      </div>
+
+      {/* Distribution des trades + Rolling Sharpe */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        {/* Distribution */}
+        <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">Distribution des Trades</h2>
+          <DistributionChart data={distData?.buckets || []} />
+          {distData?.stats && (
+            <div className="grid grid-cols-3 gap-3 mt-3 pt-3 border-t border-[var(--color-border)]">
+              <div className="text-center">
+                <div className="text-xs text-[var(--color-text-secondary)]">Moyenne</div>
+                <div className={`font-mono text-sm font-semibold ${distData.stats.mean >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}`}>
+                  ${distData.stats.mean >= 0 ? '+' : ''}{distData.stats.mean?.toFixed(2)}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-[var(--color-text-secondary)]">Mediane</div>
+                <div className={`font-mono text-sm font-semibold ${distData.stats.median >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}`}>
+                  ${distData.stats.median >= 0 ? '+' : ''}{distData.stats.median?.toFixed(2)}
+                </div>
+              </div>
+              <div className="text-center">
+                <div className="text-xs text-[var(--color-text-secondary)]">Ecart-type</div>
+                <div className="font-mono text-sm text-[var(--color-text-primary)]">
+                  ${distData.stats.std?.toFixed(2)}
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Rolling Sharpe */}
+        <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">Rolling Sharpe 30j</h2>
+          <RollingSharpeChart data={sharpeData?.points || []} />
+          {sharpeData?.current !== undefined && (
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-[var(--color-border)]">
+              <div className="text-xs text-[var(--color-text-secondary)]">Sharpe actuel (30j)</div>
+              <div className={`font-mono text-lg font-bold ${
+                sharpeData.current >= 2 ? 'text-[var(--color-profit)]' :
+                sharpeData.current >= 1 ? 'text-[var(--color-info)]' :
+                sharpeData.current >= 0 ? 'text-[var(--color-warning)]' : 'text-[var(--color-loss)]'
+              }`}>
+                {sharpeData.current?.toFixed(2)}
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Streaks */}
+      {streaksData && (
+        <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">Series (Streaks)</h2>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="border border-[var(--color-border)] rounded-lg p-3 text-center">
+              <div className="flex items-center justify-center gap-1.5 mb-1">
+                <Flame size={14} className="text-[var(--color-profit)]" />
+                <span className="text-xs text-[var(--color-text-secondary)]">Plus longue serie gagnante</span>
+              </div>
+              <div className="font-mono text-2xl font-bold text-[var(--color-profit)]">
+                {streaksData.longest_win || 0}
+              </div>
+              <div className="text-xs text-[var(--color-text-secondary)]">trades</div>
+            </div>
+            <div className="border border-[var(--color-border)] rounded-lg p-3 text-center">
+              <div className="flex items-center justify-center gap-1.5 mb-1">
+                <Snowflake size={14} className="text-[var(--color-loss)]" />
+                <span className="text-xs text-[var(--color-text-secondary)]">Plus longue serie perdante</span>
+              </div>
+              <div className="font-mono text-2xl font-bold text-[var(--color-loss)]">
+                {streaksData.longest_loss || 0}
+              </div>
+              <div className="text-xs text-[var(--color-text-secondary)]">trades</div>
+            </div>
+            <div className="border border-[var(--color-border)] rounded-lg p-3 text-center">
+              <div className="flex items-center justify-center gap-1.5 mb-1">
+                {streaksData.current_type === 'win' ? (
+                  <TrendingUp size={14} className="text-[var(--color-profit)]" />
+                ) : (
+                  <TrendingDown size={14} className="text-[var(--color-loss)]" />
+                )}
+                <span className="text-xs text-[var(--color-text-secondary)]">Serie en cours</span>
+              </div>
+              <div className={`font-mono text-2xl font-bold ${
+                streaksData.current_type === 'win' ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'
+              }`}>
+                {streaksData.current_count || 0}
+              </div>
+              <div className="text-xs text-[var(--color-text-secondary)]">
+                {streaksData.current_type === 'win' ? 'gagnants' : 'perdants'}
+              </div>
+            </div>
+            <div className="border border-[var(--color-border)] rounded-lg p-3 text-center">
+              <div className="flex items-center justify-center gap-1.5 mb-1">
+                <span className="text-xs text-[var(--color-text-secondary)]">P&L serie en cours</span>
+              </div>
+              <div className={`font-mono text-2xl font-bold ${
+                (streaksData.current_pnl || 0) >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'
+              }`}>
+                ${(streaksData.current_pnl || 0) >= 0 ? '+' : ''}{(streaksData.current_pnl || 0).toFixed(0)}
+              </div>
+              <div className="text-xs text-[var(--color-text-secondary)]">cumule</div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   )
 }

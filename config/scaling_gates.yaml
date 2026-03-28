@@ -1,0 +1,68 @@
+# KPI gates for capital scaling decisions
+# Derniere mise a jour : 2026-03-27
+
+gates:
+  gate_M1:
+    description: "Month 1 — Validate system in real conditions (multi-strategy profile)"
+    current_capital: 10000
+    target_capital: 15000
+
+    # PRIMARY conditions (ALL required)
+    conditions_primary:
+      min_calendar_days: 21
+      min_trades: 15            # IBKR only, fewer strategies than original plan
+      min_strategies_active: 3
+      max_drawdown_pct: 5.0
+      max_single_loss_pct: 2.0
+      max_critical_bugs: 0
+      max_reconciliation_errors: 0
+
+    # SECONDARY conditions (at least 3 out of 5 required)
+    # NOTE: Sharpe not primary — on 15 trades, 0.3 is not statistically significant
+    conditions_secondary:
+      min_secondary_count: 3
+      checks:
+        min_sharpe_period: 0.3
+        min_win_rate: 0.42
+        min_profit_factor: 1.1
+        max_slippage_ratio: 3.0
+        min_execution_quality: 0.85
+
+    # ABORT conditions (if ANY is true -> immediate abort)
+    abort_conditions:
+      max_drawdown_abort_pct: 8.0
+      max_critical_bugs_abort: 0
+      max_consecutive_losing_weeks: 3
+
+    decisions:
+      PASS: "Add $5K, advance to PHASE_2"
+      CONDITIONAL: "Maintain $10K, extend 15 days"
+      FAIL: "Maintain $10K, identify and fix primary issues"
+      ABORT: "Return to paper 30 days, diagnostic"
+
+  gate_M2:
+    description: "Month 2 — Scale if execution quality confirmed"
+    current_capital: 15000
+    target_capital: 20000
+    conditions:
+      min_trades: 100
+      min_sharpe_60d: 0.8
+      max_drawdown_pct: 5.0
+      max_cost_ratio: 0.25
+      min_live_vs_paper_sharpe_ratio: 0.5
+    decisions:
+      PASS: "Add $5K, activate US strategies (Day-of-Week, VIX Short)"
+      FAIL: "Maintain $15K, analyze why"
+
+  gate_M3:
+    description: "Month 3 — Full scale-up"
+    current_capital: 20000
+    target_capital: 25000
+    conditions:
+      min_trades: 150
+      min_sharpe_90d: 1.0
+      max_drawdown_pct: 5.0
+      min_strategies_live: 6
+    decisions:
+      PASS: "Capital 25-30K, leverage 2.5x, no more PDT constraints"
+      FAIL: "Maintain $20K"
