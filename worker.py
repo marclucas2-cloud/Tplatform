@@ -514,8 +514,10 @@ def run_crypto_cycle():
         risk_mgr = CryptoRiskManager(capital=total_capital)
 
         # --- Verifier le kill switch AVANT tout trade ---
-        killed, kill_reason = risk_mgr.kill_switch.check()
-        if killed:
+        # CRO H-8: verifier l'etat persiste du kill switch (pas les triggers
+        # dynamiques — ceux-la sont verifies dans check_all() plus bas)
+        if risk_mgr.kill_switch._active:
+            kill_reason = risk_mgr.kill_switch._reason or "previously activated"
             logger.critical(
                 f"CRYPTO KILL SWITCH ACTIF — aucun trade: {kill_reason}"
             )
@@ -772,6 +774,19 @@ def run_crypto_cycle():
 
                 notional = strat_capital
                 stop_loss = signal.get("stop_loss")
+
+                # CRO: JAMAIS d'ordre sans stop-loss sur des positions directionnelles
+                if stop_loss is None and market_type != "earn":
+                    # Calculer un SL par defaut a -5% du prix
+                    default_sl_pct = 0.05
+                    if side == "BUY":
+                        stop_loss = round(price * (1 - default_sl_pct), 2)
+                    else:
+                        stop_loss = round(price * (1 + default_sl_pct), 2)
+                    logger.warning(
+                        f"  [{strat_id}] Signal SANS stop_loss — SL par defaut "
+                        f"applique a {default_sl_pct*100:.0f}%: ${stop_loss:.2f}"
+                    )
 
                 try:
                     result = broker.create_position(

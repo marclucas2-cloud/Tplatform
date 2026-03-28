@@ -433,6 +433,12 @@ class AlpacaClient:
                 return None
 
         if notional and not order_class:
+            # CRO C-1: position sans stop-loss = risque non borne
+            if side == OrderSide.BUY:
+                logger.critical(
+                    f"CRO WARNING: ordre BUY {symbol} notional=${notional:.2f} "
+                    f"SANS stop-loss — risque non borne!"
+                )
             request = MarketOrderRequest(
                 symbol=symbol,
                 notional=round(notional, 2),

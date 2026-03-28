@@ -18,8 +18,12 @@ from typing import Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
-# Timezone CET (UTC+1, simplifie — pas de gestion DST ici)
-CET_OFFSET = timedelta(hours=1)
+# CRO FIX: utiliser zoneinfo pour gerer DST (CET/CEST automatiquement)
+try:
+    import zoneinfo
+    _PARIS_TZ = zoneinfo.ZoneInfo("Europe/Paris")
+except Exception:
+    _PARIS_TZ = None
 
 # --- Schedule par defaut ---
 DEFAULT_SCHEDULE = {
@@ -160,8 +164,10 @@ class TimezoneCapitalAllocator:
             {name, start, end, max_pct, markets}
         """
         if hour_cet is None:
-            now_utc = datetime.now(timezone.utc)
-            now_cet = now_utc + CET_OFFSET
+            if _PARIS_TZ:
+                now_cet = datetime.now(_PARIS_TZ)
+            else:
+                now_cet = datetime.now(timezone.utc) + timedelta(hours=1)
             hour_cet = now_cet.hour
 
         for slot_name, config in self.schedule.items():

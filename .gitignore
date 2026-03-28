@@ -6,6 +6,8 @@
 **/secrets/
 *_credentials*
 *_token*
+*.key
+*.pem
 
 # === Python ===
 __pycache__/

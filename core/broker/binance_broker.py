@@ -83,6 +83,14 @@ class BinanceBroker(BaseBroker):
         if testnet is None:
             testnet = os.getenv("BINANCE_TESTNET", "true").lower() == "true"
         self._testnet = testnet
+        # CRO SECURITY: guard explicite pour le mode LIVE
+        if not testnet:
+            live_confirmed = os.getenv("BINANCE_LIVE_CONFIRMED", "").lower() == "true"
+            if not live_confirmed:
+                logger.critical(
+                    "BINANCE LIVE MODE — set BINANCE_LIVE_CONFIRMED=true to confirm"
+                )
+            logger.warning("BinanceBroker initialise en mode LIVE (pas testnet)")
         self._spot_base = SPOT_TESTNET if testnet else SPOT_BASE
         self._rate_limiter = RateLimiter(weight_limit=1200, window=60)
         self._session = requests.Session()
@@ -115,7 +123,10 @@ class BinanceBroker(BaseBroker):
             retry = int(resp.headers.get("Retry-After", 60))
             logger.warning(f"Rate limit 429 — waiting {retry}s")
             time.sleep(retry)
-            return self._request(method, base, path, params, signed=False, weight=weight)
+            # Remove stale signature/timestamp before retry so _sign() regenerates them
+            params.pop("timestamp", None)
+            params.pop("signature", None)
+            return self._request(method, base, path, params, signed=signed, weight=weight)
         if resp.status_code >= 400:
             try:
                 err = resp.json()
@@ -339,14 +350,28 @@ class BinanceBroker(BaseBroker):
                 sl_result = self._post("/sapi/v1/margin/order", sl_params)
                 sl_id = str(sl_result.get("orderId", ""))
             except BrokerError as e:
-                logger.warning(f"SL order failed: {e}")
+                # CRO H-3: position margin SANS SL = risque non borne
+                # Fermer immediatement la position
+                logger.critical(f"SL order failed for margin {side} {symbol}: {e} — CLOSING POSITION")
+                try:
+                    close_params = {"symbol": symbol, "side": "BUY", "type": "MARKET", "quantity": str(qty), "isIsolated": "TRUE", "sideEffectType": "AUTO_REPAY"}
+                    self._post("/sapi/v1/margin/order", close_params)
+                    logger.critical(f"Emergency close: margin SHORT {symbol} closed (no SL)")
+                except Exception as e2:
+                    logger.critical(f"EMERGENCY CLOSE FAILED for {symbol}: {e2}")
         elif stop_loss and side == "BUY":
             sl_params = {"symbol": symbol, "side": "SELL", "type": "STOP_LOSS_LIMIT", "quantity": str(qty), "price": str(round(stop_loss * 0.995, 2)), "stopPrice": str(round(stop_loss, 2)), "timeInForce": "GTC", "isIsolated": "TRUE"}
             try:
                 sl_result = self._post("/sapi/v1/margin/order", sl_params)
                 sl_id = str(sl_result.get("orderId", ""))
             except BrokerError as e:
-                logger.warning(f"SL order failed: {e}")
+                logger.critical(f"SL order failed for margin {side} {symbol}: {e} — CLOSING POSITION")
+                try:
+                    close_params = {"symbol": symbol, "side": "SELL", "type": "MARKET", "quantity": str(qty), "isIsolated": "TRUE"}
+                    self._post("/sapi/v1/margin/order", close_params)
+                    logger.critical(f"Emergency close: margin LONG {symbol} closed (no SL)")
+                except Exception as e2:
+                    logger.critical(f"EMERGENCY CLOSE FAILED for {symbol}: {e2}")
         return {"orderId": str(result.get("orderId", "")), "symbol": symbol, "side": side, "status": result.get("status", "FILLED"), "qty": float(result.get("executedQty", 0)), "filled_qty": float(result.get("executedQty", 0)), "filled_price": filled_price, "stop_loss": stop_loss, "sl_order_id": sl_id, "paper": self._testnet, "authorized_by": authorized_by, "market_type": "margin"}
 
     def close_position(self, symbol: str, _authorized_by: str | None = None) -> dict:

@@ -302,9 +302,15 @@ class CryptoKillSwitch:
         """Execute kill actions in priority order.
 
         Returns list of actions executed. Each action is logged.
+        Idempotent: returns cached results if already executed.
         """
         if not self._active:
             return []
+
+        # Idempotency: if kill sequence already ran, return cached results
+        if self._actions_executed:
+            logger.warning("Kill sequence already executed, returning cached results")
+            return list(self._actions_executed)
 
         executed = []
         for action in self.KILL_ACTIONS_PRIORITY:
@@ -335,28 +341,58 @@ class CryptoKillSwitch:
 
     def _close_shorts(self, broker):
         """Close all short/margin borrow positions first (highest cost)."""
-        if hasattr(broker, "close_all_shorts"):
-            broker.close_all_shorts()
+        positions = broker.get_positions()
+        for p in positions:
+            if p.get("side") == "SHORT":
+                try:
+                    broker.close_position(
+                        p["symbol"],
+                        _authorized_by="CRYPTO_KILL_SWITCH",
+                    )
+                    logger.info(f"Kill: closed short {p['symbol']}")
+                except Exception as e:
+                    logger.error(f"Kill: failed to close short {p['symbol']}: {e}")
 
     def _cancel_orders(self, broker):
         """Cancel all open orders."""
         if hasattr(broker, "cancel_all_orders"):
-            broker.cancel_all_orders()
+            broker.cancel_all_orders(_authorized_by="CRYPTO_KILL_SWITCH")
 
     def _close_longs(self, broker):
         """Close all long positions."""
-        if hasattr(broker, "close_all_longs"):
-            broker.close_all_longs()
+        positions = broker.get_positions()
+        for p in positions:
+            if p.get("side") == "LONG":
+                try:
+                    broker.close_position(
+                        p["symbol"],
+                        _authorized_by="CRYPTO_KILL_SWITCH",
+                    )
+                    logger.info(f"Kill: closed long {p['symbol']}")
+                except Exception as e:
+                    logger.error(f"Kill: failed to close long {p['symbol']}: {e}")
 
     def _redeem_earn(self, broker):
         """Redeem all earn/savings positions."""
-        if hasattr(broker, "redeem_all_earn"):
-            broker.redeem_all_earn()
+        if hasattr(broker, "get_earn_positions") and hasattr(broker, "redeem_earn"):
+            for pos in broker.get_earn_positions():
+                product_id = pos.get("product_id", "")
+                amount = pos.get("amount", 0)
+                if product_id and amount > 0:
+                    try:
+                        broker.redeem_earn(product_id, amount)
+                        logger.info(f"Kill: redeemed earn {pos.get('asset', '?')} ({amount})")
+                    except Exception as e:
+                        logger.error(f"Kill: failed to redeem earn {product_id}: {e}")
 
     def _convert_to_usdt(self, broker):
-        """Convert all remaining assets to USDT."""
-        if hasattr(broker, "convert_all_to_usdt"):
-            broker.convert_all_to_usdt()
+        """Convert all remaining assets to USDT.
+
+        SKIPPED: not safe to implement automatically — could sell assets
+        at bad prices or hit dust conversion issues. Manual intervention
+        preferred after kill switch stabilizes the portfolio.
+        """
+        logger.warning("Kill: convert_to_usdt SKIPPED (manual intervention required)")
 
     def reset(self, _authorized_by: str = ""):
         """Manual reset (requires confirmation)."""

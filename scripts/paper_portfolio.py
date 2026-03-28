@@ -1022,8 +1022,12 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
                         )
                         price = float(quote[sym].ask_price or quote[sym].bid_price or 0)
                         if price <= 0:
-                            # Fallback sans bracket
-                            result = client.create_position(sym, "BUY", notional=round(notional_each, 2), _authorized_by="paper_portfolio")
+                            # CRO FIX C-2: JAMAIS de position sans stop-loss
+                            logger.critical(
+                                f"  [{sid}] REFUSE achat {sym}: prix=0, "
+                                f"impossible de calculer un stop-loss"
+                            )
+                            continue
                         else:
                             qty = int(notional_each / price)
                             if qty < 1:
