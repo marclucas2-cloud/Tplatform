@@ -89,6 +89,12 @@ EU_END_MINUTE = 30
 # Live risk cycle interval (same as intraday: 5 min)
 LIVE_RISK_INTERVAL_SECONDS = 300
 
+# Crypto cycle interval (24/7, every 15 min)
+CRYPTO_INTERVAL_SECONDS = 900  # 15 min
+
+# Sizing SOFT_LAUNCH crypto : 1/8 Kelly pour TOUTES les strategies
+CRYPTO_KELLY_FRACTION = 0.125
+
 
 def is_weekday():
     """Verifie si c'est un jour de semaine (lun-ven)."""
@@ -454,6 +460,332 @@ def run_live_risk_cycle():
         _execution_lock.release()
 
 
+def run_crypto_cycle():
+    """Execute le cycle crypto : 8 strategies Binance, 24/7, toutes les 15 min.
+
+    Charge les 8 strategies depuis strategies.crypto, genere les signaux,
+    passe par CryptoRiskManager + CryptoKillSwitch, route vers BinanceBroker.
+    """
+    if not _execution_lock.acquire(blocking=False):
+        logger.warning("CRYPTO CYCLE SKIP — execution deja en cours (lock)")
+        return
+    try:
+        logger.info("=== CRYPTO CYCLE ===")
+
+        # --- Verifier que Binance est configure ---
+        if not os.getenv("BINANCE_API_KEY"):
+            logger.debug("Crypto cycle skip — BINANCE_API_KEY non configuree")
+            return
+
+        # --- Charger la config d'allocation ---
+        import yaml
+        alloc_path = ROOT / "config" / "crypto_allocation.yaml"
+        crypto_config = {}
+        if alloc_path.exists():
+            try:
+                crypto_config = yaml.safe_load(
+                    alloc_path.read_text(encoding="utf-8")
+                ).get("crypto_allocation", {})
+            except Exception as e:
+                logger.error(f"Erreur lecture crypto_allocation.yaml: {e}")
+
+        total_capital = crypto_config.get("total_capital", 20_000)
+
+        # --- Importer les 8 strategies ---
+        try:
+            from strategies.crypto import CRYPTO_STRATEGIES
+        except Exception as e:
+            logger.error(f"Erreur import strategies crypto: {e}", exc_info=True)
+            return
+
+        if not CRYPTO_STRATEGIES:
+            logger.warning("Aucune strategie crypto chargee — skip")
+            return
+
+        # --- Initialiser le risk manager + kill switch ---
+        try:
+            from core.crypto.risk_manager_crypto import CryptoRiskManager
+        except Exception as e:
+            logger.error(f"Erreur import CryptoRiskManager: {e}", exc_info=True)
+            return
+
+        risk_mgr = CryptoRiskManager(capital=total_capital)
+
+        # --- Verifier le kill switch AVANT tout trade ---
+        killed, kill_reason = risk_mgr.kill_switch.check()
+        if killed:
+            logger.critical(
+                f"CRYPTO KILL SWITCH ACTIF — aucun trade: {kill_reason}"
+            )
+            try:
+                from core.telegram_alert import send_alert
+                send_alert(
+                    f"CRYPTO KILL SWITCH: {kill_reason}", level="critical"
+                )
+            except Exception:
+                pass
+            return
+
+        # --- Initialiser le broker Binance ---
+        broker = None
+        try:
+            from core.broker.binance_broker import BinanceBroker
+            broker = BinanceBroker()
+        except Exception as e:
+            logger.error(
+                f"Binance broker init echoue — signaux seront logues "
+                f"mais pas executes: {e}"
+            )
+
+        # --- Recuperer les positions et l'equity pour le risk check ---
+        positions = []
+        current_equity = total_capital
+        cash_available = 0
+        earn_total = 0
+        if broker:
+            try:
+                acct = broker.get_account_info()
+                current_equity = float(acct.get("equity", total_capital))
+                cash_available = float(acct.get("cash", 0))
+                positions = broker.get_positions()
+            except Exception as e:
+                logger.warning(f"Binance account info indisponible: {e}")
+
+        # --- Risk check global avant signaux ---
+        risk_result = risk_mgr.check_all(
+            positions=positions,
+            current_equity=current_equity,
+            cash_available=cash_available,
+            earn_total=earn_total,
+        )
+
+        if not risk_result["passed"]:
+            failed_checks = [
+                name for name, c in risk_result["checks"].items()
+                if not c["passed"]
+            ]
+            logger.warning(
+                f"CRYPTO RISK CHECK FAILED ({len(failed_checks)} checks): "
+                f"{failed_checks}"
+            )
+
+        # --- Boucle sur les 8 strategies ---
+        import pandas as pd
+
+        n_signals = 0
+        n_orders = 0
+        n_errors = 0
+
+        for strat_id, strat_data in CRYPTO_STRATEGIES.items():
+            config = strat_data["config"]
+            signal_fn = strat_data["signal_fn"]
+            strat_name = config.get("name", strat_id)
+
+            try:
+                # Construire le candle minimal (dernier prix) et le state
+                # Chaque strategie recoit un candle pd.Series et un state dict
+                candle_data = {"close": 0, "open": 0, "high": 0, "low": 0,
+                               "volume": 0, "timestamp": datetime.now(
+                                   timezone.utc).isoformat()}
+
+                # Tenter de recuperer le dernier prix via Binance
+                primary_symbol = config.get("symbols", ["BTCUSDT"])[0]
+                df_full = None
+                if broker and primary_symbol.endswith("USDT"):
+                    try:
+                        timeframe = config.get("timeframe", "4h")
+                        price_data = broker.get_prices(
+                            primary_symbol, timeframe=timeframe, bars=100
+                        )
+                        bars = price_data.get("bars", [])
+                        if bars:
+                            last_bar = bars[-1]
+                            candle_data = {
+                                "close": last_bar["c"],
+                                "open": last_bar["o"],
+                                "high": last_bar["h"],
+                                "low": last_bar["l"],
+                                "volume": last_bar["v"],
+                                "timestamp": datetime.now(
+                                    timezone.utc
+                                ).isoformat(),
+                            }
+                            # Construire df_full pour les strategies qui en ont besoin
+                            df_full = pd.DataFrame(bars)
+                            df_full.rename(columns={
+                                "o": "open", "h": "high", "l": "low",
+                                "c": "close", "v": "volume",
+                            }, inplace=True)
+                    except Exception as e:
+                        logger.warning(
+                            f"  [{strat_id}] Impossible de recuperer "
+                            f"les prix {primary_symbol}: {e}"
+                        )
+
+                candle = pd.Series(candle_data)
+
+                # State avec capital alloue (1/8 Kelly SOFT_LAUNCH)
+                alloc_pct = config.get("allocation_pct", 0.10)
+                strat_capital = total_capital * alloc_pct * CRYPTO_KELLY_FRACTION
+                state = {
+                    "capital": total_capital,
+                    "equity": current_equity,
+                    "positions": positions,
+                    "i": len(df_full) - 1 if df_full is not None and not df_full.empty else 0,
+                }
+
+                # Kwargs supplementaires pour certaines strategies
+                kwargs = {}
+                if df_full is not None:
+                    kwargs["df_full"] = df_full
+                kwargs["symbol"] = primary_symbol
+
+                # --- Appel du signal_fn ---
+                signal = signal_fn(candle, state, **kwargs)
+
+                # --- Log du signal (meme si None) ---
+                if signal is None:
+                    logger.info(
+                        f"  [{strat_id}] {strat_name}: pas de signal"
+                    )
+                    continue
+
+                n_signals += 1
+                action = signal.get("action", "UNKNOWN")
+                logger.info(
+                    f"  [{strat_id}] {strat_name}: SIGNAL {action} "
+                    f"— {json.dumps({k: v for k, v in signal.items() if k != 'df_full'}, default=str)}"
+                )
+
+                # --- Verifier risk avant execution ---
+                if not risk_result["passed"]:
+                    logger.warning(
+                        f"  [{strat_id}] Signal ignore — risk check global "
+                        f"non passe"
+                    )
+                    continue
+
+                # --- Executer via BinanceBroker si disponible ---
+                if broker is None:
+                    logger.info(
+                        f"  [{strat_id}] Signal logue mais pas execute "
+                        f"(broker indisponible)"
+                    )
+                    continue
+
+                # Determiner la direction et le market_type
+                market_type = config.get("market_type", "spot")
+
+                # Pour les signaux EARN, pas d'ordre classique
+                if action in ("EARN_REBALANCE", "EARN_SUBSCRIBE", "EARN_REDEEM",
+                              "CAPITAL_RELEASE"):
+                    logger.info(
+                        f"  [{strat_id}] Earn signal logue "
+                        f"(execution earn non implementee dans le worker)"
+                    )
+                    continue
+
+                # Pour les signaux CLOSE
+                if action == "CLOSE":
+                    try:
+                        result = broker.close_position(
+                            primary_symbol,
+                            _authorized_by=f"crypto_worker_{strat_id}",
+                        )
+                        logger.info(
+                            f"  [{strat_id}] Position fermee: {result}"
+                        )
+                        n_orders += 1
+                    except Exception as e:
+                        logger.error(
+                            f"  [{strat_id}] Erreur close: {e}"
+                        )
+                        n_errors += 1
+                    continue
+
+                # Pour BUY/SELL — calculer le sizing
+                direction = signal.get("direction", action)
+                if direction not in ("BUY", "SELL", "LONG", "SHORT"):
+                    logger.info(
+                        f"  [{strat_id}] Action {action} non routee "
+                        f"(direction inconnue)"
+                    )
+                    continue
+
+                # Mapping direction -> Binance side
+                side = "BUY" if direction in ("BUY", "LONG") else "SELL"
+
+                # Sizing : capital alloue * 1/8 Kelly
+                price = candle_data.get("close", 0)
+                if price <= 0:
+                    logger.warning(
+                        f"  [{strat_id}] Prix nul — ordre non place"
+                    )
+                    continue
+
+                notional = strat_capital
+                stop_loss = signal.get("stop_loss")
+
+                try:
+                    result = broker.create_position(
+                        symbol=signal.get("symbol", primary_symbol),
+                        direction=side,
+                        notional=notional if side == "BUY" else None,
+                        qty=round(notional / price, 6) if side == "SELL" else None,
+                        stop_loss=stop_loss,
+                        market_type=market_type,
+                        _authorized_by=f"crypto_worker_{strat_id}",
+                    )
+                    logger.info(
+                        f"  [{strat_id}] ORDRE EXECUTE: {side} "
+                        f"${notional:.0f} {signal.get('symbol', primary_symbol)} "
+                        f"— {result.get('status', '???')}"
+                    )
+                    n_orders += 1
+                except Exception as e:
+                    logger.error(
+                        f"  [{strat_id}] Erreur execution: {e}",
+                        exc_info=True,
+                    )
+                    n_errors += 1
+
+            except Exception as e:
+                # Une strategie qui plante ne doit pas bloquer les autres
+                logger.error(
+                    f"  [{strat_id}] ERREUR STRATEGIE: {e}", exc_info=True
+                )
+                n_errors += 1
+
+        logger.info(
+            f"=== CRYPTO CYCLE TERMINE: {n_signals} signal(s), "
+            f"{n_orders} ordre(s), {n_errors} erreur(s) ==="
+        )
+
+        # --- Telegram recap ---
+        try:
+            from core.telegram_alert import send_alert
+            if n_signals > 0 or n_orders > 0:
+                send_alert(
+                    f"CRYPTO CYCLE: {n_signals} signaux, {n_orders} ordres, "
+                    f"{n_errors} erreurs — equity=${current_equity:,.0f}",
+                    level="info",
+                )
+        except Exception:
+            pass
+
+    except Exception as e:
+        logger.error(f"Erreur critique crypto cycle: {e}", exc_info=True)
+        try:
+            from core.telegram_alert import send_alert
+            send_alert(
+                f"CRYPTO CYCLE ERREUR CRITIQUE: {e}", level="critical"
+            )
+        except Exception:
+            pass
+    finally:
+        _execution_lock.release()
+
+
 def main():
     _start_health_server()
     logger.info("=" * 60)
@@ -461,6 +793,7 @@ def main():
     logger.info(f"  Paris: {datetime.now(PARIS).strftime('%Y-%m-%d %H:%M')}")
     logger.info(f"  New York: {datetime.now(ET).strftime('%Y-%m-%d %H:%M')}")
     logger.info(f"  Alpaca API: {'SET' if os.getenv('ALPACA_API_KEY') else 'NOT SET'}")
+    logger.info(f"  Binance API: {'SET' if os.getenv('BINANCE_API_KEY') else 'NOT SET'}")
     logger.info("=" * 60)
 
     daily_done_today = False
@@ -469,6 +802,7 @@ def main():
     last_live_risk = 0
     last_heartbeat = 0
     last_cross_portfolio = 0
+    last_crypto = 0
     after_close_checked_today = False
     HEARTBEAT_INTERVAL = 1800  # 30 min
     CROSS_PORTFOLIO_INTERVAL = 14400  # 4 hours
@@ -500,7 +834,12 @@ def main():
             daily_done_today = False
             after_close_checked_today = False
 
-        # Skip weekends
+        # === CRYPTO CYCLE 24/7 (y compris weekends) — toutes les 15 min ===
+        if time.time() - last_crypto >= CRYPTO_INTERVAL_SECONDS:
+            run_crypto_cycle()
+            last_crypto = time.time()
+
+        # Skip weekends pour les marches traditionnels (US/EU/FX)
         if not is_weekday():
             time.sleep(60)
             continue

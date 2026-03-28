@@ -305,6 +305,93 @@ def get_strategy_detail(strategy_id: str):
         return {"error": str(e)}
 
 
+# ── Crypto Strategies ────────────────────────────────────────────────────────
+
+@app.get("/api/crypto/strategies")
+def get_crypto_strategies():
+    """Liste des 8 strategies crypto Binance avec config, wallet et statut."""
+    try:
+        from strategies.crypto import CRYPTO_STRATEGIES
+
+        # Charger la config allocation pour obtenir le capital total
+        import yaml
+        alloc_path = ROOT / "config" / "crypto_allocation.yaml"
+        crypto_config = {}
+        if alloc_path.exists():
+            try:
+                crypto_config = yaml.safe_load(
+                    alloc_path.read_text(encoding="utf-8")
+                ).get("crypto_allocation", {})
+            except Exception:
+                pass
+
+        total_capital = crypto_config.get("total_capital", 20_000)
+        wallets = crypto_config.get("wallets", {})
+
+        # Tenter de recuperer les balances Binance (si disponible)
+        binance_info = {}
+        try:
+            if os.environ.get("BINANCE_API_KEY"):
+                from core.broker.binance_broker import BinanceBroker
+                bnb = BinanceBroker()
+                binance_info = bnb.get_account_info()
+        except Exception as e:
+            logger.debug(f"Binance account info indisponible: {e}")
+
+        result = []
+        for strat_id, strat_data in CRYPTO_STRATEGIES.items():
+            config = strat_data["config"]
+            market_type = config.get("market_type", "spot")
+
+            # Mapping market_type -> wallet
+            wallet_map = {"spot": "spot", "margin": "margin", "earn": "earn"}
+            wallet = wallet_map.get(market_type, "spot")
+
+            alloc_pct = config.get("allocation_pct", 0)
+            capital_allocated = round(total_capital * alloc_pct, 2)
+
+            result.append({
+                "id": strat_id,
+                "name": config.get("name", strat_id),
+                "status": "LIVE",
+                "wallet": wallet,
+                "market_type": market_type,
+                "allocation_pct": round(alloc_pct * 100, 1),
+                "capital_allocated": capital_allocated,
+                "symbols": config.get("symbols", []),
+                "timeframe": config.get("timeframe", "4h"),
+                "frequency": config.get("frequency", "4h"),
+                "max_leverage": config.get("max_leverage", 1),
+                "kelly_fraction": 0.125,  # SOFT_LAUNCH 1/8 Kelly
+            })
+
+        # Ajouter les infos de balance Binance si disponibles
+        balance_info = {}
+        if binance_info:
+            balance_info = {
+                "equity": binance_info.get("equity", 0),
+                "cash_usdt": binance_info.get("spot_usdt", 0),
+                "spot_total_usd": binance_info.get("spot_total_usd", 0),
+                "margin_level": binance_info.get("margin_level", 0),
+            }
+
+        total_alloc_pct = sum(s["allocation_pct"] for s in result)
+        return {
+            "strategies": result,
+            "count": len(result),
+            "total_capital": total_capital,
+            "total_allocation_pct": round(total_alloc_pct, 1),
+            "wallets": wallets,
+            "binance_balance": balance_info,
+            "phase": "SOFT_LAUNCH",
+            "kelly_fraction": 0.125,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        logger.error(f"Crypto strategies error: {e}")
+        return {"error": str(e), "strategies": [], "count": 0}
+
+
 # ── Allocation ───────────────────────────────────────────────────────────────
 
 @app.get("/api/allocation")
@@ -661,6 +748,16 @@ def get_markets_overview():
             "positions_count": 0,
             "allocation_target_pct": 10,
         },
+        "crypto": {
+            "name": "Crypto (Binance France)",
+            "broker": "binance",
+            "active": True,  # Crypto 24/7
+            "hours": "24/7",
+            "pnl_today": 0,
+            "strategies_count": 8,
+            "positions_count": 0,
+            "allocation_target_pct": 7,
+        },
     }
 
     total_pnl = sum(m["pnl_today"] for m in markets.values())
@@ -708,6 +805,10 @@ def get_capital_heatmap():
         if 15 <= hour < 22:
             active_capital_pct += 35
             active_strategies.extend(["US Intraday", "US Shorts", "FOMC (si event)"])
+
+        # Crypto (24/7)
+        active_capital_pct += 7
+        active_strategies.extend(["BTC/ETH Dual Momentum", "BTC Mean Reversion", "Borrow Rate Carry"])
 
         heatmap.append({
             "hour_cet": f"{hour:02d}:00",

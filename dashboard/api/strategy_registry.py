@@ -390,4 +390,237 @@ STRATEGY_REGISTRY = {
         "tickers": ["SVXY", "SPY", "TLT"],
         "backtest": {"sharpe": 0.75, "win_rate": 52.0, "profit_factor": 1.15, "max_dd": 4.0, "trades": 12},
     },
+
+    # ── Crypto Strategies (Binance France) ───────────────────────────────
+
+    "STRAT-001": {
+        "name": "BTC/ETH Dual Momentum",
+        "tier": "S",
+        "type": "crypto",
+        "edge_type": "Trend following (dual momentum, margin)",
+        "description": (
+            "BTC et ETH affichent les tendances les plus fortes de toutes les classes d'actifs. "
+            "Quand BTC est en tendance haussiere (close > EMA50 4h, ADX > 25), on est long en spot. "
+            "Quand il est en tendance baissiere, on short via margin borrow. On peut etre long BTC + "
+            "short ETH simultanement. Le borrow rate est surveille en continu."
+        ),
+        "why_it_works": (
+            "Le marche crypto est domine par le momentum — les tendances durent des semaines. "
+            "Le dual momentum BTC/ETH exploite la decorrelation ponctuelle entre les deux. "
+            "Le margin borrow remplace les perpetuals (interdits en France)."
+        ),
+        "parameters": {
+            "ema_fast": {"value": "20", "description": "EMA rapide (4h)"},
+            "ema_slow": {"value": "50", "description": "EMA lente (4h)"},
+            "adx_threshold": {"value": "25", "description": "ADX minimum pour confirmer la tendance"},
+            "trailing_stop": {"value": "2x ATR", "description": "Trailing stop en ATR"},
+            "stop_loss": {"value": "2.5x ATR", "description": "Stop loss initial"},
+            "max_holding": {"value": "21 jours", "description": "Duree max de detention"},
+            "borrow_rate_max": {"value": "0.08%/jour", "description": "Taux borrow max pour ouvrir un short"},
+            "borrow_emergency": {"value": "0.10%/jour", "description": "Seuil pour fermer les shorts d'urgence"},
+        },
+        "tickers": ["BTCUSDT", "ETHUSDT"],
+        "backtest": {"sharpe": 0, "win_rate": 0, "profit_factor": 0, "max_dd": 0, "trades": 0},
+        "wallet": "margin",
+        "allocation_pct": 20,
+        "max_leverage": 2,
+    },
+
+    "STRAT-002": {
+        "name": "Altcoin Relative Strength",
+        "tier": "A",
+        "type": "crypto",
+        "edge_type": "Momentum rotation (hebdomadaire)",
+        "description": (
+            "Rotation hebdomadaire sur les 15 altcoins les plus liquides. On classe par "
+            "alpha BTC-adjusted sur 7 jours : les 3 meilleurs en long, les 3 pires en short "
+            "(margin). Rebalancement chaque dimanche 00:00 UTC."
+        ),
+        "why_it_works": (
+            "Les altcoins amplifient les mouvements du marche. Le ranking par alpha BTC-adjusted "
+            "identifie les flux specifiques (listings, partnerships, upgrades) qui persistent "
+            "une semaine. Le short des pires performers exploite le mean reversion des pumps."
+        ),
+        "parameters": {
+            "top_n": {"value": "3", "description": "Nombre de longs et shorts"},
+            "rebalance": {"value": "Dimanche 00:00 UTC", "description": "Jour de rotation"},
+            "stop_loss": {"value": "8%", "description": "Stop loss par position"},
+            "volume_min": {"value": "$5M/jour", "description": "Volume minimum pour etre dans l'univers"},
+        },
+        "tickers": ["ETHUSDT", "BNBUSDT", "SOLUSDT", "XRPUSDT", "ADAUSDT", "AVAXUSDT",
+                     "DOTUSDT", "LINKUSDT", "MATICUSDT", "ATOMUSDT", "NEARUSDT",
+                     "APTUSDT", "ARBUSDT", "OPUSDT", "UNIUSDT"],
+        "backtest": {"sharpe": 0, "win_rate": 0, "profit_factor": 0, "max_dd": 0, "trades": 0},
+        "wallet": "margin",
+        "allocation_pct": 15,
+        "max_leverage": 1.5,
+    },
+
+    "STRAT-003": {
+        "name": "BTC Mean Reversion",
+        "tier": "A",
+        "type": "crypto",
+        "edge_type": "Mean reversion (spot only, range-bound)",
+        "description": (
+            "Quand BTC est en range (ADX < 20 sur 4h), les deviations > 2 ecarts-types "
+            "des bandes de Bollinger (1h) offrent des entrees en mean reversion. "
+            "Spot only (long uniquement). Complementaire au Dual Momentum (STRAT-001)."
+        ),
+        "why_it_works": (
+            "En l'absence de tendance, BTC oscille entre support et resistance. "
+            "Les BBands 1h a 2.5 SD capturent les extremes intraday. Le filtre ADX < 20 "
+            "garantit qu'on ne trade que quand la reversion est probable."
+        ),
+        "parameters": {
+            "bb_period": {"value": "20", "description": "Periode Bollinger Bands"},
+            "bb_std": {"value": "2.5", "description": "Ecarts-types"},
+            "adx_max": {"value": "20", "description": "ADX maximum (range filter)"},
+            "stop_loss": {"value": "1.5x ATR", "description": "Stop loss en ATR"},
+            "take_profit": {"value": "Middle band (SMA20)", "description": "Target = retour a la moyenne"},
+        },
+        "tickers": ["BTCUSDT"],
+        "backtest": {"sharpe": 0, "win_rate": 0, "profit_factor": 0, "max_dd": 0, "trades": 0},
+        "wallet": "spot",
+        "allocation_pct": 12,
+        "max_leverage": 1,
+    },
+
+    "STRAT-004": {
+        "name": "Volatility Breakout",
+        "tier": "A",
+        "type": "crypto",
+        "edge_type": "Breakout (compression de volatilite)",
+        "description": (
+            "Detecte les compressions de volatilite (BBands width < 20th percentile sur 60 barres 4h) "
+            "puis entre dans la direction du breakout. Utilise le margin pour les shorts."
+        ),
+        "why_it_works": (
+            "Les compressions de vol precedent les grands mouvements en crypto. "
+            "Quand le marche 'respire' apres une compression, le breakout initial "
+            "est souvent suivi par une extension significative."
+        ),
+        "parameters": {
+            "compression_pctl": {"value": "20e percentile", "description": "Seuil de compression BBands width"},
+            "breakout_atr_mult": {"value": "1.5x ATR", "description": "Distance de breakout depuis la BB"},
+            "stop_loss": {"value": "2x ATR", "description": "Stop loss"},
+            "trailing_stop": {"value": "1.5x ATR", "description": "Trailing stop une fois en profit"},
+        },
+        "tickers": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+        "backtest": {"sharpe": 0, "win_rate": 0, "profit_factor": 0, "max_dd": 0, "trades": 0},
+        "wallet": "margin",
+        "allocation_pct": 10,
+        "max_leverage": 2,
+    },
+
+    "STRAT-005": {
+        "name": "BTC Dominance Rotation V2",
+        "tier": "B",
+        "type": "crypto",
+        "edge_type": "Rotation (dominance BTC, spot only)",
+        "description": (
+            "Quand la dominance BTC monte (EMA7 > EMA21), on est long BTC. "
+            "Quand elle baisse, on est long ETH ou SOL (les altcoins surperforment). "
+            "Rebalancement hebdomadaire, spot only."
+        ),
+        "why_it_works": (
+            "La dominance BTC est le principal indicateur de regime en crypto. "
+            "Quand elle monte, le capital quitte les altcoins vers BTC (flight to quality). "
+            "Quand elle baisse, les altcoins surperforment (risk-on crypto)."
+        ),
+        "parameters": {
+            "ema_fast": {"value": "7", "description": "EMA rapide sur la dominance"},
+            "ema_slow": {"value": "21", "description": "EMA lente sur la dominance"},
+            "rebalance": {"value": "Dimanche 00:00 UTC", "description": "Jour de rotation"},
+        },
+        "tickers": ["BTCUSDT", "ETHUSDT", "SOLUSDT"],
+        "backtest": {"sharpe": 0, "win_rate": 0, "profit_factor": 0, "max_dd": 0, "trades": 0},
+        "wallet": "spot",
+        "allocation_pct": 10,
+        "max_leverage": 1,
+    },
+
+    "STRAT-006": {
+        "name": "Borrow Rate Carry",
+        "tier": "B",
+        "type": "crypto",
+        "edge_type": "Yield (Binance Earn, aucun risque directionnel)",
+        "description": (
+            "Allocation dynamique entre USDT, BTC et ETH Flexible Earn en fonction des APY. "
+            "Si USDT APY > 8%, 80% en USDT Earn. Si APY < 5%, diversification BTC/ETH Earn. "
+            "Flexible Earn uniquement (retrait instantane)."
+        ),
+        "why_it_works": (
+            "Les taux Earn Binance sont structurellement positifs car les traders leverages "
+            "empruntent. L'allocation dynamique maximise le yield sans risque directionnel. "
+            "Le retrait instantane (Flexible) preserve la liquidite."
+        ),
+        "parameters": {
+            "usdt_apy_high": {"value": "8%", "description": "Seuil pour mode high USDT"},
+            "usdt_apy_low": {"value": "5%", "description": "Seuil pour diversification"},
+            "rebalance_interval": {"value": "8h minimum", "description": "Intervalle minimum entre rebalance"},
+            "min_apy_change": {"value": "0.5%", "description": "Changement minimum pour declencher rebalance"},
+        },
+        "tickers": ["USDT", "BTC", "ETH"],
+        "backtest": {"sharpe": 0, "win_rate": 0, "profit_factor": 0, "max_dd": 0, "trades": 0},
+        "wallet": "earn",
+        "allocation_pct": 13,
+        "max_leverage": 1,
+    },
+
+    "STRAT-007": {
+        "name": "Liquidation Momentum",
+        "tier": "B",
+        "type": "crypto",
+        "edge_type": "Momentum (cascades de liquidation, margin)",
+        "description": (
+            "Detecte les cascades de liquidation via OI + prix + volume : quand l'OI chute "
+            "de > 5% sur 4h avec un mouvement de prix > 3% et un volume > 3x la moyenne, "
+            "c'est une cascade. On entre 2-5 barres apres le peak pour capturer le rebond."
+        ),
+        "why_it_works": (
+            "Les cascades de liquidation creent des mouvements excessifs — les positions "
+            "leveragees sont fermees de force, poussant le prix au-dela de la fair value. "
+            "Le rebond post-cascade est statistiquement significatif."
+        ),
+        "parameters": {
+            "oi_drop_threshold": {"value": "-5%", "description": "Chute OI minimum sur 4h"},
+            "price_move_threshold": {"value": "3%", "description": "Mouvement de prix minimum sur 4h"},
+            "volume_ratio": {"value": "3x", "description": "Volume vs moyenne 7j"},
+            "bars_after_peak": {"value": "2-5", "description": "Barres d'attente apres le peak"},
+            "max_trades_week": {"value": "3", "description": "Maximum de trades par semaine"},
+        },
+        "tickers": ["BTCUSDT", "ETHUSDT"],
+        "backtest": {"sharpe": 0, "win_rate": 0, "profit_factor": 0, "max_dd": 0, "trades": 0},
+        "wallet": "margin",
+        "allocation_pct": 10,
+        "max_leverage": 3,
+    },
+
+    "STRAT-008": {
+        "name": "Weekend Gap Reversal",
+        "tier": "B",
+        "type": "crypto",
+        "edge_type": "Mean reversion (gap weekend, spot only)",
+        "description": (
+            "Le weekend, le volume crypto baisse de 40-60%. Les mouvements > 3% (BTC) "
+            "du vendredi 22:00 UTC au dimanche 22:00 UTC sont souvent reverses le lundi. "
+            "On entre dimanche soir en anticipant le retour a la moyenne."
+        ),
+        "why_it_works": (
+            "Le weekend a moins de liquidite et les market makers sont moins actifs. "
+            "Les mouvements excessifs sont corriges quand la liquidite revient le lundi. "
+            "Les dips > 3% sont souvent des liquidations en cascade qui se reversent."
+        ),
+        "parameters": {
+            "gap_threshold_small": {"value": "-3%", "description": "Seuil de dip pour entree moderee"},
+            "gap_threshold_large": {"value": "-8%", "description": "Seuil de dip pour entree large"},
+            "timing": {"value": "Dimanche 22:00 UTC", "description": "Heure d'evaluation"},
+            "max_trades_weekend": {"value": "1", "description": "Maximum 1 trade par weekend"},
+        },
+        "tickers": ["BTCUSDT"],
+        "backtest": {"sharpe": 0, "win_rate": 0, "profit_factor": 0, "max_dd": 0, "trades": 0},
+        "wallet": "spot",
+        "allocation_pct": 10,
+        "max_leverage": 1,
+    },
 }

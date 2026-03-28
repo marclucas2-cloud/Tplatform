@@ -3,14 +3,14 @@
 
 crypto_allocation:
   version: 2
-  total_capital: 15000
+  total_capital: 20000             # 20K EUR (actual portfolio)
 
   # --- Wallet Distribution ---
   wallets:
-    spot: 6000                     # Spot trading wallet
-    margin: 4000                   # Margin (isolated) wallet
-    earn: 3000                     # Earn flexible (yield)
-    cash: 2000                     # Reserve USDT
+    spot: 4000                     # Spot trading wallet (EUR + USDT)
+    margin: 2000                   # Margin (isolated) wallet
+    earn: 11500                    # Earn flexible (BTC 0.27 + USDC 1978)
+    cash: 2500                     # Reserve EUR
 
   # --- 8 Strategies with Regime Allocations ---
   # Weights are % of DEPLOYED capital (excludes cash reserve)
@@ -64,18 +64,15 @@ crypto_allocation:
   # --- Soft Launch Phases ---
   phases:
     week_1:
-      capital: 10000               # $10K deployed
-      strategies:
-        - "btc_eth_trend"
-        - "earn_yield"
-        - "spot_dca_accumulate"
-      kelly_fraction: 0.125        # 1/8 Kelly
-      max_leverage: 1.0            # No leverage week 1
+      capital: 14000               # 14K EUR deployed
+      strategies: "all"            # Toutes les 8 strategies actives des la semaine 1
+      kelly_fraction: 0.125        # 1/8 Kelly (SOFT_LAUNCH)
+      max_leverage: 1.5            # Leverage leger autorise
       earn_type: "FLEXIBLE"
-      margin_enabled: false        # No margin trading week 1
+      margin_enabled: true         # Margin active pour les strategies qui en ont besoin
 
     week_2:
-      capital: 12500               # $12.5K deployed
+      capital: 17000               # 17K EUR deployed
       strategies:
         - "btc_eth_trend"
         - "earn_yield"
@@ -88,7 +85,7 @@ crypto_allocation:
       margin_enabled: true         # Margin enabled with 1.5x max
 
     week_3_plus:
-      capital: 15000               # Full $15K
+      capital: 20000               # Full 20K EUR
       strategies: "all_validated"
       kelly_fraction: 0.25         # 1/4 Kelly
       max_leverage: 2.5            # Full leverage per limits

@@ -22,7 +22,7 @@ class TestRateLimiter:
 
 class TestBinanceBrokerInit:
     def test_default_testnet(self):
-        broker = BinanceBroker(api_key="test", api_secret="test")
+        broker = BinanceBroker(api_key="test", api_secret="test", testnet=True)
         assert broker.is_paper is True
         assert broker.name == "binance"
         assert "testnet" in broker._spot_base
