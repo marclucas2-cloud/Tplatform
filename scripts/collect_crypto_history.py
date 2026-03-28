@@ -2,12 +2,21 @@
 DATA-002 — Collect historical crypto data from Binance.
 
 Downloads OHLCV candles + funding rates for all symbols in the universe.
-Stores in data/crypto/ as Parquet (candles) and SQLite (funding).
+Supports SPOT API (api.binance.com, default for France) and FUTURES API
+(fapi.binance.com, for funding rates / reference data).
+
+Tier-based multi-timeframe collection:
+  - Tier 1 (BTC, ETH): 1h, 4h, 1d from Jan 2023
+  - Tier 2 (SOL, BNB, XRP, DOGE, AVAX, LINK, ADA, DOT, NEAR, SUI): 4h, 1d from Jan 2024
+
+Stores in data/crypto/ as Parquet (candles) and Parquet (funding).
 
 Usage:
     python scripts/collect_crypto_history.py
-    python scripts/collect_crypto_history.py --symbols BTCUSDT ETHUSDT
-    python scripts/collect_crypto_history.py --interval 5m --days 365
+    python scripts/collect_crypto_history.py --source spot
+    python scripts/collect_crypto_history.py --source futures --symbols BTCUSDT ETHUSDT
+    python scripts/collect_crypto_history.py --interval 1h --days 365
+    python scripts/collect_crypto_history.py --tier-mode
 """
 from __future__ import annotations
 
@@ -31,17 +40,59 @@ logging.basicConfig(
 )
 logger = logging.getLogger("collect_crypto")
 
-# Binance public API (no key needed for market data)
+# Binance public APIs (no key needed for market data)
+SPOT_BASE = "https://api.binance.com"
 FUTURES_BASE = "https://fapi.binance.com"
 MAX_KLINES = 1000
 
+# Tier config for multi-timeframe collection
+TIER_1_SYMBOLS = ["BTCUSDT", "ETHUSDT"]
+TIER_2_SYMBOLS = [
+    "SOLUSDT", "BNBUSDT", "XRPUSDT", "DOGEUSDT",
+    "AVAXUSDT", "LINKUSDT", "ADAUSDT", "DOTUSDT",
+    "NEARUSDT", "SUIUSDT",
+]
+ALL_SYMBOLS = TIER_1_SYMBOLS + TIER_2_SYMBOLS
+
+TIER_CONFIG: dict[str, dict] = {
+    "tier1": {
+        "symbols": TIER_1_SYMBOLS,
+        "intervals": ["1h", "4h", "1d"],
+        "start": datetime(2023, 1, 1, tzinfo=timezone.utc),
+    },
+    "tier2": {
+        "symbols": TIER_2_SYMBOLS,
+        "intervals": ["4h", "1d"],
+        "start": datetime(2024, 1, 1, tzinfo=timezone.utc),
+    },
+}
+
+
+def _klines_url(source: str) -> str:
+    """Return the klines endpoint URL for the given source."""
+    if source == "spot":
+        return f"{SPOT_BASE}/api/v3/klines"
+    return f"{FUTURES_BASE}/fapi/v1/klines"
+
 
 def fetch_klines(
-    symbol: str, interval: str, start_ms: int, end_ms: int
+    symbol: str,
+    interval: str,
+    start_ms: int,
+    end_ms: int,
+    source: str = "spot",
 ) -> list[list]:
-    """Fetch klines from Binance futures API."""
-    url = f"{FUTURES_BASE}/fapi/v1/klines"
-    all_klines = []
+    """Fetch klines from Binance spot or futures API.
+
+    Args:
+        symbol: Trading pair (e.g. BTCUSDT).
+        interval: Candle interval (1h, 4h, 1d, ...).
+        start_ms: Start timestamp in milliseconds.
+        end_ms: End timestamp in milliseconds.
+        source: 'spot' (api.binance.com) or 'futures' (fapi.binance.com).
+    """
+    url = _klines_url(source)
+    all_klines: list[list] = []
     current = start_ms
 
     while current < end_ms:
@@ -166,16 +217,91 @@ def validate_data(df: pd.DataFrame, symbol: str) -> dict:
     }
 
 
+def _collect_one(
+    symbol: str,
+    interval: str,
+    start_ms: int,
+    end_ms: int,
+    source: str,
+    data_dir: Path,
+    validate_only: bool = False,
+) -> dict:
+    """Collect (or validate) candles for a single symbol/interval pair."""
+    label = f"{symbol} {interval} ({source})"
+    parquet_path = data_dir / f"{symbol}_{interval}.parquet"
+
+    if validate_only:
+        if parquet_path.exists():
+            df = pd.read_parquet(parquet_path)
+            return validate_data(df, label)
+        return {"symbol": label, "status": "MISSING", "rows": 0}
+
+    try:
+        klines = fetch_klines(symbol, interval, start_ms, end_ms, source=source)
+        df = klines_to_df(klines)
+
+        if not df.empty:
+            if parquet_path.exists():
+                existing = pd.read_parquet(parquet_path)
+                df = pd.concat([existing, df]).drop_duplicates(
+                    subset=["timestamp"]
+                ).sort_values("timestamp")
+
+            df.to_parquet(parquet_path, index=False)
+            result = validate_data(df, label)
+            logger.info(f"  OK {label}: {result['rows']} candles saved")
+        else:
+            result = {"symbol": label, "status": "NO_DATA", "rows": 0}
+            logger.warning(f"  SKIP {label}: no data returned")
+
+    except Exception as e:
+        result = {"symbol": label, "status": "ERROR", "error": str(e)}
+        logger.error(f"  FAIL {label}: {e}")
+
+    return result
+
+
+def _build_tier_jobs(source: str) -> list[dict]:
+    """Build collection jobs from TIER_CONFIG.
+
+    Returns a list of dicts with keys: symbol, interval, start_ms, end_ms.
+    """
+    end = datetime.now(timezone.utc)
+    end_ms = int(end.timestamp() * 1000)
+    jobs: list[dict] = []
+
+    for _tier_name, cfg in TIER_CONFIG.items():
+        start_ms = int(cfg["start"].timestamp() * 1000)
+        for sym in cfg["symbols"]:
+            for iv in cfg["intervals"]:
+                jobs.append({
+                    "symbol": sym,
+                    "interval": iv,
+                    "start_ms": start_ms,
+                    "end_ms": end_ms,
+                    "source": source,
+                })
+    return jobs
+
+
 def main():
     parser = argparse.ArgumentParser(description="Collect crypto historical data")
     parser.add_argument(
         "--symbols", nargs="+",
-        default=["BTCUSDT", "ETHUSDT", "SOLUSDT", "BNBUSDT", "XRPUSDT",
-                 "AVAXUSDT", "DOTUSDT", "LINKUSDT", "ADAUSDT"],
+        default=ALL_SYMBOLS,
+        help="Symbols to collect (default: all tier1+tier2)",
     )
-    parser.add_argument("--interval", default="1h", help="Candle interval")
-    parser.add_argument("--days", type=int, default=1095, help="Days of history (default 3y)")
-    parser.add_argument("--funding", action="store_true", default=True, help="Also collect funding")
+    parser.add_argument("--interval", default="1h", help="Candle interval (ignored in --tier-mode)")
+    parser.add_argument("--days", type=int, default=1095, help="Days of history (default 3y, ignored in --tier-mode)")
+    parser.add_argument(
+        "--source", choices=["spot", "futures"], default="spot",
+        help="API source: spot (api.binance.com, default for France) or futures (fapi.binance.com)",
+    )
+    parser.add_argument(
+        "--tier-mode", action="store_true",
+        help="Tier-based multi-timeframe collection (overrides --symbols/--interval/--days)",
+    )
+    parser.add_argument("--funding", action="store_true", default=True, help="Also collect funding (futures only)")
     parser.add_argument("--validate-only", action="store_true", help="Only validate existing data")
     args = parser.parse_args()
 
@@ -184,75 +310,70 @@ def main():
     data_dir.mkdir(parents=True, exist_ok=True)
     funding_dir.mkdir(parents=True, exist_ok=True)
 
-    end = datetime.now(timezone.utc)
-    start = end - timedelta(days=args.days)
-    start_ms = int(start.timestamp() * 1000)
-    end_ms = int(end.timestamp() * 1000)
+    results: list[dict] = []
 
-    results = []
+    if args.tier_mode:
+        # ----- Tier-based multi-timeframe collection -----
+        jobs = _build_tier_jobs(source=args.source)
+        logger.info(f"Tier mode: {len(jobs)} jobs ({args.source} API)")
 
-    for symbol in args.symbols:
-        logger.info(f"{'Validating' if args.validate_only else 'Collecting'} {symbol} {args.interval}...")
-
-        parquet_path = data_dir / f"{symbol}_{args.interval}.parquet"
-
-        if args.validate_only:
-            if parquet_path.exists():
-                df = pd.read_parquet(parquet_path)
-                result = validate_data(df, symbol)
-            else:
-                result = {"symbol": symbol, "status": "MISSING", "rows": 0}
+        for job in jobs:
+            result = _collect_one(
+                symbol=job["symbol"],
+                interval=job["interval"],
+                start_ms=job["start_ms"],
+                end_ms=job["end_ms"],
+                source=job["source"],
+                data_dir=data_dir,
+                validate_only=args.validate_only,
+            )
             results.append(result)
-            continue
+    else:
+        # ----- Classic single-interval mode -----
+        end = datetime.now(timezone.utc)
+        start = end - timedelta(days=args.days)
+        start_ms = int(start.timestamp() * 1000)
+        end_ms = int(end.timestamp() * 1000)
 
-        # Fetch candles
-        try:
-            klines = fetch_klines(symbol, args.interval, start_ms, end_ms)
-            df = klines_to_df(klines)
+        for symbol in args.symbols:
+            logger.info(
+                f"{'Validating' if args.validate_only else 'Collecting'} "
+                f"{symbol} {args.interval} ({args.source})..."
+            )
 
-            if not df.empty:
-                # Merge with existing
-                if parquet_path.exists():
-                    existing = pd.read_parquet(parquet_path)
-                    df = pd.concat([existing, df]).drop_duplicates(
-                        subset=["timestamp"]
-                    ).sort_values("timestamp")
+            result = _collect_one(
+                symbol=symbol,
+                interval=args.interval,
+                start_ms=start_ms,
+                end_ms=end_ms,
+                source=args.source,
+                data_dir=data_dir,
+                validate_only=args.validate_only,
+            )
+            results.append(result)
 
-                df.to_parquet(parquet_path, index=False)
-                result = validate_data(df, symbol)
-                logger.info(f"  ✓ {symbol}: {result['rows']} candles saved")
-            else:
-                result = {"symbol": symbol, "status": "NO_DATA", "rows": 0}
-                logger.warning(f"  ✗ {symbol}: no data returned")
+            # Fetch funding rates (futures API only, not available on spot)
+            if args.funding and args.source == "futures":
+                try:
+                    rates = fetch_funding_rates(symbol, start_ms, end_ms)
+                    if rates:
+                        fr_df = pd.DataFrame(rates)
+                        fr_df["fundingTime"] = pd.to_datetime(
+                            fr_df["fundingTime"], unit="ms", utc=True
+                        )
+                        fr_df["fundingRate"] = fr_df["fundingRate"].astype(float)
+                        fr_path = funding_dir / f"funding_{symbol}.parquet"
 
-        except Exception as e:
-            result = {"symbol": symbol, "status": "ERROR", "error": str(e)}
-            logger.error(f"  ✗ {symbol}: {e}")
+                        if fr_path.exists():
+                            existing = pd.read_parquet(fr_path)
+                            fr_df = pd.concat([existing, fr_df]).drop_duplicates(
+                                subset=["fundingTime"]
+                            ).sort_values("fundingTime")
 
-        results.append(result)
-
-        # Fetch funding rates
-        if args.funding:
-            try:
-                rates = fetch_funding_rates(symbol, start_ms, end_ms)
-                if rates:
-                    fr_df = pd.DataFrame(rates)
-                    fr_df["fundingTime"] = pd.to_datetime(
-                        fr_df["fundingTime"], unit="ms", utc=True
-                    )
-                    fr_df["fundingRate"] = fr_df["fundingRate"].astype(float)
-                    fr_path = funding_dir / f"funding_{symbol}.parquet"
-
-                    if fr_path.exists():
-                        existing = pd.read_parquet(fr_path)
-                        fr_df = pd.concat([existing, fr_df]).drop_duplicates(
-                            subset=["fundingTime"]
-                        ).sort_values("fundingTime")
-
-                    fr_df.to_parquet(fr_path, index=False)
-                    logger.info(f"  ✓ {symbol}: {len(fr_df)} funding rates saved")
-            except Exception as e:
-                logger.warning(f"  Funding rates failed for {symbol}: {e}")
+                        fr_df.to_parquet(fr_path, index=False)
+                        logger.info(f"  OK {symbol}: {len(fr_df)} funding rates saved")
+                except Exception as e:
+                    logger.warning(f"  Funding rates failed for {symbol}: {e}")
 
     # Summary
     print("\n=== Collection Summary ===")
@@ -262,7 +383,7 @@ def main():
         issues = r.get("issues", [])
         print(f"  {r['symbol']}: {status} ({rows} rows)")
         for issue in issues:
-            print(f"    ⚠ {issue}")
+            print(f"    ! {issue}")
 
     total = sum(r.get("rows", 0) for r in results)
     ok = sum(1 for r in results if r.get("status") in ("OK", "WARNINGS"))
