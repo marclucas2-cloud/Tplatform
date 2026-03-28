@@ -127,6 +127,8 @@ class BinanceBroker(BaseBroker):
             params.pop("timestamp", None)
             params.pop("signature", None)
             return self._request(method, base, path, params, signed=signed, weight=weight)
+        if resp.status_code == 200 and resp.text.strip() in ('', '[]', '{}'):
+            logger.warning(f"Binance returned empty response for {path}")
         if resp.status_code >= 400:
             try:
                 err = resp.json()

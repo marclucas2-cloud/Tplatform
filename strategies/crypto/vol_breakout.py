@@ -255,6 +255,7 @@ def signal_fn(candle: pd.Series, state: dict, **kwargs) -> dict | None:
                 "action": "BUY",
                 "pct": STRATEGY_CONFIG["allocation_pct"],
                 "trailing_stop_atr": trailing,
+                "stop_loss": round(price * (1 - 2 * atr / price), 2),
                 "leverage": 1,  # spot long
                 "market_type": "spot",
                 "strategy": "vol_breakout",
@@ -283,6 +284,7 @@ def signal_fn(candle: pd.Series, state: dict, **kwargs) -> dict | None:
                 "action": "SELL",
                 "pct": STRATEGY_CONFIG["allocation_pct"],
                 "trailing_stop_atr": trailing,
+                "stop_loss": round(price * (1 + 2 * atr / price), 2),
                 "leverage": STRATEGY_CONFIG["max_leverage"],
                 "market_type": "margin",
                 "strategy": "vol_breakout",

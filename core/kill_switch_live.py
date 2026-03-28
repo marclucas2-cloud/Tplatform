@@ -77,6 +77,7 @@ class LiveKillSwitch:
         self._activated_at: Optional[str] = None
         self._activation_reason: Optional[str] = None
         self._activation_trigger: Optional[str] = None
+        self._deactivated_at: Optional[datetime] = None
         self._history: list = []
         self._disabled_strategies: set = set()
 
@@ -128,6 +129,23 @@ class LiveKillSwitch:
         Returns:
             {triggered: bool, reason: str, trigger_type: str, details: dict}
         """
+        # FIX M-12: Cooldown after deactivation — prevent immediate re-triggering
+        if self._deactivated_at is not None:
+            elapsed = datetime.now(timezone.utc) - self._deactivated_at
+            cooldown = timedelta(minutes=30)
+            if elapsed < cooldown:
+                remaining = (cooldown - elapsed).total_seconds() / 60.0
+                logger.info(
+                    "Kill switch cooldown active (%.1f min remaining) — skipping trigger checks",
+                    remaining,
+                )
+                return {
+                    "triggered": False,
+                    "reason": f"cooldown active ({remaining:.0f} min remaining)",
+                    "trigger_type": "",
+                    "details": {"cooldown_remaining_min": remaining},
+                }
+
         if capital <= 0:
             return {
                 "triggered": True,
@@ -494,6 +512,7 @@ class LiveKillSwitch:
         self._activated_at = None
         self._activation_reason = None
         self._activation_trigger = None
+        self._deactivated_at = datetime.now(timezone.utc)
         self._disabled_strategies.clear()
 
         # Persist

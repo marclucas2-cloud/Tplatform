@@ -57,17 +57,31 @@ logging.getLogger().addHandler(file_handler)
 def _handle_sigterm(signum, frame):
     """Graceful shutdown on Railway redeploy."""
     logger.critical("SIGTERM received — graceful shutdown initiated")
-    try:
-        from core.telegram_alert import send_alert
-        send_alert("Worker SIGTERM — shutting down gracefully", level="warning")
-    except Exception:
-        pass
+    _send_alert("Worker SIGTERM — shutting down gracefully", level="warning")
     # Let the scheduler shut down gracefully
     raise SystemExit(0)
 
 
 signal.signal(signal.SIGTERM, _handle_sigterm)
 signal.signal(signal.SIGINT, _handle_sigterm)
+
+
+def _send_alert(message: str, level: str = "info"):
+    """Unified alert: try LiveAlertManager first, fallback to legacy."""
+    try:
+        from core.alerting_live import LiveAlertManager
+        mgr = LiveAlertManager.get_instance()
+        if mgr:
+            mgr.send(message, level=level)
+            return
+    except Exception:
+        pass
+    try:
+        from core.telegram_alert import send_alert
+        send_alert(message, level=level)
+    except Exception:
+        pass
+
 
 # Timezone
 PARIS = zoneinfo.ZoneInfo("Europe/Paris")
@@ -133,6 +147,7 @@ def is_daily_time():
 
 import threading
 _execution_lock = threading.Lock()
+_risk_lock = threading.Lock()
 
 
 class HealthHandler(BaseHTTPRequestHandler):
@@ -200,15 +215,11 @@ def reconcile_positions_at_startup():
                         f"  ORPHELIN: {p['symbol']} qty={p['qty']} "
                         f"val=${p['market_val']:,.2f} P&L=${p['unrealized_pl']:+.2f}"
                     )
-            try:
-                from core.telegram_alert import send_alert
-                send_alert(
-                    f"⚠️ ORPHAN POSITIONS DETECTED at startup: {', '.join(orphans)}. "
-                    f"Manual review required.",
-                    level="warning"
-                )
-            except Exception:
-                pass
+            _send_alert(
+                f"ORPHAN POSITIONS DETECTED at startup: {', '.join(orphans)}. "
+                f"Manual review required.",
+                level="warning"
+            )
         if missing:
             logger.warning(
                 f"RECONCILIATION: {len(missing)} position(s) dans le state "
@@ -254,7 +265,7 @@ def check_positions_after_close():
         if still_open:
             logger.critical(
                 f"POSITIONS INTRADAY NON FERMEES APRES 16:00 ET: {sorted(still_open)}. "
-                f"Action manuelle requise!"
+                f"Auto-close en cours..."
             )
             try:
                 from core.telegram_alert import send_position_not_closed
@@ -268,6 +279,28 @@ def check_positions_after_close():
                             f"  NON FERME: {sym} qty={p['qty']} "
                             f"val=${p['market_val']:,.2f} P&L=${p['unrealized_pl']:+.2f}"
                         )
+
+            # Auto-close orphan intraday positions
+            try:
+                result = client.close_all_positions(_authorized_by="auto_close_15_55")
+                for r in result if isinstance(result, list) else [result]:
+                    logger.critical(
+                        f"  AUTO-CLOSE: {r.get('symbol', '?')} — "
+                        f"status={r.get('status', '?')}"
+                    )
+                _send_alert(
+                    f"AUTO-CLOSE 15:55 ET: {len(still_open)} position(s) intraday "
+                    f"fermees automatiquement: {sorted(still_open)}",
+                    level="critical",
+                )
+            except Exception as close_err:
+                logger.critical(
+                    f"ECHEC AUTO-CLOSE positions intraday: {close_err}"
+                )
+                _send_alert(
+                    f"ECHEC AUTO-CLOSE 15:55 ET: {close_err}",
+                    level="critical",
+                )
     except Exception as e:
         logger.error(f"Erreur check_positions_after_close: {e}")
 
@@ -303,8 +336,8 @@ def log_heartbeat():
         except Exception:
             pass
 
-        # TODO: Unify telegram_alert (legacy) with alerting_live.LiveAlertManager
-        # For now, heartbeat uses legacy telegram_alert.send_heartbeat()
+        # NOTE: heartbeat uses legacy telegram_alert.send_heartbeat()
+        # Other alerts use _send_alert() which tries LiveAlertManager first
 
     except ImportError:
         logger.warning("HEARTBEAT: psutil non installe, monitoring memoire desactive")
@@ -352,8 +385,8 @@ def run_intraday(market: str = "US"):
 
 def run_live_risk_cycle():
     """Poll live risk checks every 5 minutes — circuit breakers, kill switches, deleveraging."""
-    if not _execution_lock.acquire(blocking=False):
-        logger.warning("SKIP live risk cycle — previous execution still running")
+    if not _risk_lock.acquire(blocking=False):
+        logger.warning("SKIP live risk cycle — previous risk check still running")
         return
     try:
         from core.risk_manager_live import LiveRiskManager
@@ -381,9 +414,30 @@ def run_live_risk_cycle():
         except Exception as e:
             logger.warning(f"Could not fetch IBKR portfolio for risk cycle: {e}")
 
-        # Calculate PnL metrics (simplified — use trade journal if available)
+        # FIX CRO H-4 : PnL calculation using actual daily starting equity,
+        # NOT risk_mgr.capital (static config value like $10K).
+        # Load daily_start_equity from state file; fallback to current equity.
         equity = portfolio.get("equity", risk_mgr.capital)
-        daily_pnl_pct = (equity - risk_mgr.capital) / risk_mgr.capital if risk_mgr.capital > 0 else 0
+        daily_start_equity = equity  # fallback
+        try:
+            _state_path = ROOT / "paper_portfolio_state.json"
+            if _state_path.exists():
+                _state = json.loads(_state_path.read_text(encoding="utf-8"))
+                _saved_equity = _state.get("daily_start_equity")
+                if _saved_equity and float(_saved_equity) > 0:
+                    daily_start_equity = float(_saved_equity)
+                else:
+                    # First check of the day — persist current equity as the baseline
+                    _state["daily_start_equity"] = equity
+                    _state_path.write_text(
+                        json.dumps(_state, indent=2, default=str),
+                        encoding="utf-8",
+                    )
+                    daily_start_equity = equity
+        except Exception as _e:
+            logger.warning(f"Could not load daily_start_equity: {_e}, using current equity")
+
+        daily_pnl_pct = (equity - daily_start_equity) / daily_start_equity if daily_start_equity > 0 else 0
 
         # Run all risk checks
         risk_result = risk_mgr.check_all_limits(
@@ -397,16 +451,12 @@ def run_live_risk_cycle():
             logger.critical(f"Actions required: {risk_result['actions']}")
 
             # Send alert
-            try:
-                from core.telegram_alert import send_alert
-                send_alert(
-                    f"LIVE RISK ALERT\n"
-                    f"Reason: {risk_result['blocked_reason']}\n"
-                    f"Actions: {', '.join(risk_result['actions'])}",
-                    level="critical"
-                )
-            except Exception:
-                pass
+            _send_alert(
+                f"LIVE RISK ALERT\n"
+                f"Reason: {risk_result['blocked_reason']}\n"
+                f"Actions: {', '.join(risk_result['actions'])}",
+                level="critical"
+            )
 
         # Check kill switch triggers
         kill_switch = LiveKillSwitch()
@@ -426,6 +476,45 @@ def run_live_risk_cycle():
         delev = risk_result.get("deleveraging", {})
         if delev.get("level", 0) > 0:
             logger.warning(f"DELEVERAGING LEVEL {delev['level']}: {delev['message']}")
+
+        # --- FIX M-9: Auto-deleverage L2+ (reduce largest position by 50%) ---
+        actions = risk_result.get("actions", [])
+        if any(a in actions for a in ("DELEVERAGE_L2", "DELEVERAGE_L3")):
+            try:
+                positions = portfolio.get("positions", [])
+                if positions:
+                    # Find the largest position by market_val (absolute)
+                    largest = max(positions, key=lambda p: abs(float(p.get("market_val", 0))))
+                    symbol = largest.get("symbol", "UNKNOWN")
+                    qty = abs(float(largest.get("qty", 0)))
+                    half_qty = qty / 2.0
+
+                    if half_qty > 0 and os.environ.get("IBKR_CONNECTED") == "true":
+                        from core.broker.ibkr_adapter import IBKRBroker
+                        broker = IBKRBroker()
+                        deleverage_action = "DELEVERAGE_L3" if "DELEVERAGE_L3" in actions else "DELEVERAGE_L2"
+                        logger.critical(
+                            f"AUTO-DELEVERAGE {deleverage_action}: reducing {symbol} "
+                            f"by 50% (qty {qty} -> {qty - half_qty})"
+                        )
+                        broker.close_position(
+                            symbol, qty=half_qty,
+                            _authorized_by=f"auto_deleverage_{deleverage_action}",
+                        )
+                        logger.critical(
+                            f"AUTO-DELEVERAGE {deleverage_action} EXECUTED: "
+                            f"{symbol} reduced by {half_qty} units"
+                        )
+                        _send_alert(
+                            f"AUTO-DELEVERAGE {deleverage_action}\n"
+                            f"Position: {symbol}\n"
+                            f"Reduced by 50%: {half_qty} units",
+                            level="critical"
+                        )
+                    else:
+                        logger.warning("Auto-deleverage skipped — IBKR not connected or qty=0")
+            except Exception as e:
+                logger.error(f"Auto-deleverage failed: {e}", exc_info=True)
 
         # --- SAFE-003 : LivePerformanceGuard (auto-disable strats) ---
         try:
@@ -459,7 +548,7 @@ def run_live_risk_cycle():
     except Exception as e:
         logger.error(f"Live risk cycle error: {e}", exc_info=True)
     finally:
-        _execution_lock.release()
+        _risk_lock.release()
 
 
 def run_crypto_cycle():
@@ -472,6 +561,25 @@ def run_crypto_cycle():
         logger.warning("CRYPTO CYCLE SKIP — execution deja en cours (lock)")
         return
     try:
+        # FIX CRO H-5 : check trading_paused_until before any crypto activity
+        try:
+            _pause_state_path = ROOT / "paper_portfolio_state.json"
+            if _pause_state_path.exists():
+                _pause_state = json.loads(
+                    _pause_state_path.read_text(encoding="utf-8")
+                )
+                _paused_until = _pause_state.get("trading_paused_until")
+                if _paused_until:
+                    _pause_dt = datetime.fromisoformat(_paused_until)
+                    if datetime.now(timezone.utc) < _pause_dt:
+                        logger.warning(
+                            f"CRYPTO CYCLE SKIP — trading paused until "
+                            f"{_paused_until}"
+                        )
+                        return
+        except Exception as _pe:
+            logger.warning(f"Could not check trading_paused_until: {_pe}")
+
         logger.info("=== CRYPTO CYCLE ===")
 
         # --- Verifier que Binance est configure ---
@@ -521,13 +629,9 @@ def run_crypto_cycle():
             logger.critical(
                 f"CRYPTO KILL SWITCH ACTIF — aucun trade: {kill_reason}"
             )
-            try:
-                from core.telegram_alert import send_alert
-                send_alert(
-                    f"CRYPTO KILL SWITCH: {kill_reason}", level="critical"
-                )
-            except Exception:
-                pass
+            _send_alert(
+                f"CRYPTO KILL SWITCH: {kill_reason}", level="critical"
+            )
             return
 
         # --- Initialiser le broker Binance ---
@@ -689,8 +793,26 @@ def run_crypto_cycle():
                     kwargs["df_full"] = df_full
                 kwargs["symbol"] = primary_symbol
 
-                # --- Appel du signal_fn ---
-                signal = signal_fn(candle, state, **kwargs)
+                # --- Appel du signal_fn (FIX CRO H: per-strategy timeout 30s) ---
+                _signal_result = [None]
+                _signal_error = [None]
+                def _run_signal(_fn=signal_fn, _c=candle, _s=state, _kw=kwargs):
+                    try:
+                        _signal_result[0] = _fn(_c, _s, **_kw)
+                    except Exception as _e:
+                        _signal_error[0] = _e
+                _t = threading.Thread(target=_run_signal, daemon=True)
+                _t.start()
+                _t.join(timeout=30)
+                if _t.is_alive():
+                    logger.critical(
+                        f"  [{strat_id}] signal_fn TIMEOUT (30s) — skipping"
+                    )
+                    n_errors += 1
+                    continue
+                if _signal_error[0] is not None:
+                    raise _signal_error[0]
+                signal = _signal_result[0]
 
                 # --- Log du signal (meme si None) ---
                 if signal is None:
@@ -824,26 +946,18 @@ def run_crypto_cycle():
         )
 
         # --- Telegram recap ---
-        try:
-            from core.telegram_alert import send_alert
-            if n_signals > 0 or n_orders > 0:
-                send_alert(
-                    f"CRYPTO CYCLE: {n_signals} signaux, {n_orders} ordres, "
-                    f"{n_errors} erreurs — equity=${current_equity:,.0f}",
-                    level="info",
-                )
-        except Exception:
-            pass
+        if n_signals > 0 or n_orders > 0:
+            _send_alert(
+                f"CRYPTO CYCLE: {n_signals} signaux, {n_orders} ordres, "
+                f"{n_errors} erreurs — equity=${current_equity:,.0f}",
+                level="info",
+            )
 
     except Exception as e:
         logger.error(f"Erreur critique crypto cycle: {e}", exc_info=True)
-        try:
-            from core.telegram_alert import send_alert
-            send_alert(
-                f"CRYPTO CYCLE ERREUR CRITIQUE: {e}", level="critical"
-            )
-        except Exception:
-            pass
+        _send_alert(
+            f"CRYPTO CYCLE ERREUR CRITIQUE: {e}", level="critical"
+        )
     finally:
         _execution_lock.release()
 
@@ -882,6 +996,23 @@ def main():
     logger.info("  Reconciliation des positions au demarrage...")
     reconcile_positions_at_startup()
 
+    # Crypto reconciliation
+    if os.getenv("BINANCE_API_KEY"):
+        try:
+            from core.broker.binance_broker import BinanceBroker
+            broker = BinanceBroker()
+            acct = broker.get_account_info()
+            positions = broker.get_positions()
+            earn = broker.get_earn_positions()
+            logger.info(f"CRYPTO RECONCILIATION: equity=${acct.get('equity',0):.0f}, "
+                        f"{len(positions)} positions, {len(earn)} earn products")
+            if positions:
+                for p in positions:
+                    logger.info(f"  Binance position: {p.get('symbol')} {p.get('side')} "
+                               f"qty={p.get('qty',0)}")
+        except Exception as e:
+            logger.warning(f"Crypto reconciliation failed: {e}")
+
     # Premier heartbeat
     log_heartbeat()
     last_heartbeat = time.time()
@@ -919,8 +1050,29 @@ def main():
             after_close_checked_today = True
 
         # Daily run a 15:35 Paris (une seule fois par jour)
+        # FIX CRO H-6 : check trading_paused_until before run_daily
+        _daily_paused = False
+        try:
+            _d_state_path = ROOT / "paper_portfolio_state.json"
+            if _d_state_path.exists():
+                _d_state = json.loads(
+                    _d_state_path.read_text(encoding="utf-8")
+                )
+                _d_paused_until = _d_state.get("trading_paused_until")
+                if _d_paused_until:
+                    _d_pause_dt = datetime.fromisoformat(_d_paused_until)
+                    if datetime.now(timezone.utc) < _d_pause_dt:
+                        _daily_paused = True
+        except Exception:
+            pass
+
         if is_daily_time() and not daily_done_today:
-            run_daily()
+            if _daily_paused:
+                logger.warning(
+                    f"DAILY RUN SKIP — trading paused until {_d_paused_until}"
+                )
+            else:
+                run_daily()
             daily_done_today = True
 
         # Intraday US toutes les 5 min pendant la fenetre (15:35-22:00 Paris)
@@ -991,11 +1143,7 @@ def main():
                     )
                     if result["level"] != "OK":
                         logger.warning(f"CROSS-PORTFOLIO: {result['message']}")
-                        try:
-                            from core.telegram_alert import send_alert
-                            send_alert(f"CROSS-PORTFOLIO: {result['message']}", level="warning")
-                        except Exception:
-                            pass
+                        _send_alert(f"CROSS-PORTFOLIO: {result['message']}", level="warning")
                     else:
                         logger.info(f"Cross-portfolio check OK: {result['combined_pct']}% combined")
 

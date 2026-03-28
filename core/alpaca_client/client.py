@@ -15,10 +15,43 @@ Documentation : https://docs.alpaca.markets/reference/
 from __future__ import annotations
 
 import logging
+import math
 import os
+import time
+from collections import deque
 from typing import Any
 
 logger = logging.getLogger(__name__)
+
+
+class _RateLimiter:
+    """Simple rate limiter for Alpaca API — 200 req/min, sleep if >180 in last 60s."""
+
+    def __init__(self, max_requests: int = 200, window_seconds: float = 60.0,
+                 soft_limit: int = 180):
+        self._max = max_requests
+        self._window = window_seconds
+        self._soft = soft_limit
+        self._timestamps: deque[float] = deque()
+
+    def acquire(self):
+        """Wait if approaching rate limit before making a request."""
+        now = time.monotonic()
+        # Purge timestamps older than the window
+        while self._timestamps and self._timestamps[0] < now - self._window:
+            self._timestamps.popleft()
+
+        if len(self._timestamps) >= self._soft:
+            # Sleep until the oldest request in window expires
+            sleep_time = self._timestamps[0] + self._window - now + 0.1
+            if sleep_time > 0:
+                logger.warning(
+                    f"Alpaca rate limiter: {len(self._timestamps)} req in last "
+                    f"{self._window}s (soft limit={self._soft}), sleeping {sleep_time:.1f}s"
+                )
+                time.sleep(sleep_time)
+
+        self._timestamps.append(time.monotonic())
 
 # Mapping timeframe interne → TimeFrame Alpaca
 _TF_MAP = {
@@ -60,6 +93,7 @@ class AlpacaClient:
         self._paper     = paper
         self._trading   = None   # TradingClient (lazy)
         self._data      = None   # StockHistoricalDataClient (lazy)
+        self._rate_limiter = _RateLimiter()  # FIX CRO H-1: 200 req/min limiter
 
     @classmethod
     def from_env(cls) -> "AlpacaClient":
@@ -77,6 +111,7 @@ class AlpacaClient:
         )
 
     def _get_trading_client(self):
+        self._rate_limiter.acquire()  # FIX CRO H-1: rate limit avant chaque appel
         if self._trading is None:
             # GUARD CRITIQUE : empecher tout ordre live par erreur
             if not self._paper:
@@ -100,6 +135,7 @@ class AlpacaClient:
         return self._trading
 
     def _get_data_client(self):
+        self._rate_limiter.acquire()  # FIX CRO H-1: rate limit avant chaque appel
         if self._data is None:
             try:
                 from alpaca.data.historical import StockHistoricalDataClient
@@ -379,6 +415,21 @@ class AlpacaClient:
         side = OrderSide.BUY if direction.upper() == "BUY" else OrderSide.SELL
         notional_orig = notional  # sauvegarde pour logs conversion
 
+        # FIX CRO M-1 : guard fractional shorts — les shorts doivent avoir qty entiere
+        if side == OrderSide.SELL and qty is not None and qty != int(qty):
+            original_qty = qty
+            qty = math.floor(qty)
+            logger.warning(
+                f"Fractional short converti: {symbol} qty {original_qty} -> {qty} "
+                f"(shorts en qty entiere uniquement)"
+            )
+            if qty < 1:
+                logger.warning(
+                    f"Ordre REFUSE pour {symbol}: qty={original_qty} arrondi a {qty} "
+                    f"(< 1 action) — impossible de shorter"
+                )
+                return {"status": "refused", "reason": "fractional short qty < 1 after rounding"}
+
         # Bracket order si stop_loss ou take_profit fourni
         has_bracket = stop_loss is not None or take_profit is not None
         order_class = OrderClass.BRACKET if has_bracket and qty else None
@@ -463,7 +514,47 @@ class AlpacaClient:
             raise AlpacaAPIError(f"Ordre {symbol}: ni qty ni notional fourni")
 
         client = self._get_trading_client()
-        order = client.submit_order(request)
+
+        # FIX CRO H-2 : error handling + alerting on submit_order
+        # NO RETRY to prevent double positions — just log and alert
+        try:
+            order = client.submit_order(request)
+        except Exception as submit_err:
+            err_msg = str(submit_err).lower()
+            err_type = type(submit_err).__name__
+
+            # Classify error type
+            if "429" in err_msg or "rate limit" in err_msg:
+                logger.critical(
+                    f"ALPACA RATE LIMIT (429) pour {symbol}: {submit_err}"
+                )
+            elif "timeout" in err_msg or "timed out" in err_msg:
+                logger.critical(
+                    f"ALPACA TIMEOUT pour {symbol}: {submit_err}"
+                )
+            elif "buying power" in err_msg or "insufficient" in err_msg:
+                logger.critical(
+                    f"ALPACA INSUFFICIENT BUYING POWER pour {symbol}: {submit_err}"
+                )
+            else:
+                logger.critical(
+                    f"ALPACA ORDER FAILED pour {symbol} ({err_type}): {submit_err}"
+                )
+
+            # Try to send Telegram alert (best-effort)
+            try:
+                from core.telegram_alert import send_alert
+                send_alert(
+                    f"ALPACA ORDER FAILED: {direction} {symbol} "
+                    f"qty={qty or ''} notional={notional or ''} — "
+                    f"{err_type}: {submit_err}",
+                    level="critical",
+                )
+            except Exception:
+                pass
+
+            # Do NOT retry — re-raise so caller knows the order failed
+            raise
 
         bracket_info = ""
         if sl_request:

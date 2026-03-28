@@ -266,6 +266,18 @@ class LiveRiskManager(RiskManager):
         asset_class = order_or_position.get("asset_class", "EQUITY").upper()
         if asset_class == "FX":
             margin = abs(float(order_or_position.get("margin_used", 0)))
+            initial = abs(float(order_or_position.get("initial_margin", 0)))
+            notional = abs(float(order_or_position.get("notional", 0)))
+            if margin == 0 and initial == 0 and notional > 0:
+                estimated = notional * 0.03
+                logger.warning(
+                    "FX position %s: margin_used=0 AND initial_margin=0 but notional=$%.0f "
+                    "— using estimated margin $%.0f (3%% of notional)",
+                    order_or_position.get("symbol", "?"),
+                    notional,
+                    estimated,
+                )
+                return estimated
             if margin == 0:
                 logger.warning(
                     "FX order/position missing margin_used field: %s — treated as 0 cost",

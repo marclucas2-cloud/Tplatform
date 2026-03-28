@@ -44,7 +44,7 @@ class ExecutionSimulator:
     market impact (Almgren-Chriss simplified), limit order logic, margin check.
     """
 
-    def __init__(self, seed: Optional[int] = None) -> None:
+    def __init__(self, seed: Optional[int] = 42) -> None:
         """Args: seed — random seed for reproducibility."""
         self._rng = random.Random(seed)
 
