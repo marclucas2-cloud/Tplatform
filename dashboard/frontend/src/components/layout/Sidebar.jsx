@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   BarChart3, Activity, Target, Shield, BookOpen, GitCompare,
-  TrendingUp, Server, Receipt, Network, Menu, X
+  TrendingUp, Server, Receipt, Network, Menu, X, Bitcoin
 } from 'lucide-react'
 import { useApi } from '../../hooks/useApi'
 
@@ -10,6 +10,7 @@ const NAV_ITEMS = [
   { path: '/', label: 'Vue d\'ensemble', icon: BarChart3 },
   { path: '/positions', label: 'Positions', icon: Activity },
   { path: '/strategies', label: 'Strategies', icon: Target },
+  { path: '/crypto', label: 'Crypto', icon: Bitcoin },
   { path: '/risk', label: 'Risque', icon: Shield },
   { path: '/journal', label: 'Journal', icon: BookOpen },
   { path: '/paper-vs-live', label: 'Paper vs Live', icon: GitCompare },

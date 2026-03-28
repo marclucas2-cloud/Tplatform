@@ -12,9 +12,26 @@ const PERIODS = [
 
 const PAGE_SIZE = 20
 
+const BROKER_FILTERS = [
+  { key: 'all', label: 'Tous' },
+  { key: 'alpaca', label: 'Alpaca' },
+  { key: 'binance', label: 'Binance' },
+]
+
+const CRYPTO_PATTERN = /^(BTC|ETH|BNB|SOL|ADA|DOGE|XRP|DOT|AVAX|MATIC|LINK|UNI|AAVE|ATOM)/i
+
+function detectBroker(trade) {
+  if (trade.trade_source === 'crypto') return 'binance'
+  if (trade.trade_source === 'paper' || trade.trade_source === 'live') return 'alpaca'
+  const sym = (trade.symbol || '').toUpperCase()
+  if (sym.includes('USDT') || sym.includes('BUSD') || CRYPTO_PATTERN.test(sym)) return 'binance'
+  return 'alpaca'
+}
+
 const COLUMNS = [
   { key: 'date', label: 'Date', align: 'left' },
   { key: 'symbol', label: 'Symbole', align: 'left' },
+  { key: 'broker', label: 'Broker', align: 'left' },
   { key: 'side', label: 'Sens', align: 'left' },
   { key: 'entry_price', label: 'Entree', align: 'right', format: 'price' },
   { key: 'exit_price', label: 'Sortie', align: 'right', format: 'price' },
@@ -62,13 +79,23 @@ export default function Journal() {
   const { data: calendarData } = useApi('/trades/calendar', 120000)
 
   const [period, setPeriod] = useState('30d')
+  const [brokerFilter, setBrokerFilter] = useState('all')
   const [sortCol, setSortCol] = useState('date')
   const [sortDir, setSortDir] = useState('desc')
   const [page, setPage] = useState(0)
 
-  const allTrades = tradesData?.trades || []
+  const allTrades = useMemo(() =>
+    (tradesData?.trades || []).map((t) => ({ ...t, _broker: detectBroker(t) })),
+    [tradesData]
+  )
 
-  const filtered = useMemo(() => filterByPeriod(allTrades, period), [allTrades, period])
+  const filtered = useMemo(() => {
+    let trades = filterByPeriod(allTrades, period)
+    if (brokerFilter !== 'all') {
+      trades = trades.filter((t) => t._broker === brokerFilter)
+    }
+    return trades
+  }, [allTrades, period, brokerFilter])
 
   const sorted = useMemo(() => {
     const copy = [...filtered]
@@ -150,25 +177,46 @@ export default function Journal() {
 
   return (
     <div className="space-y-6">
-      {/* Period filter + Export */}
-      <div className="flex items-center justify-between">
-        <div className="flex gap-1">
-          {PERIODS.map((p) => (
-            <button
-              key={p.key}
-              onClick={() => {
-                setPeriod(p.key)
-                setPage(0)
-              }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
-                period === p.key
-                  ? 'bg-[var(--color-accent)] text-white'
-                  : 'bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-border)]'
-              }`}
-            >
-              {p.label}
-            </button>
-          ))}
+      {/* Period filter + Broker filter + Export */}
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div className="flex items-center gap-3">
+          <div className="flex gap-1">
+            {PERIODS.map((p) => (
+              <button
+                key={p.key}
+                onClick={() => {
+                  setPeriod(p.key)
+                  setPage(0)
+                }}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                  period === p.key
+                    ? 'bg-[var(--color-accent)] text-white'
+                    : 'bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-border)]'
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+          <div className="w-px h-5 bg-[var(--color-border)]" />
+          <div className="flex gap-1">
+            {BROKER_FILTERS.map((bf) => (
+              <button
+                key={bf.key}
+                onClick={() => {
+                  setBrokerFilter(bf.key)
+                  setPage(0)
+                }}
+                className={`px-3 py-1.5 text-xs font-semibold rounded-lg transition-colors ${
+                  brokerFilter === bf.key
+                    ? 'bg-[var(--color-accent)] text-white'
+                    : 'bg-[var(--color-bg-card)] text-[var(--color-text-secondary)] hover:bg-[var(--color-bg-hover)] border border-[var(--color-border)]'
+                }`}
+              >
+                {bf.label}
+              </button>
+            ))}
+          </div>
         </div>
         <button
           onClick={exportCSV}
@@ -285,6 +333,17 @@ export default function Journal() {
                 >
                   <td className="py-2 px-2 font-mono text-xs">{t.date ?? '-'}</td>
                   <td className="py-2 px-2 font-mono font-semibold">{t.symbol ?? '-'}</td>
+                  <td className="py-2 px-2">
+                    {t._broker === 'binance' ? (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-500">
+                        Binance
+                      </span>
+                    ) : (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400">
+                        Alpaca
+                      </span>
+                    )}
+                  </td>
                   <td className="py-2 px-2">
                     <span
                       className={`text-xs font-semibold ${

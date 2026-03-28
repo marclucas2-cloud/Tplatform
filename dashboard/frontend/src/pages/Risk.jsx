@@ -63,6 +63,7 @@ function KillSwitchCard({ broker, status, lastTest }) {
 export default function Risk() {
   const { data: overview, loading: oLoad } = useApi('/risk/overview', 15000)
   const { data: limits, loading: lLoad } = useApi('/risk/limits', 15000)
+  const { data: killSwitchData } = useApi('/risk/kill-switch', 30000)
 
   if (oLoad && !overview) {
     return (
@@ -73,28 +74,25 @@ export default function Risk() {
   }
 
   const ov = overview || {}
-  const drawdown = ov.drawdown ?? -1.2
-  const drawdownMax = ov.drawdown_max ?? -3.1
-  const var95 = ov.var_1d_95 ?? -320
-  const exposure = ov.exposure_net_pct ?? 52
-  const killSwitch = ov.kill_switch ?? 'OFF'
+  const drawdown = ov.drawdown ?? 0
+  const drawdownMax = ov.drawdown_max ?? 0
+  const var95 = ov.var_1d_95 ?? 0
+  const exposure = ov.exposure_net_pct ?? 0
+  const killSwitch = ov.kill_switch ?? 'N/A'
 
-  const riskLimits = limits?.limits || [
-    { label: 'Drawdown', current: 1.2, max: 3, unit: '%' },
-    { label: 'P&L Journalier', current: 85, max: 200, unit: '$' },
-    { label: 'Exposition Brute', current: 72, max: 100, unit: '%' },
-    { label: 'Exposition Nette', current: 52, max: 80, unit: '%' },
-    { label: 'FX Margin Used', current: 2250, max: 4000, unit: '$' },
-    { label: 'Reserve Cash', current: 35, max: 20, unit: '%' },
-    { label: 'Binance Margin Level', current: 2.8, max: 1.3, unit: 'x' },
-    { label: 'Borrow Cost', current: 0.04, max: 0.12, unit: '%' },
-    { label: 'Earn Allocation', current: 3000, max: 5000, unit: '$' },
-  ]
+  // Map API limits: [{name, current, limit, pct_used, status}] -> ProgressBar props
+  const rawLimits = limits?.limits || limits || []
+  const riskLimits = Array.isArray(rawLimits) && rawLimits.length > 0
+    ? rawLimits.map((lim) => ({
+        label: lim.name ?? lim.label ?? '-',
+        current: lim.current ?? 0,
+        max: lim.limit ?? lim.max ?? 1,
+        unit: lim.unit ?? '',
+      }))
+    : []
 
-  const killSwitches = ov.kill_switches || [
-    { broker: 'IBKR', status: 'OFF', last_test: '2026-03-27 18:00' },
-    { broker: 'Binance', status: 'OFF', last_test: '2026-03-27 18:15' },
-  ]
+  const rawKs = killSwitchData?.switches || killSwitchData || ov.kill_switches || []
+  const killSwitches = Array.isArray(rawKs) ? rawKs : []
 
   return (
     <div className="space-y-6">
@@ -138,7 +136,7 @@ export default function Risk() {
             Limites de Risque
           </h2>
           <div className="space-y-3">
-            {riskLimits.map((lim, i) => (
+            {riskLimits.length > 0 ? riskLimits.map((lim, i) => (
               <ProgressBar
                 key={i}
                 label={lim.label}
@@ -146,7 +144,11 @@ export default function Risk() {
                 max={lim.max}
                 unit={lim.unit}
               />
-            ))}
+            )) : (
+              <div className="text-center py-4 text-sm text-[var(--color-text-secondary)]">
+                Aucune donnee de limites disponible
+              </div>
+            )}
           </div>
         </div>
 

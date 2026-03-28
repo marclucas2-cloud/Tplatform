@@ -4,7 +4,7 @@ import MetricCard from '../components/MetricCard'
 import { TierBadge, StatusDot } from '../components/StrategyBadge'
 import EquityCurve from '../components/charts/EquityCurve'
 import PeriodSelector from '../components/common/PeriodSelector'
-import { ArrowUpRight, ArrowDownRight, Clock, AlertTriangle, AlertCircle, Info, CheckCircle } from 'lucide-react'
+import { ArrowUpRight, ArrowDownRight, Clock, AlertTriangle, AlertCircle, Info, CheckCircle, Bitcoin } from 'lucide-react'
 
 const PERIOD_MAP = { '7j': '7d', '30j': '30d', '90j': '90d', 'YTD': 'ytd' }
 
@@ -15,6 +15,7 @@ export default function Overview() {
   const { data: stratData } = useApi('/strategies', 60000)
   const { data: equityData } = useApi(`/equity-curve?period=${PERIOD_MAP[period] || '30d'}`, 60000)
   const { data: alertsData } = useApi('/alerts', 30000)
+  const { data: cryptoData } = useApi('/crypto/strategies', 60000)
 
   if (pLoad || !portfolio) {
     return (
@@ -156,6 +157,66 @@ export default function Overview() {
             </table>
           )}
         </div>
+      </div>
+
+      {/* Crypto Binance */}
+      <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Bitcoin size={16} className="text-orange-400" />
+            <h2 className="text-sm font-semibold text-[var(--color-text-primary)]">Crypto Binance</h2>
+          </div>
+          {cryptoData?.phase && (
+            <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-yellow-500/20 text-yellow-400 border border-yellow-500/30">
+              {cryptoData.phase}
+            </span>
+          )}
+        </div>
+        {!cryptoData ? (
+          <div className="text-center py-4 text-[var(--color-text-secondary)] text-sm animate-pulse">
+            Chargement crypto...
+          </div>
+        ) : (
+          <>
+            <div className="flex gap-4 mb-3 text-xs">
+              <span className="text-[var(--color-text-secondary)]">
+                Capital: <span className="font-mono text-[var(--color-text-primary)]">
+                  ${(cryptoData.total_capital || 0).toLocaleString()}
+                </span>
+              </span>
+              <span className="text-[var(--color-text-secondary)]">
+                Strategies actives: <span className="font-mono text-[var(--color-text-primary)]">
+                  {(cryptoData.strategies || []).filter(s => s.status === 'LIVE').length}/{(cryptoData.strategies || []).length}
+                </span>
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {(cryptoData.strategies || []).map((s, i) => (
+                <div key={s.id || i} className="flex items-center justify-between py-1 px-2 rounded-lg hover:bg-[var(--color-bg-hover)] transition-colors">
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-block w-2 h-2 rounded-full ${
+                      s.status === 'LIVE' ? 'bg-[var(--color-profit)]' : 'bg-gray-600'
+                    }`} />
+                    <span className="text-sm text-[var(--color-text-primary)]">{s.name}</span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold ${
+                      s.wallet === 'Spot' ? 'bg-blue-500/20 text-blue-400' :
+                      s.wallet === 'Margin' ? 'bg-orange-500/20 text-orange-400' :
+                      s.wallet === 'Earn' ? 'bg-purple-500/20 text-purple-400' :
+                      'bg-gray-500/20 text-gray-400'
+                    }`}>
+                      {s.wallet || '—'}
+                    </span>
+                    <span className="font-mono text-xs text-[var(--color-text-secondary)]">
+                      {s.allocation_pct || 0}%
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
       </div>
 
       {/* System Status */}

@@ -12,6 +12,7 @@ import PaperVsLive from './pages/PaperVsLive'
 import System from './pages/System'
 import Tax from './pages/Tax'
 import CrossPortfolio from './pages/CrossPortfolio'
+import Crypto from './pages/Crypto'
 
 export default function App() {
   return (
@@ -29,6 +30,7 @@ export default function App() {
           <Route path="/system" element={<System />} />
           <Route path="/tax" element={<Tax />} />
           <Route path="/cross" element={<CrossPortfolio />} />
+          <Route path="/crypto" element={<Crypto />} />
           <Route path="/allocation" element={<Allocation />} />
         </Routes>
       </Layout>

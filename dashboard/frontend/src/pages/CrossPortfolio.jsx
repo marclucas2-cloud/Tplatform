@@ -2,55 +2,18 @@ import { useApi } from '../hooks/useApi'
 import MetricCard from '../components/MetricCard'
 import { Info, Shield, AlertTriangle } from 'lucide-react'
 
-const SAMPLE_EXPOSURE = {
-  ibkr: {
-    capital: 10000,
-    long_pct: 42,
-    short_pct: 18,
-    net_pct: 24,
-    cash_pct: 58,
-    long_usd: 4200,
-    short_usd: 1800,
-    net_usd: 2400,
-  },
-  binance: {
-    capital: 15000,
-    long_pct: 55,
-    short_pct: 12,
-    net_pct: 43,
-    cash_pct: 33,
-    earn_pct: 20,
-    long_usd: 8250,
-    short_usd: 1800,
-    net_usd: 6450,
-  },
-  combined: {
-    capital: 25000,
-    net_usd: 8850,
-    net_pct: 35.4,
-    gross_usd: 16050,
-    gross_pct: 64.2,
-    correlation: 0.38,
-  },
-}
-
-const SAMPLE_STRESS = [
-  { scenario: 'SPY -10%', ibkr: -650, binance: -225, combined: -875 },
-  { scenario: 'BTC -20%', ibkr: -150, binance: -1800, combined: -1950 },
-  { scenario: 'COVID mars 2020', ibkr: -1200, binance: -2700, combined: -3900 },
-  { scenario: 'Correlation = 0.9', ibkr: -900, binance: -2100, combined: -3000 },
-  { scenario: 'USD +5% (FX)', ibkr: -320, binance: -450, combined: -770 },
-  { scenario: 'Taux +200bps', ibkr: -180, binance: -90, combined: -270 },
-]
+const DEFAULT_BROKER = { long_pct: 0, short_pct: 0, net_pct: 0, cash_pct: 0, capital: 0 }
+const DEFAULT_COMBINED = { net_long_total: 0, gross_total: 0, total_capital: 0, correlation: 0 }
 
 function ExposureBar({ label, value, max, color }) {
-  const pct = Math.min(Math.abs(value / max) * 100, 100)
+  const safeMax = max || 1
+  const pct = Math.min(Math.abs(value / safeMax) * 100, 100)
   return (
     <div className="space-y-1">
       <div className="flex items-center justify-between text-xs">
         <span className="text-[var(--color-text-secondary)]">{label}</span>
         <span className="font-mono text-[var(--color-text-primary)]">
-          ${Math.abs(value).toLocaleString()} / ${max.toLocaleString()} = {(Math.abs(value) / max * 100).toFixed(1)}%
+          ${Math.abs(value).toLocaleString()} / ${(max || 0).toLocaleString()} = {(Math.abs(value) / safeMax * 100).toFixed(1)}%
         </span>
       </div>
       <div className="w-full h-3 bg-[var(--color-bg-primary)] rounded-full overflow-hidden">
@@ -141,11 +104,9 @@ function PortfolioPanel({ title, capital, data, showEarn = false }) {
 }
 
 export default function CrossPortfolio() {
-  const { data: exposureData, loading: eLoad } = useApi('/cross/exposure', 30000)
+  const { data: exposureData, loading: eLoad } = useApi('/cross/exposure', 60000)
   const { data: stressData, loading: sLoad } = useApi('/cross/stress', 60000)
 
-  const exposure = exposureData || SAMPLE_EXPOSURE
-  const stress = stressData?.scenarios || SAMPLE_STRESS
   const loading = eLoad && sLoad
 
   if (loading && !exposureData && !stressData) {
@@ -156,7 +117,30 @@ export default function CrossPortfolio() {
     )
   }
 
-  const combined = exposure.combined
+  const ibkr = { ...DEFAULT_BROKER, ...exposureData?.ibkr }
+  const binance = { ...DEFAULT_BROKER, earn_pct: 0, ...exposureData?.binance }
+  const rawCombined = exposureData?.combined || {}
+  const combined = {
+    ...DEFAULT_COMBINED,
+    ...rawCombined,
+    capital: rawCombined.total_capital ?? DEFAULT_COMBINED.total_capital,
+    net_usd: rawCombined.net_long_total ?? DEFAULT_COMBINED.net_long_total,
+    net_pct: rawCombined.total_capital > 0
+      ? ((rawCombined.net_long_total ?? 0) / rawCombined.total_capital * 100).toFixed(1)
+      : 0,
+    gross_usd: rawCombined.gross_total ?? DEFAULT_COMBINED.gross_total,
+    gross_pct: rawCombined.total_capital > 0
+      ? ((rawCombined.gross_total ?? 0) / rawCombined.total_capital * 100).toFixed(1)
+      : 0,
+    correlation: rawCombined.correlation ?? 0,
+  }
+
+  // Compute net_usd for each broker from pct + capital
+  ibkr.net_usd = ibkr.net_usd ?? Math.round(ibkr.capital * ibkr.net_pct / 100)
+  binance.net_usd = binance.net_usd ?? Math.round(binance.capital * binance.net_pct / 100)
+
+  const exposure = { ibkr, binance, combined }
+  const stress = stressData?.scenarios || []
 
   return (
     <div className="space-y-6">
@@ -269,19 +253,20 @@ export default function CrossPortfolio() {
             </thead>
             <tbody>
               {stress.map((s, i) => {
-                const pctCapital = (s.combined / combined.capital * 100).toFixed(1)
-                const severity = Math.abs(s.combined) > 3000 ? 'text-[var(--color-loss)]' : Math.abs(s.combined) > 1500 ? 'text-[var(--color-warning)]' : 'text-[var(--color-text-primary)]'
+                const combinedLoss = s.combined ?? 0
+                const pctCapital = combined.capital > 0 ? (combinedLoss / combined.capital * 100).toFixed(1) : '0.0'
+                const severity = Math.abs(combinedLoss) > 3000 ? 'text-[var(--color-loss)]' : Math.abs(combinedLoss) > 1500 ? 'text-[var(--color-warning)]' : 'text-[var(--color-text-primary)]'
                 return (
                   <tr key={i} className="border-b border-[var(--color-border)]/50 hover:bg-[var(--color-bg-hover)]">
-                    <td className="py-2.5 px-2 text-[var(--color-text-primary)]">{s.scenario}</td>
+                    <td className="py-2.5 px-2 text-[var(--color-text-primary)]">{s.name ?? s.scenario ?? '-'}</td>
                     <td className="py-2.5 px-2 text-right font-mono text-[var(--color-loss)]">
-                      -${Math.abs(s.ibkr).toLocaleString()}
+                      -${Math.abs(s.ibkr ?? 0).toLocaleString()}
                     </td>
                     <td className="py-2.5 px-2 text-right font-mono text-[var(--color-loss)]">
-                      -${Math.abs(s.binance).toLocaleString()}
+                      -${Math.abs(s.binance ?? 0).toLocaleString()}
                     </td>
                     <td className={`py-2.5 px-2 text-right font-mono font-semibold ${severity}`}>
-                      -${Math.abs(s.combined).toLocaleString()}
+                      -${Math.abs(combinedLoss).toLocaleString()}
                     </td>
                     <td className={`py-2.5 px-2 text-right font-mono ${severity}`}>
                       {pctCapital}%

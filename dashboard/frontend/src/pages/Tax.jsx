@@ -3,26 +3,7 @@ import { useApi } from '../hooks/useApi'
 import MetricCard from '../components/MetricCard'
 import { FileText, Download, Info, AlertTriangle } from 'lucide-react'
 
-const SAMPLE_SUMMARY = {
-  ibkr: { plus_values: 850, moins_values: -230, pv_nette: 620, pfu: 186 },
-  binance: { plus_values: 420, moins_values: -180, pv_nette: 240, pfu: 72 },
-  total: { plus_values: 1270, moins_values: -410, pv_nette: 860, pfu: 258 },
-}
-
-const SAMPLE_MONTHLY = [
-  { month: 'Janvier', pv_brute: 210, mv_brute: -45, pv_nette: 165, pfu: 49.5 },
-  { month: 'Février', pv_brute: 185, mv_brute: -80, pv_nette: 105, pfu: 31.5 },
-  { month: 'Mars', pv_brute: 320, mv_brute: -95, pv_nette: 225, pfu: 67.5 },
-  { month: 'Avril', pv_brute: 0, mv_brute: 0, pv_nette: 0, pfu: 0 },
-  { month: 'Mai', pv_brute: 0, mv_brute: 0, pv_nette: 0, pfu: 0 },
-  { month: 'Juin', pv_brute: 0, mv_brute: 0, pv_nette: 0, pfu: 0 },
-  { month: 'Juillet', pv_brute: 0, mv_brute: 0, pv_nette: 0, pfu: 0 },
-  { month: 'Août', pv_brute: 0, mv_brute: 0, pv_nette: 0, pfu: 0 },
-  { month: 'Septembre', pv_brute: 0, mv_brute: 0, pv_nette: 0, pfu: 0 },
-  { month: 'Octobre', pv_brute: 0, mv_brute: 0, pv_nette: 0, pfu: 0 },
-  { month: 'Novembre', pv_brute: 0, mv_brute: 0, pv_nette: 0, pfu: 0 },
-  { month: 'Décembre', pv_brute: 0, mv_brute: 0, pv_nette: 0, pfu: 0 },
-]
+const DEFAULT_ACCOUNT = { plus_values: 0, moins_values: 0, pv_nette: 0, pfu: 0 }
 
 function fmtCurrency(val, showSign = false) {
   if (val == null) return '—'
@@ -30,13 +11,28 @@ function fmtCurrency(val, showSign = false) {
   return `${prefix}$${Math.abs(val).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`
 }
 
+function mapAccount(raw) {
+  if (!raw) return { ...DEFAULT_ACCOUNT }
+  return {
+    plus_values: raw.pv ?? raw.plus_values ?? 0,
+    moins_values: raw.mv ?? raw.moins_values ?? 0,
+    pv_nette: raw.net ?? raw.pv_nette ?? 0,
+    pfu: raw.pfu ?? 0,
+  }
+}
+
 export default function Tax() {
   const [year, setYear] = useState(2026)
-  const { data: summaryData, loading: sLoad } = useApi(`/tax/summary?year=${year}`)
-  const { data: monthlyData, loading: mLoad } = useApi(`/tax/monthly?year=${year}`)
+  const { data: summaryData, loading: sLoad } = useApi(`/tax/summary?year=${year}`, 60000)
+  const { data: monthlyData, loading: mLoad } = useApi(`/tax/monthly?year=${year}`, 60000)
 
-  const summary = summaryData || SAMPLE_SUMMARY
-  const monthly = monthlyData?.months || SAMPLE_MONTHLY
+  const rawSummary = summaryData?.summary ?? summaryData
+  const summary = {
+    ibkr: mapAccount(rawSummary?.ibkr),
+    binance: mapAccount(rawSummary?.binance),
+    total: mapAccount(rawSummary?.total),
+  }
+  const monthly = monthlyData?.months || []
   const loading = sLoad && mLoad
 
   if (loading && !summaryData && !monthlyData) {
