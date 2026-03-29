@@ -173,6 +173,11 @@ def signal_fn(candle: pd.Series, state: dict, **kwargs) -> dict | None:
     vol_ratio = row.get("vol_ratio", np.nan)
 
     if any(pd.isna(v) for v in [ema_fast, ema_slow, rsi, adx, atr, vol_ratio]):
+        import logging as _log
+        _log.getLogger(__name__).info(
+            f"NaN indicator: ema_f={ema_fast}, ema_s={ema_slow}, "
+            f"rsi={rsi}, adx={adx}, atr={atr}, vol={vol_ratio}"
+        )
         return None
     if atr <= 0:
         return None

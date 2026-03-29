@@ -49,7 +49,7 @@ ADX_MAX_RANGE = 20  # must be < 20 to consider this strategy active
 
 # ── Entry parameters (1h) ──────────────────────────────────────────────
 RSI_PERIOD = 14
-RSI_ENTRY = 30  # RSI < 30
+RSI_ENTRY = 35  # RSI < 35 (crypto vol wider than equities)
 RSI_EXIT = 60   # RSI > 60
 
 BB_PERIOD = 20
