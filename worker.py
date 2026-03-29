@@ -53,10 +53,35 @@ file_handler.setFormatter(logging.Formatter(
 logging.getLogger().addHandler(file_handler)
 
 
+# ── JSONL structured event logging ────────────────────────────────────────────
+_events_log_path = Path(__file__).parent / "logs" / "events.jsonl"
+_events_log_path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def _log_event(action: str, strategy: str = "", details: dict | None = None):
+    """Append a structured JSON event to logs/events.jsonl.
+
+    Called on: signal, order, fill, error, heartbeat, kill_switch, cycle_start/end.
+    """
+    import json as _json
+    event = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "strategy": strategy,
+        "action": action,
+        "details": details or {},
+    }
+    try:
+        with open(_events_log_path, "a", encoding="utf-8") as f:
+            f.write(_json.dumps(event, default=str) + "\n")
+    except Exception:
+        pass  # Never block the worker for a log write
+
+
 # --- Graceful shutdown handler ---
 def _handle_sigterm(signum, frame):
     """Graceful shutdown on Railway redeploy."""
     logger.critical("SIGTERM received — graceful shutdown initiated")
+    _log_event("worker_stop", details={"signal": signum})
     _send_alert("Worker SIGTERM — shutting down gracefully", level="warning")
     # Let the scheduler shut down gracefully
     raise SystemExit(0)
@@ -307,6 +332,7 @@ def check_positions_after_close():
 
 def log_heartbeat():
     """Log un heartbeat avec l'etat du worker (positions, equity)."""
+    _log_event("heartbeat", details={"source": "worker_main_loop"})
     try:
         from core.alpaca_client.client import AlpacaClient
         client = AlpacaClient.from_env()
@@ -383,6 +409,157 @@ def run_intraday(market: str = "US"):
         _execution_lock.release()
 
 
+def run_fx_carry_cycle():
+    """FX Carry + Momentum Filter — daily rebalance at 10h Paris (mon-fri).
+
+    WF VALIDATED: Sharpe OOS 2.17, 81% windows profitable, MC P5 1.41.
+    Pairs: AUD/JPY, USD/JPY, EUR/JPY, NZD/USD (carry + momentum 63d filter).
+    Probationary: 15% allocation (1/16 Kelly) for 30 days.
+    """
+    if not _execution_lock.acquire(blocking=False):
+        logger.warning("FX CARRY SKIP — execution lock held")
+        return
+    try:
+        logger.info("=== FX CARRY CYCLE ===")
+
+        # Check IBKR connection
+        ibkr_host = os.getenv("IBKR_HOST", "127.0.0.1")
+        ibkr_port = int(os.getenv("IBKR_PORT", "4002"))
+        import socket
+        try:
+            with socket.create_connection((ibkr_host, ibkr_port), timeout=3):
+                pass
+        except Exception:
+            logger.warning("  FX CARRY SKIP — IBKR Gateway not connected")
+            return
+
+        # Get IBKR equity
+        try:
+            from core.broker.ibkr_adapter import IBKRBroker
+            ibkr = IBKRBroker()
+            ibkr_info = ibkr.get_account_info()
+            equity = ibkr_info.get("equity", 0)
+        except Exception as e:
+            logger.warning(f"  FX CARRY SKIP — IBKR account info failed: {e}")
+            return
+
+        if equity < STRATEGY_CONFIG_FX_CARRY.get("min_capital", 5000):
+            logger.info(f"  FX CARRY SKIP — equity ${equity:.0f} < min ${STRATEGY_CONFIG_FX_CARRY['min_capital']}")
+            return
+
+        # Load recent daily data for each pair
+        import pandas as pd
+        from pathlib import Path
+        data_dir = Path(__file__).resolve().parent / "data" / "fx"
+        pair_data = {}
+        for pair in ["AUDJPY", "USDJPY", "EURJPY", "NZDUSD"]:
+            fpath = data_dir / f"{pair}_1D.parquet"
+            if fpath.exists():
+                df = pd.read_parquet(fpath)
+                df["datetime"] = pd.to_datetime(df["datetime"])
+                df = df.set_index("datetime").sort_index()
+                pair_data[pair] = df
+
+        if not pair_data:
+            logger.warning("  FX CARRY SKIP — no FX daily data available")
+            return
+
+        # Run strategy — Carry + Momentum Filter (replaces pure Carry VS)
+        from strategies_v2.fx.fx_carry_momentum_filter import FXCarryMomentumFilter
+        strat = FXCarryMomentumFilter()
+
+        # Persist kill switch state across cycles (CRO fix: instance recreated each time)
+        ks_state_path = Path(__file__).resolve().parent / "data" / "fx" / "carry_mom_ks_state.json"
+        try:
+            if ks_state_path.exists():
+                ks = json.loads(ks_state_path.read_text())
+                strat._equity_high = ks.get("equity_high", equity)
+                strat._equity_start = ks.get("equity_start", equity)
+        except Exception:
+            pass
+
+        state = {"equity": equity, "i": len(list(pair_data.values())[0])}
+        signal = strat.signal_fn(None, state, pair_data=pair_data, equity=equity)
+
+        # Save kill switch state for next cycle
+        try:
+            ks_state_path.write_text(json.dumps({
+                "equity_high": strat._equity_high,
+                "equity_start": strat._equity_start,
+            }))
+        except Exception:
+            pass
+
+        if signal is None:
+            logger.info("  FX CARRY-MOM: pas de signal (momentum negatif ou conditions non remplies)")
+            _log_event("signal", "fx_carry_momentum_filter", {"result": "no_signal", "equity": equity})
+            return
+
+        if signal.get("action") == "CLOSE_ALL":
+            logger.warning(f"  FX CARRY-MOM KILL: {signal.get('reason')} dd={signal.get('drawdown')}")
+            _log_event("kill_switch", "fx_carry_momentum_filter", {
+                "reason": signal.get("reason"), "drawdown": signal.get("drawdown")
+            })
+            # TODO(live-promotion): Execute actual position close via IBKR
+            # ibkr.close_all_fx_positions(_authorized_by="fx_carry_mom_kill")
+            _telegram_notify(
+                f"FX CARRY-MOM KILL SWITCH: {signal.get('reason')}\n"
+                f"Drawdown: {signal.get('drawdown', 0):.2%}",
+                level="CRITICAL"
+            )
+            return
+
+        # Log signal details
+        pairs = signal.get("pairs", [])
+        n_filtered = signal.get("n_filtered", 0)
+        total = signal.get("total_notional", 0)
+        logger.info(f"  FX CARRY-MOM: {len(pairs)} pairs active, {n_filtered} filtered by momentum, total ${total:,.0f}")
+        for p in pairs:
+            logger.info(
+                f"    {p['pair']} {p['direction']} ${p['notional']:,.0f} "
+                f"sizing={p['sizing_mult']:.1f}x vol={p['vol_20d']:.1%} "
+                f"mom63={p.get('momentum_63d', 0):+.4f} "
+                f"SL={p['stop_loss']:.5f} swap={p['swap_daily_bps']}bps/day"
+            )
+
+        # Log structured event for each pair signal
+        _log_event("signal", "fx_carry_momentum_filter", {
+            "n_pairs": len(pairs), "n_filtered": n_filtered,
+            "total_notional": total, "equity": equity,
+            "pairs": [{"pair": p["pair"], "notional": p["notional"],
+                       "sizing": p["sizing_mult"], "momentum": p.get("momentum_63d")}
+                      for p in pairs],
+        })
+
+        # NOTE: Actual IBKR order execution not implemented yet
+        # For now, log the signal and send Telegram notification
+        # Probationary phase: monitor signals for 30 days before executing
+        _telegram_notify(
+            f"FX CARRY-MOM SIGNAL: {len(pairs)}/{len(pairs)+n_filtered} pairs\n"
+            f"Total notional: ${total:,.0f}\n"
+            + "\n".join(
+                f"  {p['pair']} {p['direction']} ${p['notional']:,.0f} x{p['sizing_mult']:.1f} mom={p.get('momentum_63d',0):+.4f}"
+                for p in pairs
+            )
+            + f"\n\nFiltered by momentum: {n_filtered} pairs"
+            + f"\nEquity IBKR: ${equity:,.0f}\n"
+            f"(Probationary — signal only, 30 days)",
+            level="INFO"
+        )
+
+    except Exception as e:
+        logger.error(f"FX CARRY CYCLE ERROR: {e}", exc_info=True)
+    finally:
+        _execution_lock.release()
+
+
+# FX Carry+Momentum config reference (used by the cycle)
+STRATEGY_CONFIG_FX_CARRY = {
+    "min_capital": 5000,
+    "allocation_pct": 0.15,  # Probationary (1/16 Kelly) — promote to 0.30 after 30 days
+}
+
+
 def run_live_risk_cycle():
     """Poll live risk checks every 5 minutes — circuit breakers, kill switches, deleveraging."""
     if not _risk_lock.acquire(blocking=False):
@@ -454,6 +631,11 @@ def run_live_risk_cycle():
         if not risk_result["passed"]:
             logger.critical(f"LIVE RISK CHECK FAILED: {risk_result['blocked_reason']}")
             logger.critical(f"Actions required: {risk_result['actions']}")
+            _log_event("error", "live_risk_cycle", {
+                "reason": risk_result["blocked_reason"],
+                "actions": risk_result["actions"],
+                "daily_pnl_pct": round(daily_pnl_pct, 4),
+            })
 
             # Send alert
             _send_alert(
@@ -472,6 +654,10 @@ def run_live_risk_cycle():
 
         if ks_result["triggered"]:
             logger.critical(f"KILL SWITCH TRIGGERED: {ks_result['reason']}")
+            _log_event("kill_switch", "live_risk_cycle", {
+                "reason": ks_result["reason"],
+                "trigger_type": ks_result["trigger_type"],
+            })
             kill_switch.activate(
                 reason=ks_result["reason"],
                 trigger_type=ks_result["trigger_type"],
@@ -1061,12 +1247,15 @@ def run_crypto_cycle():
         if broker:
             try:
                 acct = broker.get_account_info()
-                spot_equity = float(acct.get("equity", 0))
+                # Use spot_total_usd (excludes Earn) to avoid double-counting
+                # since get_account_info().equity now includes Earn
+                spot_equity = float(acct.get("spot_total_usd", acct.get("equity", 0)))
                 cash_available = float(acct.get("cash", 0))
                 positions = broker.get_positions()
 
                 # Inclure les positions Earn dans l'equity totale
                 # (LDBTC, LDUSDC, LDETH = Earn Flexible, pas dans equity spot)
+                earn_positions = []
                 try:
                     earn_positions = broker.get_earn_positions()
                     for ep in earn_positions:
@@ -1112,6 +1301,50 @@ def run_crypto_cycle():
             except Exception as e:
                 logger.warning(f"Binance account info indisponible: {e}")
 
+        # --- FIX: recaler les baselines drawdown sur l'equity REELLE ---
+        # Le CryptoRiskManager est recree a chaque cycle avec capital=20K,
+        # donc _daily_start_equity = 20K. Mais l'equity reelle peut etre
+        # differente (earn fluctue, BTC prix change). On persiste l'etat
+        # drawdown entre les cycles via un fichier JSON.
+        _crypto_dd_path = ROOT / "data" / "crypto_dd_state.json"
+        try:
+            if _crypto_dd_path.exists():
+                _dd = json.loads(_crypto_dd_path.read_text(encoding="utf-8"))
+                risk_mgr._peak_equity = _dd.get("peak_equity", current_equity)
+                risk_mgr._daily_start_equity = _dd.get("daily_start", current_equity)
+                risk_mgr._hourly_start_equity = _dd.get("hourly_start", current_equity)
+                risk_mgr._weekly_start_equity = _dd.get("weekly_start", current_equity)
+                risk_mgr._monthly_start_equity = _dd.get("monthly_start", current_equity)
+                risk_mgr._last_hourly_reset = _dd.get("last_hourly_reset", time.time())
+
+                # Auto-reset daily/weekly/monthly si le jour/semaine/mois a change
+                last_date = _dd.get("last_date", "")
+                today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                if last_date != today_str:
+                    risk_mgr._daily_start_equity = current_equity
+                    logger.info(f"  Crypto DD: daily reset {last_date} -> {today_str}, start=${current_equity:,.0f}")
+
+                last_week = _dd.get("last_week", "")
+                this_week = datetime.now(timezone.utc).strftime("%Y-W%W")
+                if last_week != this_week:
+                    risk_mgr._weekly_start_equity = current_equity
+
+                last_month = _dd.get("last_month", "")
+                this_month = datetime.now(timezone.utc).strftime("%Y-%m")
+                if last_month != this_month:
+                    risk_mgr._monthly_start_equity = current_equity
+            else:
+                # Premier cycle : initialiser avec l'equity reelle
+                risk_mgr._peak_equity = current_equity
+                risk_mgr._daily_start_equity = current_equity
+                risk_mgr._hourly_start_equity = current_equity
+                risk_mgr._weekly_start_equity = current_equity
+                risk_mgr._monthly_start_equity = current_equity
+        except Exception as _dde:
+            logger.warning(f"Could not load crypto drawdown state: {_dde}")
+            risk_mgr._peak_equity = current_equity
+            risk_mgr._daily_start_equity = current_equity
+
         # --- Risk check global avant signaux ---
         risk_result = risk_mgr.check_all(
             positions=positions,
@@ -1119,6 +1352,25 @@ def run_crypto_cycle():
             cash_available=cash_available,
             earn_total=earn_total,
         )
+
+        # Persister l'etat drawdown pour le prochain cycle
+        try:
+            _crypto_dd_path.parent.mkdir(parents=True, exist_ok=True)
+            _now_utc = datetime.now(timezone.utc)
+            _crypto_dd_path.write_text(json.dumps({
+                "peak_equity": risk_mgr._peak_equity,
+                "daily_start": risk_mgr._daily_start_equity,
+                "hourly_start": risk_mgr._hourly_start_equity,
+                "weekly_start": risk_mgr._weekly_start_equity,
+                "monthly_start": risk_mgr._monthly_start_equity,
+                "last_hourly_reset": risk_mgr._last_hourly_reset,
+                "last_date": _now_utc.strftime("%Y-%m-%d"),
+                "last_week": _now_utc.strftime("%Y-W%W"),
+                "last_month": _now_utc.strftime("%Y-%m"),
+                "last_updated": _now_utc.isoformat(),
+            }))
+        except Exception:
+            pass
 
         if not risk_result["passed"]:
             failed_checks = [
@@ -1134,7 +1386,8 @@ def run_crypto_cycle():
         import pandas as pd
 
         n_signals = 0
-        n_orders = 0
+        n_orders = 0      # Real BUY/SELL trades only
+        n_actions = 0     # All actions (earn, close dust, trades)
         n_errors = 0
 
         for strat_id, strat_data in CRYPTO_STRATEGIES.items():
@@ -1247,6 +1500,10 @@ def run_crypto_cycle():
                     f"  [{strat_id}] {strat_name}: SIGNAL {action} "
                     f"— {json.dumps({k: v for k, v in signal.items() if k != 'df_full'}, default=str)}"
                 )
+                _log_event("signal", strat_id, {
+                    "action": action,
+                    "symbol": signal.get("symbol", primary_symbol),
+                })
 
                 # --- Verifier risk avant execution ---
                 if not risk_result["passed"]:
@@ -1274,8 +1531,8 @@ def run_crypto_cycle():
                         logger.info(f"  [{strat_id}] Earn signal skip (broker indisponible)")
                         continue
                     try:
-                        _execute_earn_signal(broker, strat_id, strat_name, signal, n_orders)
-                        n_orders += 1
+                        _execute_earn_signal(broker, strat_id, strat_name, signal, n_actions)
+                        n_actions += 1
                     except Exception as e:
                         logger.error(f"  [{strat_id}] Earn execution error: {e}")
                         n_errors += 1
@@ -1291,7 +1548,7 @@ def run_crypto_cycle():
                         logger.info(
                             f"  [{strat_id}] Position fermee: {result}"
                         )
-                        n_orders += 1
+                        n_actions += 1
                     except Exception as e:
                         logger.error(
                             f"  [{strat_id}] Erreur close: {e}"
@@ -1351,6 +1608,21 @@ def run_crypto_cycle():
                         f"— {result.get('status', '???')}"
                     )
                     n_orders += 1
+
+                    # Post-execution verification: check filled qty
+                    filled = float(result.get("filled_qty", 0))
+                    if filled <= 0:
+                        logger.warning(
+                            f"  [{strat_id}] POST-EXEC: order status={result.get('status')} "
+                            f"but filled_qty=0 — possible partial/unfilled"
+                        )
+
+                    _log_event("fill", strat_id, {
+                        "side": side, "symbol": signal.get("symbol", primary_symbol),
+                        "notional": notional, "status": result.get("status"),
+                        "filled_qty": filled,
+                        "filled_price": result.get("filled_price"),
+                    })
                     # Telegram: notifier chaque trade execute
                     _telegram_notify(
                         f"TRADE {side} {signal.get('symbol', primary_symbol)}\n"
@@ -1365,6 +1637,9 @@ def run_crypto_cycle():
                         exc_info=True,
                     )
                     n_errors += 1
+                    _log_event("error", strat_id, {
+                        "type": type(e).__name__, "message": str(e)[:200],
+                    })
                     _telegram_notify(
                         f"ERREUR EXECUTION {strat_name}\n{type(e).__name__}: {e}",
                         level="CRITICAL",
@@ -1379,24 +1654,24 @@ def run_crypto_cycle():
 
         logger.info(
             f"=== CRYPTO CYCLE TERMINE: {n_signals} signal(s), "
-            f"{n_orders} ordre(s), {n_errors} erreur(s) ==="
+            f"{n_orders} trade(s), {n_actions} action(s), {n_errors} erreur(s) ==="
         )
 
         # --- Telegram recap ---
-        if n_signals > 0 or n_orders > 0:
+        # Only notify on REAL trades (BUY/SELL) or errors — not earn/dust actions
+        if n_orders > 0:
             _send_alert(
-                f"CRYPTO CYCLE: {n_signals} signaux, {n_orders} ordres, "
-                f"{n_errors} erreurs — equity=${current_equity:,.0f}",
+                f"CRYPTO TRADE: {n_orders} ordre(s) execute(s) — equity=${current_equity:,.0f}",
                 level="info",
             )
             _telegram_notify(
-                f"CYCLE CRYPTO: {n_signals} signaux, {n_orders} ordres, "
-                f"{n_errors} erreurs\nEquity: ${current_equity:,.0f}",
-                level="INFO" if n_errors == 0 else "WARNING",
+                f"TRADE CRYPTO: {n_orders} ordre(s) execute(s)\n"
+                f"Equity: ${current_equity:,.0f}",
+                level="INFO",
             )
-        elif n_errors > 0:
+        if n_errors > 0:
             _telegram_notify(
-                f"CYCLE CRYPTO: 0 signal, {n_errors} erreurs\n"
+                f"CYCLE CRYPTO: {n_errors} erreur(s)\n"
                 f"Equity: ${current_equity:,.0f}",
                 level="WARNING",
             )
@@ -1587,6 +1862,12 @@ def main():
     logger.info(f"  Binance API: {'SET' if os.getenv('BINANCE_API_KEY') else 'NOT SET'}")
     logger.info("=" * 60)
 
+    _log_event("worker_start", details={
+        "alpaca": bool(os.getenv("ALPACA_API_KEY")),
+        "binance": bool(os.getenv("BINANCE_API_KEY")),
+        "ibkr_host": os.getenv("IBKR_HOST", "127.0.0.1"),
+    })
+
     daily_done_today = False
     last_intraday = 0
     last_eu_intraday = 0
@@ -1652,7 +1933,14 @@ def main():
             run_crypto_cycle()
             last_crypto = time.time()
 
-        # Skip weekends pour les marches traditionnels (US/EU/FX)
+        # === FX CARRY DAILY (lun-ven, 10h Paris) ===
+        if is_weekday() and now_paris.hour == 10 and not getattr(run_fx_carry_cycle, '_done_today', False):
+            run_fx_carry_cycle()
+            run_fx_carry_cycle._done_today = True
+        if is_weekday() and now_paris.hour < 10:
+            run_fx_carry_cycle._done_today = False
+
+        # Skip weekends pour les marches traditionnels (US/EU)
         if not is_weekday():
             time.sleep(60)
             continue

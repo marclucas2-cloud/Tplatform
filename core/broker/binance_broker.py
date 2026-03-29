@@ -109,7 +109,7 @@ class BinanceBroker(BaseBroker):
         params["signature"] = sig
         return params
 
-    def _request(self, method: str, base: str, path: str, params: dict | None = None, signed: bool = False, weight: int = 1) -> Any:
+    def _request(self, method: str, base: str, path: str, params: dict | None = None, signed: bool = False, weight: int = 1, _retry: int = 0) -> Any:
         self._rate_limiter.acquire(weight)
         params = params or {}
         if signed:
@@ -118,6 +118,13 @@ class BinanceBroker(BaseBroker):
         try:
             resp = self._session.request(method, url, params=params, timeout=10)
         except requests.RequestException as e:
+            # Retry transient network errors (max 2 retries for non-order requests)
+            if _retry < 2 and method == "GET":
+                logger.warning(f"Binance {method} {path} failed ({e}), retry {_retry + 1}/2")
+                time.sleep(1 + _retry)
+                params.pop("timestamp", None)
+                params.pop("signature", None)
+                return self._request(method, base, path, params, signed=signed, weight=weight, _retry=_retry + 1)
             raise BrokerError(f"Binance request failed: {e}")
         if resp.status_code == 429:
             retry = int(resp.headers.get("Retry-After", 60))
@@ -182,19 +189,45 @@ class BinanceBroker(BaseBroker):
         account = self._get("/api/v3/account", signed=True, weight=10)
         spot_usdt = 0.0
         spot_total_usd = 0.0
+        # Track LD* tokens (Earn wrappers) to avoid double-counting with Earn API
+        ld_assets = set()
         for b in account.get("balances", []):
             free = float(b["free"])
             locked = float(b["locked"])
             total = free + locked
-            if b["asset"] == "USDT":
+            asset = b["asset"]
+            if asset == "USDT":
                 spot_usdt = total
                 spot_total_usd += total
+            elif asset.startswith("LD"):
+                ld_assets.add(asset)  # Skip — counted via Earn API below
             elif total > 0:
                 try:
-                    ticker = self._get("/api/v3/ticker/price", {"symbol": b["asset"] + "USDT"})
+                    ticker = self._get("/api/v3/ticker/price", {"symbol": asset + "USDT"})
                     spot_total_usd += total * float(ticker["price"])
                 except BrokerError:
                     pass
+
+        # Earn positions (flexible) — the real value of LD* tokens
+        earn_total_usd = 0.0
+        try:
+            resp = self._get("/sapi/v1/simple-earn/flexible/position", signed=True, weight=10)
+            rows = resp.get("rows", []) if isinstance(resp, dict) else []
+            for r in rows:
+                amt = float(r.get("totalAmount", 0))
+                asset = r.get("asset", "")
+                if amt <= 0:
+                    continue
+                if asset in ("USDT", "USDC", "BUSD"):
+                    earn_total_usd += amt
+                else:
+                    try:
+                        ticker = self._get("/api/v3/ticker/price", {"symbol": asset + "USDT"})
+                        earn_total_usd += amt * float(ticker["price"])
+                    except BrokerError:
+                        pass
+        except BrokerError:
+            pass
 
         # Margin account
         margin_total = 0
@@ -211,13 +244,14 @@ class BinanceBroker(BaseBroker):
         except BrokerError:
             pass
 
-        equity = spot_total_usd
+        equity = spot_total_usd + earn_total_usd
         return {
             "equity": round(equity, 2),
             "cash": round(spot_usdt, 2),
             "buying_power": round(spot_usdt, 2),
             "spot_usdt": round(spot_usdt, 2),
             "spot_total_usd": round(spot_total_usd, 2),
+            "earn_total_usd": round(earn_total_usd, 2),
             "margin_level": round(margin_level, 2),
             "margin_borrowed_btc": margin_borrowed,
             "margin_interest_btc": margin_interest,
