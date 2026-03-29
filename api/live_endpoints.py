@@ -586,4 +586,210 @@ def create_live_router(
             return "WARNING"
         return "OK"
 
+    # ==================================================================
+    # V2 ENDPOINTS — Portfolio-Aware Risk & Execution Reality
+    # ==================================================================
+
+    @router.get("/v2/portfolio")
+    def get_portfolio_state():
+        """Unified cross-broker portfolio state (IBKR + Binance).
+
+        Returns: total_capital, invested, at_risk (ERE), leverage,
+                 exposure (long/short/net/gross), drawdown, correlation.
+        """
+        deps = _get_v2_deps()
+        if deps.get("portfolio_engine") is None:
+            return {"error": "PortfolioStateEngine not configured"}
+
+        try:
+            state = deps["portfolio_engine"].get_state(
+                leverage_target=deps.get("leverage_target", 1.0),
+                active_strategies=deps.get("active_strategies"),
+            )
+            return state.to_dict()
+        except Exception as e:
+            logger.error("Portfolio state error: %s", e)
+            return {"error": str(e)}
+
+    @router.get("/v2/correlation")
+    def get_correlation():
+        """Live correlation matrix + clusters.
+
+        Returns: strategies, matrix, global_score, clusters, alerts.
+        """
+        deps = _get_v2_deps()
+        corr_engine = deps.get("correlation_engine")
+        if corr_engine is None:
+            return {"error": "LiveCorrelationEngine not configured"}
+
+        try:
+            return corr_engine.to_dict()
+        except Exception as e:
+            logger.error("Correlation error: %s", e)
+            return {"error": str(e)}
+
+    @router.get("/v2/ere")
+    def get_ere():
+        """Effective Risk Exposure — true capital at risk.
+
+        Returns: ere_absolute, ere_pct, naive_risk, correlation_penalty,
+                 worst_case_cluster_loss, positions breakdown.
+        """
+        deps = _get_v2_deps()
+        ere_calc = deps.get("ere_calculator")
+        if ere_calc is None:
+            return {"error": "EffectiveRiskExposure not configured"}
+
+        try:
+            positions = []
+            if broker:
+                positions.extend(broker.get_positions())
+            capital = 0
+            if broker:
+                account = broker.get_account_info()
+                capital = account.get("equity", 0)
+
+            result = ere_calc.calculate(positions, capital)
+            return result.to_dict()
+        except Exception as e:
+            logger.error("ERE error: %s", e)
+            return {"error": str(e)}
+
+    @router.get("/v2/risk-budget")
+    def get_risk_budget():
+        """Dynamic risk budget per strategy.
+
+        Returns: total_risk_budget, per-strategy budgets, regime.
+        """
+        deps = _get_v2_deps()
+        allocator = deps.get("risk_budget_allocator")
+        if allocator is None:
+            return {"error": "RiskBudgetAllocator not configured"}
+
+        try:
+            active = deps.get("active_strategies", [])
+            capital = 0
+            if broker:
+                account = broker.get_account_info()
+                capital = account.get("equity", 0)
+
+            result = allocator.allocate(
+                active_strategies=active,
+                capital=capital,
+                regime=deps.get("regime", "normal"),
+            )
+            return result.to_dict()
+        except Exception as e:
+            logger.error("Risk budget error: %s", e)
+            return {"error": str(e)}
+
+    @router.get("/v2/leverage")
+    def get_leverage_decision():
+        """Real-time leverage decision with all factors.
+
+        Returns: base_leverage, multiplier, effective_leverage, factors.
+        """
+        deps = _get_v2_deps()
+        adapter = deps.get("leverage_adapter")
+        if adapter is None:
+            return {"error": "LeverageAdapter not configured"}
+
+        try:
+            decision = adapter.get_multiplier(
+                base_leverage=deps.get("leverage_target", 1.0),
+                drawdown_pct=deps.get("drawdown_pct", 0.0),
+                regime=deps.get("regime", "normal"),
+            )
+            return decision.to_dict()
+        except Exception as e:
+            logger.error("Leverage adapter error: %s", e)
+            return {"error": str(e)}
+
+    @router.get("/v2/execution")
+    def get_execution_quality(period: str = Query("24h")):
+        """Execution quality metrics: slippage, fills, latency, SL rate.
+
+        Returns: full ExecutionMetrics for the given period.
+        """
+        deps = _get_v2_deps()
+        exec_monitor = deps.get("execution_monitor")
+        if exec_monitor is None:
+            return {"error": "ExecutionMonitor not configured"}
+
+        try:
+            metrics = exec_monitor.get_metrics(period)
+            return metrics.to_dict()
+        except Exception as e:
+            logger.error("Execution monitor error: %s", e)
+            return {"error": str(e)}
+
+    @router.get("/v2/throttle")
+    def get_throttle_status():
+        """Strategy throttling status.
+
+        Returns: paused strategies and size multipliers.
+        """
+        deps = _get_v2_deps()
+        throttler = deps.get("strategy_throttler")
+        if throttler is None:
+            return {"error": "StrategyThrottler not configured"}
+
+        try:
+            return throttler.get_throttle_summary()
+        except Exception as e:
+            logger.error("Throttle status error: %s", e)
+            return {"error": str(e)}
+
+    @router.get("/v2/safety")
+    def get_safety_mode():
+        """Phase 1 Safety Mode status.
+
+        Returns: active, max_strategies, max_leverage, max_ere, auto_disable.
+        """
+        deps = _get_v2_deps()
+        safety = deps.get("safety_mode")
+        if safety is None:
+            return {"error": "SafetyMode not configured"}
+
+        try:
+            return safety.get_status()
+        except Exception as e:
+            logger.error("Safety mode error: %s", e)
+            return {"error": str(e)}
+
+    @router.get("/v2/dashboard")
+    def get_dashboard_v2():
+        """Consolidated V2 dashboard — all risk & execution in one call.
+
+        Returns: portfolio, correlation, ere, leverage, execution, safety.
+        """
+        result = {
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+
+        # Collect all V2 sections, swallowing individual errors
+        for key, fn in [
+            ("portfolio", get_portfolio_state),
+            ("correlation", get_correlation),
+            ("ere", get_ere),
+            ("leverage", get_leverage_decision),
+            ("safety", get_safety_mode),
+            ("throttle", get_throttle_status),
+        ]:
+            try:
+                result[key] = fn()
+            except Exception as e:
+                result[key] = {"error": str(e)}
+
+        return result
+
+    # V2 dependency injection — set via set_v2_deps() after router creation
+    _v2_deps = {}
+
+    def _get_v2_deps():
+        return _v2_deps
+
+    # Expose setter on router object for external configuration
+    router.set_v2_deps = lambda deps: _v2_deps.update(deps)
+
     return router

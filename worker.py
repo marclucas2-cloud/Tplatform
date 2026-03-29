@@ -551,6 +551,266 @@ def run_live_risk_cycle():
         _risk_lock.release()
 
 
+# --- Telegram push alerts for live monitoring ---
+_telegram_bot = None
+
+
+def _get_telegram_bot():
+    """Lazy-init Telegram bot for push alerts (not polling)."""
+    global _telegram_bot
+    if _telegram_bot is not None:
+        return _telegram_bot
+    token = os.getenv("TELEGRAM_BOT_TOKEN")
+    chat_id = os.getenv("TELEGRAM_CHAT_ID")
+    if not token or not chat_id:
+        return None
+    try:
+        from core.telegram.crypto_bot import CryptoTelegramBot
+        _telegram_bot = CryptoTelegramBot(
+            token=token, authorized_chat_id=int(chat_id),
+        )
+        logger.info("Telegram bot initialized for push alerts")
+        return _telegram_bot
+    except Exception as e:
+        logger.warning(f"Telegram bot init failed: {e}")
+        return None
+
+
+def _telegram_notify(message: str, level: str = "INFO"):
+    """Send a Telegram push notification (non-blocking)."""
+    bot = _get_telegram_bot()
+    if bot:
+        try:
+            bot.send_alert(level, message)
+        except Exception as e:
+            logger.debug(f"Telegram send failed: {e}")
+
+
+def _enrich_crypto_kwargs(
+    kwargs, strat_id, config, broker, primary_symbol, positions, equity, pd
+):
+    """Enrich kwargs for each crypto strategy based on its specific needs.
+
+    This fills in the missing data that each signal_fn expects:
+    - Temporal flags (rebalance day, sunday, month-end)
+    - Borrow rates
+    - Multi-timeframe data
+    - External data (BTC dominance, funding rates)
+    - Ratio/multi-asset data
+    """
+    now_utc = datetime.now(timezone.utc)
+
+    # --- Temporal flags ---
+    is_sunday = now_utc.weekday() == 6
+    is_friday = now_utc.weekday() == 4
+    day_of_month = now_utc.day
+    is_month_end = day_of_month >= 27 or day_of_month <= 3
+    is_rebalance_day = is_sunday  # Weekly strategies rebalance on Sunday
+
+    kwargs["is_rebalance_day"] = is_rebalance_day
+    kwargs["is_sunday_evening"] = is_sunday and now_utc.hour >= 20
+    kwargs["current_asset"] = primary_symbol
+
+    # --- Borrow rates (for margin strategies) ---
+    if config.get("market_type") == "margin" and broker:
+        try:
+            # Fetch current borrow rate for primary asset
+            asset = primary_symbol.replace("USDT", "")
+            margin_info = broker._request("GET", "/sapi/v1/margin/asset", {"asset": asset}, signed=True)
+            if margin_info:
+                daily_rate = float(margin_info.get("marginRatio", 0.0003))
+                kwargs["borrow_rate"] = daily_rate
+                kwargs["borrow_rate_eth"] = daily_rate  # Approximate
+                kwargs["borrow_rate_btc"] = daily_rate * 0.6  # BTC cheaper
+        except Exception:
+            kwargs["borrow_rate"] = 0.0003  # Default 0.03%/day
+
+    # --- Multi-timeframe (STRAT-003 needs 4h for regime) ---
+    if strat_id == "STRAT-003" and broker:
+        try:
+            data_4h = broker.get_prices(primary_symbol, timeframe="4h", bars=100)
+            bars_4h = data_4h.get("bars", [])
+            if bars_4h:
+                df_4h = pd.DataFrame(bars_4h)
+                df_4h.rename(columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"}, inplace=True)
+                kwargs["df_4h"] = df_4h
+        except Exception:
+            pass
+
+    # --- Altcoin RS (STRAT-002): multi-asset returns ---
+    if strat_id == "STRAT-002" and broker and is_rebalance_day:
+        try:
+            alt_symbols = config.get("symbols", ["BTCUSDT"])
+            returns_data = {}
+            volumes_data = {}
+            for sym in alt_symbols[:10]:  # Limit API calls
+                try:
+                    ticker = broker.get_ticker_24h(sym)
+                    returns_data[sym] = float(ticker.get("price_change_pct", ticker.get("priceChangePercent", 0))) / 100
+                    volumes_data[sym] = float(ticker.get("volume", ticker.get("quoteVolume", 0)))
+                except Exception:
+                    pass
+            if returns_data:
+                kwargs["returns_df"] = pd.DataFrame({"returns": returns_data})
+                kwargs["btc_returns"] = pd.Series([returns_data.get("BTCUSDT", 0)])
+                kwargs["volumes_24h"] = volumes_data
+                kwargs["market_caps"] = {}  # Not critical
+                kwargs["borrow_rates"] = {}
+                kwargs["borrow_available"] = {s: True for s in alt_symbols}
+        except Exception:
+            pass
+
+    # --- BTC Dominance (STRAT-005): dominance series ---
+    if strat_id == "STRAT-005" and broker and is_rebalance_day:
+        try:
+            # Approximate BTC dominance from BTC mcap vs total
+            btc_ticker = broker.get_ticker_24h("BTCUSDT")
+            eth_ticker = broker.get_ticker_24h("ETHUSDT")
+            btc_price = float(btc_ticker.get("last_price", btc_ticker.get("lastPrice", 85000)))
+            eth_price = float(eth_ticker.get("last_price", eth_ticker.get("lastPrice", 2000)))
+            # Rough dominance estimate (BTC ~60% typically)
+            dominance = 0.60  # Placeholder until CoinGecko integrated
+            kwargs["dominance_series"] = pd.Series([dominance] * 30)
+            kwargs["returns_data"] = {}
+        except Exception:
+            pass
+
+    # --- Earn APY (STRAT-006) ---
+    if strat_id == "STRAT-006":
+        kwargs["usdt_apy"] = 0.05  # 5% default
+        kwargs["btc_apy"] = 0.01
+        kwargs["eth_apy"] = 0.01
+        kwargs["current_earn_allocations"] = {}
+        kwargs["last_rebalance_ts"] = None
+        kwargs["previous_scenario"] = None
+        if broker:
+            try:
+                earn_positions = broker.get_earn_positions()
+                kwargs["current_earn_allocations"] = {
+                    ep.get("asset", ""): float(ep.get("amount", 0))
+                    for ep in earn_positions
+                }
+            except Exception:
+                pass
+
+    # --- Liquidation Momentum (STRAT-007): futures OI read-only ---
+    if strat_id == "STRAT-007" and broker:
+        try:
+            # Read futures OI from Binance (read-only, no position)
+            import requests as _req
+            oi_resp = _req.get(
+                "https://fapi.binance.com/fapi/v1/openInterest",
+                params={"symbol": primary_symbol}, timeout=5,
+            )
+            if oi_resp.ok:
+                oi_val = float(oi_resp.json().get("openInterest", 0))
+                kwargs["oi_change_4h"] = 0.0  # Need history to compute delta
+                kwargs["volume_ratio"] = 1.0
+                kwargs["bars_since_peak"] = 10
+                kwargs["trades_this_week"] = 0
+                kwargs["funding_rate"] = 0.0
+                kwargs["price_change_4h"] = 0.0
+        except Exception:
+            pass
+
+    # --- Weekend Gap (STRAT-008) ---
+    if strat_id == "STRAT-008":
+        kwargs["traded_this_weekend"] = False
+        if broker and is_friday and now_utc.hour >= 22:
+            try:
+                ticker = broker.get_ticker_24h(primary_symbol)
+                kwargs["friday_close_price"] = float(
+                    ticker.get("last_price", ticker.get("lastPrice", 0))
+                )
+            except Exception:
+                pass
+        # Persist friday price in state file for Sunday use
+        _friday_price_path = ROOT / "data" / "friday_close_price.json"
+        if is_friday and now_utc.hour >= 22 and "friday_close_price" in kwargs:
+            try:
+                _friday_price_path.write_text(
+                    json.dumps({"price": kwargs["friday_close_price"], "ts": now_utc.isoformat()}),
+                    encoding="utf-8",
+                )
+            except Exception:
+                pass
+        elif is_sunday:
+            try:
+                if _friday_price_path.exists():
+                    _fp = json.loads(_friday_price_path.read_text(encoding="utf-8"))
+                    kwargs["friday_close_price"] = _fp.get("price", 0)
+            except Exception:
+                pass
+
+    # --- Funding Rate Divergence (STRAT-009) ---
+    if strat_id == "STRAT-009" and broker:
+        try:
+            import requests as _req
+            fr_resp = _req.get(
+                "https://fapi.binance.com/fapi/v1/fundingRate",
+                params={"symbol": primary_symbol, "limit": 10}, timeout=5,
+            )
+            if fr_resp.ok:
+                rates = [float(r.get("fundingRate", 0)) for r in fr_resp.json()]
+                kwargs["funding_history"] = rates
+                kwargs["current_funding"] = rates[-1] if rates else 0.0
+                kwargs["entry_direction"] = None
+        except Exception:
+            pass
+
+    # --- Stablecoin Supply (STRAT-010) ---
+    if strat_id == "STRAT-010" and is_rebalance_day:
+        try:
+            import requests as _req
+            # CoinGecko free API for stablecoin mcap
+            resp = _req.get(
+                "https://api.coingecko.com/api/v3/coins/tether/market_chart",
+                params={"vs_currency": "usd", "days": 7}, timeout=10,
+            )
+            if resp.ok:
+                mcaps = resp.json().get("market_caps", [])
+                values = [m[1] for m in mcaps]
+                kwargs["stablecoin_supply_series"] = pd.Series(values)
+                # Daily prices for BTC
+                if "df_full" in kwargs and kwargs["df_full"] is not None:
+                    kwargs["daily_prices"] = kwargs["df_full"]["close"]
+        except Exception:
+            pass
+
+    # --- ETH/BTC Ratio (STRAT-011) ---
+    if strat_id == "STRAT-011" and broker:
+        try:
+            eth_data = broker.get_prices("ETHUSDT", timeframe="4h", bars=200)
+            btc_data = broker.get_prices("BTCUSDT", timeframe="4h", bars=200)
+            eth_bars = eth_data.get("bars", [])
+            btc_bars = btc_data.get("bars", [])
+            if eth_bars and btc_bars:
+                min_len = min(len(eth_bars), len(btc_bars))
+                eth_close = [float(b["c"]) for b in eth_bars[-min_len:]]
+                btc_close = [float(b["c"]) for b in btc_bars[-min_len:]]
+                ratio = [e / b if b > 0 else 0 for e, b in zip(eth_close, btc_close)]
+                vol_eth = [float(b["v"]) for b in eth_bars[-min_len:]]
+                vol_btc = [float(b["v"]) for b in btc_bars[-min_len:]]
+                kwargs["df_ratio"] = pd.DataFrame({
+                    "ratio": ratio, "vol_eth": vol_eth, "vol_btc": vol_btc,
+                })
+                kwargs["trade_direction"] = None
+        except Exception:
+            pass
+
+    # --- Monthly Turn-of-Month (STRAT-012): just needs df_full 1d ---
+    if strat_id == "STRAT-012" and broker:
+        try:
+            daily_data = broker.get_prices(primary_symbol, timeframe="1d", bars=40)
+            daily_bars = daily_data.get("bars", [])
+            if daily_bars:
+                df_daily = pd.DataFrame(daily_bars)
+                df_daily.rename(columns={"o": "open", "h": "high", "l": "low", "c": "close", "v": "volume"}, inplace=True)
+                kwargs["df_full"] = df_daily  # Override with daily timeframe
+        except Exception:
+            pass
+
+
 def run_crypto_cycle():
     """Execute le cycle crypto : 8 strategies Binance, 24/7, toutes les 15 min.
 
@@ -787,11 +1047,20 @@ def run_crypto_cycle():
                     "i": len(df_full) - 1 if df_full is not None and not df_full.empty else 0,
                 }
 
-                # Kwargs supplementaires pour certaines strategies
+                # Kwargs enrichis par strategie (fix: chaque strat a des besoins specifiques)
                 kwargs = {}
                 if df_full is not None:
                     kwargs["df_full"] = df_full
                 kwargs["symbol"] = primary_symbol
+
+                # --- Enrichissement kwargs par type de besoin ---
+                try:
+                    _enrich_crypto_kwargs(
+                        kwargs, strat_id, config, broker, primary_symbol,
+                        positions, current_equity, pd,
+                    )
+                except Exception as _enrich_err:
+                    logger.debug(f"  [{strat_id}] kwargs enrich partial: {_enrich_err}")
 
                 # --- Appel du signal_fn (FIX CRO H: per-strategy timeout 30s) ---
                 _signal_result = [None]
@@ -926,12 +1195,24 @@ def run_crypto_cycle():
                         f"— {result.get('status', '???')}"
                     )
                     n_orders += 1
+                    # Telegram: notifier chaque trade execute
+                    _telegram_notify(
+                        f"TRADE {side} {signal.get('symbol', primary_symbol)}\n"
+                        f"Strat: {strat_name}\n"
+                        f"Size: ${notional:.0f} | SL: {stop_loss}\n"
+                        f"Status: {result.get('status', '?')}",
+                        level="INFO",
+                    )
                 except Exception as e:
                     logger.error(
                         f"  [{strat_id}] Erreur execution: {e}",
                         exc_info=True,
                     )
                     n_errors += 1
+                    _telegram_notify(
+                        f"ERREUR EXECUTION {strat_name}\n{type(e).__name__}: {e}",
+                        level="CRITICAL",
+                    )
 
             except Exception as e:
                 # Une strategie qui plante ne doit pas bloquer les autres
@@ -952,6 +1233,17 @@ def run_crypto_cycle():
                 f"{n_errors} erreurs — equity=${current_equity:,.0f}",
                 level="info",
             )
+            _telegram_notify(
+                f"CYCLE CRYPTO: {n_signals} signaux, {n_orders} ordres, "
+                f"{n_errors} erreurs\nEquity: ${current_equity:,.0f}",
+                level="INFO" if n_errors == 0 else "WARNING",
+            )
+        elif n_errors > 0:
+            _telegram_notify(
+                f"CYCLE CRYPTO: 0 signal, {n_errors} erreurs\n"
+                f"Equity: ${current_equity:,.0f}",
+                level="WARNING",
+            )
 
     except Exception as e:
         logger.error(f"Erreur critique crypto cycle: {e}", exc_info=True)
@@ -960,6 +1252,173 @@ def run_crypto_cycle():
         )
     finally:
         _execution_lock.release()
+
+
+# =====================================================================
+# V10 — Portfolio-Aware Risk Engine
+# =====================================================================
+
+# V10 module instances (initialized lazily in main)
+_v10 = {}
+V10_CYCLE_INTERVAL = 300  # 5 minutes
+
+
+def _init_v10_modules():
+    """Initialize V10 portfolio-aware risk modules."""
+    try:
+        from core.risk.live_correlation_engine import LiveCorrelationEngine
+        from core.risk.effective_risk import EffectiveRiskExposure
+        from core.risk.risk_budget_allocator import RiskBudgetAllocator
+        from core.risk.leverage_adapter import LeverageAdapter
+        from core.risk.strategy_throttler import StrategyThrottler
+        from core.risk.safety_mode import SafetyMode
+        from core.execution.execution_monitor import ExecutionMonitor
+        from core.portfolio.portfolio_state import PortfolioStateEngine
+        from core.portfolio.live_logger import LiveSnapshotLogger
+
+        corr_engine = LiveCorrelationEngine(data_dir=str(ROOT / "data"))
+        ere_calc = EffectiveRiskExposure(correlation_engine=corr_engine)
+        budget_alloc = RiskBudgetAllocator(correlation_engine=corr_engine)
+        lev_adapter = LeverageAdapter(
+            correlation_engine=corr_engine, ere_calculator=ere_calc
+        )
+        throttler = StrategyThrottler(correlation_engine=corr_engine)
+        safety = SafetyMode(data_dir=str(ROOT / "data"))
+        exec_monitor = ExecutionMonitor(data_dir=str(ROOT / "data"))
+
+        # SmartRouter for multi-broker portfolio state
+        smart_router = None
+        try:
+            from core.broker.factory import SmartRouter
+            smart_router = SmartRouter()
+        except Exception as e:
+            logger.warning(f"V10: SmartRouter unavailable: {e}")
+
+        portfolio_engine = PortfolioStateEngine(
+            smart_router=smart_router,
+            ere_calculator=ere_calc,
+            correlation_engine=corr_engine,
+            data_dir=str(ROOT / "data"),
+        )
+
+        snapshot_logger = LiveSnapshotLogger(
+            portfolio_engine=portfolio_engine,
+            correlation_engine=corr_engine,
+            ere_calculator=ere_calc,
+            execution_monitor=exec_monitor,
+            log_dir=str(ROOT / "logs" / "portfolio"),
+        )
+
+        _v10.update({
+            "correlation_engine": corr_engine,
+            "ere_calculator": ere_calc,
+            "risk_budget_allocator": budget_alloc,
+            "leverage_adapter": lev_adapter,
+            "strategy_throttler": throttler,
+            "safety_mode": safety,
+            "execution_monitor": exec_monitor,
+            "portfolio_engine": portfolio_engine,
+            "snapshot_logger": snapshot_logger,
+        })
+
+        logger.info(
+            f"V10 modules initialized: {len(_v10)} components, "
+            f"safety_mode={'ON' if safety.is_active else 'OFF'}"
+        )
+        return True
+
+    except Exception as e:
+        logger.error(f"V10 init failed (non-blocking): {e}", exc_info=True)
+        return False
+
+
+def run_v10_portfolio_cycle():
+    """V10 portfolio-aware risk cycle — runs every 5 minutes.
+
+    1. Record portfolio snapshot (JSONL)
+    2. Check correlation alerts
+    3. Check ERE thresholds
+    4. Run safety mode anomaly check
+    5. Log leverage decision
+    """
+    if not _v10:
+        return
+
+    try:
+        # 1. Portfolio snapshot
+        snapshot_logger = _v10.get("snapshot_logger")
+        if snapshot_logger:
+            snapshot = snapshot_logger.record()
+            if snapshot:
+                portfolio_data = snapshot.get("portfolio", {})
+                logger.info(
+                    f"V10 SNAPSHOT: capital=${portfolio_data.get('total_capital', 0):,.0f}, "
+                    f"ERE={portfolio_data.get('capital_at_risk_pct', 0):.1%}, "
+                    f"corr={portfolio_data.get('correlation_score', 0):.2f}, "
+                    f"DD={portfolio_data.get('drawdown_pct', 0):.1%}"
+                )
+
+        # 2. Correlation alerts
+        corr_engine = _v10.get("correlation_engine")
+        if corr_engine:
+            alerts = corr_engine.check_alerts()
+            for alert in alerts:
+                if alert.level == "CRITICAL":
+                    logger.critical(
+                        f"V10 CORR CRITICAL: {alert.strategies[0]} <-> "
+                        f"{alert.strategies[1]} = {alert.correlation:.2f}"
+                    )
+                    _send_alert(
+                        f"CORRELATION CRITICAL: {alert.strategies[0]} <-> "
+                        f"{alert.strategies[1]} = {alert.correlation:.2f}",
+                        level="critical",
+                    )
+                elif alert.level == "WARNING":
+                    logger.warning(
+                        f"V10 CORR WARNING: {alert.strategies[0]} <-> "
+                        f"{alert.strategies[1]} = {alert.correlation:.2f}"
+                    )
+
+        # 3. Safety mode anomaly check
+        safety = _v10.get("safety_mode")
+        portfolio_engine = _v10.get("portfolio_engine")
+        if safety and safety.is_active and portfolio_engine:
+            try:
+                state = portfolio_engine.get_state()
+                anomaly = safety.check_anomaly(
+                    ere_pct=state.capital_at_risk_pct,
+                    drawdown_pct=state.drawdown_pct,
+                    correlation_score=state.correlation_score,
+                )
+                if anomaly.get("action") == "DISABLE_TRADING":
+                    logger.critical(
+                        f"V10 SAFETY: DISABLE_TRADING — {anomaly['details']}"
+                    )
+                    _send_alert(
+                        f"SAFETY MODE: Trading disabled — {anomaly['details']}",
+                        level="critical",
+                    )
+            except Exception as e:
+                logger.debug(f"V10 safety check skip: {e}")
+
+        # 4. Leverage decision (informational)
+        lev_adapter = _v10.get("leverage_adapter")
+        if lev_adapter and portfolio_engine:
+            try:
+                state = portfolio_engine.get_state()
+                decision = lev_adapter.get_multiplier(
+                    drawdown_pct=state.drawdown_pct,
+                )
+                if decision.multiplier < 0.8:
+                    logger.warning(
+                        f"V10 LEVERAGE: multiplier={decision.multiplier:.2f} "
+                        f"({decision.reason})"
+                    )
+            except Exception as e:
+                logger.debug(f"V10 leverage check skip: {e}")
+
+    except Exception as e:
+        logger.error(f"V10 portfolio cycle error: {e}", exc_info=True)
 
 
 def main():
@@ -979,6 +1438,7 @@ def main():
     last_heartbeat = 0
     last_cross_portfolio = 0
     last_crypto = 0
+    last_v10_cycle = 0
     after_close_checked_today = False
     HEARTBEAT_INTERVAL = 1800  # 30 min
     CROSS_PORTFOLIO_INTERVAL = 14400  # 4 hours
@@ -1012,6 +1472,10 @@ def main():
                                f"qty={p.get('qty',0)}")
         except Exception as e:
             logger.warning(f"Crypto reconciliation failed: {e}")
+
+    # === V10 PORTFOLIO-AWARE RISK MODULES ===
+    logger.info("  Initializing V10 portfolio-aware risk modules...")
+    _init_v10_modules()
 
     # Premier heartbeat
     log_heartbeat()
@@ -1095,6 +1559,11 @@ def main():
             if elapsed >= LIVE_RISK_INTERVAL_SECONDS:
                 run_live_risk_cycle()
                 last_live_risk = time.time()
+
+        # === V10 PORTFOLIO CYCLE every 5 min (always, including weekends for crypto) ===
+        if time.time() - last_v10_cycle >= V10_CYCLE_INTERVAL:
+            run_v10_portfolio_cycle()
+            last_v10_cycle = time.time()
 
         # Cross-portfolio exposure check every 4 hours (IBKR + Binance)
         if time.time() - last_cross_portfolio >= CROSS_PORTFOLIO_INTERVAL:
