@@ -76,9 +76,16 @@ class MESOvernightMomentum(StrategyBase):
             return None
         sym = self.SYMBOL
 
-        # Only act in the 09:35-09:45 ET window
-        bar_hour = bar.timestamp.hour if hasattr(bar.timestamp, 'hour') else 0
-        bar_minute = bar.timestamp.minute if hasattr(bar.timestamp, 'minute') else 0
+        # Convert bar timestamp to ET for time-of-day checks
+        try:
+            import zoneinfo
+            et_tz = zoneinfo.ZoneInfo("America/New_York")
+            ts_et = bar.timestamp.astimezone(et_tz) if bar.timestamp.tzinfo else bar.timestamp
+            bar_hour = ts_et.hour
+            bar_minute = ts_et.minute
+        except Exception:
+            bar_hour = bar.timestamp.hour if hasattr(bar.timestamp, 'hour') else 0
+            bar_minute = bar.timestamp.minute if hasattr(bar.timestamp, 'minute') else 0
         bar_time_min = bar_hour * 60 + bar_minute
 
         # Entry window: 09:35 (575) to 09:45 (585)
@@ -122,10 +129,19 @@ class MESOvernightMomentum(StrategyBase):
         if adx is None or adx < self.adx_threshold:
             return None
 
-        # VIX filter (use VIX if available via separate symbol)
-        # Note: VIX data may not always be in the feed for MES; we check bar volatility as proxy
+        # VIX filter: skip if VIX > vix_max (too chaotic for overnight momentum)
+        vix = self.data_feed.get_indicator("VIX", "close", 1) if hasattr(self.data_feed, 'get_indicator') else None
+        if vix is not None and vix > self.vix_max:
+            return None
+
+        # ATR for SL/TP sizing
         atr = self.data_feed.get_indicator(sym, "atr", 14)
         if atr is None or atr <= 0:
+            return None
+
+        # Volatility proxy: if VIX not available, skip if ATR > 3x normal (high vol regime)
+        atr_sma = self.data_feed.get_indicator(sym, "atr_sma", 50) if hasattr(self.data_feed, 'get_indicator') else None
+        if vix is None and atr_sma is not None and atr_sma > 0 and atr / atr_sma > 3.0:
             return None
 
         # Direction: follow overnight momentum

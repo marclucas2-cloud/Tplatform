@@ -117,8 +117,21 @@ except Exception as e:
 
 logger.info(f"Loaded {len(CRYPTO_STRATEGIES)}/12 crypto strategies")
 
-# Total allocation: 20+15+12+10+10+13+10+10 + 8+7+6+5 = 126%
-# New strategies draw from expanded capital or require rebalancing
+# Total allocation raw (may exceed 100% with new strategies)
+_RAW_ALLOCATION = sum(
+    s["config"]["allocation_pct"] for s in CRYPTO_STRATEGIES.values()
+) if CRYPTO_STRATEGIES else 0
+
+# Normalize to 100% if total exceeds — prevents overexposure
+if _RAW_ALLOCATION > 1.0 and CRYPTO_STRATEGIES:
+    scale_factor = 1.0 / _RAW_ALLOCATION
+    for strat_data in CRYPTO_STRATEGIES.values():
+        strat_data["config"]["allocation_pct"] *= scale_factor
+    logger.warning(
+        f"Crypto allocation normalized: {_RAW_ALLOCATION*100:.0f}% -> 100% "
+        f"(scale factor {scale_factor:.3f})"
+    )
+
 TOTAL_ALLOCATION = sum(
     s["config"]["allocation_pct"] for s in CRYPTO_STRATEGIES.values()
 ) if CRYPTO_STRATEGIES else 0

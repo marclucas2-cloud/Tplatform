@@ -138,8 +138,11 @@ class FXSessionOverlap(StrategyBase):
                 vix_close = float(bars_df.iloc[-1]["close"])
                 if vix_close > self.vix_max:
                     return False
-        except (KeyError, Exception):
-            pass  # VIX data not available — allow trade
+        except KeyError:
+            pass  # VIX symbol not in data feed — allow trade
+        except Exception as e:
+            import logging
+            logging.getLogger(__name__).warning(f"VIX check failed: {e}")
 
         return True
 
