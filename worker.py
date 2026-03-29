@@ -811,6 +811,116 @@ def _enrich_crypto_kwargs(
             pass
 
 
+def _execute_earn_signal(broker, strat_id, strat_name, signal, n_orders_ref):
+    """Execute un signal EARN_REBALANCE/SUBSCRIBE/REDEEM via BinanceBroker."""
+    action = signal.get("action")
+    target_weights = signal.get("target_weights", {})
+    capital = signal.get("capital_allocated", 0)
+
+    if action == "EARN_REBALANCE" and target_weights:
+        # Get current earn positions
+        earn_positions = broker.get_earn_positions()
+        earn_map = {ep["asset"]: ep for ep in earn_positions}
+
+        # Get earn product IDs
+        earn_rates = broker.get_earn_rates()
+        product_map = {r["asset"]: r["product_id"] for r in earn_rates}
+
+        for asset, target_pct in target_weights.items():
+            target_amount = capital * target_pct
+            current = float(earn_map.get(asset, {}).get("amount", 0))
+            product_id = product_map.get(asset)
+
+            if not product_id:
+                logger.debug(f"  [{strat_id}] No Earn product for {asset}")
+                continue
+
+            diff = target_amount - current
+            if abs(diff) < 1.0:  # Skip tiny rebalances < $1
+                continue
+
+            if diff > 0:
+                # Subscribe more
+                try:
+                    result = broker.subscribe_earn(product_id, round(diff, 4))
+                    logger.info(
+                        f"  [{strat_id}] EARN SUBSCRIBE {asset}: +${diff:.2f} "
+                        f"(target=${target_amount:.0f}) — {result.get('success', result)}"
+                    )
+                    _telegram_notify(
+                        f"EARN SUBSCRIBE {asset}\n"
+                        f"Strat: {strat_name}\n"
+                        f"+${diff:.2f} (target ${target_amount:.0f})",
+                        level="INFO",
+                    )
+                except Exception as e:
+                    logger.warning(f"  [{strat_id}] Earn subscribe {asset} failed: {e}")
+            else:
+                # Redeem excess
+                redeem_amount = abs(diff)
+                try:
+                    result = broker.redeem_earn(product_id, round(redeem_amount, 4))
+                    logger.info(
+                        f"  [{strat_id}] EARN REDEEM {asset}: -${redeem_amount:.2f} "
+                        f"— {result.get('success', result)}"
+                    )
+                    _telegram_notify(
+                        f"EARN REDEEM {asset}\n"
+                        f"Strat: {strat_name}\n"
+                        f"-${redeem_amount:.2f}",
+                        level="INFO",
+                    )
+                except Exception as e:
+                    logger.warning(f"  [{strat_id}] Earn redeem {asset} failed: {e}")
+
+    elif action == "EARN_SUBSCRIBE":
+        asset = signal.get("asset", "USDT")
+        amount = signal.get("amount", 0)
+        earn_rates = broker.get_earn_rates()
+        product_id = next((r["product_id"] for r in earn_rates if r["asset"] == asset), None)
+        if product_id and amount > 1:
+            result = broker.subscribe_earn(product_id, round(amount, 4))
+            logger.info(f"  [{strat_id}] EARN SUBSCRIBE {asset}: ${amount:.2f} — {result}")
+
+    elif action == "EARN_REDEEM":
+        asset = signal.get("asset", "USDT")
+        amount = signal.get("amount")
+        earn_positions = broker.get_earn_positions()
+        product_id = next((ep["product_id"] for ep in earn_positions if ep["asset"] == asset), None)
+        if product_id:
+            result = broker.redeem_earn(product_id, amount)
+            logger.info(f"  [{strat_id}] EARN REDEEM {asset}: {amount or 'ALL'} — {result}")
+
+    logger.info(f"  [{strat_id}] Earn signal {action} executed")
+
+
+def _log_strategy_debug(strat_id, config, df_full, broker, primary_symbol):
+    """Log indicateur values pour debug quand pas de signal."""
+    if df_full is None or df_full.empty:
+        logger.debug(f"  [{strat_id}] DEBUG: no df_full")
+        return
+    try:
+        close = float(df_full.iloc[-1]["close"])
+        # Simple moving averages
+        if len(df_full) >= 50:
+            ema20 = float(df_full["close"].ewm(span=20).mean().iloc[-1])
+            ema50 = float(df_full["close"].ewm(span=50).mean().iloc[-1])
+            rsi_delta = df_full["close"].diff()
+            gain = rsi_delta.clip(lower=0).rolling(14).mean().iloc[-1]
+            loss = (-rsi_delta.clip(upper=0)).rolling(14).mean().iloc[-1]
+            rsi = 100 - 100 / (1 + gain / loss) if loss > 0 else 50
+            vol_ratio = float(df_full["volume"].iloc[-1] / df_full["volume"].rolling(20).mean().iloc[-1]) if df_full["volume"].rolling(20).mean().iloc[-1] > 0 else 0
+            logger.info(
+                f"  [{strat_id}] DEBUG: price={close:.0f} EMA20={ema20:.0f} "
+                f"EMA50={ema50:.0f} RSI={rsi:.1f} vol_ratio={vol_ratio:.2f} "
+                f"trend={'UP' if ema20 > ema50 else 'DOWN'}"
+            )
+        else:
+            logger.debug(f"  [{strat_id}] DEBUG: only {len(df_full)} bars")
+    except Exception as e:
+        logger.debug(f"  [{strat_id}] DEBUG error: {e}")
+
+
 def run_crypto_cycle():
     """Execute le cycle crypto : 8 strategies Binance, 24/7, toutes les 15 min.
 
@@ -1088,6 +1198,7 @@ def run_crypto_cycle():
                     logger.info(
                         f"  [{strat_id}] {strat_name}: pas de signal"
                     )
+                    _log_strategy_debug(strat_id, config, df_full, broker, primary_symbol)
                     continue
 
                 n_signals += 1
@@ -1116,13 +1227,18 @@ def run_crypto_cycle():
                 # Determiner la direction et le market_type
                 market_type = config.get("market_type", "spot")
 
-                # Pour les signaux EARN, pas d'ordre classique
+                # --- Signaux EARN : rebalance entre produits Earn Flexible ---
                 if action in ("EARN_REBALANCE", "EARN_SUBSCRIBE", "EARN_REDEEM",
                               "CAPITAL_RELEASE"):
-                    logger.info(
-                        f"  [{strat_id}] Earn signal logue "
-                        f"(execution earn non implementee dans le worker)"
-                    )
+                    if broker is None:
+                        logger.info(f"  [{strat_id}] Earn signal skip (broker indisponible)")
+                        continue
+                    try:
+                        _execute_earn_signal(broker, strat_id, strat_name, signal, n_orders)
+                        n_orders += 1
+                    except Exception as e:
+                        logger.error(f"  [{strat_id}] Earn execution error: {e}")
+                        n_errors += 1
                     continue
 
                 # Pour les signaux CLOSE
