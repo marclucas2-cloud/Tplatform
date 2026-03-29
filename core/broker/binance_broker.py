@@ -382,8 +382,13 @@ class BinanceBroker(BaseBroker):
         positions = self.get_positions()
         for p in positions:
             if p["symbol"] == symbol:
+                qty = abs(float(p["qty"]))
+                # Skip dust positions (< $1 notional)
+                price = float(p.get("market_price", p.get("current_price", 0)))
+                if qty * price < 1.0 and qty < 0.0001:
+                    logger.info(f"Skip close {symbol}: dust position qty={qty}")
+                    return {"orderId": None, "symbol": symbol, "status": "DUST_SKIP"}
                 if p["side"] == "SHORT":
-                    qty = abs(p["qty"])
                     result = self._create_margin_position(symbol, "BUY", qty, None, None, _authorized_by)
                     base_asset = symbol.replace("USDT", "")
                     try:
@@ -392,7 +397,7 @@ class BinanceBroker(BaseBroker):
                         logger.warning(f"Repay failed: {e}")
                     return result
                 else:
-                    return self._create_spot_position(symbol, "SELL", abs(p["qty"]), None, None, _authorized_by)
+                    return self._create_spot_position(symbol, "SELL", qty, None, None, _authorized_by)
         return {"orderId": None, "symbol": symbol, "status": "NO_POSITION"}
 
     def close_all_positions(self, _authorized_by: str | None = None) -> list[dict]:
