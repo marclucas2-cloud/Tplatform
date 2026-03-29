@@ -637,43 +637,76 @@ def _enrich_crypto_kwargs(
         except Exception:
             pass
 
-    # --- Altcoin RS (STRAT-002): multi-asset returns ---
+    # --- Altcoin RS (STRAT-002): multi-asset 90d daily returns ---
     if strat_id == "STRAT-002" and broker and is_rebalance_day:
         try:
             alt_symbols = config.get("symbols", ["BTCUSDT"])
-            returns_data = {}
+            all_returns = {}
             volumes_data = {}
-            for sym in alt_symbols[:10]:  # Limit API calls
+            # Fetch 100d daily close for each alt + BTC
+            symbols_to_fetch = list(set(alt_symbols[:10] + ["BTCUSDT"]))
+            for sym in symbols_to_fetch:
                 try:
+                    price_data = broker.get_prices(sym, timeframe="1d", bars=100)
+                    bars = price_data.get("bars", [])
+                    if len(bars) >= 30:
+                        closes = pd.Series([float(b["c"]) for b in bars])
+                        all_returns[sym] = closes.pct_change().dropna()
+                    # 24h volume
                     ticker = broker.get_ticker_24h(sym)
-                    returns_data[sym] = float(ticker.get("price_change_pct", ticker.get("priceChangePercent", 0))) / 100
                     volumes_data[sym] = float(ticker.get("volume", ticker.get("quoteVolume", 0)))
                 except Exception:
                     pass
-            if returns_data:
-                kwargs["returns_df"] = pd.DataFrame({"returns": returns_data})
-                kwargs["btc_returns"] = pd.Series([returns_data.get("BTCUSDT", 0)])
+            btc_ret = all_returns.pop("BTCUSDT", None)
+            if all_returns and btc_ret is not None:
+                # Align all series to same length
+                min_len = min(len(s) for s in all_returns.values())
+                min_len = min(min_len, len(btc_ret))
+                returns_df = pd.DataFrame({
+                    sym: s.values[-min_len:] for sym, s in all_returns.items()
+                })
+                kwargs["returns_df"] = returns_df
+                kwargs["btc_returns"] = pd.Series(btc_ret.values[-min_len:])
                 kwargs["volumes_24h"] = volumes_data
-                kwargs["market_caps"] = {}  # Not critical
+                kwargs["market_caps"] = {}
                 kwargs["borrow_rates"] = {}
                 kwargs["borrow_available"] = {s: True for s in alt_symbols}
-        except Exception:
-            pass
+                logger.info(f"  [{strat_id}] Enriched: {len(all_returns)} alts, {min_len} days")
+        except Exception as e:
+            logger.debug(f"  [{strat_id}] Altcoin data fetch failed: {e}")
 
-    # --- BTC Dominance (STRAT-005): dominance series ---
+    # --- BTC Dominance (STRAT-005): dominance series + alt returns ---
     if strat_id == "STRAT-005" and broker and is_rebalance_day:
         try:
-            # Approximate BTC dominance from BTC mcap vs total
-            btc_ticker = broker.get_ticker_24h("BTCUSDT")
-            eth_ticker = broker.get_ticker_24h("ETHUSDT")
-            btc_price = float(btc_ticker.get("last_price", btc_ticker.get("lastPrice", 85000)))
-            eth_price = float(eth_ticker.get("last_price", eth_ticker.get("lastPrice", 2000)))
-            # Rough dominance estimate (BTC ~60% typically)
-            dominance = 0.60  # Placeholder until CoinGecko integrated
+            # Fetch BTC dominance from CoinGecko
+            import requests as _req
+            dom_resp = _req.get(
+                "https://api.coingecko.com/api/v3/global", timeout=10
+            )
+            dominance = 0.60
+            if dom_resp.ok:
+                dominance = dom_resp.json().get("data", {}).get(
+                    "market_cap_percentage", {}
+                ).get("btc", 60) / 100
             kwargs["dominance_series"] = pd.Series([dominance] * 30)
-            kwargs["returns_data"] = {}
-        except Exception:
-            pass
+            # Fetch 14d returns for top performer candidates
+            candidates = ["ETHUSDT", "SOLUSDT", "BNBUSDT", "ADAUSDT",
+                          "XRPUSDT", "DOTUSDT", "AVAXUSDT", "MATICUSDT"]
+            returns_data = {}
+            for sym in candidates:
+                try:
+                    data = broker.get_prices(sym, timeframe="1d", bars=20)
+                    bars = data.get("bars", [])
+                    if len(bars) >= 14:
+                        closes = [float(b["c"]) for b in bars]
+                        ret_14d = (closes[-1] / closes[-14] - 1) if closes[-14] > 0 else 0
+                        returns_data[sym] = ret_14d
+                except Exception:
+                    pass
+            kwargs["returns_data"] = returns_data
+            logger.info(f"  [{strat_id}] Enriched: dominance={dominance:.1%}, {len(returns_data)} candidates")
+        except Exception as e:
+            logger.debug(f"  [{strat_id}] Dominance fetch failed: {e}")
 
     # --- Earn APY (STRAT-006) ---
     if strat_id == "STRAT-006":
@@ -891,7 +924,7 @@ def _execute_earn_signal(broker, strat_id, strat_name, signal, n_orders_ref):
             result = broker.redeem_earn(product_id, amount)
             logger.info(f"  [{strat_id}] EARN REDEEM {asset}: {amount or 'ALL'} — {result}")
 
-    logger.info(f"  [{strat_id}] Earn signal {action} executed")
+    logger.info(f"  [{strat_id}] Earn signal {action} processed")
 
 
 def _log_strategy_debug(strat_id, config, df_full, broker, primary_symbol):
