@@ -163,3 +163,6 @@
 {"timestamp": "2026-03-29T03:04:00.594928", "symbol": "MES", "old_contract": "MESH26", "new_contract": "MESM26", "slippage_usd": null}
 {"timestamp": "2026-03-29T03:04:00.729410", "symbol": "MES", "old_contract": "MESH26", "new_contract": "MESM26", "slippage_usd": null}
 {"timestamp": "2026-03-29T03:04:00.729847", "symbol": "MNQ", "old_contract": "MNQH26", "new_contract": "MNQM26", "slippage_usd": null}
+{"timestamp": "2026-03-29T22:06:21.139503", "symbol": "MES", "old_contract": "MESH26", "new_contract": "MESM26", "slippage_usd": null}
+{"timestamp": "2026-03-29T22:06:21.272266", "symbol": "MES", "old_contract": "MESH26", "new_contract": "MESM26", "slippage_usd": null}
+{"timestamp": "2026-03-29T22:06:21.272723", "symbol": "MNQ", "old_contract": "MNQH26", "new_contract": "MNQM26", "slippage_usd": null}

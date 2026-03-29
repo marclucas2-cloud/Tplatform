@@ -18,12 +18,12 @@ export default function Positions() {
         </div>
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
           <div className="text-xs text-[var(--color-text-secondary)] uppercase">Exposure Long</div>
-          <div className="font-mono text-xl text-[var(--color-profit)]">${data.exposure_long?.toLocaleString()}</div>
+          <div className={`font-mono text-xl ${data.exposure_long > 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-text-secondary)]'}`}>${data.exposure_long?.toLocaleString()}</div>
           <div className="text-xs text-[var(--color-text-secondary)]">{data.exposure_long_pct}%</div>
         </div>
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
           <div className="text-xs text-[var(--color-text-secondary)] uppercase">Exposure Short</div>
-          <div className="font-mono text-xl text-[var(--color-loss)]">${data.exposure_short?.toLocaleString()}</div>
+          <div className={`font-mono text-xl ${data.exposure_short > 0 ? 'text-[var(--color-loss)]' : 'text-[var(--color-text-secondary)]'}`}>${data.exposure_short?.toLocaleString()}</div>
           <div className="text-xs text-[var(--color-text-secondary)]">{data.exposure_short_pct}%</div>
         </div>
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
@@ -32,7 +32,7 @@ export default function Positions() {
         </div>
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
           <div className="text-xs text-[var(--color-text-secondary)] uppercase">Cash Libre</div>
-          <div className="font-mono text-xl">${(100000 - Math.abs(data.exposure_long || 0) - Math.abs(data.exposure_short || 0)).toLocaleString()}</div>
+          <div className="font-mono text-xl">${((data.total_capital || 0) - Math.abs(data.exposure_long || 0) - Math.abs(data.exposure_short || 0)).toLocaleString()}</div>
         </div>
       </div>
 

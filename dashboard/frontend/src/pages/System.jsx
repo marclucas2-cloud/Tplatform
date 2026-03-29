@@ -100,9 +100,10 @@ const LOG_BG = {
 
 export default function System() {
   const { data: status, loading: sLoad } = useApi('/system/status', 10000)
+  const { data: health } = useApi('/system/health', 15000)
   const { data: logsData } = useApi('/system/logs', 15000)
 
-  if (sLoad && !status) {
+  if (sLoad && !status && !health) {
     return (
       <div className="flex items-center justify-center h-96">
         <div className="text-[var(--color-text-secondary)] animate-pulse">Chargement systeme...</div>
@@ -116,8 +117,9 @@ export default function System() {
   const reconciliation = sys.reconciliation || {}
   const backup = sys.backup || {}
 
-  const ibkr = brokers.ibkr || {}
-  const binance = brokers.binance || {}
+  // Use health endpoint as fallback for broker connectivity
+  const ibkr = { ...brokers.ibkr, connected: brokers.ibkr?.connected ?? health?.ibkr_connected ?? false }
+  const binance = { ...brokers.binance, connected: brokers.binance?.connected ?? health?.binance_connected ?? false }
   const telegram = brokers.telegram || {}
 
   const logs = logsData?.logs || []
@@ -326,7 +328,7 @@ export default function System() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-3">
           <span className="text-xs text-[var(--color-text-secondary)]">
-            Worker : <span className="font-mono text-[var(--color-text-primary)]">{sys.worker_status ?? 'N/A'}</span>
+            Worker : <span className="font-mono text-[var(--color-text-primary)]">{sys.worker_status ?? (health?.worker_running ? 'RUNNING' : 'OFF')}</span>
           </span>
         </div>
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-3">
@@ -336,12 +338,12 @@ export default function System() {
         </div>
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-3">
           <span className="text-xs text-[var(--color-text-secondary)]">
-            Plateforme : <span className="font-mono text-[var(--color-text-primary)]">{sys.platform ?? 'Railway'}</span>
+            Plateforme : <span className="font-mono text-[var(--color-text-primary)]">{sys.platform ?? 'Hetzner VPS'}</span>
           </span>
         </div>
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-3">
           <span className="text-xs text-[var(--color-text-secondary)]">
-            Version : <span className="font-mono text-[var(--color-text-primary)]">{sys.version ?? 'v5.0'}</span>
+            Version : <span className="font-mono text-[var(--color-text-primary)]">{sys.version ?? 'v10.0'}</span>
           </span>
         </div>
       </div>

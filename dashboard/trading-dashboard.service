@@ -1,0 +1,17 @@
+[Unit]
+Description=Trading Dashboard API (FastAPI + React SPA)
+After=network.target
+# Do NOT depend on worker — dashboard runs independently
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/trading-platform/dashboard/api
+ExecStart=/opt/trading-platform/venv/bin/uvicorn main:app --host 127.0.0.1 --port 8000 --workers 1 --log-level info
+Restart=always
+RestartSec=5
+EnvironmentFile=/opt/trading-platform/.env
+Environment=PYTHONPATH=/opt/trading-platform:/opt/trading-platform/intraday-backtesterV2:/opt/trading-platform/dashboard/api
+
+[Install]
+WantedBy=multi-user.target

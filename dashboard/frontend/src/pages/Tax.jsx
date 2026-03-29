@@ -74,7 +74,7 @@ export default function Tax() {
       {/* Summary Table */}
       <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
         <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">
-          Resume par compte — {year}
+          Résumé par compte — {year}
         </h2>
         <table className="w-full text-sm">
           <thead>

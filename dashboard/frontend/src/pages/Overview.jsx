@@ -34,16 +34,16 @@ export default function Overview() {
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
         <MetricCard
           label="Equity"
-          value={portfolio.equity}
+          value={portfolio.equity || (portfolio.alpaca_equity || 0) + (portfolio.binance_equity || 0) + (portfolio.ibkr_equity || 0)}
           change={portfolio.total_return_pct}
           prefix="$"
         />
         <MetricCard
           label="P&L Jour"
-          value={portfolio.pnl_day}
-          change={portfolio.pnl_day_pct}
+          value={portfolio.pnl_day || 0}
+          change={portfolio.pnl_day_pct || 0}
           prefix="$"
-          color={portfolio.pnl_day >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}
+          color={(portfolio.pnl_day || 0) >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}
         />
         <MetricCard
           label="Positions"
@@ -224,22 +224,22 @@ export default function Overview() {
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-3 flex items-center gap-2">
           <Clock size={14} className="text-[var(--color-text-secondary)]" />
           <span className="text-xs text-[var(--color-text-secondary)]">
-            Updated: {new Date(portfolio.timestamp).toLocaleTimeString()}
+            Updated: {portfolio.timestamp ? new Date(portfolio.timestamp).toLocaleTimeString('fr-FR') : 'N/A'}
           </span>
         </div>
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-3">
           <span className="text-xs text-[var(--color-text-secondary)]">
-            Regime: <span className="font-mono text-[var(--color-text-primary)]">{portfolio.regime}</span>
+            Regime: <span className="font-mono text-[var(--color-text-primary)]">{portfolio.regime || 'N/A'}</span>
           </span>
         </div>
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-3">
           <span className="text-xs text-[var(--color-text-secondary)]">
-            ATR SPY: <span className="font-mono text-[var(--color-text-primary)]">{portfolio.regime_detail?.atr_pct}%</span>
+            ATR SPY: <span className="font-mono text-[var(--color-text-primary)]">{portfolio.regime_detail?.atr_pct ?? 'N/A'}%</span>
           </span>
         </div>
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-3">
           <span className="text-xs text-[var(--color-text-secondary)]">
-            Capital Initial: <span className="font-mono text-[var(--color-text-primary)]">$100,000</span>
+            Capital: <span className="font-mono text-[var(--color-text-primary)]">${(portfolio.equity || 0).toLocaleString()}</span>
           </span>
         </div>
       </div>

@@ -16,23 +16,8 @@ try:
 except Exception as e:
     logger.warning(f"Failed to load STRAT-001 (btc_eth_dual_momentum): {e}")
 
-try:
-    from strategies.crypto.altcoin_relative_strength import (
-        STRATEGY_CONFIG as STRAT_002_CONFIG,
-        signal_fn as strat_002_signal,
-    )
-    CRYPTO_STRATEGIES["STRAT-002"] = {"config": STRAT_002_CONFIG, "signal_fn": strat_002_signal}
-except Exception as e:
-    logger.warning(f"Failed to load STRAT-002 (altcoin_relative_strength): {e}")
-
-try:
-    from strategies.crypto.btc_mean_reversion import (
-        STRATEGY_CONFIG as STRAT_003_CONFIG,
-        signal_fn as strat_003_signal,
-    )
-    CRYPTO_STRATEGIES["STRAT-003"] = {"config": STRAT_003_CONFIG, "signal_fn": strat_003_signal}
-except Exception as e:
-    logger.warning(f"Failed to load STRAT-003 (btc_mean_reversion): {e}")
+# STRAT-002 Altcoin RS — DISABLED (WF: NO_DATA, no validation possible)
+# STRAT-003 BTC Mean Reversion — DISABLED (WF: REJECTED, Sharpe OOS=-0.07)
 
 try:
     from strategies.crypto.vol_breakout import (
@@ -79,43 +64,12 @@ try:
 except Exception as e:
     logger.warning(f"Failed to load STRAT-008 (weekend_gap): {e}")
 
-try:
-    from strategies.crypto.funding_rate_divergence import (
-        STRATEGY_CONFIG as STRAT_009_CONFIG,
-        signal_fn as strat_009_signal,
-    )
-    CRYPTO_STRATEGIES["STRAT-009"] = {"config": STRAT_009_CONFIG, "signal_fn": strat_009_signal}
-except Exception as e:
-    logger.warning(f"Failed to load STRAT-009 (funding_rate_divergence): {e}")
+# STRAT-009 Funding Rate Divergence — DISABLED (no WF validation)
+# STRAT-010 Stablecoin Supply Flow — DISABLED (no WF validation)
+# STRAT-011 ETH/BTC Ratio Breakout — DISABLED (no WF validation)
+# STRAT-012 Monthly Turn-of-Month — DISABLED (no WF validation)
 
-try:
-    from strategies.crypto.stablecoin_supply_flow import (
-        STRATEGY_CONFIG as STRAT_010_CONFIG,
-        signal_fn as strat_010_signal,
-    )
-    CRYPTO_STRATEGIES["STRAT-010"] = {"config": STRAT_010_CONFIG, "signal_fn": strat_010_signal}
-except Exception as e:
-    logger.warning(f"Failed to load STRAT-010 (stablecoin_supply_flow): {e}")
-
-try:
-    from strategies.crypto.eth_btc_ratio_breakout import (
-        STRATEGY_CONFIG as STRAT_011_CONFIG,
-        signal_fn as strat_011_signal,
-    )
-    CRYPTO_STRATEGIES["STRAT-011"] = {"config": STRAT_011_CONFIG, "signal_fn": strat_011_signal}
-except Exception as e:
-    logger.warning(f"Failed to load STRAT-011 (eth_btc_ratio_breakout): {e}")
-
-try:
-    from strategies.crypto.monthly_turn_of_month import (
-        STRATEGY_CONFIG as STRAT_012_CONFIG,
-        signal_fn as strat_012_signal,
-    )
-    CRYPTO_STRATEGIES["STRAT-012"] = {"config": STRAT_012_CONFIG, "signal_fn": strat_012_signal}
-except Exception as e:
-    logger.warning(f"Failed to load STRAT-012 (monthly_turn_of_month): {e}")
-
-logger.info(f"Loaded {len(CRYPTO_STRATEGIES)}/12 crypto strategies")
+logger.info(f"Loaded {len(CRYPTO_STRATEGIES)}/6 crypto strategies (6 disabled after WF rejection)")
 
 # Total allocation raw (may exceed 100% with new strategies)
 _RAW_ALLOCATION = sum(

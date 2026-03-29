@@ -32,7 +32,7 @@ buckets:
   fx_swing:
     target: 0.18
     broker: ibkr
-    strategies: [fx_eurusd_trend, fx_eurgbp_mr, fx_eurjpy_carry, fx_audjpy_carry, fx_gbpusd_trend, fx_usdchf_mr, fx_nzdusd_carry]
+    strategies: [fx_eurusd_trend, fx_eurgbp_mr, fx_eurjpy_carry, fx_audjpy_carry, fx_gbpusd_trend, fx_usdchf_mr, fx_nzdusd_carry, fx_carry_momentum_filter]
   futures_trend:
     target: 0.07
     broker: ibkr
@@ -59,4 +59,4 @@ tiers:
   S: {max_alloc: 0.15, strategies: [eu_gap_open, bce_momentum_drift]}
   A: {max_alloc: 0.10, strategies: [brent_lag_play, dow_seasonal, fx_eurusd_trend, futures_mes_trend]}
   B: {max_alloc: 0.06, strategies: [corr_regime_hedge, vix_expansion_short, high_beta_short, auto_sector_german, fx_eurjpy_carry, fx_audjpy_carry]}
-  C: {max_alloc: 0.04, strategies: [late_day_mr, failed_rally, eod_sell_v2, eu_close_us_afternoon, fx_eurgbp_mr, fx_gbpusd_trend, fx_usdchf_mr, fx_nzdusd_carry, futures_mnq_mr, brent_lag_futures, fomc_reaction, bce_press_conference]}
+  C: {max_alloc: 0.04, strategies: [late_day_mr, failed_rally, eod_sell_v2, eu_close_us_afternoon, fx_eurgbp_mr, fx_gbpusd_trend, fx_usdchf_mr, fx_nzdusd_carry, futures_mnq_mr, brent_lag_futures, fomc_reaction, bce_press_conference, fx_carry_momentum_filter]}

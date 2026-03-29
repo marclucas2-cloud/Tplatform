@@ -1,11 +1,7 @@
 """
 Trading Dashboard API — FastAPI backend.
 
-Sources :
-  - Alpaca API (positions, ordres, equity)
-  - paper_portfolio_state.json (etat du pipeline)
-  - STRATEGIES dict (config strategies)
-  - output/*.csv (resultats backtests)
+Multi-broker (Alpaca + IBKR + Binance), JWT auth, static SPA serving.
 """
 import os
 import sys
@@ -16,15 +12,16 @@ from datetime import datetime, timezone
 from typing import Optional
 
 import numpy as np
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 
 # Setup paths
 ROOT = Path(__file__).resolve().parent.parent.parent
 API_DIR = Path(__file__).resolve().parent
-sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
-sys.path.insert(0, str(API_DIR))  # Pour strategy_registry
+sys.path.insert(0, str(ROOT))  # Project root FIRST (strategies.crypto lives here)
+sys.path.append(str(ROOT / "intraday-backtesterV2"))  # append, not insert — avoid shadowing strategies/
+sys.path.insert(1, str(API_DIR))  # Pour strategy_registry
 
 # Load .env
 try:
@@ -36,15 +33,85 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("dashboard-api")
 
-app = FastAPI(title="Trading Dashboard API", version="1.0.0")
+app = FastAPI(title="Trading Dashboard API", version="2.0.0")
 
+# ── CORS ─────────────────────────────────────────────────────────────────────
+ALLOWED_ORIGINS = [
+    "http://localhost:3000",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "https://trading.aucoeurdeville-laval.fr",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173", "http://127.0.0.1:3000"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# ── Auth ─────────────────────────────────────────────────────────────────────
+from auth import router as auth_router, get_current_user  # noqa: E402
+from chat import router as chat_router  # noqa: E402
+
+app.include_router(auth_router)
+app.include_router(chat_router)
+
+# Auth middleware — protect all /api/* except /api/auth/* and /api/health
+PUBLIC_PATHS = {"/api/auth/login", "/api/auth/me", "/api/health", "/docs", "/openapi.json"}
+
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    path = request.url.path
+    # Skip auth for non-API routes (frontend static files), public paths, websocket
+    if not path.startswith("/api/") or path in PUBLIC_PATHS or path.startswith("/api/auth/"):
+        return await call_next(request)
+    # Validate JWT
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return JSONResponse(status_code=401, content={"detail": "Missing token"})
+    from auth import _verify_token
+    token = auth_header.split(" ", 1)[1]
+    if _verify_token(token) is None:
+        return JSONResponse(status_code=401, content={"detail": "Invalid or expired token"})
+    return await call_next(request)
+
+# ── IBKR helpers (non-blocking, no ib_insync) ────────────────────────────────
+
+def _check_ibkr_port() -> bool:
+    """Check if IB Gateway port is open (fast TCP check, no ib_insync)."""
+    import socket
+    host = os.environ.get("IBKR_HOST", "127.0.0.1")
+    port = int(os.environ.get("IBKR_PORT", "4002"))
+    try:
+        with socket.create_connection((host, port), timeout=2):
+            return True
+    except (ConnectionRefusedError, TimeoutError, OSError):
+        return False
+
+
+def _get_ibkr_equity_from_snapshot() -> float:
+    """Read IBKR equity from latest worker JSONL snapshot."""
+    import glob
+    log_dir = ROOT / "logs" / "portfolio"
+    if not log_dir.exists():
+        return 0.0
+    files = sorted(glob.glob(str(log_dir / "*.jsonl")), reverse=True)
+    for fpath in files[:2]:  # Check today + yesterday
+        try:
+            with open(fpath, "r") as f:
+                lines = f.readlines()
+            for line in reversed(lines[-10:]):  # Last 10 entries
+                snap = json.loads(line.strip())
+                brokers = snap.get("portfolio", {}).get("brokers", [])
+                for b in brokers:
+                    if b.get("broker") == "ibkr":
+                        return float(b.get("equity", 0))
+        except Exception:
+            continue
+    return 0.0
+
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -84,19 +151,40 @@ def _tier_for_strategy(sid: str, tier_alloc: dict) -> str:
 
 @app.get("/api/portfolio")
 def get_portfolio():
-    """Etat global du portefeuille."""
+    """Etat global du portefeuille — multi-broker."""
     try:
-        client = _get_alpaca_client()
-        account = client.get_account_info()
-        positions = client.get_positions()
+        # Alpaca
+        alpaca_equity, alpaca_cash, alpaca_positions = 0, 0, []
+        try:
+            client = _get_alpaca_client()
+            account = client.get_account_info()
+            alpaca_positions = client.get_positions()
+            alpaca_equity = account["equity"]
+            alpaca_cash = account["cash"]
+        except Exception:
+            pass
 
-        equity = account["equity"]
-        cash = account["cash"]
-        total_pnl = sum(p.get("unrealized_pl", 0) for p in positions)
+        # Binance
+        binance_equity = 0
+        try:
+            if os.environ.get("BINANCE_API_KEY"):
+                from core.broker.binance_broker import BinanceBroker
+                bnb = BinanceBroker()
+                bnb_info = bnb.get_account_info()
+                binance_equity = bnb_info.get("equity", 0)
+        except Exception:
+            pass
+
+        # IBKR (read from worker snapshot — no direct connection to avoid client_id conflicts)
+        ibkr_equity = _get_ibkr_equity_from_snapshot()
+
+        equity = alpaca_equity + binance_equity + ibkr_equity
+        cash = alpaca_cash
+        total_pnl = sum(p.get("unrealized_pl", 0) for p in alpaca_positions)
 
         state = _load_state()
-        daily_start = state.get("daily_capital_start", 100_000)
-        pnl_day = equity - daily_start
+        daily_start = state.get("daily_capital_start", equity or 100_000)
+        pnl_day = equity - daily_start if daily_start > 0 else 0
 
         # Regime
         try:
@@ -111,9 +199,12 @@ def get_portfolio():
             "pnl_day": round(pnl_day, 2),
             "pnl_day_pct": round(pnl_day / daily_start * 100, 2) if daily_start > 0 else 0,
             "pnl_unrealized": round(total_pnl, 2),
-            "positions_count": len(positions),
-            "initial_capital": 100_000,
-            "total_return_pct": round((equity - 100_000) / 100_000 * 100, 2),
+            "positions_count": len(alpaca_positions),
+            "alpaca_equity": round(alpaca_equity, 2),
+            "ibkr_equity": round(ibkr_equity, 2),
+            "binance_equity": round(binance_equity, 2),
+            "initial_capital": daily_start,
+            "total_return_pct": round((equity - daily_start) / daily_start * 100, 2) if daily_start > 0 else 0,
             "regime": regime.get("regime", "UNKNOWN"),
             "regime_detail": regime,
             "market_open": _is_market_open(),
@@ -165,14 +256,33 @@ def get_positions():
         total_short = sum(abs(r["market_value"]) for r in result if r["direction"] == "SHORT")
         total = total_long + total_short
 
+        # Total capital across all brokers for % calculations
+        try:
+            account = client.get_account_info()
+            alpaca_eq = account.get("equity", 0)
+        except Exception:
+            alpaca_eq = 0
+        binance_eq = 0
+        try:
+            if os.environ.get("BINANCE_API_KEY"):
+                from core.broker.binance_broker import BinanceBroker
+                binance_eq = BinanceBroker().get_account_info().get("equity", 0)
+        except Exception:
+            pass
+        ibkr_eq = _get_ibkr_equity_from_snapshot()
+        total_capital = alpaca_eq + binance_eq + ibkr_eq
+        if total_capital == 0:
+            total_capital = state.get("capital", 100_000)
+
         return {
             "positions": result,
             "count": len(result),
             "exposure_long": round(total_long, 2),
             "exposure_short": round(total_short, 2),
             "exposure_net": round(total_long - total_short, 2),
-            "exposure_long_pct": round(total_long / 100_000 * 100, 1) if total_long > 0 else 0,
-            "exposure_short_pct": round(total_short / 100_000 * 100, 1) if total_short > 0 else 0,
+            "exposure_long_pct": round(total_long / total_capital * 100, 1) if total_capital > 0 else 0,
+            "exposure_short_pct": round(total_short / total_capital * 100, 1) if total_capital > 0 else 0,
+            "total_capital": round(total_capital, 2),
         }
     except Exception as e:
         return {"error": str(e), "positions": [], "count": 0}
@@ -325,16 +435,17 @@ def get_crypto_strategies():
             except Exception:
                 pass
 
-        total_capital = crypto_config.get("total_capital", 20_000)
         wallets = crypto_config.get("wallets", {})
 
-        # Tenter de recuperer les balances Binance (si disponible)
+        # Equity Binance LIVE (remplace le YAML statique)
+        total_capital = crypto_config.get("total_capital", 20_000)
         binance_info = {}
         try:
             if os.environ.get("BINANCE_API_KEY"):
                 from core.broker.binance_broker import BinanceBroker
                 bnb = BinanceBroker()
                 binance_info = bnb.get_account_info()
+                total_capital = binance_info.get("equity", total_capital)
         except Exception as e:
             logger.debug(f"Binance account info indisponible: {e}")
 
@@ -480,12 +591,41 @@ def get_trades(strategy: Optional[str] = None, limit: int = 50, source: str = "r
 
 @app.get("/api/system/health")
 def get_system_health():
-    """Etat du systeme."""
+    """Etat du systeme — 3 brokers."""
+    # Alpaca
     alpaca_ok = False
+    alpaca_equity = 0
     try:
         client = _get_alpaca_client()
-        client.get_account_info()
+        acct = client.get_account_info()
         alpaca_ok = True
+        alpaca_equity = acct.get("equity", 0)
+    except Exception:
+        pass
+
+    # IBKR (TCP port check + snapshot — no direct ib_insync to avoid client_id conflict with worker)
+    ibkr_ok = _check_ibkr_port()
+    ibkr_equity = _get_ibkr_equity_from_snapshot()
+
+    # Binance
+    binance_ok = False
+    binance_equity = 0
+    try:
+        if os.environ.get("BINANCE_API_KEY"):
+            from core.broker.binance_broker import BinanceBroker
+            bnb = BinanceBroker()
+            bnb_info = bnb.get_account_info()
+            binance_ok = True
+            binance_equity = bnb_info.get("equity", 0)
+    except Exception:
+        pass
+
+    # Worker health
+    worker_ok = False
+    try:
+        import urllib.request
+        with urllib.request.urlopen("http://127.0.0.1:8080/health", timeout=2) as resp:
+            worker_ok = resp.status == 200
     except Exception:
         pass
 
@@ -495,10 +635,16 @@ def get_system_health():
 
     return {
         "alpaca_connected": alpaca_ok,
+        "ibkr_connected": ibkr_ok,
+        "binance_connected": binance_ok,
+        "worker_running": worker_ok,
+        "alpaca_equity": round(alpaca_equity, 2),
+        "ibkr_equity": round(ibkr_equity, 2),
+        "binance_equity": round(binance_equity, 2),
+        "total_equity": round(alpaca_equity + ibkr_equity + binance_equity, 2),
         "cache_files": len(cache_files),
         "cache_size_mb": round(cache_size_mb, 1),
-        "strategies_count": 14,
-        "tests_passing": 128,
+        "strategies_count": 46,
         "cro_score": 9.5,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
@@ -899,10 +1045,39 @@ except Exception as e:
 
 # ── Startup ──────────────────────────────────────────────────────────────────
 
+# ── Health (public, no auth) ─────────────────────────────────────────────────
+
+@app.get("/api/health")
+def health_check():
+    return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
+
+
+# ── Static SPA serving ───────────────────────────────────────────────────────
+# Must be LAST — catches all non-API routes and serves the React frontend.
+
+DIST_DIR = ROOT / "dashboard" / "frontend" / "dist"
+if DIST_DIR.exists():
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve React SPA — all non-API routes return index.html."""
+        file_path = DIST_DIR / full_path
+        if full_path and file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(DIST_DIR / "index.html")
+else:
+    logger.warning(f"Frontend dist not found at {DIST_DIR} — run 'npm run build'")
+
+
+# ── Startup ──────────────────────────────────────────────────────────────────
+
 @app.on_event("startup")
 async def startup():
-    logger.info("Trading Dashboard API started — Multi-Market V5 + Routes V2")
+    logger.info("Trading Dashboard API v2.0 — Auth + Multi-Broker + SPA")
     logger.info(f"Root: {ROOT}")
+    logger.info(f"Frontend dist: {'FOUND' if DIST_DIR.exists() else 'MISSING'}")
 
 
 if __name__ == "__main__":

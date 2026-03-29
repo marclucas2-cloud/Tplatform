@@ -56,5 +56,16 @@ spread_filter:
     EURJPY: 1.5
     AUDJPY: 2.0
 
+  fx_carry_momentum_filter:
+    pairs: [AUDJPY, USDJPY, EURJPY, NZDUSD]
+    sharpe: 2.17  # WF OOS, MC P5 1.41
+    weight: 0.15  # Probationary (30 days signal-only)
+    notional_target: 1500  # Per pair, $10K * 15% / 4
+    margin_target: 450
+    min_lot: 1000  # Odd-lot FX
+    order_type: MARKET
+    backtest_slippage_bps: 1.0
+    status: PROBATIONARY  # Promote to 0.30 after 30 days
+
 # Total margin usage
-# Sum of margin targets: $3,000 / $10,000 = 30%
+# Sum of margin targets: $3,450 / $10,000 = 34.5%

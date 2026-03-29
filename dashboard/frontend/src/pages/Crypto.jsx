@@ -57,7 +57,7 @@ export default function Crypto() {
   const totalCapital = data.total_capital || 20000
   const earnPositions = data.earn_positions || strategies.filter(s => s.wallet === 'Earn').length
   const kellyFraction = data.kelly_fraction || '1/8'
-  const marginLevel = data.margin_level || null
+  const marginLevel = data.binance_balance?.margin_level ?? data.margin_level ?? null
 
   // Wallet distribution
   const walletEntries = Object.entries(wallets).length > 0
@@ -75,7 +75,7 @@ export default function Crypto() {
           </div>
           <div>
             <h1 className="text-lg font-semibold text-[var(--color-text-primary)]">Crypto — Binance Live</h1>
-            <p className="text-xs text-[var(--color-text-secondary)]">8 strategies, margin + spot + earn</p>
+            <p className="text-xs text-[var(--color-text-secondary)]">{strategies.length} strategies, margin + spot + earn</p>
           </div>
         </div>
         <PhaseBadge phase={phase} />

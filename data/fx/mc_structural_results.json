@@ -1,0 +1,30 @@
+{
+  "carry_vol_scaled": {
+    "original_sharpe": 2.85,
+    "mc_permutation_p5": 2.85,
+    "mc_permutation_p50": 2.85,
+    "mc_permutation_p95": 2.85,
+    "bootstrap_p5": 2.1,
+    "bootstrap_p50": 2.85,
+    "bootstrap_p95": 3.6,
+    "prob_sharpe_gt_0": 100.0,
+    "prob_sharpe_gt_05": 100.0,
+    "max_dd_p95": -0.041,
+    "max_dd_median": -0.0272,
+    "n_returns": 1278
+  },
+  "carry_momentum_filter": {
+    "original_sharpe": 2.14,
+    "mc_permutation_p5": 2.14,
+    "mc_permutation_p50": 2.14,
+    "mc_permutation_p95": 2.14,
+    "bootstrap_p5": 1.41,
+    "bootstrap_p50": 2.15,
+    "bootstrap_p95": 2.87,
+    "prob_sharpe_gt_0": 100.0,
+    "prob_sharpe_gt_05": 100.0,
+    "max_dd_p95": -0.0363,
+    "max_dd_median": -0.0237,
+    "n_returns": 1278
+  }
+}

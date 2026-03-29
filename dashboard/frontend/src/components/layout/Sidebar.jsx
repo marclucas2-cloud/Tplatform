@@ -2,9 +2,10 @@ import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   BarChart3, Activity, Target, Shield, BookOpen, GitCompare,
-  TrendingUp, Server, Receipt, Network, Menu, X, Bitcoin
+  TrendingUp, Server, Receipt, Network, Menu, X, Bitcoin, LogOut
 } from 'lucide-react'
 import { useApi } from '../../hooks/useApi'
+import { useAuth } from '../../context/AuthContext'
 
 const NAV_ITEMS = [
   { path: '/', label: 'Vue d\'ensemble', icon: BarChart3 },
@@ -22,6 +23,7 @@ const NAV_ITEMS = [
 
 export default function Sidebar() {
   const location = useLocation()
+  const { logout } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
   const { data: health } = useApi('/system/health', 30000)
@@ -135,6 +137,31 @@ export default function Sidebar() {
             </span>
           </div>
         </div>
+        {/* Worker status */}
+        <div className="mt-2 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <span className={`w-2 h-2 rounded-full ${
+              health?.worker_running ? 'bg-[var(--color-profit)] animate-pulse' : 'bg-gray-600'
+            }`} />
+            <span className="text-xs text-[var(--color-text-secondary)]">Worker</span>
+          </div>
+          <span className={`text-[10px] font-mono ${
+            health?.worker_running ? 'text-[var(--color-profit)]' : 'text-gray-600'
+          }`}>
+            {health?.worker_running ? 'ON' : 'OFF'}
+          </span>
+        </div>
+      </div>
+
+      {/* Logout */}
+      <div className="px-4 py-3 border-t border-[var(--color-border)]">
+        <button
+          onClick={logout}
+          className="flex items-center gap-2 w-full px-3 py-2 rounded-lg text-xs text-[var(--color-text-secondary)] hover:text-[var(--color-loss)] hover:bg-[var(--color-bg-hover)] transition-colors"
+        >
+          <LogOut size={14} />
+          <span>Deconnexion</span>
+        </button>
       </div>
     </div>
   )

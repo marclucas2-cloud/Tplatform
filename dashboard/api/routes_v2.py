@@ -161,6 +161,7 @@ def _load_alpaca_trades() -> list[dict]:
             "side": first.get("side", "").upper(),
             "qty": total_qty,
             "price": round(avg_price, 4),
+            "entry_price": round(avg_price, 4),
             "date": first.get("transaction_time", "")[:10],
             "timestamp": first.get("transaction_time", ""),
             "fills_count": len(fills),
@@ -451,7 +452,7 @@ def risk_limits():
             },
             {
                 "name": "Cash Reserve",
-                "current": round(capital_ibkr * 0.25, 0),
+                "current": 25,
                 "limit": round(combined.get("min_cash_pct", 0.20) * 100, 0),
                 "unit": "% capital",
                 "pct_used": round(25 / (combined.get("min_cash_pct", 0.20) * 100) * 100, 1),
@@ -480,6 +481,7 @@ def risk_limits():
                 "unit": "ratio",
                 "pct_used": round(crypto_margin.get("min_margin_level", 1.5) / 2.5 * 100, 1),
                 "status": "ok",
+                "inverted": True,
             },
             {
                 "name": "Binance Borrow Cost (monthly)",
@@ -999,7 +1001,7 @@ def analytics_distribution(
                 "pct_positive": round(float(np.mean(pnl_arr > 0) * 100), 1),
                 "profit_factor": round(
                     float(pnl_arr[pnl_arr > 0].sum() / abs(pnl_arr[pnl_arr < 0].sum())), 2
-                ) if pnl_arr[pnl_arr < 0].sum() != 0 else float("inf"),
+                ) if pnl_arr[pnl_arr < 0].sum() != 0 else 99.99,
             },
             "bucket_size": bucket_size,
         }
@@ -1610,57 +1612,154 @@ def tax_monthly():
 
 @router.get("/api/cross/exposure")
 def cross_exposure():
-    """Exposition combinee IBKR + Binance."""
+    """Exposition combinee IBKR + Binance — donnees LIVE."""
     try:
-        limits_ibkr = _load_yaml(CONFIG_DIR / "limits_live.yaml")
-        limits_crypto = _load_yaml(CONFIG_DIR / "crypto_limits.yaml")
+        # ── IBKR (TCP check + equity from snapshot) ──
+        import socket
+        ibkr_host = os.environ.get("IBKR_HOST", "127.0.0.1")
+        ibkr_port = int(os.environ.get("IBKR_PORT", "4002"))
+        ibkr_connected = False
+        try:
+            with socket.create_connection((ibkr_host, ibkr_port), timeout=2):
+                ibkr_connected = True
+        except Exception:
+            pass
 
-        capital_ibkr = limits_ibkr.get("capital", 10_000)
-        capital_crypto = limits_crypto.get("capital", 15_000)
+        # Read IBKR equity from worker snapshot
+        capital_ibkr = 0
+        try:
+            import glob as _glob
+            log_dir = ROOT / "logs" / "portfolio"
+            if log_dir.exists():
+                files = sorted(_glob.glob(str(log_dir / "*.jsonl")), reverse=True)
+                for fpath in files[:2]:
+                    with open(fpath) as f:
+                        for line in reversed(f.readlines()[-10:]):
+                            snap = json.loads(line.strip())
+                            for b in snap.get("portfolio", {}).get("brokers", []):
+                                if b.get("broker") == "ibkr":
+                                    capital_ibkr = float(b.get("equity", 0))
+                                    break
+                            if capital_ibkr > 0:
+                                break
+                    if capital_ibkr > 0:
+                        break
+        except Exception:
+            pass
+        if capital_ibkr == 0:
+            capital_ibkr = _load_yaml(CONFIG_DIR / "limits_live.yaml").get("capital", 500)
 
-        # Tenter de lire les donnees reelles
-        # En production : appel broker.get_positions()
-        # Pour dev : valeurs estimees/nulles
+        # ── Binance (live API) ──
+        capital_crypto = 0
+        binance_positions = []
+        try:
+            if os.environ.get("BINANCE_API_KEY"):
+                from core.broker.binance_broker import BinanceBroker
+                bnb = BinanceBroker()
+                bnb_info = bnb.get_account_info()
+                capital_crypto = bnb_info.get("equity", 0)
+                binance_positions = bnb.get_positions()
+        except Exception:
+            capital_crypto = _load_yaml(CONFIG_DIR / "crypto_limits.yaml").get("capital", 20_000)
+
+        # ── Alpaca (paper) ──
+        capital_alpaca = 0
+        alpaca_positions = []
+        try:
+            from core.alpaca_client.client import AlpacaClient
+            ac = AlpacaClient.from_env()
+            acct = ac.get_account_info()
+            capital_alpaca = acct.get("equity", 0)
+            alpaca_positions = ac.get_positions()
+        except Exception:
+            pass
+
+        # Compute exposures
+        def _calc_exposure(positions):
+            long_exp, short_exp = 0, 0
+            for p in positions:
+                mv = abs(float(p.get("market_val", p.get("market_value", 0))))
+                qty = float(p.get("qty", p.get("quantity", 0)))
+                if qty > 0:
+                    long_exp += mv
+                else:
+                    short_exp += mv
+            return long_exp, short_exp
+
+        bnb_long, bnb_short = _calc_exposure(binance_positions)
+        alp_long, alp_short = _calc_exposure(alpaca_positions)
+
+        def _pct(val, cap):
+            return round(val / cap * 100, 1) if cap > 0 else 0
 
         ibkr = {
-            "capital": capital_ibkr,
+            "capital": round(capital_ibkr, 2),
+            "connected": ibkr_connected,
             "long_exposure": 0,
             "short_exposure": 0,
             "net_exposure": 0,
-            "cash": capital_ibkr,
+            "long_pct": 0,
+            "short_pct": 0,
+            "net_pct": 0,
+            "cash_pct": 100,
+            "cash": round(capital_ibkr, 2),
+            "net_usd": 0,
             "margin_used": 0,
             "positions_count": 0,
         }
 
+        crypto_cash = max(0, capital_crypto - bnb_long - bnb_short)
         crypto = {
-            "capital": capital_crypto,
-            "long_exposure": 0,
-            "short_exposure": 0,
-            "net_exposure": 0,
-            "cash": capital_crypto,
+            "capital": round(capital_crypto, 2),
+            "long_exposure": round(bnb_long, 2),
+            "short_exposure": round(bnb_short, 2),
+            "net_exposure": round(bnb_long - bnb_short, 2),
+            "long_pct": _pct(bnb_long, capital_crypto),
+            "short_pct": _pct(bnb_short, capital_crypto),
+            "net_pct": _pct(bnb_long - bnb_short, capital_crypto),
+            "cash_pct": _pct(crypto_cash, capital_crypto),
+            "earn_pct": 0,
+            "cash": round(crypto_cash, 2),
+            "net_usd": round(bnb_long - bnb_short, 2),
             "margin_used": 0,
             "earn_locked": 0,
-            "positions_count": 0,
+            "positions_count": len(binance_positions),
         }
 
-        total_capital = capital_ibkr + capital_crypto
-        combined_long = ibkr["long_exposure"] + crypto["long_exposure"]
-        combined_short = ibkr["short_exposure"] + crypto["short_exposure"]
+        alpaca = {
+            "capital": round(capital_alpaca, 2),
+            "long_exposure": round(alp_long, 2),
+            "short_exposure": round(alp_short, 2),
+            "net_exposure": round(alp_long - alp_short, 2),
+            "long_pct": _pct(alp_long, capital_alpaca),
+            "short_pct": _pct(alp_short, capital_alpaca),
+            "net_pct": _pct(alp_long - alp_short, capital_alpaca),
+            "cash_pct": _pct(max(0, capital_alpaca - alp_long - alp_short), capital_alpaca),
+            "net_usd": round(alp_long - alp_short, 2),
+            "positions_count": len(alpaca_positions),
+        }
+
+        total_capital = capital_ibkr + capital_crypto + capital_alpaca
+        combined_long = ibkr["long_exposure"] + crypto["long_exposure"] + alpaca["long_exposure"]
+        combined_short = ibkr["short_exposure"] + crypto["short_exposure"] + alpaca["short_exposure"]
         combined_net = combined_long - combined_short
 
         return {
             "ibkr": ibkr,
             "binance": crypto,
+            "alpaca": alpaca,
             "combined": {
-                "total_capital": total_capital,
-                "long_exposure": combined_long,
-                "short_exposure": combined_short,
-                "net_exposure": combined_net,
+                "total_capital": round(total_capital, 2),
+                "long_exposure": round(combined_long, 2),
+                "short_exposure": round(combined_short, 2),
+                "net_exposure": round(combined_net, 2),
+                "net_long_total": round(combined_net, 2),
+                "gross_total": round(combined_long + combined_short, 2),
                 "net_pct": round(combined_net / total_capital * 100, 1) if total_capital > 0 else 0,
                 "gross_pct": round(
                     (combined_long + combined_short) / total_capital * 100, 1
                 ) if total_capital > 0 else 0,
-                "cash_total": ibkr["cash"] + crypto["cash"],
+                "cash_total": round(ibkr["cash"] + crypto["cash"], 2),
                 "cash_pct": round(
                     (ibkr["cash"] + crypto["cash"]) / total_capital * 100, 1
                 ) if total_capital > 0 else 0,

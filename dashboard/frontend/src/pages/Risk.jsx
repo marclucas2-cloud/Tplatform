@@ -2,15 +2,13 @@ import { useApi } from '../hooks/useApi'
 import MetricCard from '../components/MetricCard'
 import { ShieldAlert, ShieldCheck, ShieldOff, Activity } from 'lucide-react'
 
-function ProgressBar({ label, current, max, unit = '', warn = 0.7, danger = 0.9 }) {
+function ProgressBar({ label, current, max, unit = '', warn = 0.7, danger = 0.9, invertColor = false }) {
   const ratio = max > 0 ? Math.min(current / max, 1) : 0
   const pct = (ratio * 100).toFixed(1)
-  const barColor =
-    ratio >= danger
-      ? 'var(--color-loss)'
-      : ratio >= warn
-        ? 'var(--color-warning)'
-        : 'var(--color-profit)'
+  const isInverted = invertColor || label?.toLowerCase().includes('cash') || label?.toLowerCase().includes('reserve') || label?.toLowerCase().includes('margin level')
+  const barColor = isInverted
+    ? (ratio >= danger ? 'var(--color-profit)' : ratio >= warn ? 'var(--color-profit)' : 'var(--color-warning)')
+    : (ratio >= danger ? 'var(--color-loss)' : ratio >= warn ? 'var(--color-warning)' : 'var(--color-profit)')
 
   return (
     <div className="space-y-1">
@@ -74,11 +72,16 @@ export default function Risk() {
   }
 
   const ov = overview || {}
-  const drawdown = ov.drawdown ?? 0
-  const drawdownMax = ov.drawdown_max ?? 0
-  const var95 = ov.var_1d_95 ?? 0
-  const exposure = ov.exposure_net_pct ?? 0
-  const killSwitch = ov.kill_switch ?? 'N/A'
+  const dd = ov.drawdown || {}
+  const drawdown = dd.current_pct ?? ov.drawdown ?? 0
+  const drawdownMax = dd.max_allowed_pct ?? ov.drawdown_max ?? -5
+  const var95 = ov.var?.var_95_1d ?? ov.var_1d_95 ?? 0
+  const expData = ov.exposure || {}
+  const exposure = expData.total_capital ? Math.round((expData.ibkr_capital + expData.crypto_capital) / expData.total_capital * 100) : (ov.exposure_net_pct ?? 0)
+  const ks = ov.kill_switch || {}
+  const ibkrKs = ks.ibkr?.active ? 'ACTIVE' : 'OFF'
+  const cryptoKs = ks.crypto?.active ? 'ACTIVE' : 'OFF'
+  const killSwitch = (ibkrKs === 'ACTIVE' || cryptoKs === 'ACTIVE') ? 'ACTIVE' : 'OFF'
 
   // Map API limits: [{name, current, limit, pct_used, status}] -> ProgressBar props
   const rawLimits = limits?.limits || limits || []
@@ -88,11 +91,17 @@ export default function Risk() {
         current: lim.current ?? 0,
         max: lim.limit ?? lim.max ?? 1,
         unit: lim.unit ?? '',
+        inverted: lim.inverted ?? false,
       }))
     : []
 
-  const rawKs = killSwitchData?.switches || killSwitchData || ov.kill_switches || []
-  const killSwitches = Array.isArray(rawKs) ? rawKs : []
+  const rawKs = killSwitchData?.switches || killSwitchData || []
+  const killSwitches = Array.isArray(rawKs) && rawKs.length > 0
+    ? rawKs
+    : [
+        { broker: 'IBKR', status: ibkrKs, last_test: ks.ibkr?.activated_at || 'N/A' },
+        { broker: 'Binance', status: cryptoKs, last_test: ks.crypto?.activated_at || 'N/A' },
+      ]
 
   return (
     <div className="space-y-6">
@@ -143,6 +152,7 @@ export default function Risk() {
                 current={lim.current}
                 max={lim.max}
                 unit={lim.unit}
+                invertColor={lim.inverted}
               />
             )) : (
               <div className="text-center py-4 text-sm text-[var(--color-text-secondary)]">
