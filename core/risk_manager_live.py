@@ -68,6 +68,11 @@ class LiveRiskManager(RiskManager):
             f"capital=${self.capital:,.0f}"
         )
 
+    def update_capital(self, live_equity: float) -> None:
+        """Update capital from live equity for accurate % calculations."""
+        if live_equity > 0:
+            self.capital = live_equity
+
     # ------------------------------------------------------------------
     # Audit logging
     # ------------------------------------------------------------------

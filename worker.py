@@ -414,6 +414,11 @@ def run_live_risk_cycle():
         except Exception as e:
             logger.warning(f"Could not fetch IBKR portfolio for risk cycle: {e}")
 
+        # FIX: update risk manager capital from live equity
+        equity_live = portfolio.get("equity", risk_mgr.capital)
+        if equity_live > 0:
+            risk_mgr.update_capital(equity_live)
+
         # FIX CRO H-4 : PnL calculation using actual daily starting equity,
         # NOT risk_mgr.capital (static config value like $10K).
         # Load daily_start_equity from state file; fallback to current equity.
@@ -1181,10 +1186,12 @@ def run_crypto_cycle():
                 candle = pd.Series(candle_data)
 
                 # State avec capital alloue (1/8 Kelly SOFT_LAUNCH)
+                # FIX: utiliser l'equity LIVE, pas le capital statique du YAML
+                sizing_capital = current_equity if current_equity > 0 else total_capital
                 alloc_pct = config.get("allocation_pct", 0.10)
-                strat_capital = total_capital * alloc_pct * CRYPTO_KELLY_FRACTION
+                strat_capital = sizing_capital * alloc_pct * CRYPTO_KELLY_FRACTION
                 state = {
-                    "capital": total_capital,
+                    "capital": sizing_capital,
                     "equity": current_equity,
                     "positions": positions,
                     "i": len(df_full) - 1 if df_full is not None and not df_full.empty else 0,
