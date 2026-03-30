@@ -1789,6 +1789,21 @@ def run_crypto_cycle():
                         f"applique a {default_sl_pct*100:.0f}%: ${stop_loss:.2f}"
                     )
 
+                # CRO C-3 FIX: validate_order AVANT create_position
+                try:
+                    order_valid, order_msg = risk_mgr.validate_order(
+                        notional=notional,
+                        strategy=strat_id,
+                        current_equity=current_equity,
+                    )
+                    if not order_valid:
+                        logger.warning(
+                            f"  [{strat_id}] Ordre REFUSE par risk manager: {order_msg}"
+                        )
+                        continue
+                except Exception as risk_err:
+                    logger.debug(f"  [{strat_id}] Risk validate skip: {risk_err}")
+
                 try:
                     result = broker.create_position(
                         symbol=signal.get("symbol", primary_symbol),

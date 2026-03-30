@@ -17,7 +17,8 @@ class IBKRCostModel(CostModel):
 
     # --- FX ---
     FX_FLAT_FEE: float = 2.0
-    FX_BPS_RATE: float = 0.00002  # 0.2 bps
+    FX_BPS_RATE: float = 0.00002  # 0.2 bps commission
+    FX_SPREAD_BPS: float = 0.0001  # ~1.0 bps spread (avg major pairs)
 
     # --- US Equities ---
     US_PER_SHARE: float = 0.005
@@ -58,9 +59,10 @@ class IBKRCostModel(CostModel):
             return self._us_equity_commission(qty, notional)
 
     def _fx_commission(self, notional: float) -> float:
-        """FX: $2 flat OR 0.2 bps, whichever is larger."""
+        """FX: $2 flat OR 0.2 bps (whichever larger) + spread cost ~1 bps."""
         bps_fee = notional * self.FX_BPS_RATE
-        return max(self.FX_FLAT_FEE, bps_fee)
+        spread_cost = notional * self.FX_SPREAD_BPS
+        return max(self.FX_FLAT_FEE, bps_fee) + spread_cost
 
     def _us_equity_commission(self, qty: float, notional: float) -> float:
         """US equities: $0.005/share, min $1, max 1% of trade."""

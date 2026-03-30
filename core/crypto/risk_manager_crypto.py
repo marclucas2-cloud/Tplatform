@@ -206,6 +206,8 @@ class CryptoKillSwitch:
         "convert_to_usdt",
     ]
 
+    _STATE_PATH = ROOT / "data" / "crypto_kill_switch_state.json"
+
     def __init__(self, config_path: str | Path | None = None):
         self._config = self._load_config(config_path)
         self._active = False
@@ -214,6 +216,30 @@ class CryptoKillSwitch:
         self._daily_pnl_history: list[dict] = []
         self._hourly_pnl_history: list[dict] = []
         self._actions_executed: list[str] = []
+        # CRO H-5 FIX: load persisted state
+        self._load_persisted_state()
+
+    def _load_persisted_state(self):
+        try:
+            if self._STATE_PATH.exists():
+                data = json.loads(self._STATE_PATH.read_text(encoding="utf-8"))
+                self._active = data.get("active", False)
+                self._trigger_reason = data.get("reason", "")
+                if data.get("trigger_time"):
+                    self._trigger_time = datetime.fromisoformat(data["trigger_time"])
+        except Exception:
+            pass
+
+    def _save_persisted_state(self):
+        try:
+            self._STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            self._STATE_PATH.write_text(json.dumps({
+                "active": self._active,
+                "reason": self._trigger_reason,
+                "trigger_time": self._trigger_time.isoformat() if self._trigger_time else None,
+            }, indent=2))
+        except Exception:
+            pass
 
     def _load_config(self, path) -> dict:
         if path is None:
@@ -295,6 +321,7 @@ class CryptoKillSwitch:
         self._active = True
         self._trigger_reason = reason
         self._trigger_time = datetime.now(timezone.utc)
+        self._save_persisted_state()  # CRO H-5: persist across restarts
         logger.critical(f"CRYPTO KILL SWITCH V2 ACTIVATED: {reason}")
         return True, reason
 

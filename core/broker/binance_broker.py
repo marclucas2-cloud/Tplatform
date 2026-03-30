@@ -342,22 +342,25 @@ class BinanceBroker(BaseBroker):
 
         logger.info(f"Binance spot {side} {qty or notional} {symbol} @ {avg_price:.2f} [{authorized_by}]")
 
-        # Attach stop-loss for spot positions (broker-side)
+        # CRO H-1 FIX: Attach stop-loss for spot positions — BOTH BUY and SELL
         sl_order_id = None
-        if stop_loss and filled_qty > 0 and side == "BUY":
+        if stop_loss and filled_qty > 0:
+            sl_side = "SELL" if side == "BUY" else "BUY"
+            # Price limit: slightly worse than stop to ensure fill
+            sl_limit = round(stop_loss * (0.995 if side == "BUY" else 1.005), 2)
             try:
                 sl_params = {
                     "symbol": symbol,
-                    "side": "SELL",
+                    "side": sl_side,
                     "type": "STOP_LOSS_LIMIT",
                     "quantity": str(filled_qty),
-                    "price": str(round(stop_loss * 0.995, 2)),
+                    "price": str(sl_limit),
                     "stopPrice": str(round(stop_loss, 2)),
                     "timeInForce": "GTC",
                 }
                 sl_result = self._post("/api/v3/order", sl_params)
                 sl_order_id = str(sl_result.get("orderId", ""))
-                logger.info(f"Spot SL attached: {symbol} @ {stop_loss:.2f} [{authorized_by}]")
+                logger.info(f"Spot SL attached: {symbol} {sl_side} @ {stop_loss:.2f} [{authorized_by}]")
             except BrokerError as e:
                 logger.warning(f"Spot SL order failed for {symbol}: {e}")
 
@@ -374,41 +377,47 @@ class BinanceBroker(BaseBroker):
         params = {"symbol": symbol, "side": side, "type": "MARKET", "quantity": str(qty), "isIsolated": "TRUE", "sideEffectType": "MARGIN_BUY" if side == "BUY" else "NO_SIDE_EFFECT"}
         result = self._post("/sapi/v1/margin/order", params)
         filled_price = float(result.get("price", 0)) or float(result.get("cummulativeQuoteQty", 0)) / max(float(result.get("executedQty", 1)), 1e-8)
-        # Track avg_price from fills for position reporting
+        filled_qty = float(result.get("executedQty", 0))
         if filled_price > 0:
             self._fill_prices[symbol] = filled_price
         logger.info(f"Binance margin {side} {qty} {symbol} @ {filled_price:.2f} [{authorized_by}]")
-        # Stop loss
+
+        # CRO C-2 FIX: Stop loss — MANDATORY for margin. Emergency close if SL fails.
         sl_id = None
-        if stop_loss and side == "SELL":
-            sl_params = {"symbol": symbol, "side": "BUY", "type": "STOP_LOSS_LIMIT", "quantity": str(qty), "price": str(round(stop_loss * 1.005, 2)), "stopPrice": str(round(stop_loss, 2)), "timeInForce": "GTC", "isIsolated": "TRUE"}
+        if stop_loss and filled_qty > 0:
+            sl_side = "BUY" if side == "SELL" else "SELL"
+            # Limit price: slightly worse than stop to ensure fill
+            sl_limit = round(stop_loss * (1.005 if side == "SELL" else 0.995), 2)
+            sl_params = {"symbol": symbol, "side": sl_side, "type": "STOP_LOSS_LIMIT",
+                         "quantity": str(filled_qty), "price": str(sl_limit),
+                         "stopPrice": str(round(stop_loss, 2)),
+                         "timeInForce": "GTC", "isIsolated": "TRUE"}
             try:
                 sl_result = self._post("/sapi/v1/margin/order", sl_params)
                 sl_id = str(sl_result.get("orderId", ""))
+                logger.info(f"Margin SL attached: {symbol} {sl_side} @ {stop_loss:.2f} [{authorized_by}]")
             except BrokerError as e:
-                # CRO H-3: position margin SANS SL = risque non borne
-                # Fermer immediatement la position
-                logger.critical(f"SL order failed for margin {side} {symbol}: {e} — CLOSING POSITION")
+                # CRO: position margin SANS SL = risque non borne → close immediatement
+                logger.critical(f"SL FAILED for margin {side} {symbol}: {e} — EMERGENCY CLOSE")
+                close_side = "BUY" if side == "SELL" else "SELL"
+                repay = "AUTO_REPAY" if side == "SELL" else "NO_SIDE_EFFECT"
                 try:
-                    close_params = {"symbol": symbol, "side": "BUY", "type": "MARKET", "quantity": str(qty), "isIsolated": "TRUE", "sideEffectType": "AUTO_REPAY"}
-                    self._post("/sapi/v1/margin/order", close_params)
-                    logger.critical(f"Emergency close: margin SHORT {symbol} closed (no SL)")
+                    self._post("/sapi/v1/margin/order", {
+                        "symbol": symbol, "side": close_side, "type": "MARKET",
+                        "quantity": str(filled_qty), "isIsolated": "TRUE",
+                        "sideEffectType": repay,
+                    })
+                    logger.critical(f"Emergency close: margin {side} {symbol} closed (no SL)")
                 except Exception as e2:
                     logger.critical(f"EMERGENCY CLOSE FAILED for {symbol}: {e2}")
-        elif stop_loss and side == "BUY":
-            sl_params = {"symbol": symbol, "side": "SELL", "type": "STOP_LOSS_LIMIT", "quantity": str(qty), "price": str(round(stop_loss * 0.995, 2)), "stopPrice": str(round(stop_loss, 2)), "timeInForce": "GTC", "isIsolated": "TRUE"}
-            try:
-                sl_result = self._post("/sapi/v1/margin/order", sl_params)
-                sl_id = str(sl_result.get("orderId", ""))
-            except BrokerError as e:
-                logger.critical(f"SL order failed for margin {side} {symbol}: {e} — CLOSING POSITION")
-                try:
-                    close_params = {"symbol": symbol, "side": "SELL", "type": "MARKET", "quantity": str(qty), "isIsolated": "TRUE"}
-                    self._post("/sapi/v1/margin/order", close_params)
-                    logger.critical(f"Emergency close: margin LONG {symbol} closed (no SL)")
-                except Exception as e2:
-                    logger.critical(f"EMERGENCY CLOSE FAILED for {symbol}: {e2}")
-        return {"orderId": str(result.get("orderId", "")), "symbol": symbol, "side": side, "status": result.get("status", "FILLED"), "qty": float(result.get("executedQty", 0)), "filled_qty": float(result.get("executedQty", 0)), "filled_price": filled_price, "stop_loss": stop_loss, "sl_order_id": sl_id, "paper": self._testnet, "authorized_by": authorized_by, "market_type": "margin"}
+                return {"orderId": str(result.get("orderId", "")), "symbol": symbol,
+                        "side": side, "status": "CLOSED_NO_SL", "qty": 0,
+                        "filled_qty": 0, "filled_price": filled_price,
+                        "stop_loss": stop_loss, "sl_order_id": None,
+                        "paper": self._testnet, "authorized_by": authorized_by,
+                        "market_type": "margin", "reason": "sl_failed_emergency_close"}
+
+        return {"orderId": str(result.get("orderId", "")), "symbol": symbol, "side": side, "status": result.get("status", "FILLED"), "qty": filled_qty, "filled_qty": filled_qty, "filled_price": filled_price, "stop_loss": stop_loss, "sl_order_id": sl_id, "paper": self._testnet, "authorized_by": authorized_by, "market_type": "margin"}
 
     def close_position(self, symbol: str, _authorized_by: str | None = None) -> dict:
         if not _authorized_by:

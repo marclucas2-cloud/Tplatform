@@ -484,18 +484,16 @@ class AlpacaClient:
                 return None
 
         if notional and not order_class:
-            # CRO C-1: position sans stop-loss = risque non borne
-            if side == OrderSide.BUY:
-                logger.critical(
-                    f"CRO WARNING: ordre BUY {symbol} notional=${notional:.2f} "
-                    f"SANS stop-loss — risque non borne!"
-                )
-            request = MarketOrderRequest(
-                symbol=symbol,
-                notional=round(notional, 2),
-                side=side,
-                time_in_force=TimeInForce.DAY,
+            # CRO C-1: REFUSE position sans stop-loss = risque non borne
+            logger.critical(
+                f"CRO REJECT: ordre {side} {symbol} notional=${notional:.2f} "
+                f"SANS stop-loss — risque non borne! Ordre REFUSE."
             )
+            return {
+                "orderId": None, "symbol": symbol, "status": "REJECTED",
+                "reason": "no_stop_loss", "paper": self._paper,
+                "authorized_by": _authorized_by,
+            }
         elif qty:
             kwargs = {
                 "symbol": symbol,
