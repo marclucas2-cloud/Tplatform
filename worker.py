@@ -1600,13 +1600,17 @@ def run_crypto_cycle():
                                    timezone.utc).isoformat()}
 
                 # Tenter de recuperer le dernier prix via Binance
+                # FIX: Binance France TRD_GRP_002 bloque les paires USDT.
+                # On utilise USDC comme quote currency (meme prix, autorise).
                 primary_symbol = config.get("symbols", ["BTCUSDT"])[0]
+                # Map USDT→USDC pour data + execution
+                trade_symbol = primary_symbol.replace("USDT", "USDC") if primary_symbol.endswith("USDT") else primary_symbol
                 df_full = None
-                if broker and primary_symbol.endswith("USDT"):
+                if broker and (trade_symbol.endswith("USDC") or trade_symbol.endswith("USDT")):
                     try:
                         timeframe = config.get("timeframe", "4h")
                         price_data = broker.get_prices(
-                            primary_symbol, timeframe=timeframe, bars=100
+                            trade_symbol, timeframe=timeframe, bars=100
                         )
                         bars = price_data.get("bars", [])
                         if bars:
@@ -1699,7 +1703,7 @@ def run_crypto_cycle():
                 )
                 _log_event("signal", strat_id, {
                     "action": action,
-                    "symbol": signal.get("symbol", primary_symbol),
+                    "symbol": signal.get("symbol", trade_symbol),
                 })
 
                 # --- Verifier risk avant execution ---
@@ -1739,7 +1743,7 @@ def run_crypto_cycle():
                 if action == "CLOSE":
                     try:
                         result = broker.close_position(
-                            primary_symbol,
+                            trade_symbol,
                             _authorized_by=f"crypto_worker_{strat_id}",
                         )
                         logger.info(
@@ -1804,9 +1808,14 @@ def run_crypto_cycle():
                 except Exception as risk_err:
                     logger.debug(f"  [{strat_id}] Risk validate skip: {risk_err}")
 
+                # Map signal symbol to USDC pair for execution
+                exec_symbol = signal.get("symbol", trade_symbol)
+                if exec_symbol.endswith("USDT"):
+                    exec_symbol = exec_symbol.replace("USDT", "USDC")
+
                 try:
                     result = broker.create_position(
-                        symbol=signal.get("symbol", primary_symbol),
+                        symbol=exec_symbol,
                         direction=side,
                         notional=notional if side == "BUY" else None,
                         qty=round(notional / price, 6) if side == "SELL" else None,
