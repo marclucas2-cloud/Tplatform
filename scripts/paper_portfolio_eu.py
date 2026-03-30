@@ -198,9 +198,32 @@ def save_state(state: dict):
 # =============================================================================
 
 def _get_ibkr():
-    """Retourne une connexion IBKR via le broker adapter."""
-    from core.broker import get_broker
-    return get_broker("ibkr")
+    """Retourne une connexion IBKR PAPER (port 4003) pour le pipeline EU.
+
+    Utilise un port separe du live (4002) pour eviter les conflits.
+    Le paper gateway a ~EUR 1M de capital simule.
+    """
+    import os
+    # Force paper mode on port 4003 (separate from live gateway on 4002)
+    _saved_port = os.environ.get("IBKR_PORT")
+    _saved_paper = os.environ.get("IBKR_PAPER")
+    os.environ["IBKR_PORT"] = os.environ.get("IBKR_PAPER_PORT", "4003")
+    os.environ["IBKR_PAPER"] = "true"
+    try:
+        from core.broker.ibkr_adapter import IBKRBroker
+        # Don't use get_broker() cache — we need a separate connection
+        broker = IBKRBroker()
+        return broker
+    finally:
+        # Restore env vars
+        if _saved_port is not None:
+            os.environ["IBKR_PORT"] = _saved_port
+        elif "IBKR_PORT" in os.environ:
+            del os.environ["IBKR_PORT"]
+        if _saved_paper is not None:
+            os.environ["IBKR_PAPER"] = _saved_paper
+        elif "IBKR_PAPER" in os.environ:
+            del os.environ["IBKR_PAPER"]
 
 
 def _get_smart_router():
