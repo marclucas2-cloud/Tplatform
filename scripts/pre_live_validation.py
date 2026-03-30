@@ -515,19 +515,42 @@ def run_all_checks():
 
     elapsed = time.time() - start
 
-    # ── Verdict ──
+    # ── Per-broker verdict ──
+    # IBKR failures don't block Binance trading (independent brokers)
+    ibkr_fails = [c for c in _checks if c["status"] == "FAIL" and "IBKR" in c["name"]]
+    binance_fails = [c for c in _checks if c["status"] == "FAIL" and "Binance" in c["name"]]
+    other_fails = [c for c in _checks if c["status"] == "FAIL"
+                   and "IBKR" not in c["name"] and "Binance" not in c["name"]]
+
     n_pass = sum(1 for c in _checks if c["status"] == "PASS")
     n_fail = sum(1 for c in _checks if c["status"] == "FAIL")
     n_warn = sum(1 for c in _checks if c["status"] == "WARN")
 
-    status = "GO" if n_fail == 0 else "NO_GO"
+    # GO if no Binance fails and no critical (non-broker) fails
+    # IBKR can be down independently — just means no FX trading
+    binance_go = len(binance_fails) == 0
+    ibkr_go = len(ibkr_fails) == 0
+    core_go = len(other_fails) == 0
+
+    if binance_go and core_go:
+        status = "GO"
+    elif not binance_go or not core_go:
+        status = "NO_GO"
+    else:
+        status = "GO"
 
     logger.info("")
     logger.info("=" * 60)
     logger.info(f"  VERDICT: {status}")
+    logger.info(f"  Binance: {'GO' if binance_go else 'NO_GO'} | IBKR: {'GO' if ibkr_go else 'NO_GO (non-blocking)'}")
     logger.info(f"  {n_pass} PASS / {n_fail} FAIL / {n_warn} WARN")
     logger.info(f"  Duration: {elapsed:.1f}s")
     logger.info("=" * 60)
+
+    if ibkr_fails and binance_go:
+        logger.warning("  IBKR issues (non-blocking for Binance trading):")
+        for c in ibkr_fails:
+            logger.warning(f"    ! {c['name']}: {c['detail']}")
 
     if _errors:
         logger.error("  ERRORS:")
@@ -540,31 +563,30 @@ def run_all_checks():
             logger.warning(f"    ! {w}")
 
     # Send Telegram summary
-    if status == "GO":
-        try:
-            from core.telegram_alert import send_alert
+    try:
+        from core.telegram_alert import send_alert
+        ibkr_label = "GO" if ibkr_go else f"NO_GO (${ibkr_fails[0]['detail'][:40]})" if ibkr_fails else "GO"
+        if status == "GO":
             send_alert(
-                f"PRE-LIVE VALIDATION: GO ✓\n"
-                f"{n_pass} PASS / {n_warn} WARN\n"
-                f"All systems operational.",
+                f"PRE-LIVE VALIDATION: GO\n"
+                f"Binance: GO | IBKR: {ibkr_label}\n"
+                f"{n_pass} PASS / {n_fail} FAIL / {n_warn} WARN",
                 level="info"
             )
-        except Exception:
-            pass
-    else:
-        try:
-            from core.telegram_alert import send_alert
+        else:
             send_alert(
-                f"PRE-LIVE VALIDATION: NO_GO ✗\n"
-                f"{n_pass} PASS / {n_fail} FAIL / {n_warn} WARN\n"
-                f"Errors:\n" + "\n".join(f"• {e}" for e in _errors[:5]),
+                f"PRE-LIVE VALIDATION: NO_GO\n"
+                f"Binance: {'GO' if binance_go else 'NO_GO'} | IBKR: {ibkr_label}\n"
+                f"Errors:\n" + "\n".join(f"- {e}" for e in _errors[:5]),
                 level="critical"
             )
-        except Exception:
-            pass
+    except Exception:
+        pass
 
     return {
         "status": status,
+        "binance": "GO" if binance_go else "NO_GO",
+        "ibkr": "GO" if ibkr_go else "NO_GO",
         "checks": _checks,
         "errors": _errors,
         "warnings": _warnings,
