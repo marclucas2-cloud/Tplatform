@@ -626,6 +626,130 @@ def run_fx_carry_cycle():
         _execution_lock.release()
 
 
+def run_fx_paper_cycle():
+    """FX Paper Trading — run validated FX strategies on IBKR paper (port 4003).
+
+    Runs 2 WF-validated strategies:
+      - FX Carry Vol-Scaled (Sharpe 3.04, 94% windows profitable)
+      - FX Carry Momentum Filter (Sharpe 2.17, 81% windows profitable)
+
+    Uses IBKR paper gateway (~EUR 1M) on port 4003.
+    Frequency: every 5 min during EU+US FX hours (09:00-22:00 Paris).
+    """
+    if not _execution_lock.acquire(blocking=False):
+        logger.warning("FX PAPER SKIP — execution lock held")
+        return
+    try:
+        logger.info("=== FX PAPER CYCLE ===")
+        _log_event("cycle_start", "fx_paper")
+
+        # Connect to IBKR paper (port 4003)
+        _saved_port = os.environ.get("IBKR_PORT")
+        _saved_paper = os.environ.get("IBKR_PAPER")
+        os.environ["IBKR_PORT"] = os.environ.get("IBKR_PAPER_PORT", "4003")
+        os.environ["IBKR_PAPER"] = "true"
+
+        try:
+            from core.broker.ibkr_adapter import IBKRBroker
+            from core.broker.factory import _broker_cache
+            # Use a separate instance (not the cached live one)
+            ibkr = IBKRBroker()
+            ibkr_info = ibkr.get_account_info()
+            equity = float(ibkr_info.get("equity", 0))
+        except Exception as e:
+            logger.warning(f"  FX PAPER SKIP — IBKR paper not connected: {e}")
+            return
+        finally:
+            # Restore env vars
+            if _saved_port is not None:
+                os.environ["IBKR_PORT"] = _saved_port
+            elif "IBKR_PORT" in os.environ:
+                del os.environ["IBKR_PORT"]
+            if _saved_paper is not None:
+                os.environ["IBKR_PAPER"] = _saved_paper
+            elif "IBKR_PAPER" in os.environ:
+                del os.environ["IBKR_PAPER"]
+
+        if equity <= 0:
+            logger.warning("  FX PAPER SKIP — equity=0")
+            return
+
+        logger.info(f"  FX PAPER equity: ${equity:,.0f} (paper)")
+
+        # Load FX daily data
+        import pandas as pd
+        data_dir = Path(__file__).resolve().parent / "data" / "fx"
+        pair_data = {}
+        for pair in ["AUDJPY", "USDJPY", "EURJPY", "NZDUSD"]:
+            fpath = data_dir / f"{pair}_1D.parquet"
+            if fpath.exists():
+                df = pd.read_parquet(fpath)
+                df["datetime"] = pd.to_datetime(df["datetime"])
+                df = df.set_index("datetime").sort_index()
+                pair_data[pair] = df
+
+        if not pair_data:
+            logger.warning("  FX PAPER SKIP — no FX daily data")
+            return
+
+        # === Strategy 1: Carry Vol-Scaled ===
+        signals_summary = []
+        try:
+            from strategies_v2.fx.fx_carry_vol_scaled import FXCarryVolScaled
+            strat1 = FXCarryVolScaled()
+            state1 = {"equity": equity, "i": len(list(pair_data.values())[0])}
+            sig1 = strat1.signal_fn(None, state1, pair_data=pair_data, equity=equity)
+            if sig1 and sig1.get("action") != "CLOSE_ALL":
+                pairs1 = sig1.get("pairs", [])
+                signals_summary.append(f"CarryVS: {len(pairs1)} pairs, ${sig1.get('total_notional', 0):,.0f}")
+                for p in pairs1:
+                    logger.info(f"    VS {p['pair']} {p['direction']} ${p['notional']:,.0f} x{p['sizing_mult']:.1f}")
+            elif sig1 and sig1.get("action") == "CLOSE_ALL":
+                signals_summary.append(f"CarryVS: KILL {sig1.get('reason')}")
+            else:
+                signals_summary.append("CarryVS: no signal")
+        except Exception as e:
+            logger.error(f"  FX PAPER CarryVS error: {e}")
+            signals_summary.append(f"CarryVS: ERROR {e}")
+
+        # === Strategy 2: Carry Momentum Filter ===
+        try:
+            from strategies_v2.fx.fx_carry_momentum_filter import FXCarryMomentumFilter
+            strat2 = FXCarryMomentumFilter()
+            state2 = {"equity": equity, "i": len(list(pair_data.values())[0])}
+            sig2 = strat2.signal_fn(None, state2, pair_data=pair_data, equity=equity)
+            if sig2 and sig2.get("action") != "CLOSE_ALL":
+                pairs2 = sig2.get("pairs", [])
+                n_filt = sig2.get("n_filtered", 0)
+                signals_summary.append(f"CarryMom: {len(pairs2)} pairs ({n_filt} filtered), ${sig2.get('total_notional', 0):,.0f}")
+                for p in pairs2:
+                    logger.info(f"    MOM {p['pair']} {p['direction']} ${p['notional']:,.0f} x{p['sizing_mult']:.1f} mom={p.get('momentum_63d', 0):+.4f}")
+            elif sig2 and sig2.get("action") == "CLOSE_ALL":
+                signals_summary.append(f"CarryMom: KILL {sig2.get('reason')}")
+            else:
+                signals_summary.append("CarryMom: no signal")
+        except Exception as e:
+            logger.error(f"  FX PAPER CarryMom error: {e}")
+            signals_summary.append(f"CarryMom: ERROR {e}")
+
+        # Log + Telegram
+        summary = " | ".join(signals_summary)
+        logger.info(f"  FX PAPER: {summary}")
+        _log_event("signal", "fx_paper", {"summary": summary, "equity": equity})
+
+        # TODO: execute orders on IBKR paper when ready
+        # For now, signal-only mode (log + Telegram)
+        _send_alert(
+            f"FX PAPER SIGNAL\nEquity: ${equity:,.0f}\n" + "\n".join(signals_summary),
+            level="info"
+        )
+
+    except Exception as e:
+        logger.error(f"FX PAPER CYCLE ERROR: {e}", exc_info=True)
+    finally:
+        _execution_lock.release()
+
+
 # FX Carry+Momentum config reference (used by the cycle)
 STRATEGY_CONFIG_FX_CARRY = {
     "min_capital": 5000,
@@ -1948,12 +2072,14 @@ def main():
     daily_done_today = False
     last_intraday = 0
     last_eu_intraday = 0
+    last_fx_paper = 0
     last_live_risk = 0
     last_heartbeat = 0
     last_cross_portfolio = 0
     last_crypto = 0
     last_v10_cycle = 0
     after_close_checked_today = False
+    FX_PAPER_INTERVAL = 300  # 5 min
     HEARTBEAT_INTERVAL = 1800  # 30 min
     CROSS_PORTFOLIO_INTERVAL = 14400  # 4 hours
 
@@ -2076,6 +2202,13 @@ def main():
             if elapsed >= INTRADAY_INTERVAL_SECONDS:
                 run_intraday(market="EU")
                 last_eu_intraday = time.time()
+
+        # FX Paper strategies every 5 min (09:00-22:00 Paris) on IBKR paper port 4003
+        if is_live_risk_window():
+            elapsed = time.time() - last_fx_paper
+            if elapsed >= FX_PAPER_INTERVAL:
+                run_fx_paper_cycle()
+                last_fx_paper = time.time()
 
         # Live risk monitoring every 5 min (09:00-22:00 Paris)
         if is_live_risk_window():
