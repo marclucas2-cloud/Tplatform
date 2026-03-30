@@ -1881,8 +1881,11 @@ def main():
     CROSS_PORTFOLIO_INTERVAL = 14400  # 4 hours
 
     # Verifier que les imports fonctionnent au demarrage
+    # NOTE: ne PAS importer run_intraday ici — ca shadow la wrapper locale
+    # qui accepte le param market="US"/"EU"
     try:
-        from scripts.paper_portfolio import run, run_intraday
+        from scripts.paper_portfolio import run as _check_run
+        from scripts.paper_portfolio import run_intraday as _check_run_intraday
         logger.info("  Imports paper_portfolio OK")
     except Exception as e:
         logger.error(f"  ERREUR IMPORT: {e}", exc_info=True)
