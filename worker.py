@@ -330,6 +330,61 @@ def check_positions_after_close():
         logger.error(f"Erreur check_positions_after_close: {e}")
 
 
+def _telegram_heartbeat_full():
+    """Heartbeat enrichi multi-broker pour Telegram (toutes les 30 min)."""
+    lines = [f"HEARTBEAT {datetime.now(PARIS).strftime('%H:%M')} CET"]
+
+    # Alpaca
+    try:
+        from core.alpaca_client.client import AlpacaClient
+        client = AlpacaClient.from_env()
+        acct = client.get_account_info()
+        positions = client.get_positions()
+        total_pnl = sum(p.get("unrealized_pl", 0) for p in positions)
+        lines.append(f"\nALPACA (paper): ${acct['equity']:,.0f}")
+        lines.append(f"  {len(positions)} pos, PnL ${total_pnl:+,.0f}")
+        for p in positions:
+            lines.append(f"  {p['symbol']} {p.get('side','?')} {p.get('qty',0)} PnL=${p.get('unrealized_pl',0):+.1f}")
+    except Exception as e:
+        lines.append(f"\nALPACA: {e}")
+
+    # Binance
+    if os.getenv("BINANCE_API_KEY"):
+        try:
+            from core.broker.binance_broker import BinanceBroker
+            broker = BinanceBroker()
+            acct = broker.get_account_info()
+            positions = broker.get_positions()
+            eq = float(acct.get("equity", 0))
+            lines.append(f"\nBINANCE (LIVE): ${eq:,.0f}")
+            lines.append(f"  {len(positions)} pos")
+            for p in positions[:5]:
+                lines.append(f"  {p.get('symbol')} {p.get('side','')} qty={p.get('qty',0)}")
+        except Exception as e:
+            lines.append(f"\nBINANCE: {e}")
+
+    # IBKR
+    try:
+        import socket
+        host = os.getenv("IBKR_HOST", "127.0.0.1")
+        port = int(os.getenv("IBKR_PORT", "4002"))
+        with socket.create_connection((host, port), timeout=3):
+            pass
+        lines.append(f"\nIBKR (LIVE): gateway UP, ${os.getenv('IBKR_PORT','4002')}")
+    except Exception:
+        lines.append(f"\nIBKR: gateway DOWN")
+
+    # System
+    try:
+        import psutil
+        mem = psutil.Process().memory_info().rss / 1024 / 1024
+        lines.append(f"\nRAM: {mem:.0f}MB")
+    except Exception:
+        pass
+
+    _send_alert("\n".join(lines), level="info")
+
+
 def log_heartbeat():
     """Log un heartbeat avec l'etat du worker (positions, equity)."""
     _log_event("heartbeat", details={"source": "worker_main_loop"})
@@ -355,15 +410,11 @@ def log_heartbeat():
         if mem_mb > 500:
             logger.warning(f"MEMORY WARNING: worker utilise {mem_mb:.0f}MB (>500MB)")
 
-        # Telegram heartbeat — paper (silencieux si non configure)
+        # Telegram heartbeat exhaustif multi-broker
         try:
-            from core.telegram_alert import send_heartbeat
-            send_heartbeat(equity, n_pos, total_pnl, n_strategies=12)
-        except Exception:
-            pass
-
-        # NOTE: heartbeat uses legacy telegram_alert.send_heartbeat()
-        # Other alerts use _send_alert() which tries LiveAlertManager first
+            _telegram_heartbeat_full()
+        except Exception as tg_err:
+            logger.debug(f"Telegram heartbeat failed: {tg_err}")
 
     except ImportError:
         logger.warning("HEARTBEAT: psutil non installe, monitoring memoire desactive")
@@ -378,13 +429,15 @@ def run_daily():
         return
     try:
         logger.info("=== DAILY RUN ===")
+        _log_event("cycle_start", "daily")
         from scripts.paper_portfolio import run
         now = datetime.now(PARIS)
         force = now.day == 1  # Force rebalance le 1er du mois
         run(dry_run=False, force=force)
+        _send_alert(f"DAILY RUN OK — {now.strftime('%H:%M')} CET", level="info")
     except Exception as e:
         logger.error(f"Erreur daily run: {e}", exc_info=True)
-        logger.warning(f"WARNING API: erreur lors du daily run — {type(e).__name__}: {e}")
+        _send_alert(f"DAILY RUN ERREUR: {type(e).__name__}: {str(e)[:100]}", level="critical")
     finally:
         _execution_lock.release()
 
@@ -400,11 +453,26 @@ def run_intraday(market: str = "US"):
         return
     try:
         logger.info(f"=== INTRADAY RUN ({market}) ===")
+        _log_event("cycle_start", f"intraday_{market}")
         from scripts.paper_portfolio import run_intraday
         run_intraday(dry_run=False)
+
+        # Notify Telegram with positions summary after intraday run
+        try:
+            from core.alpaca_client.client import AlpacaClient
+            client = AlpacaClient.from_env()
+            positions = client.get_positions()
+            if positions:
+                pos_lines = [f"  {p['symbol']} {p.get('side','?')} {p.get('qty',0)} PnL=${p.get('unrealized_pl',0):+.1f}" for p in positions[:8]]
+                _send_alert(
+                    f"INTRADAY {market}: {len(positions)} pos\n" + "\n".join(pos_lines),
+                    level="info"
+                )
+        except Exception:
+            pass
     except Exception as e:
         logger.error(f"Erreur intraday run ({market}): {e}", exc_info=True)
-        logger.warning(f"WARNING API: erreur lors du intraday run — {type(e).__name__}: {e}")
+        _send_alert(f"INTRADAY {market} ERREUR: {type(e).__name__}: {str(e)[:100]}", level="critical")
     finally:
         _execution_lock.release()
 
@@ -1658,22 +1726,18 @@ def run_crypto_cycle():
         )
 
         # --- Telegram recap ---
-        # Only notify on REAL trades (BUY/SELL) or errors — not earn/dust actions
         if n_orders > 0:
             _send_alert(
-                f"CRYPTO TRADE: {n_orders} ordre(s) execute(s) — equity=${current_equity:,.0f}",
+                f"CRYPTO TRADE: {n_orders} ordre(s)\n"
+                f"Signals: {n_signals} | Actions: {n_actions}\n"
+                f"Equity: ${current_equity:,.0f}",
                 level="info",
             )
-            _telegram_notify(
-                f"TRADE CRYPTO: {n_orders} ordre(s) execute(s)\n"
-                f"Equity: ${current_equity:,.0f}",
-                level="INFO",
-            )
         if n_errors > 0:
-            _telegram_notify(
-                f"CYCLE CRYPTO: {n_errors} erreur(s)\n"
+            _send_alert(
+                f"CRYPTO ERREUR: {n_errors} erreur(s)\n"
                 f"Equity: ${current_equity:,.0f}",
-                level="WARNING",
+                level="warning",
             )
 
     except Exception as e:
@@ -1867,6 +1931,14 @@ def main():
         "binance": bool(os.getenv("BINANCE_API_KEY")),
         "ibkr_host": os.getenv("IBKR_HOST", "127.0.0.1"),
     })
+
+    _send_alert(
+        f"WORKER START {datetime.now(PARIS).strftime('%H:%M')} CET\n"
+        f"Alpaca: {'OK' if os.getenv('ALPACA_API_KEY') else 'NO'}\n"
+        f"Binance: {'LIVE' if os.getenv('BINANCE_API_KEY') else 'NO'}\n"
+        f"IBKR: {os.getenv('IBKR_HOST', '?')}:{os.getenv('IBKR_PORT', '?')}",
+        level="info"
+    )
 
     daily_done_today = False
     last_intraday = 0
