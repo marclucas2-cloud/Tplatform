@@ -186,15 +186,23 @@ def check_worker():
     """Check worker process and health endpoint."""
     logger.info("── WORKER ──")
 
-    # Check health endpoint
+    # Check health endpoint (try localhost first, then IBKR_HOST for remote)
     import urllib.request
-    try:
-        with urllib.request.urlopen("http://localhost:8080/health", timeout=3) as resp:
-            data = json.loads(resp.read())
-            _record("Worker health endpoint", data.get("status") == "ok",
-                    f"status={data.get('status')}")
-    except Exception:
-        _warn("Worker health endpoint", "not responding (worker may not be running)")
+    health_ok = False
+    for health_host in ["localhost", os.getenv("IBKR_HOST", "")]:
+        if not health_host:
+            continue
+        try:
+            with urllib.request.urlopen(f"http://{health_host}:8080/health", timeout=3) as resp:
+                data = json.loads(resp.read())
+                _record("Worker health endpoint", data.get("status") == "ok",
+                        f"status={data.get('status')} ({health_host})")
+                health_ok = True
+                break
+        except Exception:
+            continue
+    if not health_ok:
+        _warn("Worker health endpoint", "not responding on localhost or IBKR_HOST")
 
     # Check recent logs
     log_file = ROOT / "logs" / "worker" / "worker.log"
@@ -298,7 +306,7 @@ def check_data():
             from core.broker.binance_broker import BinanceBroker
             broker = BinanceBroker()
             ticker = broker.get_ticker_24h("BTCUSDT")
-            price = float(ticker.get("lastPrice", 0))
+            price = float(ticker.get("last_price", 0))
             _record("Binance data", price > 0, f"BTCUSDT=${price:,.0f}")
         except Exception as e:
             _warn("Binance data", str(e))
@@ -473,8 +481,10 @@ def check_env():
 
     logger.info(f"  Mode: PAPER_TRADING={paper}, IBKR_PAPER={ibkr_paper}, BINANCE_TESTNET={binance_testnet}")
 
-    if paper == "true" and ibkr_paper == "false":
-        _warn("Mode mismatch", "PAPER_TRADING=true but IBKR_PAPER=false")
+    # PAPER_TRADING is Alpaca-specific. IBKR_PAPER is IBKR-specific.
+    # Mixed mode (Alpaca paper + IBKR live) is valid and expected.
+    if paper == "false" and ibkr_paper == "true":
+        _warn("Mode mismatch", "PAPER_TRADING=false (Alpaca live) but IBKR_PAPER=true")
     if binance_testnet == "true" and os.getenv("BINANCE_LIVE_CONFIRMED") == "true":
         _warn("Mode mismatch", "BINANCE_TESTNET=true but BINANCE_LIVE_CONFIRMED=true")
 
