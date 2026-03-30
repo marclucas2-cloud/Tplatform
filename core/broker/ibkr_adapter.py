@@ -27,7 +27,10 @@ _MAX_BACKOFF_SECONDS = 30.0
 class IBKRBroker(BaseBroker):
     """Broker Interactive Brokers via ib_insync."""
 
-    def __init__(self):
+    # Auto-increment client ID to avoid conflicts between live/paper/scripts
+    _next_client_id = 1
+
+    def __init__(self, client_id: int | None = None):
         # Fix Python 3.14 : eventkit requiert un event loop
         import asyncio
         try:
@@ -46,9 +49,14 @@ class IBKRBroker(BaseBroker):
         self._paper = os.getenv("IBKR_PAPER", "true").lower() == "true"
         self._host = os.getenv("IBKR_HOST", "127.0.0.1")
         self._port = int(os.getenv("IBKR_PORT", "7497" if self._paper else "7496"))
-        self._client_id = int(os.getenv("IBKR_CLIENT_ID", "1"))
+        if client_id is not None:
+            self._client_id = client_id
+        else:
+            self._client_id = int(os.getenv("IBKR_CLIENT_ID", str(IBKRBroker._next_client_id)))
+            IBKRBroker._next_client_id += 1
         self._connected = False
         self._permanently_down = False
+        self._permanently_down_at: float = 0
         self._reconnect_attempts = 0
 
     def _ensure_connected(self):
@@ -60,10 +68,16 @@ class IBKRBroker(BaseBroker):
         permanently down et leve une BrokerError.
         """
         if self._permanently_down:
-            raise BrokerError(
-                "IBKR permanently down — toutes les tentatives de reconnexion "
-                "ont echoue. Redemarrez le worker apres avoir verifie TWS/IB Gateway."
-            )
+            # Allow retry after 5 min cooldown (gateway may have restarted)
+            if time.time() - self._permanently_down_at > 300:
+                logger.info("IBKR permanently_down cooldown expired — retrying connection")
+                self._permanently_down = False
+                self._reconnect_attempts = 0
+            else:
+                raise BrokerError(
+                    "IBKR temporarily down — retry in "
+                    f"{300 - (time.time() - self._permanently_down_at):.0f}s"
+                )
 
         if self._connected and self._ib.isConnected():
             return
@@ -101,8 +115,9 @@ class IBKRBroker(BaseBroker):
                     time.sleep(backoff)
                     backoff = min(backoff * 2, _MAX_BACKOFF_SECONDS)
 
-        # Toutes les tentatives ont echoue
+        # Toutes les tentatives ont echoue — cooldown 5 min avant retry
         self._permanently_down = True
+        self._permanently_down_at = time.time()
         self._connected = False
         logger.critical(
             f"IBKR PERMANENTLY DOWN apres {_MAX_RECONNECT_ATTEMPTS} tentatives. "

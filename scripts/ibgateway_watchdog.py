@@ -203,40 +203,82 @@ def handle_gateway_down():
         return False
 
 
+def _check_worker_alive():
+    """Check if trading-worker systemd service is active."""
+    try:
+        result = subprocess.run(
+            ["systemctl", "is-active", "trading-worker"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return result.stdout.strip() == "active"
+    except Exception:
+        return False
+
+
+def _check_paper_gateway():
+    """Check if paper gateway port 4003 is reachable."""
+    paper_port = int(os.getenv("IBKR_PAPER_PORT", "4003"))
+    return _check_port(IBKR_HOST, paper_port, timeout=3)
+
+
 def run_daemon():
-    """Main watchdog loop."""
+    """Main watchdog loop — monitors live gateway, paper gateway, and worker."""
     logger.info("=" * 50)
-    logger.info("  IB GATEWAY WATCHDOG started")
-    logger.info(f"  Target: {IBKR_HOST}:{IBKR_PORT}")
+    logger.info("  PLATFORM WATCHDOG started")
+    logger.info(f"  Live gateway: {IBKR_HOST}:{IBKR_PORT}")
+    logger.info(f"  Paper gateway: {IBKR_HOST}:{os.getenv('IBKR_PAPER_PORT', '4003')}")
+    logger.info(f"  Worker: trading-worker.service")
     logger.info(f"  Check interval: {CHECK_INTERVAL}s")
     logger.info("=" * 50)
 
     _send_telegram(
-        f"IB Gateway Watchdog started\n"
-        f"Monitoring {IBKR_HOST}:{IBKR_PORT} every {CHECK_INTERVAL}s",
+        f"PLATFORM WATCHDOG started\n"
+        f"Live: {IBKR_HOST}:{IBKR_PORT}\n"
+        f"Paper: {IBKR_HOST}:{os.getenv('IBKR_PAPER_PORT', '4003')}\n"
+        f"Worker: trading-worker.service\n"
+        f"Check: every {CHECK_INTERVAL}s",
         level="info"
     )
 
     last_restart = 0
     consecutive_fails = 0
+    last_worker_alert = 0
+    last_paper_alert = 0
 
     while True:
         try:
+            # ── 1. Live gateway ──
             up = _check_port()
-
             if up:
                 if consecutive_fails > 0:
-                    logger.info(f"IB Gateway OK (recovered after {consecutive_fails} fails)")
+                    logger.info(f"IB Gateway LIVE OK (recovered after {consecutive_fails} fails)")
                 consecutive_fails = 0
             else:
                 consecutive_fails += 1
-                logger.warning(f"IB Gateway check FAIL ({consecutive_fails})")
-
-                # Only trigger recovery if not in cooldown
+                logger.warning(f"IB Gateway LIVE check FAIL ({consecutive_fails})")
                 if consecutive_fails >= 2 and (time.time() - last_restart) > COOLDOWN_AFTER_RESTART:
                     handle_gateway_down()
                     last_restart = time.time()
                     consecutive_fails = 0
+
+            # ── 2. Paper gateway ──
+            paper_up = _check_paper_gateway()
+            if not paper_up and (time.time() - last_paper_alert) > 600:
+                logger.warning("IB Gateway PAPER port 4003 DOWN — restarting service")
+                _send_telegram("IB Gateway PAPER DOWN — auto-restart", level="warning")
+                try:
+                    subprocess.run(["systemctl", "restart", "ibgateway-paper"],
+                                   capture_output=True, timeout=10)
+                except Exception:
+                    pass
+                last_paper_alert = time.time()
+
+            # ── 3. Worker process ──
+            worker_alive = _check_worker_alive()
+            if not worker_alive and (time.time() - last_worker_alert) > 300:
+                logger.critical("WORKER DOWN — systemd should auto-restart")
+                _send_telegram("WORKER DOWN — systemd auto-restart", level="critical")
+                last_worker_alert = time.time()
 
         except Exception as e:
             logger.error(f"Watchdog error: {e}", exc_info=True)
