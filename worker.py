@@ -454,8 +454,13 @@ def run_intraday(market: str = "US"):
     try:
         logger.info(f"=== INTRADAY RUN ({market}) ===")
         _log_event("cycle_start", f"intraday_{market}")
-        from scripts.paper_portfolio import run_intraday
-        run_intraday(dry_run=False)
+
+        if market == "EU":
+            from scripts.paper_portfolio_eu import run_intraday_eu
+            run_intraday_eu(dry_run=False)
+        else:
+            from scripts.paper_portfolio import run_intraday
+            run_intraday(dry_run=False)
 
         # Notify Telegram with positions summary after intraday run
         try:
