@@ -1,0 +1,36 @@
+# HRP Allocation & Kelly Dynamic — config/hrp_config.yaml
+# Derniere mise a jour : 2026-03-31
+
+hrp:
+  lookback_days: 20
+  min_weight: 0.02        # 2% minimum par strategie
+  max_weight: 0.25        # 25% maximum par strategie
+  rebalance_hours: 4      # Recalcul toutes les 4h
+  turnover_threshold: 0.05  # Reequilibrage si max delta poids > 5%
+  cost_bps: 5.0           # Cout estime de reequilibrage en bps
+  linkage_method: "ward"  # ward, single, complete, average
+
+kelly:
+  sma_lookback: 20
+  hysteresis_pct: 0.02    # Zone neutre pour eviter whipsaw
+  modes:
+    aggressive:
+      fraction: 0.25      # 1/4 Kelly
+      multiplier: 1.0
+      threshold_std: 0.5  # equity > SMA + 0.5*std
+    nominal:
+      fraction: 0.125     # 1/8 Kelly
+      multiplier: 0.5
+    defensive:
+      fraction: 0.03125   # 1/32 Kelly
+      multiplier: 0.125
+      threshold_std: -0.5 # equity < SMA - 0.5*std
+    stopped:
+      fraction: 0.0
+      multiplier: 0.0
+      max_dd_pct: 0.10    # Hard floor a -10% du peak
+
+stress_test:
+  crash_correlation: 0.95  # Correlation cible en crash
+  crash_duration_days: 5
+  recovery_days: 20

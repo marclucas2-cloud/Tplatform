@@ -1,0 +1,151 @@
+# =============================================================================
+# EU Trading Cost Model — config/eu_cost_model.yaml
+#
+# Modele de couts IBKR Tiered pricing pour les bourses europeennes.
+# Utilise par le risk manager et le backtester pour calculer les couts reels.
+# Mis a jour : 2026-03-30
+#
+# Sources :
+#   - IBKR Tiered pricing schedule (interactivebrokers.com/en/pricing)
+#   - Exchange fee schedules (EUREX, Euronext, XETRA, LSE)
+# =============================================================================
+
+exchanges:
+
+  EUREX:
+    # DAX futures/options, EURO STOXX 50, indices allemands
+    description: "EUREX — derivees europeennes (DAX, ESTX50)"
+    commission_pct: 0.0005       # 0.05% du notionnel
+    min_commission_eur: 3.0
+    exchange_fee_per_contract: 0.50
+    clearing_fee_per_contract: 0.10
+    currency: "EUR"
+
+  MONEP:
+    # Marche des Options Negociables de Paris — CAC40, options Euronext Paris
+    description: "MONEP — derivees francaises (CAC40)"
+    commission_pct: 0.0005
+    min_commission_eur: 3.0
+    exchange_fee_per_contract: 0.30
+    clearing_fee_per_contract: 0.10
+    currency: "EUR"
+
+  XETRA:
+    # Deutsche Boerse — actions allemandes (SAP, Siemens, Allianz, etc.)
+    description: "XETRA — actions allemandes"
+    commission_pct: 0.0005
+    min_commission_eur: 3.0
+    exchange_fee_pct: 0.0001     # 0.01% frais de bourse
+    clearing_fee_pct: 0.00004    # 0.004% compensation
+    currency: "EUR"
+
+  EURONEXT_PARIS:
+    # Actions francaises (LVMH, TotalEnergies, BNP, Sanofi, etc.)
+    description: "Euronext Paris — actions francaises"
+    commission_pct: 0.0005
+    min_commission_eur: 3.0
+    exchange_fee_pct: 0.0001
+    clearing_fee_pct: 0.00004
+    currency: "EUR"
+
+  EURONEXT_AMSTERDAM:
+    # Actions neerlandaises (ING, ASML, etc.)
+    description: "Euronext Amsterdam — actions neerlandaises"
+    commission_pct: 0.0005
+    min_commission_eur: 3.0
+    exchange_fee_pct: 0.0001
+    clearing_fee_pct: 0.00004
+    currency: "EUR"
+
+  BORSA_ITALIANA:
+    # Actions italiennes (ISP, ENI, etc.)
+    description: "Borsa Italiana — actions italiennes"
+    commission_pct: 0.0005
+    min_commission_eur: 3.0
+    exchange_fee_pct: 0.0001
+    clearing_fee_pct: 0.00004
+    currency: "EUR"
+    italian_ftt_pct: 0.001       # 0.1% Financial Transaction Tax (actions IT)
+
+  LSE:
+    # London Stock Exchange — FTSE 100, actions UK (BP, Shell, HSBC, AZN)
+    description: "LSE — actions britanniques"
+    commission_pct: 0.0005
+    min_commission_gbp: 3.0
+    exchange_fee_pct: 0.0001
+    clearing_fee_pct: 0.00004
+    stamp_duty_pct: 0.005        # 0.5% UK stamp duty sur les ACHATS uniquement
+    stamp_duty_applies_to: "BUY"  # Pas de stamp duty sur les ventes
+    currency: "GBP"
+    ptm_levy_gbp: 1.0            # Panel on Takeovers levy (>10K GBP seulement)
+    ptm_levy_threshold_gbp: 10000
+
+# =============================================================================
+# Slippage estimates par marche (base sur observations et liquidite)
+# =============================================================================
+slippage:
+  EUREX:
+    default_bps: 1.0             # Futures = tres liquide
+    high_vol_bps: 2.0            # Pendant annonces BCE/macro
+  XETRA:
+    default_bps: 2.0             # Actions DE — bonne liquidite
+    high_vol_bps: 5.0
+    small_cap_bps: 8.0           # Mid/small caps XETRA
+  EURONEXT_PARIS:
+    default_bps: 2.0
+    high_vol_bps: 5.0
+    small_cap_bps: 10.0          # Mid/small caps Euronext
+  EURONEXT_AMSTERDAM:
+    default_bps: 2.0
+    high_vol_bps: 5.0
+  BORSA_ITALIANA:
+    default_bps: 3.0             # Moins liquide que DE/FR
+    high_vol_bps: 7.0
+  LSE:
+    default_bps: 2.0
+    high_vol_bps: 5.0
+    small_cap_bps: 10.0
+  MONEP:
+    default_bps: 1.5
+    high_vol_bps: 3.0
+
+# =============================================================================
+# Horaires de marche (Europe/Paris sauf LSE en Europe/London)
+# =============================================================================
+market_hours:
+  EUREX:
+    open: "09:00"
+    close: "17:30"
+    tz: "Europe/Paris"
+  XETRA:
+    open: "09:00"
+    close: "17:30"
+    tz: "Europe/Paris"
+  EURONEXT_PARIS:
+    open: "09:00"
+    close: "17:30"
+    tz: "Europe/Paris"
+  EURONEXT_AMSTERDAM:
+    open: "09:00"
+    close: "17:30"
+    tz: "Europe/Paris"
+  BORSA_ITALIANA:
+    open: "09:00"
+    close: "17:30"
+    tz: "Europe/Paris"
+  LSE:
+    open: "08:00"
+    close: "16:30"
+    tz: "Europe/London"
+  MONEP:
+    open: "09:00"
+    close: "17:30"
+    tz: "Europe/Paris"
+
+# =============================================================================
+# Fonction de calcul du cout total par trade
+# total_cost = max(commission_pct * notional, min_commission)
+#            + exchange_fee_pct * notional (si applicable)
+#            + stamp_duty_pct * notional (UK BUY seulement)
+#            + slippage_bps * notional / 10000
+# =============================================================================

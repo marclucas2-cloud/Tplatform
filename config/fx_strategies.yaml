@@ -1,0 +1,355 @@
+# =============================================================================
+# FX Strategies Registry — config/fx_strategies.yaml
+#
+# Registre complet des strategies FX : 12 existantes + 3 nouvelles = 15.
+# Chaque strategie reference le module Python dans strategies_v2/fx/.
+# Les nouvelles sont desactivees (paper first, WF requis).
+#
+# Champs obligatoires :
+#   name, enabled, module, pairs, edge_type, sharpe, trades, wf_status,
+#   allocation_pct, max_position_pct, sl_pct, tp_pct
+#
+# Champs optionnels :
+#   swap_daily_bps — estimation du swap journalier (+ = gain, - = cout)
+#   ibkr_symbol — mapping pair -> symbole IBKR
+#   min_order_size — taille minimum en devise de base
+#   signal_frequency — frequence d'evaluation (1H, 4H, daily)
+# =============================================================================
+
+strategies:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Strategies existantes — validees walk-forward
+  # ─────────────────────────────────────────────────────────────────────────
+
+  fx_eurusd_trend:
+    name: "EUR/USD Trend Following"
+    enabled: true
+    module: "strategies_v2.fx.eurusd_trend"
+    pairs: ["EURUSD"]
+    ibkr_symbol: {EURUSD: "EUR.USD"}
+    edge_type: "trend"
+    sharpe: 4.62
+    trades: 47
+    wf_status: "VALIDATED"
+    allocation_pct: 0.08
+    max_position_pct: 0.04
+    sl_pct: 0.008     # 60 pips
+    tp_pct: 0.016     # 120 pips
+    swap_daily_bps: -0.3  # Negatif — ECB < Fed
+    min_order_size: 25000
+    signal_frequency: "4H"
+
+  fx_eurgbp_mr:
+    name: "EUR/GBP Mean Reversion"
+    enabled: true
+    module: "strategies_v2.fx.eurgbp_mr"
+    pairs: ["EURGBP"]
+    ibkr_symbol: {EURGBP: "EUR.GBP"}
+    edge_type: "mean_reversion"
+    sharpe: 3.65
+    trades: 32
+    wf_status: "VALIDATED"
+    allocation_pct: 0.06
+    max_position_pct: 0.03
+    sl_pct: 0.006
+    tp_pct: 0.004
+    swap_daily_bps: -0.1
+    min_order_size: 25000
+    signal_frequency: "1H"
+
+  fx_eurjpy_carry:
+    name: "EUR/JPY Carry Trade"
+    enabled: true
+    module: "strategies_v2.fx.eurjpy_carry"
+    pairs: ["EURJPY"]
+    ibkr_symbol: {EURJPY: "EUR.JPY"}
+    edge_type: "carry"
+    sharpe: 2.50
+    trades: 91
+    wf_status: "VALIDATED"
+    allocation_pct: 0.05
+    max_position_pct: 0.03
+    sl_pct: 0.012
+    tp_pct: 0.02
+    swap_daily_bps: 4.0   # Long EUR vs JPY — positive carry
+    min_order_size: 25000
+    signal_frequency: "daily"
+
+  fx_audjpy_carry:
+    name: "AUD/JPY Carry Trade"
+    enabled: true
+    module: "strategies_v2.fx.audjpy_carry"
+    pairs: ["AUDJPY"]
+    ibkr_symbol: {AUDJPY: "AUD.JPY"}
+    edge_type: "carry"
+    sharpe: 1.58
+    trades: 101
+    wf_status: "VALIDATED"
+    allocation_pct: 0.04
+    max_position_pct: 0.03
+    sl_pct: 0.015
+    tp_pct: 0.025
+    swap_daily_bps: 3.85  # Long AUD vs JPY — RBA 4.35% vs BOJ 0.50%
+    min_order_size: 25000
+    signal_frequency: "daily"
+
+  fx_gbpusd_trend:
+    name: "GBP/USD Trend Following"
+    enabled: true
+    module: "strategies_v2.fx.gbpusd_trend"
+    pairs: ["GBPUSD"]
+    ibkr_symbol: {GBPUSD: "GBP.USD"}
+    edge_type: "trend"
+    sharpe: 2.0
+    trades: 38
+    wf_status: "VALIDATED"
+    allocation_pct: 0.04
+    max_position_pct: 0.03
+    sl_pct: 0.008
+    tp_pct: 0.016
+    swap_daily_bps: -0.2
+    min_order_size: 25000
+    signal_frequency: "4H"
+
+  fx_usdchf_mr:
+    name: "USD/CHF Mean Reversion"
+    enabled: true
+    module: "strategies_v2.fx.usdchf_mr"
+    pairs: ["USDCHF"]
+    ibkr_symbol: {USDCHF: "USD.CHF"}
+    edge_type: "mean_reversion"
+    sharpe: 1.20
+    trades: 45
+    wf_status: "VALIDATED"
+    allocation_pct: 0.03
+    max_position_pct: 0.02
+    sl_pct: 0.006
+    tp_pct: 0.004
+    swap_daily_bps: 0.5   # Long USD vs CHF — petit differentiel
+    min_order_size: 25000
+    signal_frequency: "1H"
+
+  fx_nzdusd_carry:
+    name: "NZD/USD Carry Trade"
+    enabled: true
+    module: "strategies_v2.fx.nzdusd_carry"
+    pairs: ["NZDUSD"]
+    ibkr_symbol: {NZDUSD: "NZD.USD"}
+    edge_type: "carry"
+    sharpe: 1.10
+    trades: 55
+    wf_status: "VALIDATED"
+    allocation_pct: 0.03
+    max_position_pct: 0.02
+    sl_pct: 0.012
+    tp_pct: 0.02
+    swap_daily_bps: 0.25  # RBNZ vs Fed — differentiel variable
+    min_order_size: 25000
+    signal_frequency: "daily"
+
+  fx_carry_momentum_filter:
+    name: "FX Carry + Momentum Filter"
+    enabled: true
+    module: "strategies_v2.fx.fx_carry_momentum_filter"
+    pairs: ["AUDJPY", "USDJPY", "EURJPY", "NZDUSD"]
+    ibkr_symbol:
+      AUDJPY: "AUD.JPY"
+      USDJPY: "USD.JPY"
+      EURJPY: "EUR.JPY"
+      NZDUSD: "NZD.USD"
+    edge_type: "carry"
+    sharpe: 2.17
+    trades: 956
+    wf_status: "VALIDATED"
+    allocation_pct: 0.04
+    max_position_pct: 0.02
+    sl_pct: 0.015
+    tp_pct: 0.025
+    swap_daily_bps: 3.0   # Moyenne paires high-yield
+    min_order_size: 25000
+    signal_frequency: "daily"
+
+  fx_carry_vol_scaled:
+    name: "FX Carry Vol-Scaled"
+    enabled: true
+    module: "strategies_v2.fx.fx_carry_vol_scaled"
+    pairs: ["AUDJPY", "USDJPY", "EURJPY", "NZDUSD"]
+    ibkr_symbol:
+      AUDJPY: "AUD.JPY"
+      USDJPY: "USD.JPY"
+      EURJPY: "EUR.JPY"
+      NZDUSD: "NZD.USD"
+    edge_type: "carry"
+    sharpe: 3.59
+    trades: 688
+    wf_status: "VALIDATED"
+    allocation_pct: 0.05
+    max_position_pct: 0.03
+    sl_pct: 0.015
+    tp_pct: 0.025
+    swap_daily_bps: 3.0
+    min_order_size: 25000
+    signal_frequency: "daily"
+
+  fx_asian_range_breakout:
+    name: "FX Asian Range Breakout"
+    enabled: true
+    module: "strategies_v2.fx.fx_asian_range_breakout"
+    pairs: ["EURUSD", "GBPUSD", "USDJPY", "EURGBP"]
+    ibkr_symbol:
+      EURUSD: "EUR.USD"
+      GBPUSD: "GBP.USD"
+      USDJPY: "USD.JPY"
+      EURGBP: "EUR.GBP"
+    edge_type: "breakout"
+    sharpe: 1.50
+    trades: 210
+    wf_status: "VALIDATED"
+    allocation_pct: 0.03
+    max_position_pct: 0.02
+    sl_pct: 0.005
+    tp_pct: 0.01
+    swap_daily_bps: 0.0   # Intraday — pas de swap
+    min_order_size: 25000
+    signal_frequency: "1H"
+
+  fx_london_fix:
+    name: "FX London Fix Flow"
+    enabled: true
+    module: "strategies_v2.fx.fx_london_fix"
+    pairs: ["EURUSD", "GBPUSD"]
+    ibkr_symbol:
+      EURUSD: "EUR.USD"
+      GBPUSD: "GBP.USD"
+    edge_type: "mean_reversion"
+    sharpe: 1.40
+    trades: 180
+    wf_status: "VALIDATED"
+    allocation_pct: 0.02
+    max_position_pct: 0.02
+    sl_pct: 0.004
+    tp_pct: 0.006
+    swap_daily_bps: 0.0
+    min_order_size: 25000
+    signal_frequency: "1H"
+
+  fx_bollinger_squeeze:
+    name: "FX Bollinger Squeeze Breakout"
+    enabled: true
+    module: "strategies_v2.fx.fx_bollinger_squeeze"
+    pairs: ["EURUSD", "GBPUSD", "USDJPY"]
+    ibkr_symbol:
+      EURUSD: "EUR.USD"
+      GBPUSD: "GBP.USD"
+      USDJPY: "USD.JPY"
+    edge_type: "breakout"
+    sharpe: 1.30
+    trades: 95
+    wf_status: "VALIDATED"
+    allocation_pct: 0.02
+    max_position_pct: 0.02
+    sl_pct: 0.006
+    tp_pct: 0.012
+    swap_daily_bps: 0.0
+    min_order_size: 25000
+    signal_frequency: "4H"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Nouvelles strategies FX — PAPER FIRST, desactivees
+  # ─────────────────────────────────────────────────────────────────────────
+
+  fx_carry_g10_diversified:
+    name: "FX Carry G10 Diversified"
+    enabled: false
+    module: "strategies_v2.fx.fx_carry_g10_diversified"
+    pairs: ["AUDJPY", "NZDJPY", "USDJPY", "CADJPY", "NOKJPY", "SEKJPY"]
+    ibkr_symbol:
+      AUDJPY: "AUD.JPY"
+      NZDJPY: "NZD.JPY"
+      USDJPY: "USD.JPY"
+      CADJPY: "CAD.JPY"
+      NOKJPY: "NOK.JPY"
+      SEKJPY: "SEK.JPY"
+    edge_type: "carry"
+    sharpe: 0.0       # TBD — walk-forward requis
+    trades: 0         # TBD
+    wf_status: "PENDING"
+    allocation_pct: 0.03
+    max_position_pct: 0.02
+    sl_pct: 0.015
+    tp_pct: 0.025
+    swap_daily_bps: 2.5   # Estimation moyenne G10 carry
+    min_order_size: 25000
+    signal_frequency: "daily"
+
+  fx_momentum_breakout:
+    name: "FX Momentum Breakout"
+    enabled: false
+    module: "strategies_v2.fx.fx_momentum_breakout"
+    pairs: ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
+    ibkr_symbol:
+      EURUSD: "EUR.USD"
+      GBPUSD: "GBP.USD"
+      USDJPY: "USD.JPY"
+      AUDUSD: "AUD.USD"
+    edge_type: "momentum"
+    sharpe: 0.0
+    trades: 0
+    wf_status: "PENDING"
+    allocation_pct: 0.03
+    max_position_pct: 0.02
+    sl_pct: 0.008
+    tp_pct: 0.016
+    swap_daily_bps: 0.0   # Direction-dependent
+    min_order_size: 25000
+    signal_frequency: "4H"
+
+  fx_mean_reversion_hourly:
+    name: "FX Mean Reversion Hourly"
+    enabled: false
+    module: "strategies_v2.fx.fx_mean_reversion_hourly"
+    pairs: ["EURUSD", "EURGBP", "USDCHF"]
+    ibkr_symbol:
+      EURUSD: "EUR.USD"
+      EURGBP: "EUR.GBP"
+      USDCHF: "USD.CHF"
+    edge_type: "mean_reversion"
+    sharpe: 0.0
+    trades: 0
+    wf_status: "PENDING"
+    allocation_pct: 0.02
+    max_position_pct: 0.02
+    sl_pct: 0.004
+    tp_pct: 0.003
+    swap_daily_bps: 0.0   # Intraday — pas de swap
+    min_order_size: 25000
+    signal_frequency: "1H"
+
+# =============================================================================
+# Spread filter — seuils max par paire (rejet si spread > max_spread_ratio x moyenne)
+# =============================================================================
+spread_filter:
+  max_spread_ratio: 2.0
+  average_spreads_bps:
+    EURUSD: 0.8
+    EURGBP: 1.2
+    EURJPY: 1.5
+    AUDJPY: 2.0
+    GBPUSD: 1.0
+    USDCHF: 1.5
+    NZDUSD: 2.5
+    USDJPY: 0.9
+    AUDUSD: 1.5
+    NZDJPY: 3.0
+    CADJPY: 2.5
+    NOKJPY: 5.0
+    SEKJPY: 5.0
+
+# =============================================================================
+# Cout IBKR FX : $2 par trade + spread (inclus dans backtest)
+# =============================================================================
+cost_model:
+  commission_per_trade_usd: 2.0
+  min_commission_usd: 2.0
+  slippage_bps_default: 0.8

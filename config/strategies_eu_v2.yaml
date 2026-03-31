@@ -1,0 +1,285 @@
+# =============================================================================
+# EU Strategies Registry V2 — config/strategies_eu_v2.yaml
+#
+# Extension du registre EU : 5 existantes + 9 nouvelles = 14 strategies.
+# Les nouvelles strategies sont desactivees (paper first).
+# Le pipeline paper_launch_eu.py charge ce fichier pour la phase paper 48h.
+#
+# Champs obligatoires :
+#   name, enabled, sharpe, trades, wf_status, edge_type,
+#   market_hours (start, end, tz), tickers,
+#   allocation_pct, max_position_pct, sl_pct, tp_pct
+#
+# Champs optionnels :
+#   execution_broker — pour routage cross-broker (default: ibkr)
+#   exchanges — mapping ticker -> (exchange, currency) pour IBKR
+# =============================================================================
+
+strategies:
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Strategies existantes (validees WF, live ou paper)
+  # ─────────────────────────────────────────────────────────────────────────
+
+  bce_momentum_drift:
+    name: "BCE Momentum Drift v2"
+    enabled: true
+    sharpe: 14.93
+    trades: 99
+    wf_status: "VALIDATED"
+    edge_type: "event"
+    market_hours: {start: "13:45", end: "17:30", tz: "Europe/Paris"}
+    tickers: ["BNP.PA", "GLE.PA", "DBK.DE", "ING.AS"]
+    allocation_pct: 0.06
+    max_position_pct: 0.03
+    sl_pct: 0.015
+    tp_pct: 0.03
+    execution_broker: "ibkr"
+
+  auto_sector_german:
+    name: "Auto Sector German"
+    enabled: true
+    sharpe: 13.43
+    trades: 97
+    wf_status: "VALIDATED"
+    edge_type: "event"
+    market_hours: {start: "09:00", end: "17:30", tz: "Europe/Paris"}
+    tickers: ["CON.DE", "SHA.DE", "ZIL.DE"]
+    allocation_pct: 0.05
+    max_position_pct: 0.03
+    sl_pct: 0.02
+    tp_pct: 0.035
+    execution_broker: "ibkr"
+
+  brent_lag_play:
+    name: "Brent Lag Play"
+    enabled: true
+    sharpe: 4.08
+    trades: 729
+    wf_status: "VALIDATED"
+    edge_type: "momentum"
+    market_hours: {start: "15:30", end: "20:00", tz: "Europe/Paris"}
+    tickers: ["BP.L", "SHEL.L", "TTE.PA"]
+    allocation_pct: 0.06
+    max_position_pct: 0.03
+    sl_pct: 0.015
+    tp_pct: 0.025
+    execution_broker: "ibkr"
+
+  eu_close_us_afternoon:
+    name: "EU Close -> US Afternoon"
+    enabled: true
+    sharpe: 2.43
+    trades: 113
+    wf_status: "VALIDATED"
+    edge_type: "cross_timezone"
+    market_hours: {start: "15:30", end: "21:00", tz: "Europe/Paris"}
+    tickers: ["SPY", "QQQ", "IWM"]  # Signal EU, execution US
+    execution_broker: "alpaca"  # Cross-broker
+    allocation_pct: 0.05
+    max_position_pct: 0.03
+    sl_pct: 0.01
+    tp_pct: 0.02
+
+  eu_gap_open:
+    name: "EU Gap Open"
+    enabled: true
+    sharpe: 8.56
+    trades: 150
+    wf_status: "VALIDATED"
+    edge_type: "gap"
+    market_hours: {start: "09:05", end: "12:00", tz: "Europe/Paris"}
+    tickers: ["MC.PA", "SAP.DE", "ASML.AS", "TTE.PA", "SIE.DE", "ALV.DE", "BNP.PA", "BMW.DE"]
+    allocation_pct: 0.06
+    max_position_pct: 0.03
+    sl_pct: 0.01
+    tp_pct: 0.02
+    execution_broker: "ibkr"
+
+  # ─────────────────────────────────────────────────────────────────────────
+  # Nouvelles strategies — PAPER FIRST, toutes desactivees
+  # Walk-forward en attente, Sharpe et trades a valider
+  # ─────────────────────────────────────────────────────────────────────────
+
+  eu_mean_reversion_dax:
+    name: "EU Mean Reversion DAX"
+    enabled: false  # Paper first
+    sharpe: 0.0     # TBD — walk-forward requis
+    trades: 0       # TBD
+    wf_status: "PENDING"
+    edge_type: "mean_reversion"
+    market_hours: {start: "09:30", end: "17:00", tz: "Europe/Paris"}
+    tickers: ["DAX"]
+    exchanges:
+      DAX: {exchange: "EUREX", currency: "EUR"}
+    allocation_pct: 0.03
+    max_position_pct: 0.02
+    sl_pct: 0.015     # 3x ATR stop
+    tp_pct: 0.01      # VWAP reversion target
+    execution_broker: "ibkr"
+
+  eu_mean_reversion_cac:
+    name: "EU Mean Reversion CAC"
+    enabled: false
+    sharpe: 0.0
+    trades: 0
+    wf_status: "PENDING"
+    edge_type: "mean_reversion"
+    market_hours: {start: "09:30", end: "17:00", tz: "Europe/Paris"}
+    tickers: ["CAC40"]
+    exchanges:
+      CAC40: {exchange: "MONEP", currency: "EUR"}
+    allocation_pct: 0.03
+    max_position_pct: 0.02
+    sl_pct: 0.015
+    tp_pct: 0.01
+    execution_broker: "ibkr"
+
+  eu_mean_reversion_sx5e:
+    name: "EU Mean Reversion EURO STOXX 50"
+    enabled: false
+    sharpe: 0.0
+    trades: 0
+    wf_status: "PENDING"
+    edge_type: "mean_reversion"
+    market_hours: {start: "09:30", end: "17:00", tz: "Europe/Paris"}
+    tickers: ["ESTX50"]
+    exchanges:
+      ESTX50: {exchange: "EUREX", currency: "EUR"}
+    allocation_pct: 0.02
+    max_position_pct: 0.02
+    sl_pct: 0.015
+    tp_pct: 0.01
+    execution_broker: "ibkr"
+
+  eu_orb_frankfurt:
+    name: "EU Opening Range Breakout Frankfurt"
+    enabled: false
+    sharpe: 0.0
+    trades: 0
+    wf_status: "PENDING"
+    edge_type: "breakout"
+    market_hours: {start: "09:00", end: "10:30", tz: "Europe/Paris"}
+    tickers: ["SAP.DE", "SIE.DE", "ALV.DE", "DTE.DE", "BAS.DE"]
+    exchanges:
+      SAP.DE: {exchange: "XETRA", currency: "EUR"}
+      SIE.DE: {exchange: "XETRA", currency: "EUR"}
+      ALV.DE: {exchange: "XETRA", currency: "EUR"}
+      DTE.DE: {exchange: "XETRA", currency: "EUR"}
+      BAS.DE: {exchange: "XETRA", currency: "EUR"}
+    allocation_pct: 0.03
+    max_position_pct: 0.02
+    sl_pct: 0.008    # Tight stop — ORB style
+    tp_pct: 0.016    # 2:1 R:R
+    execution_broker: "ibkr"
+
+  eu_orb_paris:
+    name: "EU Opening Range Breakout Paris"
+    enabled: false
+    sharpe: 0.0
+    trades: 0
+    wf_status: "PENDING"
+    edge_type: "breakout"
+    market_hours: {start: "09:00", end: "10:30", tz: "Europe/Paris"}
+    tickers: ["MC.PA", "TTE.PA", "SAN.PA", "AI.PA", "BNP.PA"]
+    exchanges:
+      MC.PA: {exchange: "EURONEXT_PARIS", currency: "EUR"}
+      TTE.PA: {exchange: "EURONEXT_PARIS", currency: "EUR"}
+      SAN.PA: {exchange: "EURONEXT_PARIS", currency: "EUR"}
+      AI.PA: {exchange: "EURONEXT_PARIS", currency: "EUR"}
+      BNP.PA: {exchange: "EURONEXT_PARIS", currency: "EUR"}
+    allocation_pct: 0.03
+    max_position_pct: 0.02
+    sl_pct: 0.008
+    tp_pct: 0.016
+    execution_broker: "ibkr"
+
+  eu_cross_asset_lead_lag:
+    name: "EU Cross-Asset Lead-Lag"
+    enabled: false
+    sharpe: 0.0
+    trades: 0
+    wf_status: "PENDING"
+    edge_type: "momentum"
+    market_hours: {start: "09:00", end: "17:30", tz: "Europe/Paris"}
+    tickers: ["DAX", "ESTX50", "CAC40", "FTSE100"]
+    exchanges:
+      DAX: {exchange: "EUREX", currency: "EUR"}
+      ESTX50: {exchange: "EUREX", currency: "EUR"}
+      CAC40: {exchange: "MONEP", currency: "EUR"}
+      FTSE100: {exchange: "LSE", currency: "GBP"}
+    allocation_pct: 0.02
+    max_position_pct: 0.02
+    sl_pct: 0.012
+    tp_pct: 0.02
+    execution_broker: "ibkr"
+
+  eu_sector_rotation:
+    name: "EU Sector Rotation"
+    enabled: false
+    sharpe: 0.0
+    trades: 0
+    wf_status: "PENDING"
+    edge_type: "momentum"
+    market_hours: {start: "09:00", end: "17:30", tz: "Europe/Paris"}
+    tickers: ["CON.DE", "BMW.DE", "MC.PA", "CDI.PA", "SIE.DE", "SAP.DE"]
+    exchanges:
+      CON.DE: {exchange: "XETRA", currency: "EUR"}
+      BMW.DE: {exchange: "XETRA", currency: "EUR"}
+      MC.PA: {exchange: "EURONEXT_PARIS", currency: "EUR"}
+      CDI.PA: {exchange: "EURONEXT_PARIS", currency: "EUR"}
+      SIE.DE: {exchange: "XETRA", currency: "EUR"}
+      SAP.DE: {exchange: "XETRA", currency: "EUR"}
+    allocation_pct: 0.03
+    max_position_pct: 0.02
+    sl_pct: 0.02
+    tp_pct: 0.035
+    execution_broker: "ibkr"
+
+  eu_bce_press_conference:
+    name: "BCE Press Conference Volatility"
+    enabled: false
+    sharpe: 0.0
+    trades: 0
+    wf_status: "PENDING"
+    edge_type: "event"
+    market_hours: {start: "14:30", end: "17:00", tz: "Europe/Paris"}
+    tickers: ["BNP.PA", "GLE.PA", "DBK.DE", "ING.AS", "ISP.MI"]
+    exchanges:
+      BNP.PA: {exchange: "EURONEXT_PARIS", currency: "EUR"}
+      GLE.PA: {exchange: "EURONEXT_PARIS", currency: "EUR"}
+      DBK.DE: {exchange: "XETRA", currency: "EUR"}
+      ING.AS: {exchange: "EURONEXT_AMSTERDAM", currency: "EUR"}
+      ISP.MI: {exchange: "BORSA_ITALIANA", currency: "EUR"}
+    allocation_pct: 0.02
+    max_position_pct: 0.02
+    sl_pct: 0.015
+    tp_pct: 0.03
+    execution_broker: "ibkr"
+
+  eu_ftse_mean_reversion:
+    name: "FTSE 100 Mean Reversion"
+    enabled: false
+    sharpe: 0.0
+    trades: 0
+    wf_status: "PENDING"
+    edge_type: "mean_reversion"
+    market_hours: {start: "09:00", end: "16:30", tz: "Europe/London"}
+    tickers: ["FTSE100", "BP.L", "SHEL.L", "HSBA.L", "AZN.L"]
+    exchanges:
+      FTSE100: {exchange: "LSE", currency: "GBP"}
+      BP.L: {exchange: "LSE", currency: "GBP"}
+      SHEL.L: {exchange: "LSE", currency: "GBP"}
+      HSBA.L: {exchange: "LSE", currency: "GBP"}
+      AZN.L: {exchange: "LSE", currency: "GBP"}
+    allocation_pct: 0.03
+    max_position_pct: 0.02
+    sl_pct: 0.015
+    tp_pct: 0.01
+    execution_broker: "ibkr"
+
+# =============================================================================
+# Allocation totale nouvelles strategies : 24% (repartie sur 9 strats)
+# Avec les 5 existantes (28%) : total EU ~52% du pipe IBKR
+# Les nouvelles ne seront activees qu'apres validation WF + paper 48h
+# =============================================================================
