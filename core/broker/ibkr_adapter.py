@@ -458,6 +458,15 @@ class IBKRBroker(BaseBroker):
     def disconnect(self):
         """Deconnexion propre."""
         if self._connected:
-            self._ib.disconnect()
+            try:
+                self._ib.disconnect()
+            except Exception:
+                pass
             self._connected = False
-            logger.info("IBKR deconnecte")
+            logger.info(f"IBKR deconnecte (clientId={self._client_id})")
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *args):
+        self.disconnect()

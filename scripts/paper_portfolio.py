@@ -559,20 +559,33 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
     if now_et.hour >= 16:
         return {"action": "hold", "reason": "apres 16:00 ET"}
 
-    # Importer les strategies
-    backtester_path = str(Path(__file__).parent.parent / "intraday-backtesterV2")
-    if backtester_path not in sys.path:
-        sys.path.insert(0, backtester_path)
+    # Importer les strategies depuis intraday-backtesterV2
+    # IMPORTANT: on utilise importlib pour eviter le conflit avec trading-platform/strategies/ (crypto)
+    import importlib.util
+    backtester_path = Path(__file__).parent.parent / "intraday-backtesterV2"
+    _bt_strats = backtester_path / "strategies"
 
-    from strategies import (
-        DayOfWeekSeasonalStrategy,
-        LateDayMeanReversionStrategy,
-    )
-    from strategies.correlation_regime_hedge import CorrelationRegimeHedgeStrategy
-    from strategies.vix_expansion_short import VIXExpansionShortStrategy
-    from strategies.failed_rally_short import FailedRallyShortStrategy
-    from strategies.eod_sell_v2 import EODSellV2Strategy
-    from strategies.high_beta_underperf_short import HighBetaUnderperfShortStrategy
+    def _load_bt_strategy(module_name, class_name):
+        """Charge une classe de strategie depuis intraday-backtesterV2/strategies/."""
+        mod_path = _bt_strats / f"{module_name}.py"
+        if not mod_path.exists():
+            logger.warning(f"Strategy module not found: {mod_path}")
+            return None
+        spec = importlib.util.spec_from_file_location(f"bt_strategies.{module_name}", mod_path)
+        mod = importlib.util.module_from_spec(spec)
+        # Add backtester to path temporarily for internal imports
+        if str(backtester_path) not in sys.path:
+            sys.path.insert(0, str(backtester_path))
+        spec.loader.exec_module(mod)
+        return getattr(mod, class_name, None)
+
+    DayOfWeekSeasonalStrategy = _load_bt_strategy("day_of_week_seasonal", "DayOfWeekSeasonalStrategy")
+    LateDayMeanReversionStrategy = _load_bt_strategy("lateday_mean_reversion", "LateDayMeanReversionStrategy")
+    CorrelationRegimeHedgeStrategy = _load_bt_strategy("correlation_regime_hedge", "CorrelationRegimeHedgeStrategy")
+    VIXExpansionShortStrategy = _load_bt_strategy("vix_expansion_short", "VIXExpansionShortStrategy")
+    FailedRallyShortStrategy = _load_bt_strategy("failed_rally_short", "FailedRallyShortStrategy")
+    EODSellV2Strategy = _load_bt_strategy("eod_sell_v2", "EODSellV2Strategy")
+    HighBetaUnderperfShortStrategy = _load_bt_strategy("high_beta_underperf_short", "HighBetaUnderperfShortStrategy")
 
     STRAT_MAP = {
         "dow_seasonal": DayOfWeekSeasonalStrategy,

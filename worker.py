@@ -483,8 +483,8 @@ def run_intraday(market: str = "US"):
             from scripts.paper_portfolio_eu import run_intraday_eu
             run_intraday_eu(dry_run=False)
         else:
-            from scripts.paper_portfolio import run_intraday
-            run_intraday(dry_run=False)
+            from scripts.paper_portfolio import run_intraday as _pp_run_intraday
+            _pp_run_intraday(dry_run=False)
 
         # Notify Telegram with positions summary after intraday run
         try:
@@ -531,12 +531,15 @@ def run_fx_carry_cycle():
             return
 
         # Get IBKR equity
+        _ibkr_carry = None
         try:
             from core.broker.ibkr_adapter import IBKRBroker
-            ibkr = IBKRBroker(client_id=10)  # clientId dedie FX carry live
-            ibkr_info = ibkr.get_account_info()
+            _ibkr_carry = IBKRBroker(client_id=10)  # clientId dedie FX carry live
+            ibkr_info = _ibkr_carry.get_account_info()
             equity = ibkr_info.get("equity", 0)
         except Exception as e:
+            if _ibkr_carry:
+                _ibkr_carry.disconnect()
             logger.warning(f"  FX CARRY SKIP — IBKR account info failed: {e}")
             return
 
@@ -647,6 +650,8 @@ def run_fx_carry_cycle():
     except Exception as e:
         logger.error(f"FX CARRY CYCLE ERROR: {e}", exc_info=True)
     finally:
+        if _ibkr_carry:
+            _ibkr_carry.disconnect()
         _execution_lock.release()
 
 
@@ -725,7 +730,6 @@ def run_futures_paper_cycle():
 
         portfolio_state = PortfolioState(
             equity=equity, cash=equity, positions={},
-            daily_pnl=0, max_drawdown=0,
         )
 
         signals = []
@@ -939,15 +943,15 @@ def run_live_risk_cycle():
             # Try to get real portfolio from IBKR if available
             if os.environ.get("IBKR_CONNECTED") == "true":
                 from core.broker.ibkr_adapter import IBKRBroker
-                broker = IBKRBroker(client_id=3)  # monitoring, pas de conflit avec FX carry (10)
-                account = broker.get_account_info()
-                positions = broker.get_positions()
-                portfolio = {
-                    "equity": float(account.get("equity", risk_mgr.capital)),
-                    "cash": float(account.get("cash", risk_mgr.capital)),
-                    "positions": positions,
-                    "margin_used_pct": float(account.get("margin_used_pct", 0)),
-                }
+                with IBKRBroker(client_id=3) as broker:
+                    account = broker.get_account_info()
+                    positions = broker.get_positions()
+                    portfolio = {
+                        "equity": float(account.get("equity", risk_mgr.capital)),
+                        "cash": float(account.get("cash", risk_mgr.capital)),
+                        "positions": positions,
+                        "margin_used_pct": float(account.get("margin_used_pct", 0)),
+                    }
         except Exception as e:
             logger.warning(f"Could not fetch IBKR portfolio for risk cycle: {e}")
 
@@ -2256,8 +2260,8 @@ def run_v11_eod_cleanup():
         # Try IBKR cleanup
         try:
             from core.broker.ibkr_adapter import IBKRBroker
-            ibkr = IBKRBroker(client_id=3)
-            result = detector.run_eod_cleanup(ibkr, datetime.now(PARIS))
+            with IBKRBroker(client_id=3) as ibkr:
+                result = detector.run_eod_cleanup(ibkr, datetime.now(PARIS))
             if result.get("orphans_found", 0) > 0:
                 logger.warning(
                     f"V11 EOD: {result['orphans_found']} orphans found, "
@@ -2569,15 +2573,15 @@ def main():
                 try:
                     if os.environ.get("IBKR_CONNECTED") == "true":
                         from core.broker.ibkr_adapter import IBKRBroker
-                        ibkr = IBKRBroker(client_id=3)
-                        acct = ibkr.get_account_info()
-                        ibkr_capital = float(acct.get("equity", 0))
-                        for p in ibkr.get_positions():
-                            val = abs(float(p.get("market_val", 0)))
-                            if float(p.get("qty", 0)) >= 0:
-                                ibkr_long += val
-                            else:
-                                ibkr_short += val
+                        with IBKRBroker(client_id=3) as ibkr:
+                            acct = ibkr.get_account_info()
+                            ibkr_capital = float(acct.get("equity", 0))
+                            for p in ibkr.get_positions():
+                                val = abs(float(p.get("market_val", 0)))
+                                if float(p.get("qty", 0)) >= 0:
+                                    ibkr_long += val
+                                else:
+                                    ibkr_short += val
                 except Exception as e:
                     logger.debug(f"Cross-portfolio: IBKR unavailable: {e}")
 
