@@ -1,0 +1,59 @@
+{
+  "name": "M2K ORB",
+  "verdict": "REJECTED",
+  "avg_oos_sharpe": -0.27,
+  "avg_is_sharpe": -0.02,
+  "win_pct": 0.4,
+  "avg_dd": 0.0724,
+  "total_trades": 111,
+  "mc_p5_sharpe": -4.44,
+  "mc_p50_sharpe": -1.1,
+  "mc_p95_sharpe": 0.9,
+  "windows": [
+    {
+      "window": 0,
+      "is_sharpe": -0.23,
+      "oos_sharpe": -0.75,
+      "oos_return": -0.0304,
+      "oos_dd": -0.068,
+      "oos_trades": 25,
+      "profitable": false
+    },
+    {
+      "window": 1,
+      "is_sharpe": 0.17,
+      "oos_sharpe": 0.69,
+      "oos_return": 0.0349,
+      "oos_dd": -0.0544,
+      "oos_trades": 20,
+      "profitable": true
+    },
+    {
+      "window": 2,
+      "is_sharpe": 0.97,
+      "oos_sharpe": -1.3,
+      "oos_return": -0.068,
+      "oos_dd": -0.1265,
+      "oos_trades": 22,
+      "profitable": false
+    },
+    {
+      "window": 3,
+      "is_sharpe": -0.48,
+      "oos_sharpe": 0.25,
+      "oos_return": 0.0073,
+      "oos_dd": -0.0477,
+      "oos_trades": 21,
+      "profitable": true
+    },
+    {
+      "window": 4,
+      "is_sharpe": -0.54,
+      "oos_sharpe": -0.26,
+      "oos_return": -0.016,
+      "oos_dd": -0.0653,
+      "oos_trades": 23,
+      "profitable": false
+    }
+  ]
+}

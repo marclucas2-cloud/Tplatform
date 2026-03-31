@@ -1,0 +1,59 @@
+{
+  "name": "MGC VIX Hedge",
+  "verdict": "BORDERLINE",
+  "avg_oos_sharpe": 0.45,
+  "avg_is_sharpe": 0.12,
+  "win_pct": 0.4,
+  "avg_dd": 0.0043,
+  "total_trades": 4,
+  "mc_p5_sharpe": -1.51,
+  "mc_p50_sharpe": 0.5,
+  "mc_p95_sharpe": 3.9,
+  "windows": [
+    {
+      "window": 0,
+      "is_sharpe": 1.02,
+      "oos_sharpe": 3.0,
+      "oos_return": 0.0217,
+      "oos_dd": -0.0003,
+      "oos_trades": 1,
+      "profitable": true
+    },
+    {
+      "window": 1,
+      "is_sharpe": 1.07,
+      "oos_sharpe": 1.52,
+      "oos_return": 0.013,
+      "oos_dd": -0.0018,
+      "oos_trades": 1,
+      "profitable": true
+    },
+    {
+      "window": 2,
+      "is_sharpe": 0.3,
+      "oos_sharpe": 0.0,
+      "oos_return": 0.0,
+      "oos_dd": 0.0,
+      "oos_trades": 0,
+      "profitable": false
+    },
+    {
+      "window": 3,
+      "is_sharpe": -0.35,
+      "oos_sharpe": -2.27,
+      "oos_return": -0.0192,
+      "oos_dd": -0.0192,
+      "oos_trades": 2,
+      "profitable": false
+    },
+    {
+      "window": 4,
+      "is_sharpe": -1.43,
+      "oos_sharpe": 0.0,
+      "oos_return": 0.0,
+      "oos_dd": 0.0,
+      "oos_trades": 0,
+      "profitable": false
+    }
+  ]
+}

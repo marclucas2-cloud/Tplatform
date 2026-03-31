@@ -1,0 +1,14 @@
+{
+  "validated": [],
+  "borderline": [
+    "mes_trend",
+    "mes_mnq_pairs",
+    "mgc_vix_hedge"
+  ],
+  "rejected": [
+    "mes_overnight",
+    "m2k_orb",
+    "mcl_brent_lag"
+  ],
+  "total": 6
+}

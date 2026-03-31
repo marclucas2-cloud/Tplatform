@@ -1,0 +1,59 @@
+{
+  "name": "MES/MNQ Pairs",
+  "verdict": "BORDERLINE",
+  "avg_oos_sharpe": 0.76,
+  "avg_is_sharpe": 0.12,
+  "win_pct": 0.8,
+  "avg_dd": 0.023,
+  "total_trades": 23,
+  "mc_p5_sharpe": -1.29,
+  "mc_p50_sharpe": 0.43,
+  "mc_p95_sharpe": 4.04,
+  "windows": [
+    {
+      "window": 0,
+      "is_sharpe": 0.24,
+      "oos_sharpe": 2.66,
+      "oos_return": 0.0539,
+      "oos_dd": -0.0184,
+      "oos_trades": 7,
+      "profitable": true
+    },
+    {
+      "window": 1,
+      "is_sharpe": 0.73,
+      "oos_sharpe": 0.9,
+      "oos_return": 0.0176,
+      "oos_dd": -0.0132,
+      "oos_trades": 4,
+      "profitable": true
+    },
+    {
+      "window": 2,
+      "is_sharpe": -0.05,
+      "oos_sharpe": -2.27,
+      "oos_return": -0.0592,
+      "oos_dd": -0.0716,
+      "oos_trades": 6,
+      "profitable": false
+    },
+    {
+      "window": 3,
+      "is_sharpe": -0.66,
+      "oos_sharpe": 1.61,
+      "oos_return": 0.0148,
+      "oos_dd": -0.0085,
+      "oos_trades": 3,
+      "profitable": true
+    },
+    {
+      "window": 4,
+      "is_sharpe": 0.36,
+      "oos_sharpe": 0.88,
+      "oos_return": 0.0025,
+      "oos_dd": -0.0034,
+      "oos_trades": 3,
+      "profitable": true
+    }
+  ]
+}

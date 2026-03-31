@@ -1,0 +1,59 @@
+{
+  "name": "MES Trend",
+  "verdict": "BORDERLINE",
+  "avg_oos_sharpe": 1.46,
+  "avg_is_sharpe": 0.0,
+  "win_pct": 0.8,
+  "avg_dd": 0.0774,
+  "total_trades": 12,
+  "mc_p5_sharpe": 0.87,
+  "mc_p50_sharpe": 2.16,
+  "mc_p95_sharpe": 4.64,
+  "windows": [
+    {
+      "window": 0,
+      "is_sharpe": 1.64,
+      "oos_sharpe": 1.23,
+      "oos_return": 0.0536,
+      "oos_dd": -0.0449,
+      "oos_trades": 1,
+      "profitable": true
+    },
+    {
+      "window": 1,
+      "is_sharpe": -1.02,
+      "oos_sharpe": 1.4,
+      "oos_return": 0.112,
+      "oos_dd": -0.0942,
+      "oos_trades": 0,
+      "profitable": true
+    },
+    {
+      "window": 2,
+      "is_sharpe": -0.65,
+      "oos_sharpe": 0.16,
+      "oos_return": 0.0032,
+      "oos_dd": -0.1339,
+      "oos_trades": 3,
+      "profitable": true
+    },
+    {
+      "window": 3,
+      "is_sharpe": -1.07,
+      "oos_sharpe": -0.43,
+      "oos_return": -0.0173,
+      "oos_dd": -0.0925,
+      "oos_trades": 7,
+      "profitable": false
+    },
+    {
+      "window": 4,
+      "is_sharpe": 1.1,
+      "oos_sharpe": 4.94,
+      "oos_return": 0.1901,
+      "oos_dd": -0.0215,
+      "oos_trades": 1,
+      "profitable": true
+    }
+  ]
+}
