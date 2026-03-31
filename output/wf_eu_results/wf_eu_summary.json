@@ -1,5 +1,5 @@
 {
-  "run_timestamp": "2026-03-31T03:50:25.658324+00:00",
+  "run_timestamp": "2026-03-31T04:42:41.077289+00:00",
   "n_strategies": 10,
   "verdicts": {
     "VALIDATED": [],
@@ -21,142 +21,128 @@
   "strategies": {
     "eu_mean_reversion_dax": {
       "verdict": "REJECTED",
-      "avg_oos_sharpe": -1.508,
-      "profitable_ratio": 0.0,
-      "total_oos_trades": 2925,
-      "commission_burn_rate": 7.2573,
-      "avg_oos_max_dd": -0.6044,
+      "avg_oos_sharpe": 0.299,
+      "profitable_ratio": 0.6,
+      "total_oos_trades": 225,
+      "commission_burn_rate": 0.594,
+      "avg_oos_max_dd": -0.1357,
       "rejection_reasons": [
-        "Sharpe OOS -1.51 < 0.5",
-        "Commission burn 725.7% > 25%",
-        "Max DD OOS 60.4% > 15%",
-        "Win% 0% < 50%"
+        "Sharpe OOS 0.30 < 0.5",
+        "Commission burn 59.4% > 25%"
       ]
     },
     "eu_mean_reversion_cac": {
       "verdict": "REJECTED",
-      "avg_oos_sharpe": -1.8,
-      "profitable_ratio": 0.0,
-      "total_oos_trades": 2925,
-      "commission_burn_rate": 8.4377,
-      "avg_oos_max_dd": -0.6329,
+      "avg_oos_sharpe": -0.377,
+      "profitable_ratio": 0.2,
+      "total_oos_trades": 225,
+      "commission_burn_rate": 1.6012,
+      "avg_oos_max_dd": -0.1427,
       "rejection_reasons": [
-        "Sharpe OOS -1.80 < 0.5",
-        "Commission burn 843.8% > 25%",
-        "Max DD OOS 63.3% > 15%",
-        "Win% 0% < 50%"
+        "Sharpe OOS -0.38 < 0.5",
+        "Commission burn 160.1% > 25%",
+        "Win% 20% < 50%"
       ]
     },
     "eu_mean_reversion_sx5e": {
       "verdict": "REJECTED",
-      "avg_oos_sharpe": -1.958,
-      "profitable_ratio": 0.0,
-      "total_oos_trades": 2925,
-      "commission_burn_rate": 7.4726,
-      "avg_oos_max_dd": -0.6222,
+      "avg_oos_sharpe": 0.171,
+      "profitable_ratio": 0.6,
+      "total_oos_trades": 220,
+      "commission_burn_rate": 0.7764,
+      "avg_oos_max_dd": -0.1322,
       "rejection_reasons": [
-        "Sharpe OOS -1.96 < 0.5",
-        "Commission burn 747.3% > 25%",
-        "Max DD OOS 62.2% > 15%",
-        "Win% 0% < 50%"
+        "Sharpe OOS 0.17 < 0.5",
+        "Commission burn 77.6% > 25%"
       ]
     },
     "eu_ftse_mean_reversion": {
       "verdict": "REJECTED",
-      "avg_oos_sharpe": -2.723,
-      "profitable_ratio": 0.0,
-      "total_oos_trades": 2925,
-      "commission_burn_rate": 21.6031,
-      "avg_oos_max_dd": -0.6998,
+      "avg_oos_sharpe": -0.221,
+      "profitable_ratio": 0.4,
+      "total_oos_trades": 225,
+      "commission_burn_rate": 1.2657,
+      "avg_oos_max_dd": -0.103,
       "rejection_reasons": [
-        "Sharpe OOS -2.72 < 0.5",
-        "Commission burn 2160.3% > 25%",
-        "Max DD OOS 70.0% > 15%",
-        "Win% 0% < 50%"
+        "Sharpe OOS -0.22 < 0.5",
+        "Commission burn 126.6% > 25%",
+        "Win% 40% < 50%"
       ]
     },
     "eu_orb_frankfurt": {
       "verdict": "REJECTED",
-      "avg_oos_sharpe": -3.186,
-      "profitable_ratio": 0.0,
-      "total_oos_trades": 5850,
-      "commission_burn_rate": 14.5146,
-      "avg_oos_max_dd": -0.8514,
+      "avg_oos_sharpe": -0.445,
+      "profitable_ratio": 0.4,
+      "total_oos_trades": 450,
+      "commission_burn_rate": 1.1881,
+      "avg_oos_max_dd": -0.1644,
       "rejection_reasons": [
-        "Sharpe OOS -3.19 < 0.5",
-        "Commission burn 1451.5% > 25%",
-        "Max DD OOS 85.1% > 15%",
-        "Win% 0% < 50%"
+        "Sharpe OOS -0.45 < 0.5",
+        "Commission burn 118.8% > 25%",
+        "Max DD OOS 16.4% > 15%",
+        "Win% 40% < 50%"
       ]
     },
     "eu_orb_paris": {
       "verdict": "REJECTED",
-      "avg_oos_sharpe": -3.815,
-      "profitable_ratio": 0.0,
-      "total_oos_trades": 5850,
-      "commission_burn_rate": 16.8754,
-      "avg_oos_max_dd": -0.8746,
+      "avg_oos_sharpe": -1.197,
+      "profitable_ratio": 0.2,
+      "total_oos_trades": 455,
+      "commission_burn_rate": 3.2025,
+      "avg_oos_max_dd": -0.1727,
       "rejection_reasons": [
-        "Sharpe OOS -3.81 < 0.5",
-        "Commission burn 1687.5% > 25%",
-        "Max DD OOS 87.5% > 15%",
-        "Win% 0% < 50%"
+        "Sharpe OOS -1.20 < 0.5",
+        "Commission burn 320.2% > 25%",
+        "Max DD OOS 17.3% > 15%",
+        "Win% 20% < 50%"
       ]
     },
     "eu_gap_open": {
       "verdict": "REJECTED",
-      "avg_oos_sharpe": -2.831,
-      "profitable_ratio": 0.0,
-      "total_oos_trades": 4095,
-      "commission_burn_rate": 20.3784,
-      "avg_oos_max_dd": -0.7539,
+      "avg_oos_sharpe": -0.111,
+      "profitable_ratio": 0.2,
+      "total_oos_trades": 310,
+      "commission_burn_rate": 1.087,
+      "avg_oos_max_dd": -0.14,
       "rejection_reasons": [
-        "Sharpe OOS -2.83 < 0.5",
-        "Commission burn 2037.8% > 25%",
-        "Max DD OOS 75.4% > 15%",
-        "Win% 0% < 50%"
+        "Sharpe OOS -0.11 < 0.5",
+        "Commission burn 108.7% > 25%",
+        "Win% 20% < 50%"
       ]
     },
     "eu_cross_asset_lead_lag": {
       "verdict": "REJECTED",
-      "avg_oos_sharpe": -2.424,
-      "profitable_ratio": 0.0,
-      "total_oos_trades": 3510,
-      "commission_burn_rate": 17.4672,
-      "avg_oos_max_dd": -0.7006,
+      "avg_oos_sharpe": 0.03,
+      "profitable_ratio": 0.2,
+      "total_oos_trades": 265,
+      "commission_burn_rate": 0.9317,
+      "avg_oos_max_dd": -0.1362,
       "rejection_reasons": [
-        "Sharpe OOS -2.42 < 0.5",
-        "Commission burn 1746.7% > 25%",
-        "Max DD OOS 70.1% > 15%",
-        "Win% 0% < 50%"
+        "Sharpe OOS 0.03 < 0.5",
+        "Commission burn 93.2% > 25%",
+        "Win% 20% < 50%"
       ]
     },
     "eu_sector_rotation": {
       "verdict": "REJECTED",
-      "avg_oos_sharpe": -0.798,
-      "profitable_ratio": 0.0,
-      "total_oos_trades": 1170,
-      "commission_burn_rate": 5.8224,
-      "avg_oos_max_dd": -0.3744,
+      "avg_oos_sharpe": 0.595,
+      "profitable_ratio": 1.0,
+      "total_oos_trades": 85,
+      "commission_burn_rate": 0.3106,
+      "avg_oos_max_dd": -0.1219,
       "rejection_reasons": [
-        "Sharpe OOS -0.80 < 0.5",
-        "Commission burn 582.2% > 25%",
-        "Max DD OOS 37.4% > 15%",
-        "Win% 0% < 50%"
+        "Commission burn 31.1% > 25%"
       ]
     },
     "eu_bce_press_conference": {
       "verdict": "REJECTED",
-      "avg_oos_sharpe": -0.229,
-      "profitable_ratio": 0.2,
-      "total_oos_trades": 350,
-      "commission_burn_rate": 1.7467,
-      "avg_oos_max_dd": -0.2188,
+      "avg_oos_sharpe": 0.792,
+      "profitable_ratio": 1.0,
+      "total_oos_trades": 25,
+      "commission_burn_rate": 0.0932,
+      "avg_oos_max_dd": -0.1179,
       "rejection_reasons": [
-        "Sharpe OOS -0.23 < 0.5",
-        "Commission burn 174.7% > 25%",
-        "Max DD OOS 21.9% > 15%",
-        "Win% 20% < 50%"
+        "Total trades 25 < 30 (noise)"
       ]
     }
   },

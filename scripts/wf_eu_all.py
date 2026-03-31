@@ -398,16 +398,26 @@ def load_eu_data(symbol: str, data_dir: Optional[Path] = None) -> Optional[Any]:
         base / f"{symbol}_daily.parquet",
     ]
 
+    # Load all existing candidates, prefer the one with most bars (min 500 for WF)
+    import pandas as pd
+    best_df = None
+    best_path = None
+    best_len = 0
+
     for path in candidates:
         if path.exists():
             try:
-                import pandas as pd
                 df = pd.read_parquet(path)
-                logger.info("Loaded %d rows for %s from %s", len(df), symbol, path)
-                return df
+                if len(df) > best_len:
+                    best_df = df
+                    best_path = path
+                    best_len = len(df)
             except Exception as e:
                 logger.warning("Failed to read %s: %s", path, e)
-                return None
+
+    if best_df is not None:
+        logger.info("Loaded %d rows for %s from %s", best_len, symbol, best_path)
+        return best_df
 
     return None
 

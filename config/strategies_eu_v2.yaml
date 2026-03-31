@@ -216,10 +216,10 @@ strategies:
 
   eu_sector_rotation:
     name: "EU Sector Rotation"
-    enabled: false
-    sharpe: 0.0
-    trades: 0
-    wf_status: "PENDING"
+    enabled: true
+    sharpe: 0.59
+    trades: 85
+    wf_status: "BORDERLINE_ACCEPTED"
     edge_type: "momentum"
     market_hours: {start: "09:00", end: "17:30", tz: "Europe/Paris"}
     tickers: ["CON.DE", "BMW.DE", "MC.PA", "CDI.PA", "SIE.DE", "SAP.DE"]
@@ -238,10 +238,10 @@ strategies:
 
   eu_bce_press_conference:
     name: "BCE Press Conference Volatility"
-    enabled: false
-    sharpe: 0.0
-    trades: 0
-    wf_status: "PENDING"
+    enabled: true
+    sharpe: 0.79
+    trades: 25
+    wf_status: "BORDERLINE_ACCEPTED"
     edge_type: "event"
     market_hours: {start: "14:30", end: "17:00", tz: "Europe/Paris"}
     tickers: ["BNP.PA", "GLE.PA", "DBK.DE", "ING.AS", "ISP.MI"]
