@@ -1,0 +1,70 @@
+# Alpaca PDT-Safe Configuration
+# Pour comptes < $25K — max 3 day-trades par 5 jours ouvres
+# Derniere mise a jour : 2026-03-31
+
+account:
+  mode: PAPER    # Passer a LIVE quand $5K depose
+  pdt_limit: 3   # Max 3 day-trades / 5 jours
+  capital_target: 5000
+
+# Strategies PDT-SAFE (holding overnight, pas de day-trade)
+# Ces strategies n'ouvrent et ferment PAS le meme jour
+swing_strategies:
+  vix_expansion_short:
+    name: "VIX Expansion Short"
+    enabled: true
+    sharpe_wf: 1.80
+    wf_status: "VALIDATED"
+    holding_days: "1-3"
+    allocation_pct: 0.35       # 35% du capital Alpaca
+    max_position_pct: 0.15
+    sl_pct: 0.03
+    tp_pct: 0.05
+    tickers: ["SPY", "QQQ"]
+    pdt_safe: true
+
+  high_beta_short:
+    name: "High-Beta Underperformance Short"
+    enabled: true
+    sharpe_wf: 1.00
+    wf_status: "VALIDATED"
+    holding_days: "1-5"
+    allocation_pct: 0.25
+    max_position_pct: 0.12
+    sl_pct: 0.04
+    tp_pct: 0.06
+    tickers: ["ARKK", "TSLA"]
+    pdt_safe: true
+
+# Strategies DAY-TRADE (max 3/semaine, seulement les meilleurs setups)
+day_trade_strategies:
+  dow_seasonal:
+    name: "DoW Seasonal"
+    enabled: true
+    sharpe_wf: 1.50
+    wf_status: "VALIDATED"
+    holding_days: "intraday"
+    allocation_pct: 0.20
+    max_position_pct: 0.10
+    sl_pct: 0.01
+    tp_pct: 0.015
+    tickers: ["SPY", "QQQ"]
+    pdt_safe: false
+    # Filtre PDT: seulement si conviction_score > 0.7
+    min_conviction_for_dt: 0.7
+    # Preferencer les jours forts (vendredi > lundi)
+    preferred_days: ["FRI", "MON"]
+
+# Reserve cash
+cash_reserve_pct: 0.20    # 20% toujours en cash ($1K sur $5K)
+
+# PDT tracking
+pdt_tracking:
+  rolling_window_days: 5
+  max_day_trades: 3
+  # Si on approche la limite (2/3 utilises), augmenter conviction_threshold
+  escalation:
+    dt_used_0: {min_conviction: 0.5}    # 0 DT utilise = seuil bas
+    dt_used_1: {min_conviction: 0.6}    # 1 DT utilise
+    dt_used_2: {min_conviction: 0.8}    # 2 DT utilises = tres selectif
+    dt_used_3: {block_all_dt: true}      # 3 DT = bloque jusqu'a reset
