@@ -156,6 +156,30 @@ def is_live_risk_window():
     return 9 <= now.hour <= 22
 
 
+def is_fx_window():
+    """Verifie si le marche FX est ouvert (dim 23:00 CET -> ven 23:00 CET, ~24h).
+
+    FX = dimanche 17:00 ET a vendredi 17:00 ET = quasi 24h lun-ven.
+    En CET: dimanche 23:00 a vendredi 23:00.
+    On trade lundi 00:00 CET a vendredi 22:59 CET (simplifie).
+    """
+    now = datetime.now(PARIS)
+    weekday = now.weekday()  # 0=lundi ... 6=dimanche
+    # Lundi a jeudi: toujours ouvert
+    if 0 <= weekday <= 3:
+        return True
+    # Vendredi: ouvert jusqu'a 23:00 CET
+    if weekday == 4:
+        return now.hour < 23
+    # Samedi: ferme
+    if weekday == 5:
+        return False
+    # Dimanche: ouvert a partir de 23:00 CET
+    if weekday == 6:
+        return now.hour >= 23
+    return False
+
+
 def is_intraday_window():
     """Verifie si on est dans la fenetre intraday (15:35-22:00 Paris)."""
     now = datetime.now(PARIS)
@@ -2368,8 +2392,8 @@ def main():
                 run_intraday(market="EU")
                 last_eu_intraday = time.time()
 
-        # FX Paper strategies every 5 min (09:00-22:00 Paris) on IBKR paper port 4003
-        if is_live_risk_window():
+        # FX Paper strategies every 5 min (24h lun-ven) on IBKR paper port 4003
+        if is_fx_window():
             elapsed = time.time() - last_fx_paper
             if elapsed >= FX_PAPER_INTERVAL:
                 run_fx_paper_cycle()
