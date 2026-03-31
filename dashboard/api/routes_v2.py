@@ -1264,6 +1264,111 @@ def analytics_streaks():
 
 
 # =============================================================================
+# PERFORMANCE ATTRIBUTION
+# =============================================================================
+
+
+@router.get("/api/analytics/attribution")
+def analytics_attribution():
+    """Attribution de performance : par source, direction, alpha vs beta, strategie."""
+    try:
+        trades = _load_all_trades(source="real")
+
+        # Par source d'alpha (asset class)
+        by_source: dict[str, dict] = {}
+        # Par direction
+        by_direction = {"LONG": {"pnl": 0, "trades": 0, "wins": 0}, "SHORT": {"pnl": 0, "trades": 0, "wins": 0}}
+        # Par strategie
+        by_strategy: dict[str, dict] = {}
+
+        total_pnl = 0.0
+        daily_returns: dict[str, float] = {}
+
+        for t in trades:
+            pnl = _pnl_from_trade(t)
+            if pnl == 0 and not t.get("commission"):
+                continue
+
+            asset_class = _asset_class_from_trade(t)
+            if asset_class not in by_source:
+                by_source[asset_class] = {"pnl": 0, "trades": 0, "wins": 0}
+            by_source[asset_class]["pnl"] += pnl
+            by_source[asset_class]["trades"] += 1
+            if pnl > 0:
+                by_source[asset_class]["wins"] += 1
+
+            # Direction
+            direction = str(t.get("direction", t.get("side", ""))).upper()
+            if "SHORT" in direction or "SELL" in direction:
+                by_direction["SHORT"]["pnl"] += pnl
+                by_direction["SHORT"]["trades"] += 1
+                if pnl > 0:
+                    by_direction["SHORT"]["wins"] += 1
+            else:
+                by_direction["LONG"]["pnl"] += pnl
+                by_direction["LONG"]["trades"] += 1
+                if pnl > 0:
+                    by_direction["LONG"]["wins"] += 1
+
+            # Par strategie
+            strat = t.get("strategy", t.get("source", "unknown"))
+            if strat not in by_strategy:
+                by_strategy[strat] = {"pnl": 0, "trades": 0, "wins": 0}
+            by_strategy[strat]["pnl"] += pnl
+            by_strategy[strat]["trades"] += 1
+            if pnl > 0:
+                by_strategy[strat]["wins"] += 1
+
+            total_pnl += pnl
+
+            # Daily returns pour alpha/beta
+            d = _date_from_trade(t)
+            if d:
+                daily_returns[d] = daily_returns.get(d, 0) + pnl
+
+        # Formater les resultats
+        sources = []
+        for src, data in sorted(by_source.items(), key=lambda x: -abs(x[1]["pnl"])):
+            sources.append({
+                "source": src,
+                "pnl": round(data["pnl"], 2),
+                "trades": data["trades"],
+                "win_rate": round(data["wins"] / max(data["trades"], 1) * 100, 1),
+                "pct_of_total": round(data["pnl"] / abs(total_pnl) * 100, 1) if total_pnl else 0,
+            })
+
+        directions = []
+        for d, data in by_direction.items():
+            directions.append({
+                "direction": d,
+                "pnl": round(data["pnl"], 2),
+                "trades": data["trades"],
+                "win_rate": round(data["wins"] / max(data["trades"], 1) * 100, 1),
+                "pct_of_total": round(data["pnl"] / abs(total_pnl) * 100, 1) if total_pnl else 0,
+            })
+
+        strats = []
+        for s, data in sorted(by_strategy.items(), key=lambda x: -abs(x[1]["pnl"])):
+            strats.append({
+                "strategy": s,
+                "pnl": round(data["pnl"], 2),
+                "trades": data["trades"],
+                "win_rate": round(data["wins"] / max(data["trades"], 1) * 100, 1),
+            })
+
+        return {
+            "total_pnl": round(total_pnl, 2),
+            "by_source": sources,
+            "by_direction": directions,
+            "by_strategy": strats[:20],
+            "trading_days": len(daily_returns),
+        }
+    except Exception as e:
+        logger.error("analytics/attribution error: %s", e)
+        return {"error": str(e)}
+
+
+# =============================================================================
 # SYSTEM ENDPOINTS
 # =============================================================================
 
