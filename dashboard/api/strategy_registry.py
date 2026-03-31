@@ -46,9 +46,9 @@ STRATEGY_PHASES = {
     "crypto_session_momentum":{"phase": "CODE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-31"},
     "crypto_rsi_divergence":  {"phase": "CODE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-31"},
     # FX — IBKR (paper -> live bientot)
-    "fx_carry_g10":           {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
-    "fx_carry_vs":            {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
-    "fx_carry_momentum":      {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
+    "fx_carry_g10":           {"phase": "LIVE",       "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-31"},
+    "fx_carry_vs":            {"phase": "LIVE",       "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-31"},
+    "fx_carry_momentum":      {"phase": "LIVE",       "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-31"},
     "fx_momentum_breakout":   {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
     "fx_mean_reversion":      {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
     "fx_session_london":      {"phase": "REJECTED",   "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-31"},
