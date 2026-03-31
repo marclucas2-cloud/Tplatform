@@ -74,9 +74,18 @@ function filterByPeriod(trades, period) {
   return trades.filter((t) => new Date(t.date) >= cutoff)
 }
 
+const MODE_TABS = [
+  { key: 'all', label: 'Tous', color: 'text-[var(--color-text-primary)]' },
+  { key: 'live', label: 'Live', color: 'text-emerald-400' },
+  { key: 'paper', label: 'Paper', color: 'text-blue-400' },
+]
+
 export default function Journal() {
-  const { data: tradesData, loading: tLoad } = useApi('/trades?limit=200', 60000)
+  const [modeTab, setModeTab] = useState('all')
+  const modeParam = modeTab === 'all' ? '' : `&mode=${modeTab}`
+  const { data: tradesData, loading: tLoad } = useApi(`/trades?limit=200${modeParam}`, 60000)
   const { data: calendarData } = useApi('/trades/calendar', 120000)
+  const { data: costsData } = useApi('/trades/costs', 120000)
 
   const [period, setPeriod] = useState('30d')
   const [brokerFilter, setBrokerFilter] = useState('all')
@@ -177,6 +186,37 @@ export default function Journal() {
 
   return (
     <div className="space-y-6">
+      {/* Mode Tabs: Live / Paper / All */}
+      <div className="flex items-center gap-1">
+        {MODE_TABS.map((tab) => (
+          <button key={tab.key} onClick={() => { setModeTab(tab.key); setPage(0) }}
+            className={`px-4 py-2 text-sm font-semibold rounded-lg transition-colors ${
+              modeTab === tab.key
+                ? `bg-[var(--color-bg-card)] ${tab.color} border border-[var(--color-border)]`
+                : 'text-[var(--color-text-secondary)] hover:text-[var(--color-text-primary)]'
+            }`}>
+            {tab.key === 'live' && '● '}{tab.key === 'paper' && '○ '}{tab.label}
+            {tradesData && ` (${tradesData.count})`}
+          </button>
+        ))}
+      </div>
+
+      {/* Cost Summary */}
+      {costsData && !costsData.error && (
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+          <MetricCard label="Commissions" value={costsData.total_commissions} prefix="$" />
+          <MetricCard label="Interets" value={costsData.total_interest} prefix="$" />
+          <MetricCard label="Slippage moy" value={costsData.total_slippage_bps_avg} suffix=" bps" />
+          <MetricCard label="Cout/trade" value={costsData.cost_per_trade_avg} prefix="$" />
+          <MetricCard
+            label="Couts % P&L"
+            value={costsData.cost_as_pct_of_pnl}
+            suffix="%"
+            color={costsData.healthy ? 'text-[var(--color-profit)]' : 'text-[var(--color-warning)]'}
+          />
+        </div>
+      )}
+
       {/* Period filter + Broker filter + Export */}
       <div className="flex items-center justify-between flex-wrap gap-2">
         <div className="flex items-center gap-3">
