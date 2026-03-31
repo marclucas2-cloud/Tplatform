@@ -2,6 +2,8 @@ import { useState, useMemo } from 'react'
 import { useApi } from '../hooks/useApi'
 import MetricCard from '../components/MetricCard'
 import { Download, ChevronUp, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
+import Tooltip from '../components/common/Tooltip'
+import { TOOLTIPS } from '../utils/tooltips'
 
 const PERIODS = [
   { key: '7d', label: '7j' },
@@ -204,12 +206,12 @@ export default function Journal() {
       {/* Cost Summary */}
       {costsData && !costsData.error && (
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-          <MetricCard label="Commissions" value={costsData.total_commissions} prefix="$" />
-          <MetricCard label="Interets" value={costsData.total_interest} prefix="$" />
-          <MetricCard label="Slippage moy" value={costsData.total_slippage_bps_avg} suffix=" bps" />
+          <MetricCard label={<Tooltip text={TOOLTIPS.commissions}>Commissions</Tooltip>} value={costsData.total_commissions} prefix="$" />
+          <MetricCard label={<Tooltip text={TOOLTIPS.interest}>Interets</Tooltip>} value={costsData.total_interest} prefix="$" />
+          <MetricCard label={<Tooltip text={TOOLTIPS.slippage}>Slippage moy</Tooltip>} value={costsData.total_slippage_bps_avg} suffix=" bps" />
           <MetricCard label="Cout/trade" value={costsData.cost_per_trade_avg} prefix="$" />
           <MetricCard
-            label="Couts % P&L"
+            label={<Tooltip text={TOOLTIPS.cost_pct}>Couts % P&L</Tooltip>}
             value={costsData.cost_as_pct_of_pnl}
             suffix="%"
             color={costsData.healthy ? 'text-[var(--color-profit)]' : 'text-[var(--color-warning)]'}

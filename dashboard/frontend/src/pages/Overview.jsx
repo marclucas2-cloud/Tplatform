@@ -5,6 +5,8 @@ import { TierBadge, StatusDot } from '../components/StrategyBadge'
 import EquityCurve from '../components/charts/EquityCurve'
 import PeriodSelector from '../components/common/PeriodSelector'
 import { ArrowUpRight, ArrowDownRight, Clock, AlertTriangle, AlertCircle, Info, CheckCircle, Bitcoin, Wallet } from 'lucide-react'
+import Tooltip from '../components/common/Tooltip'
+import { TOOLTIPS } from '../utils/tooltips'
 
 const PERIOD_MAP = { '7j': '7d', '30j': '30d', '90j': '90d', 'YTD': 'ytd' }
 
@@ -65,19 +67,19 @@ export default function Overview() {
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <MetricCard
-          label="NAV Live"
+          label={<Tooltip text={TOOLTIPS.nav_live}>NAV Live</Tooltip>}
           value={nav?.nav_live || portfolio.equity || 0}
           change={nav?.pnl_live_pct}
           prefix="$"
         />
         <MetricCard
-          label="P&L Trading"
+          label={<Tooltip text={TOOLTIPS.pnl_trading}>P&L Trading</Tooltip>}
           value={nav?.pnl_live || 0}
           prefix="$"
           color={(nav?.pnl_live || 0) >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}
         />
         <MetricCard
-          label="TWR"
+          label={<Tooltip text={TOOLTIPS.twr}>TWR</Tooltip>}
           value={nav?.twr_pct ?? 0}
           suffix="%"
           color={(nav?.twr_pct || 0) >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}

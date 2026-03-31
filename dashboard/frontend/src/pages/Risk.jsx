@@ -2,6 +2,8 @@ import { useApi } from '../hooks/useApi'
 import MetricCard from '../components/MetricCard'
 import CorrelationHeatmap from '../components/charts/CorrelationHeatmap'
 import { ShieldAlert, ShieldCheck, ShieldOff, Activity, Zap } from 'lucide-react'
+import Tooltip from '../components/common/Tooltip'
+import { TOOLTIPS } from '../utils/tooltips'
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 
 function ProgressBar({ label, current, max, unit = '', warn = 0.7, danger = 0.9, invertColor = false }) {
@@ -113,26 +115,26 @@ export default function Risk() {
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MetricCard
-          label="Drawdown"
+          label={<Tooltip text={TOOLTIPS.drawdown}>Drawdown</Tooltip>}
           value={drawdown}
           change={drawdownMax}
           suffix="%"
           color="text-[var(--color-loss)]"
         />
         <MetricCard
-          label="VaR 1j 95%"
+          label={<Tooltip text={TOOLTIPS.var_95}>VaR 1j 95%</Tooltip>}
           value={var95}
           prefix="$"
           color="text-[var(--color-warning)]"
         />
         <MetricCard
-          label="Exposition Nette"
+          label={<Tooltip text={TOOLTIPS.exposure_net}>Exposition Nette</Tooltip>}
           value={exposure}
           suffix="% long"
           color="text-[var(--color-text-primary)]"
         />
         <MetricCard
-          label="Kill Switch"
+          label={<Tooltip text={TOOLTIPS.kill_switch}>Kill Switch</Tooltip>}
           value={killSwitch}
           color={
             killSwitch === 'OFF'
