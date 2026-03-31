@@ -1,0 +1,70 @@
+TODO : ALPHA PUR & SINGLE STOCKS (V11.3)
+Objectif : Isoler l'alpha spécifique | Cible : Réduction de la corrélation au Beta (indices) < 0.4.
+
+1. UNIVERSE SELECTION & DATA PIPELINE (EU/US/JPY)
+L'enjeu : Gérer des centaines de tickers sans saturer l'infra.
+
+[ ] Dynamic Universe Filter : Créer un script core/data/universe_manager.py pour filtrer les 100 actions les plus liquides (Volume > $50M/jour) sur l'Euronext, le NYSE/NASDAQ et le TSE (Tokyo).
+
+[ ] Corporate Calendar Integration : Connecter l'API (via IBKR ou fournisseur tiers) pour récupérer les dates exactes de résultats (Earnings) en temps réel.
+
+[ ] Cross-Currency Normalization : Ajuster le calcul du PnL pour les stocks JPY (Yens) et EUR afin de neutraliser l'effet de change dans le backtest de performance pure.
+
+[ ] Survivorship Bias Guard : Vérifier que les données historiques incluent les actions délistées pour ne pas surestimer l'alpha.
+
+2. EARNINGS VOLATILITY DRIFT (PEAD)
+L'enjeu : Capturer l'ajustement du marché après une surprise fondamentale.
+
+[ ] Surprise Calculator : Développer le module core/strat/earnings_drift.py pour comparer les résultats publiés (EPS/Revenus) vs consensus.
+
+[ ] Post-Earnings Momentum Trigger :
+
+[ ] Entry : Achat si (Surprise > 5% ET Gap de rupture haussier) OU Vente si (Surprise < -5% ET Gap baissier).
+
+[ ] Hold : Tester une période de détention optimale (3 à 10 jours) pour capturer le "drift".
+
+[ ] Volatility Crush Filter : Utiliser les données d'options (IV vs RV) pour s'assurer que l'on ne rentre pas quand la prime de risque est déjà totalement consommée.
+
+[ ] Ticker Focus : Priorité sur les "Market Movers" : ASML, LVMH, SAP (EU) et NVIDIA, AAPL, MSFT (US).
+
+3. JPY STAT-ARB (PAIRS TRADING ENGINE)
+L'enjeu : Exploiter la stabilité légendaire des corrélations sectorielles japonaises.
+
+[ ] Cointegration Tester : Coder un module core/strat/pairs_trading.py utilisant le test d'Engle-Granger sur les paires sectorielles (ex: Toyota/Honda, Mitsubishi/Sumitomo).
+
+[ ] Z-Score Engine : Calculer l'écart-type (Spread) entre les deux actifs.
+
+[ ] Signal : Vendre l'action surperformante / Acheter l'action sous-performante quand Z-Score > 2.0.
+
+[ ] Exit : Clôture au retour à la moyenne (Z-Score = 0).
+
+[ ] Stationarity Monitor : Vérifier quotidiennement que la paire reste co-intégrée. Si la corrélation se brise (changement structurel), sortir immédiatement de la position.
+
+[ ] Sector Rotation Guard : S'assurer d'être "Delta Neutral" (exposition nette au marché = 0) sur chaque paire.
+
+4. RELATIVE STRENGTH FILTER (THE ALPHA GUARD)
+L'enjeu : N'acheter que les leaders, ne shorter que les traînards.
+
+[ ] Benchmark Comparator : Créer le module core/risk/relative_strength.py.
+
+[ ] Alpha_Score = Stock_Return(20j) - Index_Return(20j).
+
+[ ] Hard Guard Integration : Modifier le OrderManager pour rejeter tout signal d'achat si l'action ne surperforme pas son indice de référence sur les 5 dernières séances.
+
+[ ] Momentum Divergence Alert : Détecter les "Fake Outs" (Indices qui montent mais actions qui stagnent) pour éviter les pièges de fin de cycle.
+
+[ ] Sector Neutralizer : Comparer l'action à son secteur (ex: ASML vs EuroStoxx Tech) plutôt qu'à l'indice global pour une précision chirurgicale.
+
+5. INTEGRATION & MONITORING (DASHBOARD V2.2)
+L'enjeu : Visualiser d'où vient l'argent (Beta du marché vs Alpha du sélectionneur).
+
+[ ] Alpha Attribution Widget : Ajouter un graphique montrant la décomposition de la performance quotidienne (Marché vs Secteur vs Sélection).
+
+[ ] Earnings Countdown : Afficher sur le dashboard les "Prochains Résultats" des actions en portefeuille (Alertes J-1).
+
+[ ] Pairs Spread Visualizer : Graphique live des Z-Scores pour les paires JPY actives.
+
+[ ] Telegram Alpha Report : "🚀 Focus Alpha : LVMH confirme sa force relative (+2.1% vs CAC). Stratégie PEAD active sur NVIDIA (Surprise +12%)."
+
+💡 Le Mot de la Fin (Peer Review) :
+Le Pairs Trading JPY est ton "amortisseur" de portefeuille. C'est une stratégie qui produit peu de volatilité et qui fonctionne même quand les marchés US/EU sont en panique. En couplant cela au Relative Strength Filter, tu t'assures que ton capital ne va que vers la qualité. C'est l'étape ultime pour passer d'un "algorithme" à un "système de gestion" résilient.

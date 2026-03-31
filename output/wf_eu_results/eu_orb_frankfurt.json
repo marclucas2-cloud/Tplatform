@@ -18,9 +18,18 @@
     "Win% 40% < 50%"
   ],
   "bootstrap": null,
-  "monte_carlo": null,
+  "monte_carlo": {
+    "median_sharpe": -0.9406834280229858,
+    "p5_sharpe": -0.9406834280229859,
+    "p95_sharpe": -0.9406834280229858,
+    "median_max_dd": 0.6746488588895888,
+    "p95_max_dd": 0.8297914712162039,
+    "prob_profitable": 0.0,
+    "prob_ruin": 1.0,
+    "n_simulations": 10000
+  },
   "error": "",
-  "timestamp": "2026-03-31T04:42:40.972667+00:00",
+  "timestamp": "2026-03-31T13:50:51.177436+00:00",
   "windows": [
     {
       "window_idx": 0,

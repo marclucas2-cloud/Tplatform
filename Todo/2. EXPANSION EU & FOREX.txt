@@ -1,0 +1,92 @@
+📝 TODO XXL — EXPANSION EU & FOREX (V10.1)
+Objectif : Déploiement de 20 stratégies (12 Indices EU + 8 FX) | Audit : Post-Purge Overfitting
+
+🛰️ PHASE 1 : INFRASTRUCTURE DATA & PIPELINE (IBKR)
+L'enjeu : Gérer la granularité 15min et les spécificités de session sans biais de survie.
+
+[ ] Connector Hardening : Adapter ibkr_data_loader.py pour le téléchargement massif de bougies 15m/1h sur 5 ans (DAX, CAC, EuroStoxx, FTSE).
+
+[ ] Gap Analysis : Coder un module session_manager.py pour filtrer les gaps d'ouverture EU (09h00 CET) et éviter les signaux erronés sur bougies vides.
+
+[ ] FX Tick-to-Ohlc : Créer un synchroniseur pour aligner les flux FX (24h) avec les sessions Actions EU pour les stratégies de corrélation.
+
+[ ] Cost Matrix Update : Intégrer les tarifs IBKR Tiered (Commissions + Exchange Fees + Clearing) pour les indices EU (souvent plus chers que le US).
+
+[ ] Data Integrity Check : Script de validation automatique : détection des prix aberrants (bad ticks) et trous de données sur le 15min.
+
+Risque : Biais d'interpolation sur les bougies de faible liquidité (nuit).
+
+Succès : Dataset 100% propre avec mapping fuseau horaire CET strict.
+
+🧪 PHASE 2 : QUANT RESEARCH & PROTOTYPAGE (20 STRATS)
+L'enjeu : Générer de l'alpha structurel, pas statistique.
+
+[ ] EU Index Mean Reversion (15m/1h) : Tester le retour à la moyenne sur extension de l'ATR (3 stratégies : DAX, CAC, SX5E).
+
+[ ] Opening Range Breakout (ORB) : Modéliser la cassure des 30 premières minutes de Francfort/Paris (4 stratégies).
+
+[ ] Forex Carry/Momentum (Daily) : Adapter les algos V10 (EUR/USD, GBP/USD, USD/JPY) avec filtres de volatilité macro.
+
+[ ] Cross-Asset Lead-Lag : Coder une stratégie cherchant le retard de l'EuroStoxx par rapport au DAX lors des décalages brutaux.
+
+[ ] FX Asian Breakout : Exploiter la liquidité de Londres (08h00 CET) sur les paires JPY et AUD (3 stratégies).
+
+[ ] EU Sector Rotation (Daily) : Backtester le momentum relatif entre Automobile (Allemagne) et Luxe (France).
+
+Risque : Overfitting massif sur le 15min (bruit de marché).
+
+Succès : 20 prototypes codés avec logique entry/exit documentée.
+
+🛡️ PHASE 3 : VALIDATION & HARDENING (CRITÈRES V10)
+L'enjeu : Tuer 80% des idées ici pour ne garder que le "Validated".
+
+[ ] Walk-Forward Analysis (WFA) : Lancer le moteur V10 sur chaque strat (70% IS / 30% OOS) avec 5 fenêtres rolling.
+
+[ ] Slippage Stress Test : Appliquer une pénalité de 1 à 2 ticks par trade sur le 15min pour vérifier la survie de l'edge.
+
+[ ] Monte Carlo (10k sims) : Calculer la probabilité de ruine et le Max DD probable sur 12 mois.
+
+[ ] Commission Burn Rate : Calculer le ratio Commissions / Profit Net. Rejet si > 25%.
+
+[ ] Correlation Matrix (New Strats) : Vérifier que les nouvelles strats EU ne sont pas corrélées à > 0.6 avec le portefeuille US actuel.
+
+Risque : Accepter un Sharpe de 2.0 qui devient -0.5 dès qu'on ajoute 1ms de latence.
+
+Succès : Liste finale des stratégies "VALIDATED" (Objectif : 6 à 8 survivantes réelles).
+
+⚙️ PHASE 4 : INTÉGRATION RISK ENGINE V10.0
+L'enjeu : Faire entrer les nouveaux actifs dans la "conscience" du portefeuille.
+
+[ ] Live Correlation Update : Injecter les tickers EU/FX dans live_correlation_engine.py.
+
+[ ] ERE Calibration : Ajuster l'Effective Risk Exposure pour le Forex (levier 20x-30x possible via IBKR, mais limité par le Safety Mode).
+
+[ ] Dynamic Risk Budget : Configurer risk_budget_allocator.py pour réduire l'exposition EU si la volatilité de l'EUR dépasse un seuil critique.
+
+[ ] V10 Throttler : Définir les seuils de "Pause" automatique pour les nouvelles strats (ex: 3 pertes consécutives sur ORB = Arrêt 24h).
+
+[ ] Margin Guard : Script de vérification de la marge disponible spécifique aux Futures Micro EU (DAX/CAC).
+
+Risque : Appel de marge par surexposition croisée Indices/FX.
+
+Succès : Dashboard V2 affichant les nouveaux buckets de risque sans erreur.
+
+🚀 PHASE 5 : DÉPLOIEMENT & LIVE MONITORING
+L'enjeu : Le passage au feu (Safety Mode P1).
+
+[ ] Paper Launch (48h) : Faire tourner les 20 strats (ou les survivantes) sur DUP573894 (Hetzner VPS).
+
+[ ] Slippage Tracker : Comparer le prix ExecutionSimulator vs IBKR Paper Fill.
+
+[ ] Kill Switch Drill : Simuler un crash du worker et vérifier que les alertes Telegram et les fermetures d'urgence fonctionnent.
+
+[ ] Live Sizing : Appliquer le 1/16 Kelly (très prudent) pour la première semaine de production.
+
+[ ] Snapshot Logging : Vérifier que le JSONL enregistre bien l'état du portefeuille toutes les 5 min.
+
+Risque : Mauvaise exécution sur les brackets orders complexes en Europe.
+
+Succès : Première semaine "Green" ou "Flat" avec 0 erreur d'exécution.
+
+📌 Note du modèle (Peer Review) :
+Pour le Forex, surveille particulièrement le "Roll-Over" (23h00 CET). Si tu gardes des positions intraday qui débordent, les swaps peuvent détruire ton Sharpe. Pour le 15min EU, l'implémentation de Trailing Stops codés côté script (et non broker) demande une redondance serveur absolue. Tu devrais peut-être limiter ces strats au VPS Hetzner avec un ping minimal vers les serveurs IBKR de Zurich/Londres.

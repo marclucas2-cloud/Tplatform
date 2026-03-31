@@ -16,9 +16,18 @@
     "Commission burn 77.6% > 25%"
   ],
   "bootstrap": null,
-  "monte_carlo": null,
+  "monte_carlo": {
+    "median_sharpe": -0.11538413963922245,
+    "p5_sharpe": -0.11538413963922264,
+    "p95_sharpe": -0.11538413963922221,
+    "median_max_dd": 0.3371975953207237,
+    "p95_max_dd": 0.49797067406957823,
+    "prob_profitable": 0.0,
+    "prob_ruin": 0.0,
+    "n_simulations": 10000
+  },
   "error": "",
-  "timestamp": "2026-03-31T04:42:40.956021+00:00",
+  "timestamp": "2026-03-31T13:50:50.210414+00:00",
   "windows": [
     {
       "window_idx": 0,

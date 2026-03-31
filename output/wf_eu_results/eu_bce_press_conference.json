@@ -20,9 +20,18 @@
     "p95": 1.1913673261703268,
     "pct_positive": 0.856
   },
-  "monte_carlo": null,
+  "monte_carlo": {
+    "median_sharpe": 4.574903752725059,
+    "p5_sharpe": 4.574903752725058,
+    "p95_sharpe": 4.57490375272506,
+    "median_max_dd": 0.12524823583195838,
+    "p95_max_dd": 0.1986030569282631,
+    "prob_profitable": 1.0,
+    "prob_ruin": 0.0,
+    "n_simulations": 10000
+  },
   "error": "",
-  "timestamp": "2026-03-31T04:42:41.040412+00:00",
+  "timestamp": "2026-03-31T13:50:53.518451+00:00",
   "windows": [
     {
       "window_idx": 0,

@@ -1,0 +1,668 @@
+{
+  "btc_eth_dual_momentum": {
+    "strategy_name": "btc_eth_dual_momentum",
+    "tier": "TIER_1",
+    "verdict": "BORDERLINE",
+    "avg_oos_sharpe": 0.435,
+    "avg_is_sharpe": 0.244,
+    "oos_is_ratio": 1.783,
+    "profitable_windows": 5,
+    "total_windows": 10,
+    "profitable_ratio": 0.5,
+    "total_oos_trades": 90,
+    "error": "",
+    "timestamp": "2026-03-31T13:50:43.456303+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -2.842,
+        "oos_sharpe": 1.441,
+        "oos_return": 0.01009,
+        "oos_trades": 9,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.01442
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": -1.164,
+        "oos_sharpe": 2.506,
+        "oos_return": 0.05701,
+        "oos_trades": 9,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.0195
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": 1.176,
+        "oos_sharpe": 3.306,
+        "oos_return": 0.08613,
+        "oos_trades": 9,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.02689
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": 2.513,
+        "oos_sharpe": -0.568,
+        "oos_return": -0.00725,
+        "oos_trades": 9,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.02388
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": 2.13,
+        "oos_sharpe": 1.952,
+        "oos_return": 0.03976,
+        "oos_trades": 9,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.04019
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": 1.934,
+        "oos_sharpe": -0.383,
+        "oos_return": -0.00612,
+        "oos_trades": 9,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.04351
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": 0.529,
+        "oos_sharpe": -0.278,
+        "oos_return": -0.00594,
+        "oos_trades": 9,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.04295
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": 0.478,
+        "oos_sharpe": -3.14,
+        "oos_return": -0.0336,
+        "oos_trades": 9,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.031
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": -0.92,
+        "oos_sharpe": -1.953,
+        "oos_return": -0.02659,
+        "oos_trades": 9,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.05874
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": -1.394,
+        "oos_sharpe": 1.467,
+        "oos_return": 0.02072,
+        "oos_trades": 9,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.02048
+      }
+    ]
+  },
+  "btc_mean_reversion": {
+    "strategy_name": "btc_mean_reversion",
+    "tier": "TIER_1",
+    "verdict": "REJECTED",
+    "avg_oos_sharpe": -0.069,
+    "avg_is_sharpe": -0.355,
+    "oos_is_ratio": 0.193,
+    "profitable_windows": 5,
+    "total_windows": 10,
+    "profitable_ratio": 0.5,
+    "total_oos_trades": 120,
+    "error": "",
+    "timestamp": "2026-03-31T13:50:43.777057+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -4.338,
+        "oos_sharpe": 0.413,
+        "oos_return": 0.00289,
+        "oos_trades": 12,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.01667
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": -2.404,
+        "oos_sharpe": 2.189,
+        "oos_return": 0.04981,
+        "oos_trades": 12,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.02115
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": 0.661,
+        "oos_sharpe": 3.029,
+        "oos_return": 0.07893,
+        "oos_trades": 12,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.03027
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": 2.158,
+        "oos_sharpe": -1.131,
+        "oos_return": -0.01445,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.0277
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": 1.791,
+        "oos_sharpe": 1.598,
+        "oos_return": 0.03256,
+        "oos_trades": 12,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.04273
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": 1.582,
+        "oos_sharpe": -0.833,
+        "oos_return": -0.01332,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.04638
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": 0.096,
+        "oos_sharpe": -0.614,
+        "oos_return": -0.01314,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.04811
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": 0.105,
+        "oos_sharpe": -3.812,
+        "oos_return": -0.0408,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.03685
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": -1.356,
+        "oos_sharpe": -2.482,
+        "oos_return": -0.03379,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.06157
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": -1.849,
+        "oos_sharpe": 0.957,
+        "oos_return": 0.01352,
+        "oos_trades": 12,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.02174
+      }
+    ]
+  },
+  "vol_breakout": {
+    "strategy_name": "vol_breakout",
+    "tier": "TIER_1",
+    "verdict": "VALIDATED",
+    "avg_oos_sharpe": 0.939,
+    "avg_is_sharpe": 0.843,
+    "oos_is_ratio": 1.113,
+    "profitable_windows": 7,
+    "total_windows": 10,
+    "profitable_ratio": 0.7,
+    "total_oos_trades": 60,
+    "error": "",
+    "timestamp": "2026-03-31T13:50:43.782706+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -1.346,
+        "oos_sharpe": 2.469,
+        "oos_return": 0.01729,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.01219
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": 0.075,
+        "oos_sharpe": 2.822,
+        "oos_return": 0.06421,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.01785
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": 1.691,
+        "oos_sharpe": 3.582,
+        "oos_return": 0.09333,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.02459
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": 2.867,
+        "oos_sharpe": -0.004,
+        "oos_return": -5e-05,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.02318
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": 2.468,
+        "oos_sharpe": 2.305,
+        "oos_return": 0.04696,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.03765
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": 2.286,
+        "oos_sharpe": 0.068,
+        "oos_return": 0.00108,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.04064
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": 0.963,
+        "oos_sharpe": 0.059,
+        "oos_return": 0.00126,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.03776
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": 0.851,
+        "oos_sharpe": -2.467,
+        "oos_return": -0.0264,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.02831
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": -0.485,
+        "oos_sharpe": -1.424,
+        "oos_return": -0.01939,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.05591
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": -0.938,
+        "oos_sharpe": 1.977,
+        "oos_return": 0.02792,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.0193
+      }
+    ]
+  },
+  "btc_dominance": {
+    "strategy_name": "btc_dominance",
+    "tier": "TIER_1",
+    "verdict": "VALIDATED",
+    "avg_oos_sharpe": 1.241,
+    "avg_is_sharpe": 1.202,
+    "oos_is_ratio": 1.032,
+    "profitable_windows": 8,
+    "total_windows": 10,
+    "profitable_ratio": 0.8,
+    "total_oos_trades": 40,
+    "error": "",
+    "timestamp": "2026-03-31T13:50:43.788043+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -0.448,
+        "oos_sharpe": 3.085,
+        "oos_return": 0.02161,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.01135
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": 0.819,
+        "oos_sharpe": 3.012,
+        "oos_return": 0.06853,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.01686
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": 2.0,
+        "oos_sharpe": 3.748,
+        "oos_return": 0.09765,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.02445
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": 3.079,
+        "oos_sharpe": 0.334,
+        "oos_return": 0.00427,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.02275
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": 2.671,
+        "oos_sharpe": 2.517,
+        "oos_return": 0.05128,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.03632
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": 2.497,
+        "oos_sharpe": 0.338,
+        "oos_return": 0.0054,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.0389
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": 1.222,
+        "oos_sharpe": 0.261,
+        "oos_return": 0.00558,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.0349
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": 1.074,
+        "oos_sharpe": -2.063,
+        "oos_return": -0.02208,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.0267
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": -0.224,
+        "oos_sharpe": -1.107,
+        "oos_return": -0.01507,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.0542
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": -0.665,
+        "oos_sharpe": 2.283,
+        "oos_return": 0.03224,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.01859
+      }
+    ]
+  },
+  "altcoin_relative_strength": {
+    "strategy_name": "altcoin_relative_strength",
+    "tier": "TIER_2",
+    "verdict": "NO_DATA",
+    "avg_oos_sharpe": 0.0,
+    "avg_is_sharpe": 0.0,
+    "oos_is_ratio": 0.0,
+    "profitable_windows": 0,
+    "total_windows": 0,
+    "profitable_ratio": 0.0,
+    "total_oos_trades": 0,
+    "error": "No data found for SOLUSDT in C:\\Users\\barqu\\trading-platform\\data\\crypto\\candles",
+    "timestamp": "2026-03-31T13:50:43.793722+00:00",
+    "windows": []
+  },
+  "weekend_gap": {
+    "strategy_name": "weekend_gap",
+    "tier": "LOW_FREQ",
+    "verdict": "VALIDATED",
+    "avg_oos_sharpe": 1.241,
+    "avg_is_sharpe": 1.202,
+    "oos_is_ratio": 1.032,
+    "profitable_windows": 8,
+    "total_windows": 10,
+    "profitable_ratio": 0.8,
+    "total_oos_trades": 40,
+    "error": "",
+    "timestamp": "2026-03-31T13:50:43.793958+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -0.448,
+        "oos_sharpe": 3.085,
+        "oos_return": 0.02161,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.01135
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": 0.819,
+        "oos_sharpe": 3.012,
+        "oos_return": 0.06853,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.01686
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": 2.0,
+        "oos_sharpe": 3.748,
+        "oos_return": 0.09765,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.02445
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": 3.079,
+        "oos_sharpe": 0.334,
+        "oos_return": 0.00427,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.02275
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": 2.671,
+        "oos_sharpe": 2.517,
+        "oos_return": 0.05128,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.03632
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": 2.497,
+        "oos_sharpe": 0.338,
+        "oos_return": 0.0054,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.0389
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": 1.222,
+        "oos_sharpe": 0.261,
+        "oos_return": 0.00558,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.0349
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": 1.074,
+        "oos_sharpe": -2.063,
+        "oos_return": -0.02208,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.0267
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": -0.224,
+        "oos_sharpe": -1.107,
+        "oos_return": -0.01507,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.0542
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": -0.665,
+        "oos_sharpe": 2.283,
+        "oos_return": 0.03224,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.01859
+      }
+    ]
+  },
+  "liquidation_momentum": {
+    "strategy_name": "liquidation_momentum",
+    "tier": "LOW_FREQ",
+    "verdict": "VALIDATED",
+    "avg_oos_sharpe": 0.939,
+    "avg_is_sharpe": 0.843,
+    "oos_is_ratio": 1.113,
+    "profitable_windows": 7,
+    "total_windows": 10,
+    "profitable_ratio": 0.7,
+    "total_oos_trades": 60,
+    "error": "",
+    "timestamp": "2026-03-31T13:50:43.945767+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -1.346,
+        "oos_sharpe": 2.469,
+        "oos_return": 0.01729,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.01219
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": 0.075,
+        "oos_sharpe": 2.822,
+        "oos_return": 0.06421,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.01785
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": 1.691,
+        "oos_sharpe": 3.582,
+        "oos_return": 0.09333,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.02459
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": 2.867,
+        "oos_sharpe": -0.004,
+        "oos_return": -5e-05,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.02318
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": 2.468,
+        "oos_sharpe": 2.305,
+        "oos_return": 0.04696,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.03765
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": 2.286,
+        "oos_sharpe": 0.068,
+        "oos_return": 0.00108,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.04064
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": 0.963,
+        "oos_sharpe": 0.059,
+        "oos_return": 0.00126,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.03776
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": 0.851,
+        "oos_sharpe": -2.467,
+        "oos_return": -0.0264,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.02831
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": -0.485,
+        "oos_sharpe": -1.424,
+        "oos_return": -0.01939,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.05591
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": -0.938,
+        "oos_sharpe": 1.977,
+        "oos_return": 0.02792,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.0193
+      }
+    ]
+  },
+  "borrow_rate_carry": {
+    "strategy_name": "borrow_rate_carry",
+    "tier": "PASSIVE",
+    "verdict": "SKIPPED",
+    "avg_oos_sharpe": 0.0,
+    "avg_is_sharpe": 0.0,
+    "oos_is_ratio": 0.0,
+    "profitable_windows": 0,
+    "total_windows": 0,
+    "profitable_ratio": 0.0,
+    "total_oos_trades": 0,
+    "error": "Passive earn strategy — no directional signal to walk-forward",
+    "timestamp": "2026-03-31T13:50:44.092796+00:00",
+    "windows": []
+  }
+}

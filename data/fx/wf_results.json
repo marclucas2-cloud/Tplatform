@@ -2,193 +2,1290 @@
   "eurusd_trend": {
     "strategy_name": "eurusd_trend",
     "tier": "MAJOR",
-    "verdict": "NO_DATA",
-    "avg_oos_sharpe": 0.0,
-    "avg_is_sharpe": 0.0,
-    "oos_is_ratio": 0.0,
-    "profitable_windows": 0,
-    "total_windows": 0,
-    "profitable_ratio": 0.0,
-    "total_oos_trades": 0,
+    "verdict": "REJECTED",
+    "avg_oos_sharpe": -1.239,
+    "avg_is_sharpe": -0.987,
+    "oos_is_ratio": 1.255,
+    "profitable_windows": 4,
+    "total_windows": 10,
+    "profitable_ratio": 0.4,
+    "total_oos_trades": 40,
     "bootstrap": null,
-    "error": "No data found for EURUSD in C:\\Users\\barqu\\trading-platform\\data\\fx",
-    "timestamp": "2026-03-28T23:18:25.308058+00:00",
-    "windows": []
+    "error": "",
+    "timestamp": "2026-03-31T13:50:25.860862+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -0.146,
+        "oos_sharpe": 0.483,
+        "oos_return": 0.00077,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00286
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": 0.699,
+        "oos_sharpe": -3.935,
+        "oos_return": -0.01415,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01566
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": -2.23,
+        "oos_sharpe": -3.949,
+        "oos_return": -0.0077,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00991
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": -2.763,
+        "oos_sharpe": -2.482,
+        "oos_return": -0.00413,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00516
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": -3.406,
+        "oos_sharpe": 0.037,
+        "oos_return": 7e-05,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00445
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": -2.141,
+        "oos_sharpe": -0.581,
+        "oos_return": -0.00119,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00422
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": -0.941,
+        "oos_sharpe": 0.888,
+        "oos_return": 0.00194,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00273
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": 0.135,
+        "oos_sharpe": 1.422,
+        "oos_return": 0.00217,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00334
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": 0.505,
+        "oos_sharpe": -0.827,
+        "oos_return": -0.00169,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00589
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": 0.418,
+        "oos_sharpe": -3.447,
+        "oos_return": -0.00541,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00784
+      }
+    ]
   },
   "gbpusd_trend": {
     "strategy_name": "gbpusd_trend",
     "tier": "MAJOR",
-    "verdict": "NO_DATA",
-    "avg_oos_sharpe": 0.0,
-    "avg_is_sharpe": 0.0,
-    "oos_is_ratio": 0.0,
-    "profitable_windows": 0,
-    "total_windows": 0,
-    "profitable_ratio": 0.0,
-    "total_oos_trades": 0,
+    "verdict": "REJECTED",
+    "avg_oos_sharpe": -1.239,
+    "avg_is_sharpe": -1.033,
+    "oos_is_ratio": 1.2,
+    "profitable_windows": 4,
+    "total_windows": 10,
+    "profitable_ratio": 0.4,
+    "total_oos_trades": 40,
     "bootstrap": null,
-    "error": "No data found for GBPUSD in C:\\Users\\barqu\\trading-platform\\data\\fx",
-    "timestamp": "2026-03-28T23:18:25.308329+00:00",
-    "windows": []
+    "error": "",
+    "timestamp": "2026-03-31T13:50:31.836122+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -0.809,
+        "oos_sharpe": 1.317,
+        "oos_return": 0.00207,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00257
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": 0.624,
+        "oos_sharpe": -3.363,
+        "oos_return": -0.01284,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01522
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": -1.879,
+        "oos_sharpe": -2.659,
+        "oos_return": -0.00552,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01064
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": -2.03,
+        "oos_sharpe": -3.779,
+        "oos_return": -0.00601,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00656
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": -3.055,
+        "oos_sharpe": -0.355,
+        "oos_return": -0.00086,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00447
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": -2.016,
+        "oos_sharpe": -3.561,
+        "oos_return": -0.00965,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01273
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": -2.41,
+        "oos_sharpe": 2.084,
+        "oos_return": 0.00555,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.0031
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": -0.633,
+        "oos_sharpe": 2.054,
+        "oos_return": 0.00423,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00399
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": 0.017,
+        "oos_sharpe": 1.432,
+        "oos_return": 0.00338,
+        "oos_trades": 4,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00543
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": 1.863,
+        "oos_sharpe": -5.559,
+        "oos_return": -0.00753,
+        "oos_trades": 4,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00857
+      }
+    ]
   },
   "eurgbp_mr": {
     "strategy_name": "eurgbp_mr",
     "tier": "CROSS",
-    "verdict": "NO_DATA",
-    "avg_oos_sharpe": 0.0,
-    "avg_is_sharpe": 0.0,
-    "oos_is_ratio": 0.0,
-    "profitable_windows": 0,
-    "total_windows": 0,
-    "profitable_ratio": 0.0,
-    "total_oos_trades": 0,
+    "verdict": "REJECTED",
+    "avg_oos_sharpe": -3.817,
+    "avg_is_sharpe": -3.201,
+    "oos_is_ratio": 1.193,
+    "profitable_windows": 1,
+    "total_windows": 10,
+    "profitable_ratio": 0.1,
+    "total_oos_trades": 60,
     "bootstrap": null,
-    "error": "No data found for EURGBP in C:\\Users\\barqu\\trading-platform\\data\\fx",
-    "timestamp": "2026-03-28T23:18:25.308481+00:00",
-    "windows": []
+    "error": "",
+    "timestamp": "2026-03-31T13:50:31.840908+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -2.115,
+        "oos_sharpe": -7.368,
+        "oos_return": -0.00478,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00484
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": -3.814,
+        "oos_sharpe": -4.751,
+        "oos_return": -0.0048,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00526
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": -4.769,
+        "oos_sharpe": -6.305,
+        "oos_return": -0.00566,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00503
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": -5.915,
+        "oos_sharpe": -1.821,
+        "oos_return": -0.00157,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00231
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": -4.335,
+        "oos_sharpe": -1.652,
+        "oos_return": -0.0026,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00406
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": -2.839,
+        "oos_sharpe": 3.07,
+        "oos_return": 0.00504,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00186
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": 0.206,
+        "oos_sharpe": -4.881,
+        "oos_return": -0.00708,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00685
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": -0.979,
+        "oos_sharpe": -4.457,
+        "oos_return": -0.00555,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00529
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": -1.703,
+        "oos_sharpe": -8.854,
+        "oos_return": -0.00856,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00853
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": -5.746,
+        "oos_sharpe": -1.154,
+        "oos_return": -0.00136,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00373
+      }
+    ]
   },
   "usdchf_mr": {
     "strategy_name": "usdchf_mr",
     "tier": "MAJOR",
-    "verdict": "NO_DATA",
-    "avg_oos_sharpe": 0.0,
-    "avg_is_sharpe": 0.0,
-    "oos_is_ratio": 0.0,
-    "profitable_windows": 0,
-    "total_windows": 0,
-    "profitable_ratio": 0.0,
-    "total_oos_trades": 0,
+    "verdict": "REJECTED",
+    "avg_oos_sharpe": -0.532,
+    "avg_is_sharpe": -0.769,
+    "oos_is_ratio": 0.692,
+    "profitable_windows": 3,
+    "total_windows": 10,
+    "profitable_ratio": 0.3,
+    "total_oos_trades": 60,
     "bootstrap": null,
-    "error": "No data found for USDCHF in C:\\Users\\barqu\\trading-platform\\data\\fx",
-    "timestamp": "2026-03-28T23:18:25.308601+00:00",
-    "windows": []
+    "error": "",
+    "timestamp": "2026-03-31T13:50:31.844835+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -0.727,
+        "oos_sharpe": -1.481,
+        "oos_return": -0.00264,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00643
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": -1.567,
+        "oos_sharpe": 1.391,
+        "oos_return": 0.00546,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00701
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": -0.276,
+        "oos_sharpe": -0.044,
+        "oos_return": -8e-05,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00332
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": 0.339,
+        "oos_sharpe": -1.821,
+        "oos_return": -0.00318,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00472
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": 0.273,
+        "oos_sharpe": -1.156,
+        "oos_return": -0.00249,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00641
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": -1.007,
+        "oos_sharpe": -1.068,
+        "oos_return": -0.00303,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00853
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": -1.276,
+        "oos_sharpe": 0.042,
+        "oos_return": 8e-05,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00417
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": -0.782,
+        "oos_sharpe": -2.363,
+        "oos_return": -0.00374,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00469
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": -1.03,
+        "oos_sharpe": -2.608,
+        "oos_return": -0.00558,
+        "oos_trades": 6,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00655
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": -1.633,
+        "oos_sharpe": 3.789,
+        "oos_return": 0.00752,
+        "oos_trades": 6,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00378
+      }
+    ]
   },
   "eurjpy_carry": {
     "strategy_name": "eurjpy_carry",
     "tier": "CROSS",
-    "verdict": "NO_DATA",
-    "avg_oos_sharpe": 0.0,
-    "avg_is_sharpe": 0.0,
+    "verdict": "BORDERLINE",
+    "avg_oos_sharpe": 0.503,
+    "avg_is_sharpe": -0.01,
     "oos_is_ratio": 0.0,
-    "profitable_windows": 0,
-    "total_windows": 0,
-    "profitable_ratio": 0.0,
-    "total_oos_trades": 0,
+    "profitable_windows": 6,
+    "total_windows": 10,
+    "profitable_ratio": 0.6,
+    "total_oos_trades": 20,
     "bootstrap": null,
-    "error": "No data found for EURJPY in C:\\Users\\barqu\\trading-platform\\data\\fx",
-    "timestamp": "2026-03-28T23:18:25.308734+00:00",
-    "windows": []
+    "error": "",
+    "timestamp": "2026-03-31T13:50:31.848794+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": 0.327,
+        "oos_sharpe": 0.391,
+        "oos_return": 0.0006,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00338
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": 0.825,
+        "oos_sharpe": -2.169,
+        "oos_return": -0.00483,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00638
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": -1.226,
+        "oos_sharpe": -1.124,
+        "oos_return": -0.00332,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01184
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": -1.095,
+        "oos_sharpe": 0.459,
+        "oos_return": 0.00084,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.0033
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": -1.03,
+        "oos_sharpe": -0.181,
+        "oos_return": -0.00033,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00243
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": -0.416,
+        "oos_sharpe": -0.034,
+        "oos_return": -0.00012,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00707
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": 0.052,
+        "oos_sharpe": 1.347,
+        "oos_return": 0.00291,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00258
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": 0.322,
+        "oos_sharpe": 4.542,
+        "oos_return": 0.00852,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00324
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": 1.472,
+        "oos_sharpe": 0.026,
+        "oos_return": 0.00026,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.02406
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": 0.671,
+        "oos_sharpe": 1.771,
+        "oos_return": 0.00384,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.0024
+      }
+    ]
   },
   "audjpy_carry": {
     "strategy_name": "audjpy_carry",
     "tier": "CROSS",
-    "verdict": "NO_DATA",
-    "avg_oos_sharpe": 0.0,
-    "avg_is_sharpe": 0.0,
-    "oos_is_ratio": 0.0,
-    "profitable_windows": 0,
-    "total_windows": 0,
-    "profitable_ratio": 0.0,
-    "total_oos_trades": 0,
+    "verdict": "BORDERLINE",
+    "avg_oos_sharpe": 0.215,
+    "avg_is_sharpe": 0.103,
+    "oos_is_ratio": 2.08,
+    "profitable_windows": 5,
+    "total_windows": 10,
+    "profitable_ratio": 0.5,
+    "total_oos_trades": 20,
     "bootstrap": null,
-    "error": "No data found for AUDJPY in C:\\Users\\barqu\\trading-platform\\data\\fx",
-    "timestamp": "2026-03-28T23:18:25.308866+00:00",
-    "windows": []
+    "error": "",
+    "timestamp": "2026-03-31T13:50:31.852906+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": 0.716,
+        "oos_sharpe": 2.962,
+        "oos_return": 0.00613,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00363
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": 1.636,
+        "oos_sharpe": -2.354,
+        "oos_return": -0.00818,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01237
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": -0.825,
+        "oos_sharpe": -1.064,
+        "oos_return": -0.00354,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01373
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": -0.616,
+        "oos_sharpe": -2.515,
+        "oos_return": -0.00711,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01097
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": -1.962,
+        "oos_sharpe": -0.407,
+        "oos_return": -0.00104,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00467
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": -1.342,
+        "oos_sharpe": 0.413,
+        "oos_return": 0.00199,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.01259
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": -0.583,
+        "oos_sharpe": 2.927,
+        "oos_return": 0.00805,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00335
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": 0.855,
+        "oos_sharpe": 3.145,
+        "oos_return": 0.00901,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00578
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": 1.774,
+        "oos_sharpe": 0.777,
+        "oos_return": 0.00739,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.02446
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": 1.38,
+        "oos_sharpe": -1.735,
+        "oos_return": -0.0042,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00941
+      }
+    ]
   },
   "nzdusd_carry": {
     "strategy_name": "nzdusd_carry",
     "tier": "CROSS",
-    "verdict": "NO_DATA",
-    "avg_oos_sharpe": 0.0,
-    "avg_is_sharpe": 0.0,
-    "oos_is_ratio": 0.0,
-    "profitable_windows": 0,
-    "total_windows": 0,
-    "profitable_ratio": 0.0,
-    "total_oos_trades": 0,
+    "verdict": "REJECTED",
+    "avg_oos_sharpe": -0.922,
+    "avg_is_sharpe": -0.629,
+    "oos_is_ratio": 1.467,
+    "profitable_windows": 4,
+    "total_windows": 10,
+    "profitable_ratio": 0.4,
+    "total_oos_trades": 20,
     "bootstrap": null,
-    "error": "No data found for NZDUSD in C:\\Users\\barqu\\trading-platform\\data\\fx",
-    "timestamp": "2026-03-28T23:18:25.308987+00:00",
-    "windows": []
+    "error": "",
+    "timestamp": "2026-03-31T13:50:31.856650+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -0.031,
+        "oos_sharpe": 2.939,
+        "oos_return": 0.00683,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00353
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": 1.352,
+        "oos_sharpe": -2.651,
+        "oos_return": -0.01428,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01836
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": -1.251,
+        "oos_sharpe": -3.107,
+        "oos_return": -0.00809,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.0132
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": -1.393,
+        "oos_sharpe": -3.137,
+        "oos_return": -0.0081,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01235
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": -2.718,
+        "oos_sharpe": -0.735,
+        "oos_return": -0.00198,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00523
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": -2.319,
+        "oos_sharpe": -0.219,
+        "oos_return": -0.00073,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00686
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": -1.252,
+        "oos_sharpe": 1.156,
+        "oos_return": 0.00269,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00373
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": -0.002,
+        "oos_sharpe": 0.726,
+        "oos_return": 0.0021,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00633
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": 0.472,
+        "oos_sharpe": 0.716,
+        "oos_return": 0.00189,
+        "oos_trades": 2,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00479
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": 0.853,
+        "oos_sharpe": -4.911,
+        "oos_return": -0.01446,
+        "oos_trades": 2,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01775
+      }
+    ]
   },
   "fx_asian_range_breakout": {
     "strategy_name": "fx_asian_range_breakout",
     "tier": "INTRADAY",
-    "verdict": "NO_DATA",
-    "avg_oos_sharpe": 0.0,
-    "avg_is_sharpe": 0.0,
-    "oos_is_ratio": 0.0,
+    "verdict": "REJECTED",
+    "avg_oos_sharpe": -4.433,
+    "avg_is_sharpe": -3.947,
+    "oos_is_ratio": 1.123,
     "profitable_windows": 0,
-    "total_windows": 0,
+    "total_windows": 10,
     "profitable_ratio": 0.0,
-    "total_oos_trades": 0,
+    "total_oos_trades": 210,
     "bootstrap": null,
-    "error": "No data found for EURUSD in C:\\Users\\barqu\\trading-platform\\data\\fx",
-    "timestamp": "2026-03-28T23:18:25.309104+00:00",
-    "windows": []
+    "error": "",
+    "timestamp": "2026-03-31T13:50:31.859870+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -3.424,
+        "oos_sharpe": -3.317,
+        "oos_return": -0.00528,
+        "oos_trades": 21,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00517
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": -2.699,
+        "oos_sharpe": -5.617,
+        "oos_return": -0.02019,
+        "oos_trades": 21,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.02121
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": -4.582,
+        "oos_sharpe": -7.051,
+        "oos_return": -0.01375,
+        "oos_trades": 21,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.0139
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": -5.141,
+        "oos_sharpe": -6.12,
+        "oos_return": -0.01017,
+        "oos_trades": 21,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.0102
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": -5.785,
+        "oos_sharpe": -3.184,
+        "oos_return": -0.00598,
+        "oos_trades": 21,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00733
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": -5.445,
+        "oos_sharpe": -3.532,
+        "oos_return": -0.00724,
+        "oos_trades": 21,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00768
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": -4.196,
+        "oos_sharpe": -1.877,
+        "oos_return": -0.0041,
+        "oos_trades": 21,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00521
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": -2.848,
+        "oos_sharpe": -2.547,
+        "oos_return": -0.00388,
+        "oos_trades": 21,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00432
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": -2.632,
+        "oos_sharpe": -3.784,
+        "oos_return": -0.00774,
+        "oos_trades": 21,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00909
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": -2.72,
+        "oos_sharpe": -7.303,
+        "oos_return": -0.01145,
+        "oos_trades": 21,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01183
+      }
+    ]
   },
   "fx_bollinger_squeeze": {
     "strategy_name": "fx_bollinger_squeeze",
     "tier": "INTRADAY",
-    "verdict": "NO_DATA",
-    "avg_oos_sharpe": 0.0,
-    "avg_is_sharpe": 0.0,
-    "oos_is_ratio": 0.0,
+    "verdict": "REJECTED",
+    "avg_oos_sharpe": -2.836,
+    "avg_is_sharpe": -2.467,
+    "oos_is_ratio": 1.15,
     "profitable_windows": 0,
-    "total_windows": 0,
+    "total_windows": 10,
     "profitable_ratio": 0.0,
-    "total_oos_trades": 0,
+    "total_oos_trades": 120,
     "bootstrap": null,
-    "error": "No data found for EURUSD in C:\\Users\\barqu\\trading-platform\\data\\fx",
-    "timestamp": "2026-03-28T23:18:25.309246+00:00",
-    "windows": []
+    "error": "",
+    "timestamp": "2026-03-31T13:50:31.862485+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -1.785,
+        "oos_sharpe": -1.417,
+        "oos_return": -0.00226,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00322
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": -1.0,
+        "oos_sharpe": -4.776,
+        "oos_return": -0.01717,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01839
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": -3.406,
+        "oos_sharpe": -5.5,
+        "oos_return": -0.01072,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01154
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": -3.952,
+        "oos_sharpe": -4.301,
+        "oos_return": -0.00715,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00762
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": -4.595,
+        "oos_sharpe": -1.574,
+        "oos_return": -0.00296,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00551
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": -3.793,
+        "oos_sharpe": -2.056,
+        "oos_return": -0.00421,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00587
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": -2.569,
+        "oos_sharpe": -0.494,
+        "oos_return": -0.00108,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00378
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": -1.357,
+        "oos_sharpe": -0.563,
+        "oos_return": -0.00086,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00356
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": -1.064,
+        "oos_sharpe": -2.306,
+        "oos_return": -0.00471,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00702
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": -1.151,
+        "oos_sharpe": -5.375,
+        "oos_return": -0.00843,
+        "oos_trades": 12,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00955
+      }
+    ]
   },
   "fx_london_fix": {
     "strategy_name": "fx_london_fix",
     "tier": "INTRADAY",
-    "verdict": "NO_DATA",
-    "avg_oos_sharpe": 0.0,
-    "avg_is_sharpe": 0.0,
-    "oos_is_ratio": 0.0,
+    "verdict": "REJECTED",
+    "avg_oos_sharpe": -5.631,
+    "avg_is_sharpe": -5.057,
+    "oos_is_ratio": 1.113,
     "profitable_windows": 0,
-    "total_windows": 0,
+    "total_windows": 10,
     "profitable_ratio": 0.0,
-    "total_oos_trades": 0,
+    "total_oos_trades": 270,
     "bootstrap": null,
-    "error": "No data found for EURUSD in C:\\Users\\barqu\\trading-platform\\data\\fx",
-    "timestamp": "2026-03-28T23:18:25.309353+00:00",
-    "windows": []
+    "error": "",
+    "timestamp": "2026-03-31T13:50:31.865318+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -4.653,
+        "oos_sharpe": -4.742,
+        "oos_return": -0.00755,
+        "oos_trades": 27,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00719
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": -3.973,
+        "oos_sharpe": -6.248,
+        "oos_return": -0.02246,
+        "oos_trades": 27,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.02333
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": -5.464,
+        "oos_sharpe": -8.214,
+        "oos_return": -0.01601,
+        "oos_trades": 27,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01603
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": -6.033,
+        "oos_sharpe": -7.484,
+        "oos_return": -0.01244,
+        "oos_trades": 27,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01239
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": -6.677,
+        "oos_sharpe": -4.392,
+        "oos_return": -0.00825,
+        "oos_trades": 27,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00882
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": -6.684,
+        "oos_sharpe": -4.639,
+        "oos_return": -0.00951,
+        "oos_trades": 27,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00976
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": -5.416,
+        "oos_sharpe": -2.914,
+        "oos_return": -0.00637,
+        "oos_trades": 27,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00685
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": -3.967,
+        "oos_sharpe": -4.035,
+        "oos_return": -0.00615,
+        "oos_trades": 27,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00633
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": -3.808,
+        "oos_sharpe": -4.893,
+        "oos_return": -0.01001,
+        "oos_trades": 27,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01064
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": -3.896,
+        "oos_sharpe": -8.749,
+        "oos_return": -0.01372,
+        "oos_trades": 27,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01353
+      }
+    ]
   },
   "fx_session_overlap": {
     "strategy_name": "fx_session_overlap",
     "tier": "INTRADAY",
-    "verdict": "NO_DATA",
-    "avg_oos_sharpe": 0.0,
-    "avg_is_sharpe": 0.0,
-    "oos_is_ratio": 0.0,
+    "verdict": "REJECTED",
+    "avg_oos_sharpe": -3.635,
+    "avg_is_sharpe": -3.207,
+    "oos_is_ratio": 1.133,
     "profitable_windows": 0,
-    "total_windows": 0,
+    "total_windows": 10,
     "profitable_ratio": 0.0,
-    "total_oos_trades": 0,
+    "total_oos_trades": 160,
     "bootstrap": null,
-    "error": "No data found for EURUSD in C:\\Users\\barqu\\trading-platform\\data\\fx",
-    "timestamp": "2026-03-28T23:18:25.309462+00:00",
-    "windows": []
+    "error": "",
+    "timestamp": "2026-03-31T13:50:31.867781+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -2.604,
+        "oos_sharpe": -2.367,
+        "oos_return": -0.00377,
+        "oos_trades": 16,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00406
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": -1.849,
+        "oos_sharpe": -5.197,
+        "oos_return": -0.01868,
+        "oos_trades": 16,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.0198
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": -3.994,
+        "oos_sharpe": -6.275,
+        "oos_return": -0.01223,
+        "oos_trades": 16,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01254
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": -4.547,
+        "oos_sharpe": -5.21,
+        "oos_return": -0.00866,
+        "oos_trades": 16,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00887
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": -5.19,
+        "oos_sharpe": -2.379,
+        "oos_return": -0.00447,
+        "oos_trades": 16,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00636
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": -4.619,
+        "oos_sharpe": -2.794,
+        "oos_return": -0.00573,
+        "oos_trades": 16,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00669
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": -3.382,
+        "oos_sharpe": -1.186,
+        "oos_return": -0.00259,
+        "oos_trades": 16,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.0045
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": -2.102,
+        "oos_sharpe": -1.555,
+        "oos_return": -0.00237,
+        "oos_trades": 16,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00371
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": -1.848,
+        "oos_sharpe": -3.045,
+        "oos_return": -0.00623,
+        "oos_trades": 16,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00805
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": -1.935,
+        "oos_sharpe": -6.339,
+        "oos_return": -0.00994,
+        "oos_trades": 16,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01069
+      }
+    ]
   },
   "fx_eom_flow": {
     "strategy_name": "fx_eom_flow",
     "tier": "FLOW",
-    "verdict": "NO_DATA",
-    "avg_oos_sharpe": 0.0,
-    "avg_is_sharpe": 0.0,
-    "oos_is_ratio": 0.0,
-    "profitable_windows": 0,
-    "total_windows": 0,
-    "profitable_ratio": 0.0,
-    "total_oos_trades": 0,
-    "bootstrap": null,
-    "error": "No data found for EURUSD in C:\\Users\\barqu\\trading-platform\\data\\fx",
-    "timestamp": "2026-03-28T23:18:25.309577+00:00",
-    "windows": []
+    "verdict": "REJECTED",
+    "avg_oos_sharpe": -1.479,
+    "avg_is_sharpe": -1.209,
+    "oos_is_ratio": 1.223,
+    "profitable_windows": 3,
+    "total_windows": 10,
+    "profitable_ratio": 0.3,
+    "total_oos_trades": 50,
+    "bootstrap": {
+      "median": -0.7015845686340305,
+      "p5": -0.9296894681967902,
+      "p95": -0.4690534264980787,
+      "pct_positive": 0.0
+    },
+    "error": "",
+    "timestamp": "2026-03-31T13:50:31.870299+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "is_sharpe": -0.392,
+        "oos_sharpe": 0.198,
+        "oos_return": 0.00031,
+        "oos_trades": 5,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00291
+      },
+      {
+        "window_idx": 1,
+        "is_sharpe": 0.444,
+        "oos_sharpe": -4.061,
+        "oos_return": -0.0146,
+        "oos_trades": 5,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01598
+      },
+      {
+        "window_idx": 2,
+        "is_sharpe": -2.407,
+        "oos_sharpe": -4.182,
+        "oos_return": -0.00815,
+        "oos_trades": 5,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.01011
+      },
+      {
+        "window_idx": 3,
+        "is_sharpe": -2.941,
+        "oos_sharpe": -2.755,
+        "oos_return": -0.00458,
+        "oos_trades": 5,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.0055
+      },
+      {
+        "window_idx": 4,
+        "is_sharpe": -3.584,
+        "oos_sharpe": -0.205,
+        "oos_return": -0.00039,
+        "oos_trades": 5,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.0046
+      },
+      {
+        "window_idx": 5,
+        "is_sharpe": -2.389,
+        "oos_sharpe": -0.802,
+        "oos_return": -0.00164,
+        "oos_trades": 5,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00447
+      },
+      {
+        "window_idx": 6,
+        "is_sharpe": -1.185,
+        "oos_sharpe": 0.681,
+        "oos_return": 0.00149,
+        "oos_trades": 5,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00282
+      },
+      {
+        "window_idx": 7,
+        "is_sharpe": -0.089,
+        "oos_sharpe": 1.124,
+        "oos_return": 0.00171,
+        "oos_trades": 5,
+        "oos_profitable": true,
+        "oos_max_drawdown": -0.00337
+      },
+      {
+        "window_idx": 8,
+        "is_sharpe": 0.27,
+        "oos_sharpe": -1.049,
+        "oos_return": -0.00214,
+        "oos_trades": 5,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00595
+      },
+      {
+        "window_idx": 9,
+        "is_sharpe": 0.183,
+        "oos_sharpe": -3.736,
+        "oos_return": -0.00586,
+        "oos_trades": 5,
+        "oos_profitable": false,
+        "oos_max_drawdown": -0.00805
+      }
+    ]
   }
 }

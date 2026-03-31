@@ -1,0 +1,67 @@
+🧠 TODO : ALLOCATION QUANTATIVE & HRP (V11.2)
+Objectif : Supprimer les clusters de risque cachés | Cible : Réduction du Max DD de 30% via l'adaptativité.
+
+🌳 1. MOTEUR HIERARCHICAL RISK PARITY (HRP)
+L'enjeu : Ne plus allouer par "actif" mais par "comportement".
+
+[ ] Data Prep - PnL Matrix : Créer un script core/alloc/pnl_matrix_builder.py qui génère une matrice de rendements log des 29+ stratégies sur une fenêtre glissante (ex: 20 jours).
+
+[ ] Clustering ML (SciPy) : Implémenter l'algorithme de clustering hiérarchique (Linkage : Single ou Ward).
+
+Tâche : Regrouper les stratégies par distance de corrélation (Dendrogramme).
+
+[ ] Quasi-Diagonalization : Coder la réorganisation de la matrice de covariance pour isoler les blocs de risque (Regrouper DAX + EUR/USD si leur corrélation live explose).
+
+[ ] Recursive Bisection : Développer l'allocateur qui distribue le poids (Weight) inversement à la variance de chaque cluster.
+
+[ ] HRP-to-V10 Bridge : Injecter les nouveaux poids calculés dans le PositionSizer toutes les 4 heures (ou à chaque clôture de session).
+
+Indicateur de succès : Le système réduit automatiquement la taille sur le CAC40 si le DAX est déjà très exposé, sans règle manuelle.
+
+📈 2. FRACTIONAL KELLY DYNAMIQUE (EQUITY MOMENTUM)
+L'enjeu : Accélérer quand on gagne, freiner avant le crash.
+
+[ ] Equity Curve Tracker : Créer un module core/risk/equity_monitor.py qui enregistre l'Equity Curve globale (Realized + Floating) toutes les heures.
+
+[ ] Momentum Indicator : Calculer une SMA (Simple Moving Average) 20 jours et un écart-type (Bollinger) sur l'Equity Curve.
+
+[ ] Kelly Switch Logic : Coder le sélecteur de levier (Leverage State Machine) :
+
+MODE AGRESSIF (1/4 Kelly) : Si Equity > SMA20 + 0.5 StdDev.
+
+MODE NOMINAL (1/8 Kelly) : Si Equity entre SMA20 +/- 0.5 StdDev.
+
+MODE DÉFENSIF (1/32 Kelly) : Si Equity < SMA20 - 0.5 StdDev.
+
+[ ] Anti-Whipsaw Buffer : Ajouter une zone de neutralité (Hystérésis) pour éviter que le levier ne change 10 fois par jour si on oscille autour de la moyenne.
+
+[ ] Max Drawdown Protection (Hard Floor) : Si Equity < Peak - 10%, forcer le levier à ZÉRO (Arrêt total jusqu'à audit manuel).
+
+Indicateur de succès : La courbe de profit devient plus "lisse" (moins de volatilité sur le PnL global).
+
+🔬 3. BACKTEST & VALIDATION DE L'ALLOCATEUR
+L'enjeu : Prouver que le HRP bat le Kelly fixe sur les données historiques.
+
+[ ] HRP vs Equal Weight : Lancer une simulation sur les 6 derniers mois comparant une allocation fixe vs HRP.
+
+[ ] Correlation Stress Test : Simuler un crash corrélé (type Mars 2020) et vérifier que le HRP décharge les positions avant que le DD ne devienne critique.
+
+[ ] Turnover Cost Analysis : Vérifier que les changements de poids du HRP ne génèrent pas trop de frais de transaction (rééquilibrage trop fréquent).
+
+[ ] Sizing Sanity Check : Ajouter un "Clamp" (plafond) : aucune stratégie ne peut représenter plus de X% du capital, peu importe ce que dit le HRP.
+
+🖥️ 4. VISUALISATION (DASHBOARD V2.1)
+L'enjeu : Comprendre pourquoi le système change ses tailles d'ordre.
+
+[ ] Live Dendrogram View : Ajouter un graphique sur le dashboard montrant les clusters de stratégies en temps réel.
+
+[ ] Kelly State Indicator : Afficher clairement le mode actuel (🐢 DÉFENSIF, ⚖️ NOMINAL, 🚀 AGRESSIF) avec une barre de progression vers le prochain seuil.
+
+[ ] Correlation Heatmap : Matrice de corrélation interactive des stratégies live (Rouge = Danger de sur-exposition).
+
+[ ] Telegram Alert : "⚠️ Changement d'allocation : Passage en mode DÉFENSIF (Equity < SMA20). Tailles divisées par 4."
+
+💡 Le "Secret" du Quant (V11.2) :
+L'HRP est particulièrement efficace car il ne nécessite pas d'inverser la matrice de covariance (contrairement à Markowitz), ce qui le rend ultra-stable même avec peu de données. En couplant cela au Kelly Dynamique, tu te crées une "Gestion de Fortune Automatisée" qui protège tes gains de manière mathématique.
+
+Prêt à coder le module hrp_allocator.py ? C'est le cerveau qui va piloter tes stratégies.
