@@ -4,13 +4,44 @@ import MetricCard from '../components/MetricCard'
 import { TierBadge, StatusDot } from '../components/StrategyBadge'
 import EquityCurve from '../components/charts/EquityCurve'
 import PeriodSelector from '../components/common/PeriodSelector'
-import { ArrowUpRight, ArrowDownRight, Clock, AlertTriangle, AlertCircle, Info, CheckCircle, Bitcoin } from 'lucide-react'
+import { ArrowUpRight, ArrowDownRight, Clock, AlertTriangle, AlertCircle, Info, CheckCircle, Bitcoin, Wallet } from 'lucide-react'
 
 const PERIOD_MAP = { '7j': '7d', '30j': '30d', '90j': '90d', 'YTD': 'ytd' }
+
+function BrokerCard({ name, equity, deposited, status, paper }) {
+  const pnl = equity - deposited
+  const pnlPct = deposited > 0 ? ((pnl / deposited) * 100) : 0
+  return (
+    <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Wallet size={14} className="text-[var(--color-text-secondary)]" />
+          <span className="text-sm font-semibold text-[var(--color-text-primary)]">{name}</span>
+        </div>
+        <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded ${
+          paper ? 'bg-blue-500/20 text-blue-400' :
+          status ? 'bg-emerald-500/20 text-emerald-400' : 'bg-gray-500/20 text-gray-500'
+        }`}>
+          {paper ? 'PAPER' : status ? 'LIVE' : 'OFF'}
+        </span>
+      </div>
+      <div className="font-mono text-xl font-semibold text-[var(--color-text-primary)]">
+        ${equity.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+      </div>
+      <div className="mt-1 flex items-center gap-3 text-xs">
+        <span className="text-[var(--color-text-secondary)]">Depose: ${deposited.toLocaleString()}</span>
+        <span className={`font-mono ${pnl >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}`}>
+          {pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
+        </span>
+      </div>
+    </div>
+  )
+}
 
 export default function Overview() {
   const [period, setPeriod] = useState('30j')
   const { data: portfolio, loading: pLoad } = useApi('/portfolio', 30000)
+  const { data: nav } = useApi('/nav', 30000)
   const { data: posData } = useApi('/positions', 15000)
   const { data: stratData } = useApi('/strategies', 60000)
   const { data: equityData } = useApi(`/equity-curve?period=${PERIOD_MAP[period] || '30d'}`, 60000)
@@ -27,16 +58,29 @@ export default function Overview() {
 
   const positions = posData?.positions || []
   const strategies = stratData?.strategies || []
+  const brokers = nav?.brokers || {}
 
   return (
     <div className="space-y-6">
       {/* KPI Row */}
-      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <MetricCard
-          label="Equity"
-          value={portfolio.equity || (portfolio.alpaca_equity || 0) + (portfolio.binance_equity || 0) + (portfolio.ibkr_equity || 0)}
-          change={portfolio.total_return_pct}
+          label="NAV Live"
+          value={nav?.nav_live || portfolio.equity || 0}
+          change={nav?.pnl_live_pct}
           prefix="$"
+        />
+        <MetricCard
+          label="P&L Trading"
+          value={nav?.pnl_live || 0}
+          prefix="$"
+          color={(nav?.pnl_live || 0) >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}
+        />
+        <MetricCard
+          label="TWR"
+          value={nav?.twr_pct ?? 0}
+          suffix="%"
+          color={(nav?.twr_pct || 0) >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}
         />
         <MetricCard
           label="P&L Jour"
@@ -56,9 +100,27 @@ export default function Overview() {
           prefix="$"
           color={portfolio.pnl_unrealized >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}
         />
-        <MetricCard
-          label="CRO Score"
-          value="9.5/10"
+      </div>
+
+      {/* Broker Breakdown */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        <BrokerCard
+          name="IBKR"
+          equity={brokers.IBKR?.equity || portfolio.ibkr_equity || 0}
+          deposited={brokers.IBKR?.deposited || 0}
+          status={true}
+        />
+        <BrokerCard
+          name="Binance"
+          equity={brokers.BINANCE?.equity || portfolio.binance_equity || 0}
+          deposited={brokers.BINANCE?.deposited || 0}
+          status={true}
+        />
+        <BrokerCard
+          name="Alpaca"
+          equity={brokers.ALPACA?.equity || portfolio.alpaca_equity || 0}
+          deposited={brokers.ALPACA?.deposited || 0}
+          paper={true}
         />
       </div>
 
