@@ -43,15 +43,15 @@ STRATEGY_PHASES = {
     "weekend_gap_reversal":   {"phase": "LIVE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-28"},
     "funding_rate_divergence":{"phase": "PROBATION",  "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-30"},
     "eth_btc_ratio":          {"phase": "PROBATION",  "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-30"},
-    "crypto_session_momentum":{"phase": "WF_PENDING", "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-31"},
-    "crypto_rsi_divergence":  {"phase": "WF_PENDING", "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-31"},
+    "crypto_session_momentum":{"phase": "CODE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-31"},
+    "crypto_rsi_divergence":  {"phase": "CODE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-31"},
     # FX — IBKR (paper -> live bientot)
     "fx_carry_g10":           {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
     "fx_carry_vs":            {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
     "fx_carry_momentum":      {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
     "fx_momentum_breakout":   {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
     "fx_mean_reversion":      {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
-    "fx_session_london":      {"phase": "WF_PENDING", "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-31"},
+    "fx_session_london":      {"phase": "REJECTED",   "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-31"},
     # EU — IBKR (paper)
     "eu_mean_reversion_dax":  {"phase": "PAPER",      "asset_class": "EU",     "broker": "IBKR",    "phase_since": "2026-03-28"},
     "eu_mean_reversion_cac":  {"phase": "PAPER",      "asset_class": "EU",     "broker": "IBKR",    "phase_since": "2026-03-28"},
@@ -59,12 +59,12 @@ STRATEGY_PHASES = {
     "eu_bce_press":           {"phase": "PAPER",      "asset_class": "EU",     "broker": "IBKR",    "phase_since": "2026-03-28"},
     "eu_sector_rotation":     {"phase": "PAPER",      "asset_class": "EU",     "broker": "IBKR",    "phase_since": "2026-03-28"},
     # Futures — IBKR (WF pending)
-    "mes_mnq_pairs":          {"phase": "WF_PENDING", "asset_class": "FUTURES","broker": "IBKR",    "phase_since": "2026-03-31"},
-    "mes_trend":              {"phase": "WF_PENDING", "asset_class": "FUTURES","broker": "IBKR",    "phase_since": "2026-03-31"},
-    "mcl_seasonal":           {"phase": "WF_PENDING", "asset_class": "FUTURES","broker": "IBKR",    "phase_since": "2026-03-31"},
+    "mes_mnq_pairs":          {"phase": "PAPER",      "asset_class": "FUTURES","broker": "IBKR",    "phase_since": "2026-03-31"},
+    "mes_trend":              {"phase": "PAPER",      "asset_class": "FUTURES","broker": "IBKR",    "phase_since": "2026-03-31"},
+    "mcl_seasonal":           {"phase": "REJECTED",   "asset_class": "FUTURES","broker": "IBKR",    "phase_since": "2026-03-31"},
     # Single stocks
-    "earnings_drift":         {"phase": "WF_PENDING", "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-31"},
-    "pairs_trading_jpy":      {"phase": "WF_PENDING", "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-31"},
+    "earnings_drift":         {"phase": "CODE",       "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-31"},
+    "pairs_trading_jpy":      {"phase": "CODE",       "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-31"},
 }
 
 STRATEGY_REGISTRY = {
