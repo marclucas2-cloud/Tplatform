@@ -580,7 +580,7 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         return getattr(mod, class_name, None)
 
     DayOfWeekSeasonalStrategy = _load_bt_strategy("day_of_week_seasonal", "DayOfWeekSeasonalStrategy")
-    LateDayMeanReversionStrategy = _load_bt_strategy("lateday_mean_reversion", "LateDayMeanReversionStrategy")
+    LateDayMeanReversionStrategy = _load_bt_strategy("late_day_mean_reversion", "LateDayMeanReversionStrategy")
     CorrelationRegimeHedgeStrategy = _load_bt_strategy("correlation_regime_hedge", "CorrelationRegimeHedgeStrategy")
     VIXExpansionShortStrategy = _load_bt_strategy("vix_expansion_short", "VIXExpansionShortStrategy")
     FailedRallyShortStrategy = _load_bt_strategy("failed_rally_short", "FailedRallyShortStrategy")
