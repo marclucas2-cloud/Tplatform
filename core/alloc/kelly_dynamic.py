@@ -35,21 +35,59 @@ import numpy as np
 logger = logging.getLogger(__name__)
 
 
-# Kelly fractions for each mode
+# Kelly fractions for each mode — ROC optim Phase 1 (doubled from original)
 KELLY_FRACTIONS = {
-    "AGGRESSIVE": 0.25,    # 1/4 Kelly
-    "NOMINAL": 0.125,      # 1/8 Kelly
-    "DEFENSIVE": 0.03125,  # 1/32 Kelly
+    "AGGRESSIVE": 0.50,    # 1/2 Kelly
+    "NOMINAL": 0.25,       # 1/4 Kelly
+    "DEFENSIVE": 0.0625,   # 1/16 Kelly
     "STOPPED": 0.0,        # No trading
 }
 
 # Position multipliers for each mode
 POSITION_MULTIPLIERS = {
-    "AGGRESSIVE": 1.0,
-    "NOMINAL": 0.5,
-    "DEFENSIVE": 0.125,
+    "AGGRESSIVE": 2.0,
+    "NOMINAL": 1.0,
+    "DEFENSIVE": 0.25,
     "STOPPED": 0.0,
 }
+
+
+def vol_kelly_multiplier(vix: float = None, btc_vol_30d: float = None) -> float:
+    """Adjust Kelly fraction by volatility regime.
+
+    Low vol -> more aggressive (calmer markets = better Sharpe realization).
+    High vol -> more defensive (but never 0).
+
+    Args:
+        vix: Current VIX level (for equities/FX).
+        btc_vol_30d: BTC 30d annualized vol (for crypto).
+
+    Returns:
+        Multiplier (0.4 to 1.5) to apply on Kelly fraction.
+    """
+    # Crypto: use BTC vol
+    if btc_vol_30d is not None:
+        if btc_vol_30d < 0.40:
+            return 1.5   # Calm crypto market — rare, aggressive
+        elif btc_vol_30d < 0.60:
+            return 1.0   # Normal
+        elif btc_vol_30d < 0.80:
+            return 0.7   # High vol
+        else:
+            return 0.4   # Extreme vol
+
+    # Equities/FX: use VIX
+    if vix is not None:
+        if vix < 15:
+            return 1.5   # Low vol regime
+        elif vix < 20:
+            return 1.0   # Normal
+        elif vix < 30:
+            return 0.7   # Elevated
+        else:
+            return 0.4   # Stress
+
+    return 1.0  # Default: no adjustment
 
 # Hard floor: if equity drops more than this from peak, stop trading
 HARD_FLOOR_DRAWDOWN = 0.10  # 10%
@@ -186,9 +224,11 @@ class DynamicKellyManager:
         new_mode = self._check_hysteresis(raw_mode, self._current_mode)
         self._current_mode = new_mode
 
+        base_fraction = KELLY_FRACTIONS[new_mode]
+
         return {
             "mode": new_mode,
-            "fraction": KELLY_FRACTIONS[new_mode],
+            "fraction": base_fraction,
             "equity_vs_sma": round(equity_vs_sma, 6),
         }
 

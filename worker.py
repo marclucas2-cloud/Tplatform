@@ -2060,6 +2060,31 @@ def run_crypto_cycle():
                 level="warning",
             )
 
+        # --- Cash Sweep: USDC idle -> Earn Flexible ---
+        try:
+            cash_available = float(bnb_info.get("cash_available", 0))
+            min_sweep = 500  # Minimum $500 pour sweep
+            if cash_available > min_sweep:
+                sweep_amount = cash_available - 100  # Garder $100 buffer
+                logger.info(f"  CASH SWEEP: ${cash_available:,.0f} USDC idle, sweeping ${sweep_amount:,.0f} -> Earn")
+                try:
+                    # Trouver le productId USDC Flexible Earn
+                    earn_pos = bnb.get_earn_positions()
+                    usdc_product_id = None
+                    for ep in earn_pos:
+                        if ep.get("asset") == "USDC":
+                            usdc_product_id = ep.get("product_id")
+                            break
+                    if usdc_product_id:
+                        bnb.subscribe_earn(usdc_product_id, sweep_amount)
+                        logger.info(f"  CASH SWEEP OK: ${sweep_amount:,.0f} USDC -> Earn (product={usdc_product_id})")
+                    else:
+                        logger.info("  CASH SWEEP: pas de product_id USDC Earn trouve")
+                except Exception as e:
+                    logger.warning(f"  CASH SWEEP FAILED: {e}")
+        except Exception:
+            pass
+
     except Exception as e:
         logger.error(f"Erreur critique crypto cycle: {e}", exc_info=True)
         _send_alert(
@@ -2365,6 +2390,31 @@ def run_v10_portfolio_cycle():
                     )
             except Exception as e:
                 logger.debug(f"V10 leverage check skip: {e}")
+
+        # 5. Cash drag monitor — alert if too much cash idle
+        try:
+            total_capital = portfolio_data.get("total_capital", 0) if snapshot else 0
+            total_invested = portfolio_data.get("capital_at_risk", 0) if snapshot else 0
+            if total_capital > 0:
+                cash_pct = 1 - (total_invested / total_capital)
+                if cash_pct > 0.40:
+                    daily_drag = total_capital * cash_pct * 0.0004  # ~15% annualise
+                    logger.warning(
+                        f"V10 CASH DRAG: {cash_pct:.0%} idle "
+                        f"(${total_capital * cash_pct:,.0f}), "
+                        f"opportunity cost ~${daily_drag:.0f}/jour"
+                    )
+                    # Alert Telegram every 2h max (check modulo)
+                    now_h = datetime.now(PARIS).hour
+                    if now_h % 2 == 0:
+                        _send_alert(
+                            f"CASH DRAG: {cash_pct:.0%} idle\n"
+                            f"${total_capital * cash_pct:,.0f} non deploye\n"
+                            f"Cout opportunite: ~${daily_drag:.0f}/jour",
+                            level="warning",
+                        )
+        except Exception:
+            pass
 
     except Exception as e:
         logger.error(f"V10 portfolio cycle error: {e}", exc_info=True)
