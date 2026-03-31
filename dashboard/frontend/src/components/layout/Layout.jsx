@@ -32,7 +32,7 @@ export default function Layout({ children }) {
       <Sidebar />
       <main className="flex-1 overflow-auto">
         <StickyHeader />
-        <div className="p-6 pt-4 md:p-6 md:pt-4 max-w-[1440px] mx-auto">
+        <div className="p-3 pt-12 md:p-6 md:pt-4 max-w-[1440px] mx-auto">
           {children}
         </div>
       </main>

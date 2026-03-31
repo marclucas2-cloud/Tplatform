@@ -42,7 +42,7 @@ export default function StickyHeader() {
   const twr = nav?.twr_pct ?? 0
 
   return (
-    <div className="sticky top-0 z-30 flex items-center gap-4 px-4 py-2 bg-[var(--color-bg-card)]/95 backdrop-blur border-b border-[var(--color-border)] text-xs">
+    <div className="sticky top-0 z-30 flex items-center gap-2 md:gap-4 px-3 md:px-4 py-2 bg-[var(--color-bg-card)]/95 backdrop-blur border-b border-[var(--color-border)] text-xs">
       {/* NAV */}
       <div className="flex items-center gap-2">
         <span className="text-[var(--color-text-secondary)]">NAV</span>
