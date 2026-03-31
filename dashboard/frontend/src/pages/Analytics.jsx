@@ -42,6 +42,46 @@ function DayTooltip({ active, payload }) {
   )
 }
 
+function AttributionBar({ items, total }) {
+  if (!items?.length) return null
+  return (
+    <div className="space-y-2">
+      {items.map((item) => {
+        const pct = total ? Math.abs(item.pnl / total * 100) : 0
+        return (
+          <div key={item.source || item.direction || item.strategy} className="space-y-1">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-[var(--color-text-secondary)]">
+                {item.source || item.direction || item.strategy}
+              </span>
+              <div className="flex items-center gap-3">
+                <span className="font-mono text-[var(--color-text-secondary)]">
+                  {item.trades} trades | WR {item.win_rate}%
+                </span>
+                <span className={`font-mono font-semibold ${item.pnl >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}`}>
+                  ${item.pnl >= 0 ? '+' : ''}{item.pnl.toFixed(0)}
+                </span>
+                <span className="font-mono text-[var(--color-text-secondary)] w-12 text-right">
+                  {item.pct_of_total != null ? `${item.pct_of_total}%` : `${pct.toFixed(0)}%`}
+                </span>
+              </div>
+            </div>
+            <div className="h-1.5 rounded-full bg-[var(--color-bg-hover)] overflow-hidden">
+              <div
+                className="h-full rounded-full transition-all"
+                style={{
+                  width: `${Math.min(pct, 100)}%`,
+                  backgroundColor: item.pnl >= 0 ? 'var(--color-profit)' : 'var(--color-loss)',
+                }}
+              />
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
+
 export default function Analytics() {
   const { data: stratData } = useApi('/strategies', 60000)
   const { data: regime } = useApi('/regime', 60000)
@@ -50,11 +90,46 @@ export default function Analytics() {
   const { data: sharpeData } = useApi('/analytics/rolling-sharpe', 120000)
   const { data: dayData } = useApi('/analytics/by-day', 120000)
   const { data: streaksData } = useApi('/analytics/streaks', 120000)
+  const { data: attrData } = useApi('/analytics/attribution', 120000)
 
   const strategies = stratData?.strategies || []
 
   return (
     <div className="space-y-6">
+      {/* Performance Attribution */}
+      {attrData && !attrData.error && (
+        <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-5">
+          <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">
+            Attribution de Performance
+            <span className="ml-2 font-mono text-xs text-[var(--color-text-secondary)]">
+              Total: <span className={attrData.total_pnl >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}>
+                ${attrData.total_pnl >= 0 ? '+' : ''}{attrData.total_pnl?.toFixed(0)}
+              </span>
+              {' '}| {attrData.trading_days} jours
+            </span>
+          </h2>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* By Source */}
+            <div>
+              <h3 className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">Par source d'alpha</h3>
+              <AttributionBar items={attrData.by_source} total={attrData.total_pnl} />
+            </div>
+            {/* By Direction */}
+            <div>
+              <h3 className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">Par direction</h3>
+              <AttributionBar items={attrData.by_direction} total={attrData.total_pnl} />
+            </div>
+          </div>
+          {/* Top strategies */}
+          {attrData.by_strategy?.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-[var(--color-border)]">
+              <h3 className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider mb-3">Top strategies</h3>
+              <AttributionBar items={attrData.by_strategy.slice(0, 8)} total={attrData.total_pnl} />
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Regime */}
       <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-5">
         <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3">Regime de Marche</h2>
