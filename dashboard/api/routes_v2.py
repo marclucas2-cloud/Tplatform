@@ -2230,3 +2230,127 @@ def equity_curve():
     except Exception as e:
         logger.error("equity-curve error: %s", e)
         return {"error": str(e)}
+
+
+# ── NAV / TWR ────────────────────────────────────────────────────────────────
+
+def _load_cash_flows() -> list[dict]:
+    """Charge les flux de capital depuis data/cash_flows.jsonl."""
+    cf_path = DATA_DIR / "cash_flows.jsonl"
+    flows = []
+    if not cf_path.exists():
+        return flows
+    try:
+        for line in cf_path.read_text(encoding="utf-8").strip().split("\n"):
+            if line.strip():
+                flows.append(json.loads(line))
+    except Exception as e:
+        logger.error("cash_flows load error: %s", e)
+    return flows
+
+
+def _compute_twr(equity_series: list[dict], cash_flows: list[dict]) -> float:
+    """
+    Time-Weighted Return — elimine l'effet des depots/retraits.
+    TWR = produit((NAV_t - CF_t) / NAV_{t-1}) - 1
+    """
+    if len(equity_series) < 2:
+        return 0.0
+
+    cf_by_date = {}
+    for cf in cash_flows:
+        d = cf.get("date", "")
+        cf_by_date[d] = cf_by_date.get(d, 0) + cf.get("amount", 0) * (
+            1 if cf.get("type") == "deposit" else -1
+        )
+
+    twr = 1.0
+    for i in range(1, len(equity_series)):
+        prev_nav = equity_series[i - 1].get("total", 0)
+        curr_nav = equity_series[i].get("total", 0)
+        date_str = equity_series[i].get("timestamp", "")[:10]
+        cf_amount = cf_by_date.get(date_str, 0)
+
+        if prev_nav > 0:
+            period_return = (curr_nav - cf_amount) / prev_nav
+            twr *= period_return
+
+    return round((twr - 1) * 100, 2)
+
+
+@router.get("/api/nav")
+def nav_overview():
+    """NAV avec TWR, depots/retraits, cost basis — vue institutionnelle."""
+    try:
+        cash_flows = _load_cash_flows()
+
+        # Equities actuelles (reutilise la logique existante)
+        state = _load_state()
+        ibkr_eq = 500.0  # sera dynamique quand IBKR live
+        binance_eq = 0.0
+        alpaca_eq = 0.0
+
+        # Essayer de lire les equities reelles
+        try:
+            from main import _get_ibkr_equity, _get_binance_equity
+            ibkr_eq = _get_ibkr_equity() or 500.0
+            binance_eq = _get_binance_equity() or 0.0
+        except Exception:
+            pass
+
+        try:
+            import requests as req
+            api_key = os.environ.get("ALPACA_API_KEY", "")
+            api_secret = os.environ.get("ALPACA_SECRET_KEY", "")
+            if api_key and api_secret:
+                base = os.environ.get("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
+                r = req.get(f"{base}/v2/account", headers={
+                    "APCA-API-KEY-ID": api_key, "APCA-API-SECRET-KEY": api_secret
+                }, timeout=5)
+                if r.ok:
+                    alpaca_eq = float(r.json().get("equity", 0))
+        except Exception:
+            pass
+
+        # Calculs NAV
+        nav_live = ibkr_eq + binance_eq
+        nav_paper = alpaca_eq
+
+        deposits_by_broker = {}
+        for cf in cash_flows:
+            b = cf.get("broker", "OTHER")
+            if cf.get("type") == "deposit":
+                deposits_by_broker[b] = deposits_by_broker.get(b, 0) + cf.get("amount", 0)
+
+        total_deposits = sum(cf.get("amount", 0) for cf in cash_flows if cf.get("type") == "deposit")
+        total_withdrawals = sum(cf.get("amount", 0) for cf in cash_flows if cf.get("type") == "withdrawal")
+        cost_basis_live = deposits_by_broker.get("IBKR", 0) + deposits_by_broker.get("BINANCE", 0)
+
+        pnl_live = nav_live - cost_basis_live
+        pnl_live_pct = round(pnl_live / cost_basis_live * 100, 2) if cost_basis_live > 0 else 0
+
+        # TWR depuis equity curve history
+        history = state.get("history", [])
+        twr = _compute_twr(history, cash_flows) if history else pnl_live_pct
+
+        return {
+            "nav_live": round(nav_live, 2),
+            "nav_paper": round(nav_paper, 2),
+            "nav_total": round(nav_live + nav_paper, 2),
+            "cost_basis_live": round(cost_basis_live, 2),
+            "pnl_live": round(pnl_live, 2),
+            "pnl_live_pct": pnl_live_pct,
+            "twr_pct": twr,
+            "total_deposits": total_deposits,
+            "total_withdrawals": total_withdrawals,
+            "cash_flows": cash_flows,
+            "brokers": {
+                "IBKR": {"equity": round(ibkr_eq, 2), "deposited": deposits_by_broker.get("IBKR", 0)},
+                "BINANCE": {"equity": round(binance_eq, 2), "deposited": deposits_by_broker.get("BINANCE", 0)},
+                "ALPACA": {"equity": round(alpaca_eq, 2), "deposited": deposits_by_broker.get("ALPACA", 0), "paper": True},
+            },
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        }
+    except Exception as e:
+        logger.error("nav error: %s", e)
+        return {"error": str(e)}
