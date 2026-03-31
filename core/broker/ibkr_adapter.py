@@ -24,6 +24,51 @@ _INITIAL_BACKOFF_SECONDS = 1.0
 _MAX_BACKOFF_SECONDS = 30.0
 
 
+# Mapping suffixes EU -> exchange + currency pour IBKR
+_EU_EXCHANGE_MAP = {
+    ".DE": ("IBIS", "EUR"),     # Xetra (Allemagne)
+    ".PA": ("SBF", "EUR"),      # Euronext Paris
+    ".AS": ("AEB", "EUR"),      # Euronext Amsterdam
+    ".MI": ("BVME", "EUR"),     # Borsa Italiana
+    ".MC": ("BM", "EUR"),       # Bolsa Madrid
+    ".L":  ("LSE", "GBP"),      # London Stock Exchange
+    ".SW": ("EBS", "CHF"),      # SIX Swiss
+    ".T":  ("TSEJ", "JPY"),     # Tokyo
+    ".HK": ("SEHK", "HKD"),    # Hong Kong
+}
+
+# FX pairs use Forex contract
+_FX_PAIRS = {
+    "EURUSD", "GBPUSD", "USDJPY", "AUDJPY", "EURJPY", "NZDUSD",
+    "EURGBP", "GBPJPY", "AUDUSD", "USDCHF", "USDCAD", "NZDJPY",
+}
+
+
+def _make_contract(symbol: str):
+    """Cree le bon contrat IBKR selon le type de symbole.
+
+    - Actions EU (.DE, .PA, .L) -> Stock(sym, exchange, currency)
+    - FX pairs (EURUSD) -> Forex(pair)
+    - Actions US (default) -> Stock(sym, SMART, USD)
+    """
+    from ib_insync import Stock, Forex
+
+    # FX
+    if symbol.upper() in _FX_PAIRS:
+        return Forex(symbol.upper())
+
+    # EU stocks (detect suffix)
+    for suffix, (exchange, currency) in _EU_EXCHANGE_MAP.items():
+        if symbol.upper().endswith(suffix.upper()):
+            # IBKR veut le symbole SANS le suffixe exchange pour certains
+            # mais avec pour d'autres — on garde le symbole complet et SMART
+            # avec la bonne currency, IBKR resout via qualifyContracts
+            return Stock(symbol, "SMART", currency)
+
+    # Default: US stock
+    return Stock(symbol, "SMART", "USD")
+
+
 class IBKRBroker(BaseBroker):
     """Broker Interactive Brokers via ib_insync."""
 
@@ -240,9 +285,9 @@ class IBKRBroker(BaseBroker):
             logger.info(f"IBKR LIVE order authorized by: {_authorized_by}")
 
         self._ensure_connected()
-        from ib_insync import Stock, MarketOrder, StopOrder, LimitOrder
+        from ib_insync import MarketOrder, StopOrder, LimitOrder
 
-        contract = Stock(symbol, "SMART", "USD")
+        contract = _make_contract(symbol)
         self._ib.qualifyContracts(contract)
 
         action = "BUY" if direction.upper() == "BUY" else "SELL"
@@ -322,7 +367,7 @@ class IBKRBroker(BaseBroker):
         if not pos:
             raise BrokerError(f"IBKR: pas de position ouverte sur {symbol}")
 
-        contract = Stock(symbol, "SMART", "USD")
+        contract = _make_contract(symbol)
         self._ib.qualifyContracts(contract)
 
         action = "SELL" if pos.position > 0 else "BUY"
@@ -364,10 +409,10 @@ class IBKRBroker(BaseBroker):
 
     def get_prices(self, symbol, timeframe="1D", bars=500, start="", end="") -> dict:
         self._ensure_connected()
-        from ib_insync import Stock, util
+        from ib_insync import util
         import datetime
 
-        contract = Stock(symbol, "SMART", "USD")
+        contract = _make_contract(symbol)
         self._ib.qualifyContracts(contract)
 
         # Mapping timeframe
