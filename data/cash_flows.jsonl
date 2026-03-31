@@ -1,3 +1,4 @@
 {"date": "2025-06-15", "amount": 20000, "type": "deposit", "broker": "BINANCE", "note": "Depot initial Binance 20K EUR"}
 {"date": "2026-01-10", "amount": 2500, "type": "deposit", "broker": "BINANCE", "note": "Complement Binance"}
 {"date": "2026-03-01", "amount": 500, "type": "deposit", "broker": "IBKR", "note": "Depot initial IBKR"}
+{"date": "2026-03-31", "amount": 10000, "type": "deposit", "broker": "IBKR", "note": "Depot 10K IBKR — go live FX"}

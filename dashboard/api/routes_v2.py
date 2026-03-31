@@ -2463,31 +2463,45 @@ def _compute_twr(equity_series: list[dict], cash_flows: list[dict]) -> float:
 
 @router.get("/api/nav")
 def nav_overview():
-    """NAV avec TWR, depots/retraits, cost basis — vue institutionnelle."""
+    """NAV avec TWR, depots/retraits, cost basis — vue institutionnelle.
+
+    Lit les equities LIVE depuis les memes sources que /api/portfolio :
+    - IBKR: snapshot JSONL du worker (logs/portfolio/*.jsonl)
+    - Binance: API live via BinanceBroker
+    - Alpaca: API live via REST
+    """
     try:
         cash_flows = _load_cash_flows()
 
-        # Equities actuelles (reutilise la logique existante)
-        state = _load_state()
-        ibkr_eq = 500.0  # sera dynamique quand IBKR live
+        # ── Equities live (meme logique que main.py /api/portfolio) ──
+        ibkr_eq = 0.0
         binance_eq = 0.0
         alpaca_eq = 0.0
 
-        # Essayer de lire les equities reelles
+        # IBKR — depuis snapshot worker (pas de connexion directe)
         try:
-            from main import _get_ibkr_equity, _get_binance_equity
-            ibkr_eq = _get_ibkr_equity() or 500.0
-            binance_eq = _get_binance_equity() or 0.0
+            from main import _get_ibkr_equity_from_snapshot
+            ibkr_eq = _get_ibkr_equity_from_snapshot() or 0.0
         except Exception:
             pass
 
+        # Binance — API live
         try:
-            import requests as req
+            if os.environ.get("BINANCE_API_KEY"):
+                from core.broker.binance_broker import BinanceBroker
+                bnb = BinanceBroker()
+                bnb_info = bnb.get_account_info()
+                binance_eq = float(bnb_info.get("equity", 0))
+        except Exception:
+            pass
+
+        # Alpaca — API live
+        try:
             api_key = os.environ.get("ALPACA_API_KEY", "")
             api_secret = os.environ.get("ALPACA_SECRET_KEY", "")
             if api_key and api_secret:
                 base = os.environ.get("ALPACA_BASE_URL", "https://paper-api.alpaca.markets")
-                r = req.get(f"{base}/v2/account", headers={
+                r = requests.get(f"{base}/v2/account", headers={
                     "APCA-API-KEY-ID": api_key, "APCA-API-SECRET-KEY": api_secret
                 }, timeout=5)
                 if r.ok:
