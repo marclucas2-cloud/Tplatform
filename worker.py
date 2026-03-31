@@ -600,8 +600,12 @@ def run_fx_carry_cycle():
             _log_event("kill_switch", "fx_carry_momentum_filter", {
                 "reason": signal.get("reason"), "drawdown": signal.get("drawdown")
             })
-            # TODO(live-promotion): Execute actual position close via IBKR
-            # ibkr.close_all_fx_positions(_authorized_by="fx_carry_mom_kill")
+            # Execute kill: close all FX positions
+            try:
+                _ibkr_carry.close_all_positions(_authorized_by="fx_carry_mom_kill")
+                logger.critical("  FX CARRY KILL: all positions closed")
+            except Exception as e:
+                logger.error(f"  FX CARRY KILL FAILED: {e}")
             _telegram_notify(
                 f"FX CARRY-MOM KILL SWITCH: {signal.get('reason')}\n"
                 f"Drawdown: {signal.get('drawdown', 0):.2%}",
@@ -631,19 +635,70 @@ def run_fx_carry_cycle():
                       for p in pairs],
         })
 
-        # NOTE: Actual IBKR order execution not implemented yet
-        # For now, log the signal and send Telegram notification
-        # Probationary phase: monitor signals for 30 days before executing
+        # === LIVE EXECUTION — FX Carry orders via IBKR ===
+        # Reconcile: get current positions, only trade deltas
+        try:
+            current_positions = _ibkr_carry.get_positions()
+            current_pairs = {p.get("symbol", ""): p for p in current_positions}
+        except Exception as e:
+            logger.warning(f"  FX CARRY: cannot get positions: {e}")
+            current_pairs = {}
+
+        n_orders = 0
+        for p in pairs:
+            pair_symbol = p["pair"]  # e.g. "AUDJPY" — _make_contract handles Forex
+            direction = p["direction"].upper()  # "BUY" or "SELL"
+            target_notional = p["notional"]
+            sl = p.get("stop_loss")
+
+            # Skip if already positioned in same direction
+            existing = current_pairs.get(pair_symbol)
+            if existing:
+                existing_qty = float(existing.get("qty", 0))
+                if (direction == "BUY" and existing_qty > 0) or (direction == "SELL" and existing_qty < 0):
+                    logger.info(f"    {pair_symbol}: already positioned {existing_qty}, skip")
+                    continue
+
+            # Cap notional to max per pair from config
+            max_pair_notional = 40000  # from limits_live.yaml
+            notional = min(target_notional, max_pair_notional)
+
+            try:
+                result = _ibkr_carry.create_position(
+                    symbol=pair_symbol,
+                    direction=direction,
+                    notional=notional,
+                    stop_loss=sl,
+                    _authorized_by="fx_carry_momentum_live",
+                )
+                n_orders += 1
+                logger.info(
+                    f"    FX CARRY ORDER: {direction} {pair_symbol} "
+                    f"notional=${notional:,.0f} SL={sl} -> {result}"
+                )
+            except Exception as e:
+                logger.error(f"    FX CARRY ORDER FAILED: {pair_symbol} {direction} — {e}")
+
+        # Handle CLOSE_ALL for pairs no longer in signal
+        active_pair_symbols = {p["pair"] for p in pairs}
+        for sym, pos in current_pairs.items():
+            if sym not in active_pair_symbols and abs(float(pos.get("qty", 0))) > 0:
+                try:
+                    _ibkr_carry.close_position(sym, _authorized_by="fx_carry_momentum_rebalance")
+                    logger.info(f"    FX CARRY CLOSE: {sym} (no longer in signal)")
+                    n_orders += 1
+                except Exception as e:
+                    logger.warning(f"    FX CARRY CLOSE FAILED: {sym} — {e}")
+
         _telegram_notify(
-            f"FX CARRY-MOM SIGNAL: {len(pairs)}/{len(pairs)+n_filtered} pairs\n"
+            f"FX CARRY LIVE: {n_orders} ordre(s)\n"
+            f"{len(pairs)} pairs actives, {n_filtered} filtrees\n"
             f"Total notional: ${total:,.0f}\n"
             + "\n".join(
-                f"  {p['pair']} {p['direction']} ${p['notional']:,.0f} x{p['sizing_mult']:.1f} mom={p.get('momentum_63d',0):+.4f}"
+                f"  {p['pair']} {p['direction']} ${p['notional']:,.0f} x{p['sizing_mult']:.1f}"
                 for p in pairs
             )
-            + f"\n\nFiltered by momentum: {n_filtered} pairs"
-            + f"\nEquity IBKR: ${equity:,.0f}\n"
-            f"(Probationary — signal only, 30 days)",
+            + f"\nEquity: ${equity:,.0f}",
             level="INFO"
         )
 
@@ -1665,7 +1720,11 @@ def run_crypto_cycle():
             except Exception as e:
                 logger.warning(f"Binance account info indisponible: {e}")
 
-        # --- FIX: recaler les baselines drawdown sur l'equity REELLE ---
+        # --- FIX: recaler capital et baselines sur l'equity REELLE ---
+        # Le capital du risk manager doit refleter l'equity reelle
+        # (pas 20K config quand BTC a monte et earn=23K)
+        if current_equity > 0:
+            risk_mgr.capital = current_equity
         # Le CryptoRiskManager est recree a chaque cycle avec capital=20K,
         # donc _daily_start_equity = 20K. Mais l'equity reelle peut etre
         # differente (earn fluctue, BTC prix change). On persiste l'etat
@@ -1873,14 +1932,6 @@ def run_crypto_cycle():
                     "symbol": signal.get("symbol", trade_symbol),
                 })
 
-                # --- Verifier risk avant execution ---
-                if not risk_result["passed"]:
-                    logger.warning(
-                        f"  [{strat_id}] Signal ignore — risk check global "
-                        f"non passe"
-                    )
-                    continue
-
                 # --- Executer via BinanceBroker si disponible ---
                 if broker is None:
                     logger.info(
@@ -1892,7 +1943,7 @@ def run_crypto_cycle():
                 # Determiner la direction et le market_type
                 market_type = config.get("market_type", "spot")
 
-                # --- Signaux EARN : rebalance entre produits Earn Flexible ---
+                # --- Signaux EARN : pas de risque directionnel, toujours autorises ---
                 if action in ("EARN_REBALANCE", "EARN_SUBSCRIBE", "EARN_REDEEM",
                               "CAPITAL_RELEASE"):
                     if broker is None:
@@ -1922,6 +1973,13 @@ def run_crypto_cycle():
                             f"  [{strat_id}] Erreur close: {e}"
                         )
                         n_errors += 1
+                    continue
+
+                # --- Risk check pour trades directionnels (BUY/SELL) ---
+                if not risk_result["passed"]:
+                    logger.warning(
+                        f"  [{strat_id}] Signal {action} ignore — risk check non passe"
+                    )
                     continue
 
                 # Pour BUY/SELL — calculer le sizing
