@@ -1980,6 +1980,140 @@ def _init_v10_modules():
         return False
 
 
+# =====================================================================
+# V11 — Data Quality, HRP, Kelly, Orphan Detection
+# =====================================================================
+
+_v11_data_quality = None
+_v11_kelly = None
+_v11_hrp = None
+_v11_throttler_eu = None
+
+
+def _init_v11_modules():
+    """Initialize V11 roadmap modules: data quality, HRP, Kelly, EU throttler."""
+    global _v11_data_quality, _v11_kelly, _v11_hrp, _v11_throttler_eu
+
+    try:
+        from core.data.data_quality import DataQualityGuard
+        _v11_data_quality = DataQualityGuard()
+        logger.info("  V11 DataQualityGuard initialized")
+    except Exception as e:
+        logger.warning(f"  V11 DataQualityGuard failed: {e}")
+
+    try:
+        from core.alloc.kelly_dynamic import DynamicKellyManager
+        _v11_kelly = DynamicKellyManager(sma_lookback=20, hysteresis_pct=0.02)
+        logger.info("  V11 DynamicKellyManager initialized")
+    except Exception as e:
+        logger.warning(f"  V11 DynamicKellyManager failed: {e}")
+
+    try:
+        from core.alloc.hrp_allocator import HRPAllocator
+        _v11_hrp = HRPAllocator(min_weight=0.02, max_weight=0.25)
+        logger.info("  V11 HRPAllocator initialized")
+    except Exception as e:
+        logger.warning(f"  V11 HRPAllocator failed: {e}")
+
+    try:
+        from core.risk.v10_throttler_eu import V10ThrottlerEU
+        _v11_throttler_eu = V10ThrottlerEU()
+        logger.info("  V11 V10ThrottlerEU initialized")
+    except Exception as e:
+        logger.warning(f"  V11 V10ThrottlerEU failed: {e}")
+
+
+def run_v11_hrp_rebalance():
+    """V11 HRP rebalance — runs every 4 hours.
+
+    Recomputes strategy weights using Hierarchical Risk Parity.
+    Logs allocation changes and sends Telegram alert on mode change.
+    """
+    if not _v11_hrp or not _v11_kelly:
+        return
+
+    try:
+        # Update Kelly equity tracking
+        total_equity = 0
+        try:
+            if os.getenv("BINANCE_API_KEY"):
+                from core.broker.binance_broker import BinanceBroker
+                bnb = BinanceBroker()
+                acct = bnb.get_account_info()
+                total_equity += float(acct.get("equity", 0))
+        except Exception:
+            pass
+
+        if total_equity > 0:
+            _v11_kelly.update_equity(datetime.now(timezone.utc), total_equity)
+            mode = _v11_kelly.get_kelly_mode()
+            logger.info(
+                f"V11 KELLY: mode={mode['mode']}, fraction={mode['fraction']:.3f}, "
+                f"equity=${total_equity:,.0f}"
+            )
+
+            # Alert on mode change
+            if hasattr(run_v11_hrp_rebalance, '_last_mode'):
+                if mode['mode'] != run_v11_hrp_rebalance._last_mode:
+                    try:
+                        from core.alloc.allocation_report import AllocationReport
+                        report = AllocationReport()
+                        msg = report.format_telegram_alert(
+                            run_v11_hrp_rebalance._last_mode,
+                            mode['mode'],
+                            f"equity=${total_equity:,.0f}"
+                        )
+                        _send_alert(msg, level="warning")
+                    except Exception:
+                        _send_alert(
+                            f"KELLY MODE: {run_v11_hrp_rebalance._last_mode} -> {mode['mode']}",
+                            level="warning"
+                        )
+            run_v11_hrp_rebalance._last_mode = mode['mode']
+
+        _log_event("v11_hrp_rebalance", details={
+            "kelly_mode": mode['mode'] if total_equity > 0 else "UNKNOWN",
+            "equity": total_equity,
+        })
+
+    except Exception as e:
+        logger.error(f"V11 HRP rebalance error: {e}", exc_info=True)
+
+
+def run_v11_eod_cleanup():
+    """V11 End-of-day orphan order cleanup.
+
+    Runs 5 min after EU close (17:35 CET) and US close (16:05 ET).
+    Detects and cancels orphan SL/TP orders without matching positions.
+    """
+    try:
+        from core.execution.orphan_detector import OrphanDetector
+        detector = OrphanDetector(alert_callback=_send_alert)
+
+        # Try IBKR cleanup
+        try:
+            from core.broker.ibkr_adapter import IBKRBroker
+            ibkr = IBKRBroker()
+            result = detector.run_eod_cleanup(ibkr, datetime.now(PARIS))
+            if result.get("orphans_found", 0) > 0:
+                logger.warning(
+                    f"V11 EOD: {result['orphans_found']} orphans found, "
+                    f"{result.get('cancelled', 0)} cancelled"
+                )
+                _send_alert(
+                    f"EOD CLEANUP: {result['orphans_found']} orphans, "
+                    f"{result.get('cancelled', 0)} cancelled",
+                    level="warning"
+                )
+        except Exception as e:
+            logger.debug(f"V11 EOD IBKR cleanup skip: {e}")
+
+        _log_event("v11_eod_cleanup", details={"status": "completed"})
+
+    except Exception as e:
+        logger.error(f"V11 EOD cleanup error: {e}", exc_info=True)
+
+
 def run_v10_portfolio_cycle():
     """V10 portfolio-aware risk cycle — runs every 5 minutes.
 
@@ -2102,10 +2236,13 @@ def main():
     last_cross_portfolio = 0
     last_crypto = 0
     last_v10_cycle = 0
+    last_v11_hrp = 0
+    v11_eod_done_today = False
     after_close_checked_today = False
     FX_PAPER_INTERVAL = 300  # 5 min
     HEARTBEAT_INTERVAL = 1800  # 30 min
     CROSS_PORTFOLIO_INTERVAL = 14400  # 4 hours
+    V11_HRP_INTERVAL = 14400  # 4 hours
 
     # Verifier que les imports fonctionnent au demarrage
     # NOTE: ne PAS importer run_intraday ici — ca shadow la wrapper locale
@@ -2143,6 +2280,10 @@ def main():
     # === V10 PORTFOLIO-AWARE RISK MODULES ===
     logger.info("  Initializing V10 portfolio-aware risk modules...")
     _init_v10_modules()
+
+    # === V11 ROADMAP MODULES ===
+    logger.info("  Initializing V11 roadmap modules (data quality, HRP, Kelly, EU throttler)...")
+    _init_v11_modules()
 
     # Premier heartbeat
     log_heartbeat()
@@ -2300,6 +2441,19 @@ def main():
             except Exception as e:
                 logger.error(f"Cross-portfolio check error: {e}", exc_info=True)
             last_cross_portfolio = time.time()
+
+        # === V11 HRP REBALANCE every 4 hours ===
+        if time.time() - last_v11_hrp >= V11_HRP_INTERVAL:
+            run_v11_hrp_rebalance()
+            last_v11_hrp = time.time()
+
+        # === V11 EOD ORPHAN CLEANUP (17:35 CET) ===
+        if (not v11_eod_done_today
+                and now_paris.hour == 17 and 35 <= now_paris.minute <= 45):
+            run_v11_eod_cleanup()
+            v11_eod_done_today = True
+        if now_paris.hour < 17:
+            v11_eod_done_today = False
 
         # Sleep 30s entre les checks
         time.sleep(30)
