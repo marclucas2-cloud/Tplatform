@@ -607,17 +607,28 @@ def get_regime():
 # ── Trades ───────────────────────────────────────────────────────────────────
 
 @app.get("/api/trades")
-def get_trades(strategy: Optional[str] = None, limit: int = 50, source: str = "real"):
+def get_trades(
+    strategy: Optional[str] = None,
+    limit: int = 50,
+    source: str = "real",
+    mode: Optional[str] = None,
+):
     """Historique des trades.
 
     source: "real" (Alpaca API + journals), "backtest" (simulations CSV), "all"
+    mode: "live", "paper", None (all)
     """
     try:
-        # Deleguer a routes_v2 qui a le helper _load_all_trades avec cache Alpaca
         from routes_v2 import _load_all_trades
         all_trades = _load_all_trades(source=source)
     except ImportError:
         all_trades = []
+
+    # Filtre par mode live/paper
+    if mode == "live":
+        all_trades = [t for t in all_trades if t.get("trade_source") == "live"]
+    elif mode == "paper":
+        all_trades = [t for t in all_trades if t.get("trade_source") in ("paper", "")]
 
     if strategy:
         all_trades = [
@@ -627,7 +638,7 @@ def get_trades(strategy: Optional[str] = None, limit: int = 50, source: str = "r
             ).lower()
         ]
 
-    return {"trades": all_trades[:limit], "count": len(all_trades), "source": source}
+    return {"trades": all_trades[:limit], "count": len(all_trades), "source": source, "mode": mode}
 
 
 # ── System Health ────────────────────────────────────────────────────────────

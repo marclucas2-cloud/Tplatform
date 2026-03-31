@@ -746,6 +746,84 @@ def risk_var():
 # TRADES ENDPOINTS
 # =============================================================================
 
+
+@router.get("/api/trades/costs")
+def trades_costs():
+    """Analyse detaillee des couts de trading (commissions, interets, slippage)."""
+    try:
+        trades = _load_all_trades(source="real")
+        # Filtrer seulement les trades avec P&L
+        trades_with_pnl = [t for t in trades if _pnl_from_trade(t) != 0 or t.get("commission")]
+
+        total_commissions = 0.0
+        total_interest = 0.0
+        total_slippage = 0.0
+        total_pnl_gross = 0.0
+        by_broker: dict[str, dict] = {}
+        by_strategy: dict[str, dict] = {}
+
+        for t in trades_with_pnl:
+            comm = _safe_float(t.get("commission", 0))
+            interest = _safe_float(t.get("interest", t.get("borrow_cost", 0)))
+            slip_bps = _safe_float(t.get("slippage_entry_bps", t.get("slippage_bps", 0)))
+            pnl = _pnl_from_trade(t)
+            pnl_gross = pnl + abs(comm) + abs(interest)
+
+            total_commissions += abs(comm)
+            total_interest += abs(interest)
+            total_slippage += abs(slip_bps)
+            total_pnl_gross += pnl_gross
+
+            # Par broker
+            broker = t.get("broker", t.get("trade_source", "unknown")).upper()
+            if broker not in by_broker:
+                by_broker[broker] = {"commissions": 0, "interest": 0, "slippage_bps_avg": 0, "trades": 0, "pnl_gross": 0}
+            by_broker[broker]["commissions"] += abs(comm)
+            by_broker[broker]["interest"] += abs(interest)
+            by_broker[broker]["slippage_bps_avg"] += abs(slip_bps)
+            by_broker[broker]["trades"] += 1
+            by_broker[broker]["pnl_gross"] += pnl_gross
+
+            # Par strategie
+            strat = t.get("strategy", t.get("source", "unknown"))
+            if strat not in by_strategy:
+                by_strategy[strat] = {"commissions": 0, "interest": 0, "slippage_bps_avg": 0, "trades": 0}
+            by_strategy[strat]["commissions"] += abs(comm)
+            by_strategy[strat]["interest"] += abs(interest)
+            by_strategy[strat]["slippage_bps_avg"] += abs(slip_bps)
+            by_strategy[strat]["trades"] += 1
+
+        # Moyenner le slippage
+        for b in by_broker.values():
+            b["slippage_bps_avg"] = round(b["slippage_bps_avg"] / max(b["trades"], 1), 1)
+            b["commissions"] = round(b["commissions"], 2)
+            b["interest"] = round(b["interest"], 2)
+            b["pnl_gross"] = round(b["pnl_gross"], 2)
+        for s in by_strategy.values():
+            s["slippage_bps_avg"] = round(s["slippage_bps_avg"] / max(s["trades"], 1), 1)
+            s["commissions"] = round(s["commissions"], 2)
+            s["interest"] = round(s["interest"], 2)
+
+        total_costs = total_commissions + total_interest
+        cost_pct = round(total_costs / abs(total_pnl_gross) * 100, 1) if total_pnl_gross else 0
+
+        return {
+            "total_commissions": round(total_commissions, 2),
+            "total_interest": round(total_interest, 2),
+            "total_slippage_bps_avg": round(total_slippage / max(len(trades_with_pnl), 1), 1),
+            "total_pnl_gross": round(total_pnl_gross, 2),
+            "cost_as_pct_of_pnl": cost_pct,
+            "cost_per_trade_avg": round(total_costs / max(len(trades_with_pnl), 1), 2),
+            "trade_count": len(trades_with_pnl),
+            "by_broker": by_broker,
+            "by_strategy": by_strategy,
+            "healthy": cost_pct < 15,  # < 15% = sain
+        }
+    except Exception as e:
+        logger.error("trades/costs error: %s", e)
+        return {"error": str(e)}
+
+
 @router.get("/api/trades/calendar")
 def trades_calendar():
     """Heatmap calendrier : {date, pnl, trade_count} pour vue calendrier."""
