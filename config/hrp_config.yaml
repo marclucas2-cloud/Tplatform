@@ -15,15 +15,15 @@ kelly:
   hysteresis_pct: 0.02    # Zone neutre pour eviter whipsaw
   modes:
     aggressive:
-      fraction: 0.25      # 1/4 Kelly
-      multiplier: 1.0
+      fraction: 0.50      # 1/2 Kelly — ROC optim phase 1
+      multiplier: 2.0
       threshold_std: 0.5  # equity > SMA + 0.5*std
     nominal:
-      fraction: 0.125     # 1/8 Kelly
-      multiplier: 0.5
+      fraction: 0.25      # 1/4 Kelly — ROC optim phase 1 (was 1/8)
+      multiplier: 1.0
     defensive:
-      fraction: 0.03125   # 1/32 Kelly
-      multiplier: 0.125
+      fraction: 0.0625    # 1/16 Kelly — ROC optim phase 1 (was 1/32)
+      multiplier: 0.25
       threshold_std: -0.5 # equity < SMA - 0.5*std
     stopped:
       fraction: 0.0
