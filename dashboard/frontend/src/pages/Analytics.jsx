@@ -413,6 +413,65 @@ export default function Analytics() {
           </div>
         </div>
       )}
+
+      {/* Pipeline Funnel */}
+      {strategies.length > 0 && (() => {
+        const phaseCounts = {}
+        for (const s of strategies) {
+          const p = s.phase || 'CODE'
+          phaseCounts[p] = (phaseCounts[p] || 0) + 1
+        }
+        const phases = [
+          { key: 'CODE', label: 'Code', color: '#6b7280', icon: '⬜' },
+          { key: 'WF_PENDING', label: 'WF Pending', color: '#a855f7', icon: '⏳' },
+          { key: 'PAPER', label: 'Paper', color: '#3b82f6', icon: '○' },
+          { key: 'PROBATION', label: 'Probation', color: '#eab308', icon: '◐' },
+          { key: 'LIVE', label: 'Live', color: '#22c55e', icon: '●' },
+        ]
+        const rejected = phaseCounts['REJECTED'] || 0
+        const maxCount = Math.max(...phases.map(p => phaseCounts[p.key] || 0), 1)
+
+        return (
+          <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-5">
+            <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">
+              Pipeline des Strategies
+            </h2>
+            <div className="space-y-2">
+              {phases.map((p) => {
+                const count = phaseCounts[p.key] || 0
+                const widthPct = Math.max((count / maxCount) * 100, 8)
+                return (
+                  <div key={p.key} className="flex items-center gap-3">
+                    <div className="w-24 text-right text-xs text-[var(--color-text-secondary)]">
+                      {p.icon} {p.label}
+                    </div>
+                    <div className="flex-1 h-7 rounded bg-[var(--color-bg-hover)] overflow-hidden relative">
+                      <div
+                        className="h-full rounded flex items-center px-3 transition-all"
+                        style={{ width: `${widthPct}%`, backgroundColor: p.color + '40' }}
+                      >
+                        <span className="text-xs font-mono font-bold" style={{ color: p.color }}>
+                          {count}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )
+              })}
+              {rejected > 0 && (
+                <div className="flex items-center gap-3 mt-1 pt-1 border-t border-[var(--color-border)]">
+                  <div className="w-24 text-right text-xs text-[var(--color-text-secondary)]">
+                    ✕ Rejete
+                  </div>
+                  <div className="flex-1">
+                    <span className="text-xs font-mono text-red-400">{rejected} strategies rejetees par WF</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
