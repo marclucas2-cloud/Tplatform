@@ -1,15 +1,19 @@
 """
-Telegram Bot Service — standalone bot with rich multi-broker data.
+Telegram Bot Service — rich multi-broker dashboard from phone.
 
-Runs as a separate systemd service. Commands:
-  /status     — Portfolio multi-broker (IBKR + Binance + Alpaca)
-  /positions  — All open positions with P&L
-  /signals    — Recent signals from worker
-  /strats     — All 46 strategies status
-  /risk       — Risk indicators + kill switch
-  /earn       — Earn positions with APY
-  /crypto     — Crypto strategies detail
-  /help       — Commands list
+Commandes:
+  /status     — NAV, P&L, brokers, regime
+  /positions  — Positions ouvertes (live + paper)
+  /strats     — Strategies par phase (LIVE/PAPER/WF)
+  /crypto     — Crypto Binance detail + earn
+  /fx         — FX carry status + signaux
+  /risk       — Kill switch, drawdown, limites
+  /signals    — Derniers signaux worker
+  /trades     — Derniers trades executes
+  /costs      — Couts trading (commissions, slippage)
+  /health     — Infra status (worker, IBKR, Binance)
+  /kill CONFIRM — KILL SWITCH (ferme tout)
+  /help       — Commandes
 """
 import os
 import sys
@@ -41,30 +45,18 @@ def _auth(update: Update) -> bool:
 
 # ── Data fetchers ────────────────────────────────────────────────────────────
 
-def _binance():
+def _binance_info():
     try:
         from core.broker.binance_broker import BinanceBroker
-        return BinanceBroker()
-    except Exception:
-        return None
-
-
-def _binance_info():
-    bnb = _binance()
-    if not bnb:
-        return {}
-    try:
-        return bnb.get_account_info()
+        return BinanceBroker().get_account_info()
     except Exception as e:
         return {"error": str(e)}
 
 
 def _binance_positions():
-    bnb = _binance()
-    if not bnb:
-        return []
     try:
-        return bnb.get_positions()
+        from core.broker.binance_broker import BinanceBroker
+        return BinanceBroker().get_positions()
     except Exception:
         return []
 
@@ -72,8 +64,7 @@ def _binance_positions():
 def _alpaca_info():
     try:
         from core.alpaca_client.client import AlpacaClient
-        ac = AlpacaClient.from_env()
-        return ac.get_account_info()
+        return AlpacaClient.from_env().get_account_info()
     except Exception as e:
         return {"error": str(e)}
 
@@ -81,299 +72,211 @@ def _alpaca_info():
 def _alpaca_positions():
     try:
         from core.alpaca_client.client import AlpacaClient
-        ac = AlpacaClient.from_env()
-        return ac.get_positions()
+        return AlpacaClient.from_env().get_positions()
     except Exception:
         return []
+
+
+def _ibkr_equity():
+    """IBKR equity from worker snapshot (no direct connection)."""
+    import glob
+    log_dir = ROOT / "logs" / "portfolio"
+    if not log_dir.exists():
+        return 0.0
+    files = sorted(glob.glob(str(log_dir / "*.jsonl")), reverse=True)
+    for fpath in files[:2]:
+        try:
+            with open(fpath) as f:
+                lines = f.readlines()
+            for line in reversed(lines[-10:]):
+                snap = json.loads(line.strip())
+                for b in snap.get("portfolio", {}).get("brokers", []):
+                    if b.get("broker") == "ibkr":
+                        return float(b.get("equity", 0))
+        except Exception:
+            continue
+    return 0.0
 
 
 def _ibkr_connected():
     import socket
     try:
-        with socket.create_connection(
-            (os.environ.get("IBKR_HOST", "127.0.0.1"),
-             int(os.environ.get("IBKR_PORT", "4002"))),
-            timeout=2
-        ):
+        host = os.environ.get("IBKR_HOST", "127.0.0.1")
+        port = int(os.environ.get("IBKR_PORT", "4002"))
+        with socket.create_connection((host, port), timeout=2):
             return True
     except Exception:
         return False
 
 
-def _worker_signals(n=12):
+def _worker_running():
     try:
-        r = subprocess.run(
-            ["journalctl", "-u", "trading-worker", "--no-pager", "-n", "150"],
-            capture_output=True, text=True, timeout=5
-        )
-        lines = []
-        for l in r.stdout.split("\n"):
-            if "SIGNAL" in l or "pas de signal" in l:
-                # Extract after [worker]
-                idx = l.find("[worker]")
-                if idx > 0:
-                    lines.append(l[idx + 9:].strip())
-                else:
-                    lines.append(l.strip()[-100:])
-        return lines[-n:]
+        import urllib.request
+        with urllib.request.urlopen("http://127.0.0.1:8080/health", timeout=2) as r:
+            return r.status == 200
+    except Exception:
+        return False
+
+
+def _worker_signals(n=15):
+    """Read recent signals from worker log file."""
+    log_file = ROOT / "logs" / "worker" / "worker_stdout.log"
+    if not log_file.exists():
+        return []
+    try:
+        lines = log_file.read_text(errors="replace").split("\n")
+        signals = []
+        for l in reversed(lines):
+            if any(k in l for k in ["SIGNAL", "pas de signal", "aucun signal", "SKIP"]):
+                # Extract timestamp + message
+                parts = l.split("] ", 1)
+                msg = parts[-1].strip() if len(parts) > 1 else l.strip()
+                if msg and len(msg) > 5:
+                    signals.append(msg[:120])
+            if len(signals) >= n:
+                break
+        return list(reversed(signals))
     except Exception:
         return []
+
+
+def _load_cash_flows():
+    cf_path = ROOT / "data" / "cash_flows.jsonl"
+    if not cf_path.exists():
+        return []
+    try:
+        return [json.loads(l) for l in cf_path.read_text().strip().split("\n") if l.strip()]
+    except Exception:
+        return []
+
+
+def _strategy_phases():
+    """Load strategy phases from registry."""
+    try:
+        reg_path = ROOT / "dashboard" / "api" / "strategy_registry.py"
+        ns = {}
+        exec(reg_path.read_text(encoding="utf-8"), ns)
+        return ns.get("STRATEGY_PHASES", {})
+    except Exception:
+        return {}
 
 
 # ── Commands ─────────────────────────────────────────────────────────────────
 
 async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/status — Portfolio complet multi-broker."""
+    """/status — NAV live, P&L, brokers."""
     if not _auth(update):
         return
 
     bnb = _binance_info()
     alp = _alpaca_info()
+    ibkr_eq = _ibkr_equity()
     ibkr_ok = _ibkr_connected()
 
-    bnb_eq = bnb.get("equity", 0)
-    bnb_spot = bnb.get("spot_total_usd", 0)
-    bnb_earn = bnb.get("earn_total_usd", 0)
-    alp_eq = alp.get("equity", 0)
-    alp_paper = alp.get("paper", True)
+    bnb_eq = float(bnb.get("equity", 0))
+    alp_eq = float(alp.get("equity", 0))
 
-    total = bnb_eq + alp_eq
+    nav_live = bnb_eq + ibkr_eq
+    cash_flows = _load_cash_flows()
+    total_deposited = sum(cf["amount"] for cf in cash_flows if cf.get("type") == "deposit")
+    pnl = nav_live - total_deposited
+    pnl_pct = (pnl / total_deposited * 100) if total_deposited > 0 else 0
 
     now = datetime.now(timezone.utc).strftime("%H:%M UTC")
+    sign = "+" if pnl >= 0 else ""
 
     text = (
-        f"\U0001f4ca *Portfolio Status* ({now})\n"
-        f"{'=' * 30}\n\n"
-        f"\U0001f7e2 *Binance* — LIVE\n"
-        f"  Equity: `${bnb_eq:,.2f}`\n"
-        f"  Spot: `${bnb_spot:,.2f}`\n"
-        f"  Earn: `${bnb_earn:,.2f}`\n"
-        f"  Margin lvl: `{bnb.get('margin_level', 'N/A')}`\n\n"
-        f"{'🟢' if ibkr_ok else '🔴'} *IBKR* — {'LIVE' if ibkr_ok else 'OFF (weekend)'}\n"
-        f"  Capital: `~500 EUR` (virement 10K en cours)\n"
-        f"  Port: `{os.environ.get('IBKR_PORT', '4002')}`\n\n"
-        f"\U0001f7e1 *Alpaca* — {'PAPER' if alp_paper else 'LIVE'}\n"
-        f"  Equity: `${alp_eq:,.2f}`\n\n"
-        f"\U0001f4b0 *Total*: `${total:,.2f}`\n"
-        f"\U0001f6e1 Safety Mode: `ON (Phase 1)`"
+        f"📊 *NAV & P&L* ({now})\n"
+        f"{'─' * 28}\n"
+        f"NAV Live: `${nav_live:,.0f}`\n"
+        f"P&L Trading: `{sign}${pnl:,.0f}` ({sign}{pnl_pct:.1f}%)\n"
+        f"Depose: `${total_deposited:,.0f}`\n\n"
+        f"🟢 *IBKR* — {'LIVE' if ibkr_ok else 'OFF'}\n"
+        f"  Equity: `${ibkr_eq:,.0f}`\n"
+        f"🟢 *Binance* — LIVE\n"
+        f"  Equity: `${bnb_eq:,.0f}`\n"
+        f"  Spot: `${bnb.get('spot_total_usd', 0):,.0f}` | Earn: `${bnb.get('earn_total_usd', 0):,.0f}`\n"
+        f"🟡 *Alpaca* — PAPER\n"
+        f"  Equity: `${alp_eq:,.0f}`\n"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
 
 async def cmd_positions(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/positions — Toutes les positions ouvertes."""
+    """/positions — Toutes les positions."""
     if not _auth(update):
         return
 
     bnb_pos = _binance_positions()
     alp_pos = _alpaca_positions()
 
-    lines = ["\U0001f4cb *Positions Ouvertes*\n"]
+    lines = ["📋 *Positions Ouvertes*\n"]
 
     if bnb_pos:
-        lines.append("*Binance:*")
+        lines.append("*Binance (LIVE):*")
         for p in bnb_pos[:10]:
             sym = p.get("symbol", "?")
-            qty = float(p.get("qty", 0))
-            mv = float(p.get("market_value", 0))
             pnl = float(p.get("unrealized_pl", 0))
-            entry = float(p.get("avg_entry", 0))
-            price = float(p.get("current_price", 0))
+            mv = float(p.get("market_value", 0))
             sign = "+" if pnl >= 0 else ""
-            emoji = "\U0001f7e2" if pnl >= 0 else "\U0001f534"
-            lines.append(
-                f"  {emoji} `{sym}` qty={qty:.6f}\n"
-                f"      entry=${entry:,.2f} now=${price:,.2f}\n"
-                f"      val=${mv:,.2f} P&L={sign}${pnl:,.2f}"
-            )
+            e = "🟢" if pnl >= 0 else "🔴"
+            lines.append(f"  {e} `{sym}` ${mv:,.0f} P&L={sign}${pnl:,.0f}")
     else:
-        lines.append("*Binance:* Aucune position")
+        lines.append("*Binance:* Aucune position directionnelle")
 
     if alp_pos:
         lines.append("\n*Alpaca (PAPER):*")
         for p in alp_pos[:10]:
             sym = p.get("symbol", "?")
-            qty = float(p.get("qty", 0))
-            mv = float(p.get("market_val", 0))
             pnl = float(p.get("unrealized_pl", 0))
             sign = "+" if pnl >= 0 else ""
-            emoji = "\U0001f7e2" if pnl >= 0 else "\U0001f534"
-            lines.append(f"  {emoji} `{sym}` {qty} shares val=${mv:,.2f} P&L={sign}${pnl:,.2f}")
+            e = "🟢" if pnl >= 0 else "🔴"
+            lines.append(f"  {e} `{sym}` P&L={sign}${pnl:,.0f}")
     else:
         lines.append("\n*Alpaca:* Aucune position")
 
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
-async def cmd_signals(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/signals — Derniers signaux du worker."""
-    if not _auth(update):
-        return
-
-    signals = _worker_signals(12)
-    if not signals:
-        await update.message.reply_text("Aucun signal recent.")
-        return
-
-    lines = ["\U0001f4e1 *Derniers Signaux*\n"]
-    for s in signals:
-        if "SIGNAL" in s:
-            lines.append(f"\U0001f534 `{s[:120]}`")
-        else:
-            lines.append(f"\u2796 `{s[:80]}`")
-
-    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
-
-
 async def cmd_strats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/strats — Toutes les strategies par categorie."""
+    """/strats — Strategies par phase lifecycle."""
     if not _auth(update):
         return
 
-    lines = ["\U0001f3af *Strategies (46 total)*\n"]
+    phases = _strategy_phases()
+    grouped = {}
+    for sid, info in phases.items():
+        p = info.get("phase", "CODE")
+        grouped.setdefault(p, []).append((sid, info))
 
-    # Crypto
-    try:
-        sys.path.insert(0, str(ROOT))
-        from strategies.crypto import CRYPTO_STRATEGIES
-        lines.append(f"*Crypto Binance ({len(CRYPTO_STRATEGIES)} strats):*")
-        for sid, data in CRYPTO_STRATEGIES.items():
-            cfg = data["config"]
-            name = cfg.get("name", sid)
-            mtype = cfg.get("market_type", "spot")
-            alloc = cfg.get("allocation_pct", 0) * 100
-            lines.append(f"  \U0001f7e2 `{name}` [{mtype}] {alloc:.0f}%")
-    except Exception as e:
-        lines.append(f"  Erreur crypto: {e}")
+    icons = {"LIVE": "🟢", "PROBATION": "🟡", "PAPER": "🔵", "WF_PENDING": "⏳", "CODE": "⬜", "REJECTED": "❌"}
+    order = ["LIVE", "PROBATION", "PAPER", "WF_PENDING", "CODE", "REJECTED"]
 
-    # FX/EU
-    lines.append(f"\n*FX/EU (IBKR) — 15 strats:*")
-    fx_strats = [
-        "EUR/USD Carry", "EUR/GBP MR", "EUR/JPY Mom",
-        "AUD/JPY Carry", "GBP/USD Trend", "USD/CHF Range",
-        "NZD/USD Carry", "EUR/NOK Carry", "EU STOXX Pairs",
-        "DAX Opening Range", "CAC MR", "FTSE Gap",
-        "EUR/SEK", "Lead-Lag Cross-TZ", "Nordic Carry"
-    ]
-    for s in fx_strats[:8]:
-        lines.append(f"  \U0001f535 `{s}`")
-    lines.append(f"  ... +{len(fx_strats)-8} autres")
-
-    # US
-    lines.append(f"\n*US Equities (Alpaca PAPER) — 7 strats:*")
-    us_strats = ["OpEx Gamma", "Gap Continuation", "Day-of-Week",
-                 "Late Day MR", "Crypto Proxy V2", "Triple EMA", "Dow Seasonal"]
-    for s in us_strats:
-        lines.append(f"  \U0001f7e1 `{s}`")
-
-    # Futures
-    lines.append(f"\n*Futures Micro (IBKR) — 8 strats:*")
-    lines.append(f"  \U0001f535 MES Trend, MNQ MR, MCL Brent, MGC Gold...")
+    lines = [f"🎯 *Strategies ({len(phases)} total)*\n"]
+    for phase in order:
+        items = grouped.get(phase, [])
+        if not items:
+            continue
+        icon = icons.get(phase, "·")
+        lines.append(f"\n*{icon} {phase} ({len(items)}):*")
+        for sid, info in items:
+            ac = info.get("asset_class", "")
+            broker = info.get("broker", "")
+            name = sid.replace("_", " ").title()
+            lines.append(f"  `{name}` [{ac}] {broker}")
 
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
-async def cmd_risk(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/risk — Indicateurs de risque complets."""
+async def cmd_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/crypto — Detail crypto Binance + earn."""
     if not _auth(update):
         return
 
     bnb = _binance_info()
-    ibkr_ok = _ibkr_connected()
+    equity = float(bnb.get("equity", 0))
 
-    # Worker health
-    worker_ok = False
-    try:
-        import urllib.request
-        with urllib.request.urlopen("http://127.0.0.1:8080/health", timeout=2) as r:
-            worker_ok = r.status == 200
-    except Exception:
-        pass
-
-    text = (
-        f"\U0001f6e1 *Risk Status*\n"
-        f"{'=' * 30}\n\n"
-        f"*Kill Switch:*\n"
-        f"  IBKR: `OFF` \U0001f7e2\n"
-        f"  Binance: `OFF` \U0001f7e2\n\n"
-        f"*Margin:*\n"
-        f"  Binance level: `{bnb.get('margin_level', 'N/A')}`\n"
-        f"  Borrowed BTC: `{bnb.get('margin_borrowed_btc', 0)}`\n\n"
-        f"*Infra:*\n"
-        f"  Worker: `{'RUNNING' if worker_ok else 'OFF'}` {'🟢' if worker_ok else '🔴'}\n"
-        f"  IBKR Gateway: `{'ON' if ibkr_ok else 'OFF'}` {'🟢' if ibkr_ok else '🔴'}\n"
-        f"  Dashboard: `ON` \U0001f7e2\n\n"
-        f"*Safety Mode:* `Phase 1 ON`\n"
-        f"  Max 5 strats simultanées\n"
-        f"  Max leverage 1.0x\n"
-        f"  Max ERE 20%"
-    )
-    await update.message.reply_text(text, parse_mode="Markdown")
-
-
-async def cmd_earn(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/earn — Positions Earn Binance avec APY."""
-    if not _auth(update):
-        return
-
-    bnb = _binance()
-    if not bnb:
-        await update.message.reply_text("Binance indisponible.")
-        return
-
-    try:
-        resp = bnb._get("/sapi/v1/simple-earn/flexible/position", signed=True, weight=10)
-        rows = resp.get("rows", []) if isinstance(resp, dict) else []
-
-        lines = ["\U0001f4b0 *Earn Positions (Flexible)*\n"]
-        total_usd = 0
-
-        for r in rows:
-            amt = float(r.get("totalAmount", 0))
-            if amt <= 0:
-                continue
-            asset = r.get("asset", "?")
-            apy = float(r.get("latestAnnualPercentageRate", 0)) * 100
-
-            # USD value
-            usd_val = 0
-            if asset in ("USDT", "USDC"):
-                usd_val = amt
-            else:
-                try:
-                    ticker = bnb._get("/api/v3/ticker/price", {"symbol": asset + "USDT"})
-                    usd_val = amt * float(ticker["price"])
-                except Exception:
-                    pass
-            total_usd += usd_val
-
-            daily_yield = usd_val * (apy / 100) / 365
-            lines.append(
-                f"  `{asset}`: {amt:.4f} (${usd_val:,.2f})\n"
-                f"      APY: {apy:.1f}% | yield/jour: ${daily_yield:.2f}"
-            )
-
-        daily_total = total_usd * 0.04 / 365  # ~4% average APY estimate
-        lines.append(f"\n\U0001f4b5 *Total Earn:* `${total_usd:,.2f}`")
-        lines.append(f"\U0001f4c8 *Yield/jour:* ~`${daily_total:.2f}`")
-
-        await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
-    except Exception as e:
-        await update.message.reply_text(f"Erreur: {e}")
-
-
-async def cmd_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/crypto — Detail strategies crypto."""
-    if not _auth(update):
-        return
-
-    bnb_info = _binance_info()
-    equity = bnb_info.get("equity", 0)
-
-    lines = [
-        f"\U0001f4ca *Crypto Binance* — LIVE\n",
-        f"Equity: `${equity:,.2f}`\n",
-    ]
+    lines = [f"🪙 *Crypto Binance* — LIVE\n", f"Equity: `${equity:,.0f}`\n"]
 
     try:
         from strategies.crypto import CRYPTO_STRATEGIES
@@ -382,39 +285,277 @@ async def cmd_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
             name = cfg.get("name", sid)
             mtype = cfg.get("market_type", "spot")
             alloc = cfg.get("allocation_pct", 0)
-            symbols = ", ".join(cfg.get("symbols", [])[:3])
             capital = equity * alloc
-            tf = cfg.get("timeframe", "?")
-
-            badge = {"spot": "\U0001f4b5", "margin": "\U0001f4b3", "earn": "\U0001f3e6"}.get(mtype, "\U0001f4b0")
-            lines.append(
-                f"{badge} *{name}*\n"
-                f"  {mtype} | {tf} | {alloc*100:.0f}% (${capital:,.0f})\n"
-                f"  {symbols}"
-            )
+            badge = {"spot": "💵", "margin": "💳", "earn": "🏦"}.get(mtype, "💰")
+            lines.append(f"{badge} *{name}* [{mtype}] {alloc*100:.0f}% (${capital:,.0f})")
     except Exception as e:
         lines.append(f"Erreur: {e}")
 
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
 
+async def cmd_fx(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/fx — FX carry status."""
+    if not _auth(update):
+        return
+
+    ibkr_eq = _ibkr_equity()
+    ibkr_ok = _ibkr_connected()
+
+    # Read last FX signal from worker log
+    log_file = ROOT / "logs" / "worker" / "worker_stdout.log"
+    fx_lines = []
+    if log_file.exists():
+        try:
+            for l in reversed(log_file.read_text(errors="replace").split("\n")):
+                if "FX CARRY" in l or "FX PAPER" in l or "CarryVS" in l or "CarryMom" in l:
+                    parts = l.split("] ", 1)
+                    fx_lines.append(parts[-1].strip()[:120] if len(parts) > 1 else l.strip()[:120])
+                if len(fx_lines) >= 5:
+                    break
+        except Exception:
+            pass
+
+    text = (
+        f"💱 *FX Status*\n"
+        f"{'─' * 28}\n"
+        f"IBKR: `{'CONNECTED' if ibkr_ok else 'OFF'}` {'🟢' if ibkr_ok else '🔴'}\n"
+        f"Equity: `${ibkr_eq:,.0f}`\n"
+        f"Mode: `LIVE` (carry daily 10h CET)\n\n"
+        f"*Strats actives:*\n"
+        f"  📈 FX Carry Vol-Scaled\n"
+        f"  📈 FX Carry Momentum Filter\n"
+        f"  📝 FX Paper (5 paires, 5min)\n\n"
+        f"*Derniers signaux:*\n"
+    )
+    if fx_lines:
+        for l in reversed(fx_lines):
+            text += f"  `{l}`\n"
+    else:
+        text += "  Aucun signal FX recent\n"
+
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
+async def cmd_risk(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/risk — Kill switch, drawdown, limites."""
+    if not _auth(update):
+        return
+
+    worker_ok = _worker_running()
+    ibkr_ok = _ibkr_connected()
+
+    # Kill switch states
+    ks_ibkr = "OFF"
+    ks_crypto = "OFF"
+    try:
+        ks_path = ROOT / "data" / "kill_switch_state.json"
+        if ks_path.exists():
+            ks = json.loads(ks_path.read_text())
+            if ks.get("active"):
+                ks_ibkr = "ACTIVE ⚠️"
+    except Exception:
+        pass
+    try:
+        ks_path = ROOT / "data" / "crypto" / "kill_switch_state.json"
+        if ks_path.exists():
+            ks = json.loads(ks_path.read_text())
+            if ks.get("active"):
+                ks_crypto = "ACTIVE ⚠️"
+    except Exception:
+        pass
+
+    text = (
+        f"🛡 *Risk Dashboard*\n"
+        f"{'─' * 28}\n\n"
+        f"*Kill Switch:*\n"
+        f"  IBKR: `{ks_ibkr}` {'🟢' if 'OFF' in ks_ibkr else '🔴'}\n"
+        f"  Crypto: `{ks_crypto}` {'🟢' if 'OFF' in ks_crypto else '🔴'}\n\n"
+        f"*Infra:*\n"
+        f"  Worker: `{'ON' if worker_ok else 'OFF'}` {'🟢' if worker_ok else '🔴'}\n"
+        f"  IBKR GW: `{'ON' if ibkr_ok else 'OFF'}` {'🟢' if ibkr_ok else '🔴'}\n"
+        f"  Dashboard: `ON` 🟢\n\n"
+        f"*Limites:*\n"
+        f"  Max DD daily: `-5%`\n"
+        f"  Max DD hourly: `-3%`\n"
+        f"  Kelly mode: `NOMINAL (1/8)`\n"
+        f"  Crypto regime: `BEAR`"
+    )
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
+async def cmd_signals(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/signals — Derniers signaux worker."""
+    if not _auth(update):
+        return
+
+    signals = _worker_signals(15)
+    if not signals:
+        await update.message.reply_text("Aucun signal recent dans les logs.")
+        return
+
+    lines = ["📡 *Derniers Signaux*\n"]
+    for s in signals:
+        if "SIGNAL" in s.upper():
+            lines.append(f"  🔴 `{s}`")
+        elif "pas de signal" in s or "aucun signal" in s:
+            lines.append(f"  ➖ `{s}`")
+        else:
+            lines.append(f"  ℹ️ `{s}`")
+
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+async def cmd_trades(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/trades — Derniers trades."""
+    if not _auth(update):
+        return
+
+    log_file = ROOT / "logs" / "worker" / "worker_stdout.log"
+    trade_lines = []
+    if log_file.exists():
+        try:
+            for l in reversed(log_file.read_text(errors="replace").split("\n")):
+                if any(k in l for k in ["ORDER", "FILL", "TRADE", "BUY", "SELL", "EXECUTED"]):
+                    if "ib_insync" not in l and "alpaca" not in l.lower()[:30]:
+                        parts = l.split("] ", 1)
+                        trade_lines.append(parts[-1].strip()[:120] if len(parts) > 1 else l.strip()[:120])
+                if len(trade_lines) >= 10:
+                    break
+        except Exception:
+            pass
+
+    if not trade_lines:
+        await update.message.reply_text("Aucun trade recent dans les logs.\n(Regime BEAR — pas de setups)")
+        return
+
+    lines = ["📈 *Derniers Trades*\n"]
+    for t in reversed(trade_lines):
+        lines.append(f"  `{t}`")
+    await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
+
+
+async def cmd_costs(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/costs — Resume couts trading."""
+    if not _auth(update):
+        return
+
+    try:
+        import urllib.request
+        r = urllib.request.urlopen("http://127.0.0.1:8080/api/trades/costs", timeout=5)
+        data = json.loads(r.read())
+    except Exception:
+        # Fallback: pas de dashboard API
+        data = {}
+
+    if not data or data.get("error"):
+        await update.message.reply_text("Pas de donnees de couts disponibles.")
+        return
+
+    text = (
+        f"💸 *Couts Trading*\n"
+        f"{'─' * 28}\n"
+        f"Commissions: `${data.get('total_commissions', 0):,.2f}`\n"
+        f"Interets: `${data.get('total_interest', 0):,.2f}`\n"
+        f"Slippage moy: `{data.get('total_slippage_bps_avg', 0):.1f} bps`\n"
+        f"Cout/trade: `${data.get('cost_per_trade_avg', 0):,.2f}`\n"
+        f"Couts % P&L: `{data.get('cost_as_pct_of_pnl', 0):.1f}%` "
+        f"{'✅' if data.get('healthy') else '⚠️'}\n"
+        f"Trades: `{data.get('trade_count', 0)}`"
+    )
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
+async def cmd_health(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/health — Status infrastructure."""
+    if not _auth(update):
+        return
+
+    worker_ok = _worker_running()
+    ibkr_ok = _ibkr_connected()
+
+    # Check services via systemctl
+    services = {}
+    for svc in ["trading-worker", "ibgateway", "trading-dashboard", "trading-watchdog", "trading-telegram"]:
+        try:
+            r = subprocess.run(["systemctl", "is-active", svc], capture_output=True, text=True, timeout=3)
+            services[svc] = r.stdout.strip() == "active"
+        except Exception:
+            services[svc] = False
+
+    text = (
+        f"🏥 *Infrastructure*\n"
+        f"{'─' * 28}\n"
+    )
+    for svc, ok in services.items():
+        name = svc.replace("trading-", "").replace("ibgateway", "IB Gateway").title()
+        text += f"  {'🟢' if ok else '🔴'} {name}: `{'ON' if ok else 'OFF'}`\n"
+
+    text += (
+        f"\n*Health checks:*\n"
+        f"  Worker HTTP: `{'OK' if worker_ok else 'FAIL'}`\n"
+        f"  IBKR TCP: `{'OK' if ibkr_ok else 'FAIL'}`\n"
+    )
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
+async def cmd_kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/kill CONFIRM — Ferme toutes les positions."""
+    if not _auth(update):
+        return
+
+    args = " ".join(context.args) if context.args else ""
+    if args.upper() != "CONFIRM":
+        await update.message.reply_text(
+            "⚠️ *KILL SWITCH*\n\n"
+            "Ceci fermera TOUTES les positions live.\n"
+            "Envoyez `/kill CONFIRM` pour executer.",
+            parse_mode="Markdown"
+        )
+        return
+
+    # Execute kill switch
+    results = []
+    try:
+        from core.broker.binance_broker import BinanceBroker
+        bnb = BinanceBroker()
+        bnb.cancel_all_orders()
+        results.append("Binance: ordres annules")
+    except Exception as e:
+        results.append(f"Binance: erreur {e}")
+
+    try:
+        from core.broker.ibkr_adapter import IBKRBroker
+        with IBKRBroker(client_id=50) as ibkr:
+            ibkr.cancel_all_orders()
+            results.append("IBKR: ordres annules")
+    except Exception as e:
+        results.append(f"IBKR: erreur {e}")
+
+    text = "🔴 *KILL SWITCH ACTIVE*\n\n" + "\n".join(f"  {r}" for r in results)
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/help — Liste des commandes."""
     if not _auth(update):
         return
 
     text = (
-        "\U0001f916 *tradingKing Bot*\n"
-        f"{'=' * 25}\n\n"
-        "/status — Portfolio multi-broker\n"
-        "/positions — Positions ouvertes\n"
-        "/signals — Derniers signaux worker\n"
-        "/strats — 46 strategies (toutes)\n"
-        "/crypto — Detail crypto Binance\n"
-        "/risk — Risk + kill switch + infra\n"
-        "/earn — Earn positions + APY\n"
-        "/help — Cette aide\n\n"
-        "\U0001f310 Dashboard: trading.aucoeurdeville-laval.fr"
+        "🤖 *Trading Bot*\n"
+        f"{'─' * 25}\n\n"
+        "📊 /status — NAV, P&L, brokers\n"
+        "📋 /positions — Positions ouvertes\n"
+        "🎯 /strats — Strategies par phase\n"
+        "🪙 /crypto — Crypto Binance\n"
+        "💱 /fx — FX carry status\n"
+        "🛡 /risk — Risk + kill switch\n"
+        "📡 /signals — Derniers signaux\n"
+        "📈 /trades — Derniers trades\n"
+        "💸 /costs — Couts trading\n"
+        "🏥 /health — Infra status\n"
+        "🔴 /kill CONFIRM — KILL SWITCH\n"
+        "❓ /help — Cette aide\n\n"
+        "🌐 Dashboard: trading.aucoeurdeville-laval.fr"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -422,20 +563,24 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    logger.info(f"Starting tradingKing bot (chat_id={CHAT_ID})")
+    logger.info(f"Starting trading bot (chat_id={CHAT_ID})")
     app = Application.builder().token(TOKEN).build()
 
     app.add_handler(CommandHandler("status", cmd_status))
     app.add_handler(CommandHandler("positions", cmd_positions))
-    app.add_handler(CommandHandler("signals", cmd_signals))
     app.add_handler(CommandHandler("strats", cmd_strats))
     app.add_handler(CommandHandler("crypto", cmd_crypto))
+    app.add_handler(CommandHandler("fx", cmd_fx))
     app.add_handler(CommandHandler("risk", cmd_risk))
-    app.add_handler(CommandHandler("earn", cmd_earn))
+    app.add_handler(CommandHandler("signals", cmd_signals))
+    app.add_handler(CommandHandler("trades", cmd_trades))
+    app.add_handler(CommandHandler("costs", cmd_costs))
+    app.add_handler(CommandHandler("health", cmd_health))
+    app.add_handler(CommandHandler("kill", cmd_kill))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("start", cmd_help))
 
-    logger.info("Bot polling started — 8 commands active")
+    logger.info("Bot polling started — 12 commands active")
     app.run_polling(drop_pending_updates=True)
 
 
