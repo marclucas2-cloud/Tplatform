@@ -1,7 +1,71 @@
 """
 Registre complet des strategies avec descriptions, edges et parametres.
 Source unique de verite pour le dashboard.
+
+Phases du lifecycle :
+  LIVE      = trading reel, P&L reel
+  PROBATION = live 1/16 Kelly, monitoring renforce
+  PAPER     = paper trading, pas de P&L reel
+  WF_PENDING = code, en attente de walk-forward
+  CODE      = code, pas encore backteste
+  REJECTED  = rejete par walk-forward (overfitting)
 """
+
+# Phase et asset_class par strategie (source de verite)
+STRATEGY_PHASES = {
+    # US Strategies — Alpaca (paper)
+    "opex_gamma":       {"phase": "REJECTED",   "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-28"},
+    "gap_continuation": {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-15"},
+    "gold_fear":        {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-15"},
+    "crypto_proxy_v2":  {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-15"},
+    "dow_seasonal":     {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-15"},
+    "vwap_micro":       {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-15"},
+    "gap_fade_orb":     {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-15"},
+    "extreme_reversal": {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-15"},
+    "corr_hedge":       {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-15"},
+    "triple_ema":       {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-15"},
+    "lateday_meanrev":  {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-15"},
+    "vix_short":        {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-28"},
+    "failed_rally":     {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-28"},
+    "high_beta_short":  {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-28"},
+    "momentum_25":      {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-15"},
+    "pairs_mu_amat":    {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-15"},
+    "vrp_rotation":     {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-15"},
+    "eod_sell_v2":      {"phase": "PAPER",      "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-28"},
+    # Crypto — Binance (live)
+    "btc_eth_dual_momentum":  {"phase": "LIVE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-28"},
+    "altcoin_rs":             {"phase": "LIVE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-28"},
+    "btc_mean_reversion":     {"phase": "LIVE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-28"},
+    "vol_breakout":           {"phase": "LIVE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-28"},
+    "btc_dominance_rotation": {"phase": "LIVE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-28"},
+    "borrow_rate_carry":      {"phase": "LIVE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-28"},
+    "liquidation_momentum":   {"phase": "LIVE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-28"},
+    "weekend_gap_reversal":   {"phase": "LIVE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-28"},
+    "funding_rate_divergence":{"phase": "PROBATION",  "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-30"},
+    "eth_btc_ratio":          {"phase": "PROBATION",  "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-30"},
+    "crypto_session_momentum":{"phase": "WF_PENDING", "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-31"},
+    "crypto_rsi_divergence":  {"phase": "WF_PENDING", "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-31"},
+    # FX — IBKR (paper -> live bientot)
+    "fx_carry_g10":           {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
+    "fx_carry_vs":            {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
+    "fx_carry_momentum":      {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
+    "fx_momentum_breakout":   {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
+    "fx_mean_reversion":      {"phase": "PAPER",      "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-28"},
+    "fx_session_london":      {"phase": "WF_PENDING", "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-31"},
+    # EU — IBKR (paper)
+    "eu_mean_reversion_dax":  {"phase": "PAPER",      "asset_class": "EU",     "broker": "IBKR",    "phase_since": "2026-03-28"},
+    "eu_mean_reversion_cac":  {"phase": "PAPER",      "asset_class": "EU",     "broker": "IBKR",    "phase_since": "2026-03-28"},
+    "eu_orb_frankfurt":       {"phase": "PAPER",      "asset_class": "EU",     "broker": "IBKR",    "phase_since": "2026-03-28"},
+    "eu_bce_press":           {"phase": "PAPER",      "asset_class": "EU",     "broker": "IBKR",    "phase_since": "2026-03-28"},
+    "eu_sector_rotation":     {"phase": "PAPER",      "asset_class": "EU",     "broker": "IBKR",    "phase_since": "2026-03-28"},
+    # Futures — IBKR (WF pending)
+    "mes_mnq_pairs":          {"phase": "WF_PENDING", "asset_class": "FUTURES","broker": "IBKR",    "phase_since": "2026-03-31"},
+    "mes_trend":              {"phase": "WF_PENDING", "asset_class": "FUTURES","broker": "IBKR",    "phase_since": "2026-03-31"},
+    "mcl_seasonal":           {"phase": "WF_PENDING", "asset_class": "FUTURES","broker": "IBKR",    "phase_since": "2026-03-31"},
+    # Single stocks
+    "earnings_drift":         {"phase": "WF_PENDING", "asset_class": "US",     "broker": "ALPACA",  "phase_since": "2026-03-31"},
+    "pairs_trading_jpy":      {"phase": "WF_PENDING", "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-31"},
+}
 
 STRATEGY_REGISTRY = {
     "opex_gamma": {

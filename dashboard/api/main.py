@@ -292,11 +292,19 @@ def get_positions():
 
 @app.get("/api/strategies")
 def get_strategies():
-    """Liste de toutes les strategies avec config et sante."""
+    """Liste de toutes les strategies avec config, sante et phase lifecycle."""
     try:
         strategies, tier_alloc = _get_strategies_config()
         state = _load_state()
         pnl_log = state.get("strategy_pnl_log", {})
+
+        # Charger les phases depuis le registre
+        phase_map = {}
+        try:
+            from strategy_registry import STRATEGY_PHASES
+            phase_map = STRATEGY_PHASES
+        except Exception:
+            pass
 
         result = []
         for sid, s in strategies.items():
@@ -307,12 +315,11 @@ def get_strategies():
             threshold = -alloc_pct * 100_000 * 0.02  # -2% du capital alloue
             tier = _tier_for_strategy(sid, tier_alloc)
 
-            # Status
+            # Status legacy
             status = "ACTIVE"
             if pnl_5d < threshold and len(log) >= 5:
                 status = "PAUSED"
             if sid == "triple_ema":
-                # Check regime
                 try:
                     from scripts.paper_portfolio import get_market_regime
                     regime = get_market_regime()
@@ -321,11 +328,22 @@ def get_strategies():
                 except Exception:
                     pass
 
+            # Phase lifecycle (nouveau)
+            phase_info = phase_map.get(sid, {})
+            phase = phase_info.get("phase", "CODE")
+            asset_class = phase_info.get("asset_class", "US")
+            broker = phase_info.get("broker", "ALPACA")
+            phase_since = phase_info.get("phase_since", "")
+
             result.append({
                 "id": sid,
                 "name": s["name"],
                 "tier": tier,
                 "status": status,
+                "phase": phase,
+                "asset_class": asset_class,
+                "broker": broker,
+                "phase_since": phase_since,
                 "type": s.get("frequency", "intraday"),
                 "sharpe": s["sharpe"],
                 "allocation_pct": round(alloc_pct * 100, 1),
@@ -334,6 +352,31 @@ def get_strategies():
                 "kill_threshold": round(threshold, 2),
                 "kill_margin_pct": round((pnl_5d - threshold) / abs(threshold) * 100, 0) if threshold != 0 else 100,
             })
+
+        # Ajouter les strategies du phase_map qui ne sont pas dans le config
+        existing_ids = {s["id"] for s in result}
+        registry = _load_strategy_registry()
+        for sid, info in phase_map.items():
+            if sid not in existing_ids:
+                reg_entry = registry.get(sid, {})
+                bt = reg_entry.get("backtest", {})
+                result.append({
+                    "id": sid,
+                    "name": reg_entry.get("name", sid.replace("_", " ").title()),
+                    "tier": "C",
+                    "status": "INACTIVE",
+                    "phase": info.get("phase", "CODE"),
+                    "asset_class": info.get("asset_class", ""),
+                    "broker": info.get("broker", ""),
+                    "phase_since": info.get("phase_since", ""),
+                    "type": reg_entry.get("type", "daily"),
+                    "sharpe": bt.get("sharpe", 0),
+                    "allocation_pct": 0,
+                    "capital": 0,
+                    "pnl_5d": 0,
+                    "kill_threshold": 0,
+                    "kill_margin_pct": 100,
+                })
 
         result.sort(key=lambda x: -x["sharpe"])
         return {"strategies": result, "count": len(result)}
