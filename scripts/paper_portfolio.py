@@ -571,6 +571,8 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
     from strategies.correlation_regime_hedge import CorrelationRegimeHedgeStrategy
     from strategies.vix_expansion_short import VIXExpansionShortStrategy
     from strategies.failed_rally_short import FailedRallyShortStrategy
+    from strategies.eod_sell_v2 import EODSellV2Strategy
+    from strategies.high_beta_underperf_short import HighBetaUnderperfShortStrategy
 
     STRAT_MAP = {
         "dow_seasonal": DayOfWeekSeasonalStrategy,
@@ -578,6 +580,8 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         "corr_hedge": CorrelationRegimeHedgeStrategy,
         "vix_short": VIXExpansionShortStrategy,
         "failed_rally_short": FailedRallyShortStrategy,
+        "eod_sell_v2": EODSellV2Strategy,
+        "high_beta_short": HighBetaUnderperfShortStrategy,
     }
 
     strat_class = STRAT_MAP.get(strategy_id)
