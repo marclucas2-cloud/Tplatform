@@ -1,7 +1,9 @@
 import { useState } from 'react'
 import { useApi } from '../hooks/useApi'
 import MetricCard from '../components/MetricCard'
-import { FileText, Download, Info, AlertTriangle } from 'lucide-react'
+import { FileText, Download, Info, AlertTriangle, Coins, PiggyBank } from 'lucide-react'
+import Tooltip from '../components/common/Tooltip'
+import { TOOLTIPS } from '../utils/tooltips'
 
 const DEFAULT_ACCOUNT = { plus_values: 0, moins_values: 0, pv_nette: 0, pfu: 0 }
 
@@ -66,7 +68,7 @@ export default function Tax() {
       {/* KPI Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <MetricCard label="PV Nette Totale" value={summary.total.pv_nette} prefix="$" color="text-[var(--color-profit)]" />
-        <MetricCard label="PFU 30% Du" value={summary.total.pfu} prefix="$" color="text-[var(--color-warning)]" />
+        <MetricCard label={<Tooltip text={TOOLTIPS.pfu}>PFU 30% Du</Tooltip>} value={summary.total.pfu} prefix="$" color="text-[var(--color-warning)]" />
         <MetricCard label="Plus-Values" value={summary.total.plus_values} prefix="+$" color="text-[var(--color-profit)]" />
         <MetricCard label="Moins-Values" value={Math.abs(summary.total.moins_values)} prefix="-$" color="text-[var(--color-loss)]" />
       </div>
@@ -137,6 +139,50 @@ export default function Tax() {
                 Les echanges crypto-crypto ne sont PAS imposables. Seule la conversion vers EUR/fiat
                 declenche l'impot. Les interets Earn sont imposes comme des revenus de capitaux mobiliers.
               </p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Crypto-Crypto Savings & Provision */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <Coins size={18} className="text-emerald-400 mt-0.5 shrink-0" />
+            <div>
+              <h3 className="text-sm font-semibold text-emerald-400 mb-1">
+                <Tooltip text={TOOLTIPS.crypto_crypto}>Economie Crypto-Crypto</Tooltip>
+              </h3>
+              <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed mb-2">
+                Vos echanges crypto-crypto (BTC/ETH/USDC) ne sont PAS imposables en France.
+                Seules les conversions vers EUR declenchent l'impot.
+              </p>
+              <div className="flex items-center gap-4 text-sm">
+                <span className="text-[var(--color-text-secondary)]">
+                  Gains crypto-crypto: <span className="font-mono font-semibold text-emerald-400">~40%</span> du total
+                </span>
+                <span className="text-[var(--color-text-secondary)]">
+                  Taux effectif: <span className="font-mono font-semibold text-emerald-400">~18%</span> vs 30% nominal
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div className="bg-purple-500/10 border border-purple-500/30 rounded-xl p-4">
+          <div className="flex items-start gap-3">
+            <PiggyBank size={18} className="text-purple-400 mt-0.5 shrink-0" />
+            <div>
+              <h3 className="text-sm font-semibold text-purple-400 mb-1">Provision Recommandee</h3>
+              <p className="text-xs text-[var(--color-text-secondary)] leading-relaxed mb-2">
+                Montant a mettre de cote pour les impots. Base sur les plus-values realisees
+                converties en EUR uniquement.
+              </p>
+              <div className="font-mono text-2xl font-bold text-purple-400">
+                ${summary.total.pfu.toLocaleString()}
+              </div>
+              <div className="text-[10px] text-[var(--color-text-secondary)] mt-1">
+                a provisionner pour la declaration {year}
+              </div>
             </div>
           </div>
         </div>
