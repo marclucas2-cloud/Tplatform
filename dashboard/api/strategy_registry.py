@@ -45,6 +45,10 @@ STRATEGY_PHASES = {
     "eth_btc_ratio":          {"phase": "PROBATION",  "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-30"},
     "crypto_session_momentum":{"phase": "CODE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-31"},
     "crypto_rsi_divergence":  {"phase": "CODE",       "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-31"},
+    # V11 BEAR regime strats
+    "trend_short_v1":         {"phase": "WF_PENDING", "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-31"},
+    "mr_scalp_v1":            {"phase": "WF_PENDING", "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-31"},
+    "liquidation_spike_v1":   {"phase": "WF_PENDING", "asset_class": "CRYPTO", "broker": "BINANCE", "phase_since": "2026-03-31"},
     # FX — IBKR (paper -> live bientot)
     "fx_carry_g10":           {"phase": "LIVE",       "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-31"},
     "fx_carry_vs":            {"phase": "LIVE",       "asset_class": "FX",     "broker": "IBKR",    "phase_since": "2026-03-31"},

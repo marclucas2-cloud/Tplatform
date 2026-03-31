@@ -64,12 +64,35 @@ try:
 except Exception as e:
     logger.warning(f"Failed to load STRAT-008 (weekend_gap): {e}")
 
-# STRAT-009 Funding Rate Divergence — DISABLED (no WF validation)
-# STRAT-010 Stablecoin Supply Flow — DISABLED (no WF validation)
-# STRAT-011 ETH/BTC Ratio Breakout — DISABLED (no WF validation)
-# STRAT-012 Monthly Turn-of-Month — DISABLED (no WF validation)
+# BEAR regime strategies (V11 ROC optim)
+try:
+    from strategies.crypto.trend_short_v1 import (
+        STRATEGY_CONFIG as STRAT_009_CONFIG,
+        signal_fn as strat_009_signal,
+    )
+    CRYPTO_STRATEGIES["STRAT-009"] = {"config": STRAT_009_CONFIG, "signal_fn": strat_009_signal}
+except Exception as e:
+    logger.warning(f"Failed to load STRAT-009 (trend_short_v1): {e}")
 
-logger.info(f"Loaded {len(CRYPTO_STRATEGIES)}/6 crypto strategies (6 disabled after WF rejection)")
+try:
+    from strategies.crypto.mr_scalp_v1 import (
+        STRATEGY_CONFIG as STRAT_010_CONFIG,
+        signal_fn as strat_010_signal,
+    )
+    CRYPTO_STRATEGIES["STRAT-010"] = {"config": STRAT_010_CONFIG, "signal_fn": strat_010_signal}
+except Exception as e:
+    logger.warning(f"Failed to load STRAT-010 (mr_scalp_v1): {e}")
+
+try:
+    from strategies.crypto.liquidation_spike_v1 import (
+        STRATEGY_CONFIG as STRAT_011_CONFIG,
+        signal_fn as strat_011_signal,
+    )
+    CRYPTO_STRATEGIES["STRAT-011"] = {"config": STRAT_011_CONFIG, "signal_fn": strat_011_signal}
+except Exception as e:
+    logger.warning(f"Failed to load STRAT-011 (liquidation_spike_v1): {e}")
+
+logger.info(f"Loaded {len(CRYPTO_STRATEGIES)} crypto strategies")
 
 # Total allocation raw (may exceed 100% with new strategies)
 _RAW_ALLOCATION = sum(
