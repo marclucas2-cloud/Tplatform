@@ -533,7 +533,7 @@ def run_fx_carry_cycle():
         # Get IBKR equity
         try:
             from core.broker.ibkr_adapter import IBKRBroker
-            ibkr = IBKRBroker()
+            ibkr = IBKRBroker(client_id=10)  # clientId dedie FX carry live
             ibkr_info = ibkr.get_account_info()
             equity = ibkr_info.get("equity", 0)
         except Exception as e:
@@ -676,8 +676,8 @@ def run_fx_paper_cycle():
         try:
             from core.broker.ibkr_adapter import IBKRBroker
             from core.broker.factory import _broker_cache
-            # Use a separate instance (not the cached live one)
-            ibkr = IBKRBroker()
+            # clientId=2 pour eviter conflit avec EU paper (clientId=1) sur port 4003
+            ibkr = IBKRBroker(client_id=2)
             ibkr_info = ibkr.get_account_info()
             equity = float(ibkr_info.get("equity", 0))
         except Exception as e:
@@ -800,7 +800,7 @@ def run_live_risk_cycle():
             # Try to get real portfolio from IBKR if available
             if os.environ.get("IBKR_CONNECTED") == "true":
                 from core.broker.ibkr_adapter import IBKRBroker
-                broker = IBKRBroker()
+                broker = IBKRBroker(client_id=3)  # monitoring, pas de conflit avec FX carry (10)
                 account = broker.get_account_info()
                 positions = broker.get_positions()
                 portfolio = {
@@ -903,7 +903,7 @@ def run_live_risk_cycle():
 
                     if half_qty > 0 and os.environ.get("IBKR_CONNECTED") == "true":
                         from core.broker.ibkr_adapter import IBKRBroker
-                        broker = IBKRBroker()
+                        broker = IBKRBroker(client_id=3)
                         deleverage_action = "DELEVERAGE_L3" if "DELEVERAGE_L3" in actions else "DELEVERAGE_L2"
                         logger.critical(
                             f"AUTO-DELEVERAGE {deleverage_action}: reducing {symbol} "
@@ -2117,7 +2117,7 @@ def run_v11_eod_cleanup():
         # Try IBKR cleanup
         try:
             from core.broker.ibkr_adapter import IBKRBroker
-            ibkr = IBKRBroker()
+            ibkr = IBKRBroker(client_id=3)
             result = detector.run_eod_cleanup(ibkr, datetime.now(PARIS))
             if result.get("orphans_found", 0) > 0:
                 logger.warning(
@@ -2423,7 +2423,7 @@ def main():
                 try:
                     if os.environ.get("IBKR_CONNECTED") == "true":
                         from core.broker.ibkr_adapter import IBKRBroker
-                        ibkr = IBKRBroker()
+                        ibkr = IBKRBroker(client_id=3)
                         acct = ibkr.get_account_info()
                         ibkr_capital = float(acct.get("equity", 0))
                         for p in ibkr.get_positions():
