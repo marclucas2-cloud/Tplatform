@@ -1,6 +1,8 @@
 import { useApi } from '../hooks/useApi'
 import MetricCard from '../components/MetricCard'
-import { ShieldAlert, ShieldCheck, ShieldOff, Activity } from 'lucide-react'
+import CorrelationHeatmap from '../components/charts/CorrelationHeatmap'
+import { ShieldAlert, ShieldCheck, ShieldOff, Activity, Zap } from 'lucide-react'
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
 
 function ProgressBar({ label, current, max, unit = '', warn = 0.7, danger = 0.9, invertColor = false }) {
   const ratio = max > 0 ? Math.min(current / max, 1) : 0
@@ -62,6 +64,9 @@ export default function Risk() {
   const { data: overview, loading: oLoad } = useApi('/risk/overview', 15000)
   const { data: limits, loading: lLoad } = useApi('/risk/limits', 15000)
   const { data: killSwitchData } = useApi('/risk/kill-switch', 30000)
+  const { data: ddData } = useApi('/risk/drawdown', 30000)
+  const { data: corrData } = useApi('/risk/correlation', 60000)
+  const { data: stressData } = useApi('/cross/stress', 60000)
 
   if (oLoad && !overview) {
     return (
@@ -162,16 +167,31 @@ export default function Risk() {
           </div>
         </div>
 
-        {/* Drawdown Chart Placeholder */}
+        {/* Drawdown Chart */}
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
           <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">
             Historique Drawdown
           </h2>
-          <div className="flex items-center justify-center h-64 border border-dashed border-[var(--color-border)] rounded-lg">
-            <span className="text-sm text-[var(--color-text-secondary)]">
-              Drawdown History Chart
-            </span>
-          </div>
+          {ddData?.history?.length > 0 ? (
+            <ResponsiveContainer width="100%" height={250}>
+              <AreaChart data={ddData.history} margin={{ top: 5, right: 10, bottom: 5, left: 10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="#2a2b3d" />
+                <XAxis dataKey="date" tick={{ fill: '#6b7280', fontSize: 10 }} stroke="#2a2b3d"
+                  tickFormatter={(d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} />
+                <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} stroke="#2a2b3d"
+                  tickFormatter={(v) => `${v.toFixed(1)}%`} />
+                <Tooltip
+                  contentStyle={{ background: '#1a1a2e', border: '1px solid #333', borderRadius: 8, fontSize: 12 }}
+                  formatter={(v) => [`${v.toFixed(2)}%`, 'Drawdown']}
+                  labelFormatter={(d) => new Date(d).toLocaleDateString('fr-FR')} />
+                <Area type="monotone" dataKey="drawdown_pct" stroke="#ef4444" fill="#ef4444" fillOpacity={0.15} strokeWidth={1.5} />
+              </AreaChart>
+            </ResponsiveContainer>
+          ) : (
+            <div className="flex items-center justify-center h-64 text-sm text-[var(--color-text-secondary)]">
+              Pas de donnees drawdown disponibles
+            </div>
+          )}
         </div>
       </div>
 
@@ -197,18 +217,59 @@ export default function Risk() {
           </div>
         </div>
 
-        {/* Correlation Matrix Placeholder */}
+        {/* Correlation Matrix */}
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
           <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-4">
             Matrice de Correlation
           </h2>
-          <div className="flex items-center justify-center h-48 border border-dashed border-[var(--color-border)] rounded-lg">
-            <span className="text-sm text-[var(--color-text-secondary)]">
-              Correlation Matrix Heatmap
-            </span>
-          </div>
+          <CorrelationHeatmap
+            strategies={corrData?.strategies || []}
+            matrix={corrData?.matrix || []}
+          />
         </div>
       </div>
+
+      {/* Stress Scenarios */}
+      {stressData?.scenarios && (
+        <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
+          <h2 className="text-sm font-semibold text-[var(--color-text-primary)] mb-3 flex items-center gap-2">
+            <Zap size={14} />
+            Scenarios de Stress
+          </h2>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="text-xs text-[var(--color-text-secondary)] uppercase tracking-wider">
+                  <th className="text-left py-2 px-3">Scenario</th>
+                  <th className="text-right py-2">IBKR</th>
+                  <th className="text-right py-2">Binance</th>
+                  <th className="text-right py-2">Total</th>
+                  <th className="text-left py-2 px-3">Protection</th>
+                </tr>
+              </thead>
+              <tbody>
+                {stressData.scenarios.map((s, i) => (
+                  <tr key={i} className="border-t border-[var(--color-border)]/30">
+                    <td className="py-2 px-3 text-[var(--color-text-primary)]">{s.name}</td>
+                    <td className="py-2 text-right font-mono text-[var(--color-loss)]">
+                      {s.ibkr_loss ? `-${s.ibkr_loss}%` : '—'}
+                    </td>
+                    <td className="py-2 text-right font-mono text-[var(--color-loss)]">
+                      {s.binance_loss ? `-${s.binance_loss}%` : '—'}
+                    </td>
+                    <td className="py-2 text-right font-mono font-semibold text-[var(--color-loss)]">
+                      -${s.total_loss_usd?.toLocaleString() || '?'}
+                    </td>
+                    <td className="py-2 px-3 text-xs text-[var(--color-text-secondary)]">
+                      {s.protection || 'Kill switch + SL'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
 
       {/* Footer: Circuit Breaker Summary */}
       <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
