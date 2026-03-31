@@ -437,6 +437,14 @@ def get_strategy_detail(strategy_id: str):
             if not df.empty:
                 trades = df.head(50).to_dict(orient="records")
 
+        # Phase lifecycle
+        phase_info = {}
+        try:
+            from strategy_registry import STRATEGY_PHASES
+            phase_info = STRATEGY_PHASES.get(strategy_id, {})
+        except Exception:
+            pass
+
         return {
             "id": strategy_id,
             "name": s["name"],
@@ -444,6 +452,10 @@ def get_strategy_detail(strategy_id: str):
             "sharpe": s["sharpe"],
             "frequency": s.get("frequency", "intraday"),
             "allocation_pct": round(tier_alloc.get(strategy_id, 0) * 100, 1),
+            "phase": phase_info.get("phase", "CODE"),
+            "asset_class": phase_info.get("asset_class", ""),
+            "broker": phase_info.get("broker", ""),
+            "phase_since": phase_info.get("phase_since", ""),
             "trades_sample": trades,
             "trades_count": len(trades),
             # Registre complet

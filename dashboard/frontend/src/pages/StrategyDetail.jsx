@@ -1,7 +1,45 @@
 import { useParams, Link } from 'react-router-dom'
 import { useApi } from '../hooks/useApi'
-import { TierBadge } from '../components/StrategyBadge'
+import { TierBadge, PhaseBadge, PHASE_ORDER, PHASE_CONFIG } from '../components/StrategyBadge'
 import { ArrowLeft, Shield, Target, Clock, BarChart3, Zap, Info } from 'lucide-react'
+
+const LIFECYCLE_STEPS = ['CODE', 'WF_PENDING', 'PAPER', 'PROBATION', 'LIVE']
+
+function LifecycleTimeline({ currentPhase }) {
+  if (!currentPhase || currentPhase === 'REJECTED') {
+    return (
+      <div className="flex items-center gap-2 text-xs">
+        <span className="text-red-400 font-semibold">✕ REJECTED</span>
+        <span className="text-[var(--color-text-secondary)]">— Rejete par walk-forward</span>
+      </div>
+    )
+  }
+  const currentIdx = LIFECYCLE_STEPS.indexOf(currentPhase)
+  return (
+    <div className="flex items-center gap-0">
+      {LIFECYCLE_STEPS.map((step, i) => {
+        const cfg = PHASE_CONFIG[step]
+        const isActive = i <= currentIdx
+        const isCurrent = step === currentPhase
+        return (
+          <div key={step} className="flex items-center">
+            {i > 0 && (
+              <div className={`w-8 h-0.5 ${isActive ? 'bg-emerald-500' : 'bg-[var(--color-border)]'}`} />
+            )}
+            <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-semibold border ${
+              isCurrent ? `${cfg.bg} ${cfg.text} ${cfg.border}` :
+              isActive ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' :
+              'bg-[var(--color-bg-hover)] text-[var(--color-text-secondary)] border-[var(--color-border)]'
+            }`}>
+              <span>{cfg.icon}</span>
+              <span>{cfg.label}</span>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 export default function StrategyDetail() {
   const { id } = useParams()
@@ -36,7 +74,22 @@ export default function StrategyDetail() {
         <div className="mt-1 text-sm text-[var(--color-text-secondary)]">
           Allocation: <span className="font-mono text-[var(--color-text-primary)]">{data.allocation_pct}%</span>
           {' '} | Sharpe: <span className="font-mono text-[var(--color-text-primary)]">{data.sharpe}</span>
+          {data.broker && <>{' '} | Broker: <span className="font-mono">{data.broker}</span></>}
+          {data.asset_class && <>{' '} | Classe: <span className="font-mono">{data.asset_class}</span></>}
         </div>
+      </div>
+
+      {/* Lifecycle Timeline */}
+      <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-xs font-semibold text-[var(--color-text-secondary)] uppercase tracking-wider">Cycle de Vie</h2>
+          {data.phase_since && (
+            <span className="text-xs text-[var(--color-text-secondary)]">
+              Phase actuelle depuis: <span className="font-mono">{data.phase_since}</span>
+            </span>
+          )}
+        </div>
+        <LifecycleTimeline currentPhase={data.phase} />
       </div>
 
       {/* Description de l'edge */}
