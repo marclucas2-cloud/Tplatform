@@ -90,7 +90,8 @@ def _check_account() -> dict | None:
         # Clear broker cache to force fresh connection
         from core.broker.factory import _broker_cache
         _broker_cache.pop("ibkr", None)
-        broker = IBKRBroker()
+        # clientId=99 pour eviter conflit avec worker (clientId=1)
+        broker = IBKRBroker(client_id=99)
         info = broker.get_account_info()
         return info
     except Exception as e:

@@ -430,17 +430,22 @@ class AlpacaClient:
                 )
                 return {"status": "refused", "reason": "fractional short qty < 1 after rounding"}
 
-        # Bracket order si stop_loss ou take_profit fourni
-        has_bracket = stop_loss is not None or take_profit is not None
-        order_class = OrderClass.BRACKET if has_bracket and qty else None
-
-        # Construire les legs du bracket
+        # Bracket order si stop_loss ET take_profit fournis
+        # OTO (One-Triggers-Other) si seulement stop_loss (Alpaca exige TP pour BRACKET)
         sl_request = None
         tp_request = None
         if stop_loss is not None and stop_loss > 0:
             sl_request = StopLossRequest(stop_price=round(stop_loss, 2))
         if take_profit is not None and take_profit > 0:
             tp_request = TakeProfitRequest(limit_price=round(take_profit, 2))
+
+        has_bracket = sl_request is not None or tp_request is not None
+        if sl_request and tp_request:
+            order_class = OrderClass.BRACKET if qty else None
+        elif sl_request:
+            order_class = OrderClass.OTO if qty else None
+        else:
+            order_class = None
 
         # Bracket orders necessitent qty (pas notional)
         # FIX CRO H-1 : convertir notional → qty au lieu de supprimer le bracket
