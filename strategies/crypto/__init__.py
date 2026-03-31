@@ -92,6 +92,25 @@ try:
 except Exception as e:
     logger.warning(f"Failed to load STRAT-011 (liquidation_spike_v1): {e}")
 
+# V11 BEAR v2 — WF validated/borderline
+try:
+    from strategies.crypto.range_bb_harvest import (
+        STRATEGY_CONFIG as STRAT_014_CONFIG,
+        signal_fn as strat_014_signal,
+    )
+    CRYPTO_STRATEGIES["STRAT-014"] = {"config": STRAT_014_CONFIG, "signal_fn": strat_014_signal}
+except Exception as e:
+    logger.warning(f"Failed to load STRAT-014 (range_bb_harvest): {e}")
+
+try:
+    from strategies.crypto.vol_expansion_bear import (
+        STRATEGY_CONFIG as STRAT_012_CONFIG,
+        signal_fn as strat_012_signal,
+    )
+    CRYPTO_STRATEGIES["STRAT-012"] = {"config": STRAT_012_CONFIG, "signal_fn": strat_012_signal}
+except Exception as e:
+    logger.warning(f"Failed to load STRAT-012 (vol_expansion_bear): {e}")
+
 logger.info(f"Loaded {len(CRYPTO_STRATEGIES)} crypto strategies")
 
 # Total allocation raw (may exceed 100% with new strategies)
