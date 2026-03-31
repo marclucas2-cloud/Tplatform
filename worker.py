@@ -650,6 +650,145 @@ def run_fx_carry_cycle():
         _execution_lock.release()
 
 
+def run_futures_paper_cycle():
+    """Futures Paper Trading — MES Trend + MES/MNQ Pairs on IBKR paper (port 4003).
+
+    WF BORDERLINE: MES Trend Sharpe 1.46, MES/MNQ Pairs Sharpe 0.76.
+    Daily frequency, uses data/futures/ parquet files.
+    """
+    if not _execution_lock.acquire(blocking=False):
+        logger.warning("FUTURES PAPER SKIP — execution lock held")
+        return
+    try:
+        logger.info("=== FUTURES PAPER CYCLE ===")
+
+        # Switch to IBKR paper (port 4003)
+        _saved_port = os.environ.get("IBKR_PORT")
+        _saved_paper = os.environ.get("IBKR_PAPER")
+        os.environ["IBKR_PORT"] = os.environ.get("IBKR_PAPER_PORT", "4003")
+        os.environ["IBKR_PAPER"] = "true"
+
+        try:
+            from core.broker.ibkr_adapter import IBKRBroker
+            from core.broker.factory import _broker_cache
+            _broker_cache.pop("ibkr", None)
+            ibkr = IBKRBroker(client_id=4)  # clientId dedie futures paper
+            ibkr_info = ibkr.get_account_info()
+            equity = float(ibkr_info.get("equity", 0))
+        except Exception as e:
+            logger.warning(f"  FUTURES PAPER SKIP — IBKR paper not connected: {e}")
+            return
+        finally:
+            if _saved_port is not None:
+                os.environ["IBKR_PORT"] = _saved_port
+            elif "IBKR_PORT" in os.environ:
+                del os.environ["IBKR_PORT"]
+            if _saved_paper is not None:
+                os.environ["IBKR_PAPER"] = _saved_paper
+            elif "IBKR_PAPER" in os.environ:
+                del os.environ["IBKR_PAPER"]
+
+        if equity <= 0:
+            logger.warning("  FUTURES PAPER SKIP — equity=0")
+            return
+
+        logger.info(f"  FUTURES PAPER equity: ${equity:,.0f}")
+
+        # Load futures data
+        import pandas as pd
+        data_dir = Path(__file__).resolve().parent / "data" / "futures"
+        data_sources = {}
+        for sym in ["MES", "MNQ"]:
+            fpath = data_dir / f"{sym}_1D.parquet"
+            if fpath.exists():
+                df = pd.read_parquet(fpath)
+                df.columns = [c.lower() for c in df.columns]
+                if "datetime" in df.columns:
+                    df.index = pd.to_datetime(df["datetime"])
+                elif not isinstance(df.index, pd.DatetimeIndex):
+                    df.index = pd.to_datetime(df.index)
+                df = df.sort_index()
+                data_sources[sym] = df
+
+        if "MES" not in data_sources:
+            logger.warning("  FUTURES PAPER SKIP — no MES daily data")
+            return
+
+        # Setup DataFeed
+        from core.backtester_v2.data_feed import DataFeed
+        from core.backtester_v2.types import Bar, PortfolioState
+        feed = DataFeed(data_sources)
+
+        # Set timestamp to now (all bars visible)
+        now_ts = pd.Timestamp.now(tz="UTC")
+        feed.set_timestamp(now_ts)
+
+        portfolio_state = PortfolioState(
+            equity=equity, cash=equity, positions={},
+            daily_pnl=0, max_drawdown=0,
+        )
+
+        signals = []
+
+        # 1. MES Trend
+        try:
+            from strategies_v2.futures.mes_trend import MESTrend
+            strat = MESTrend()
+            strat.set_data_feed(feed)
+            bar = feed.get_latest_bar("MES")
+            if bar:
+                sig = strat.on_bar(bar, portfolio_state)
+                if sig:
+                    signals.append(("MES Trend", sig))
+                    logger.info(f"    MES Trend: {sig.side} MES @ {bar.close:.2f} SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f} str={sig.strength:.2f}")
+                else:
+                    logger.info("    MES Trend: pas de signal")
+            else:
+                logger.info("    MES Trend: pas de bar disponible")
+        except Exception as e:
+            logger.error(f"    MES Trend error: {e}")
+
+        # 2. MES/MNQ Pairs
+        if "MNQ" in data_sources:
+            try:
+                from strategies_v2.futures.mes_mnq_pairs import MESMNQPairs
+                strat = MESMNQPairs()
+                strat.set_data_feed(feed)
+                bar = feed.get_latest_bar("MES")
+                if bar:
+                    sig = strat.on_bar(bar, portfolio_state)
+                    if sig:
+                        signals.append(("MES/MNQ Pairs", sig))
+                        logger.info(f"    MES/MNQ Pairs: {sig.side} MES @ {bar.close:.2f} z-score signal str={sig.strength:.2f}")
+                    else:
+                        logger.info("    MES/MNQ Pairs: pas de signal (z-score dans le range)")
+                else:
+                    logger.info("    MES/MNQ Pairs: pas de bar MES")
+            except Exception as e:
+                logger.error(f"    MES/MNQ Pairs error: {e}")
+        else:
+            logger.info("    MES/MNQ Pairs: SKIP — pas de data MNQ")
+
+        logger.info(f"  FUTURES PAPER: {len(signals)} signal(s)")
+        _log_event("cycle_end", "futures_paper", {
+            "signals": len(signals), "equity": equity,
+        })
+
+        # NOTE: Paper mode — signaux logues, pas d'execution
+        for name, sig in signals:
+            _telegram_notify(
+                f"FUTURES PAPER SIGNAL: {name}\n"
+                f"{sig.side} {sig.symbol} SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f}\n"
+                f"Strength: {sig.strength:.2f}",
+                level="INFO"
+            )
+
+    except Exception as e:
+        logger.error(f"FUTURES PAPER CYCLE ERROR: {e}", exc_info=True)
+    finally:
+        _execution_lock.release()
+
+
 def run_fx_paper_cycle():
     """FX Paper Trading — run validated FX strategies on IBKR paper (port 4003).
 
@@ -2334,6 +2473,13 @@ def main():
             run_fx_carry_cycle._done_today = True
         if is_weekday() and now_paris.hour < 10:
             run_fx_carry_cycle._done_today = False
+
+        # === FUTURES PAPER DAILY (lun-ven, 16h Paris = ouverture US) ===
+        if is_weekday() and now_paris.hour == 16 and not getattr(run_futures_paper_cycle, '_done_today', False):
+            run_futures_paper_cycle()
+            run_futures_paper_cycle._done_today = True
+        if is_weekday() and now_paris.hour < 16:
+            run_futures_paper_cycle._done_today = False
 
         # Skip weekends pour les marches traditionnels (US/EU)
         if not is_weekday():
