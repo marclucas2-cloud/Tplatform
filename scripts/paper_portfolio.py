@@ -177,6 +177,14 @@ STRATEGIES = {
     # - ORB 5-Min : Sharpe -0.05 (ne survit pas aux couts sur univers large)
     # - Earnings Drift : Sharpe -9.55 (overtrade sur small caps)
     # - ML Volume Cluster : Sharpe -1.36
+
+    # === Swing strategies (daily, WF validated) ===
+    "rsi2_meanrev": {
+        "name": "Mean Reversion RSI2 S&P500",
+        "sharpe": 0.99,           # OOS walk-forward validated
+        "frequency": "daily",     # Daily scan, hold 2-5j
+        "multi_asset": True,
+    },
 }
 
 # ─── Univers ETFs Momentum ───────────────────────────────────────────────────
@@ -541,6 +549,142 @@ def signal_vrp(allocated_capital: float, state: dict, force_monthly: bool) -> di
 # INTRADAY SIGNAL GENERATORS
 # =============================================================================
 
+def _signal_rsi2_daily(allocated_capital: float, state: dict) -> dict:
+    """Mean Reversion RSI2 — daily scan S&P 500, swing 2-5j.
+
+    Uses daily bars (200+ days for SMA200 filter).
+    Runs once per day at 10:00 ET (after open noise settles).
+    """
+    import zoneinfo
+    et = zoneinfo.ZoneInfo("America/New_York")
+    now_et = datetime.now(et)
+
+    # Only run once per day between 10:00-10:15 ET
+    if now_et.hour != 10 or now_et.minute > 15:
+        return {"action": "hold", "reason": "RSI2: hors fenetre 10:00-10:15 ET"}
+
+    # Check if already ran today
+    rsi2_state = state.get("rsi2_last_scan", "")
+    today_str = now_et.strftime("%Y-%m-%d")
+    if rsi2_state == today_str:
+        return {"action": "hold", "reason": "RSI2: deja scanne aujourd'hui"}
+
+    try:
+        from alpaca.data.historical import StockHistoricalDataClient
+        from alpaca.data.requests import StockBarsRequest
+        from alpaca.data.timeframe import TimeFrame
+        from alpaca.data.enums import DataFeed
+        import os
+
+        client = StockHistoricalDataClient(
+            api_key=os.getenv("ALPACA_API_KEY"),
+            secret_key=os.getenv("ALPACA_SECRET_KEY"),
+        )
+
+        # Top 50 S&P 500 liquid stocks for scanning
+        scan_tickers = [
+            "AAPL", "MSFT", "NVDA", "AMZN", "META", "GOOGL", "AVGO",
+            "JPM", "BAC", "WFC", "GS", "UNH", "JNJ", "LLY", "ABBV",
+            "MRK", "PFE", "XOM", "CVX", "COP", "CAT", "GE", "HON",
+            "PG", "KO", "PEP", "COST", "WMT", "HD", "MCD", "NKE",
+            "DIS", "NFLX", "CMCSA", "TSLA", "AMD", "CRM", "ADBE",
+            "NEE", "LIN", "TMO", "ABT", "RTX", "DE", "BA",
+            "TGT", "LOW", "SBUX", "INTC", "QCOM",
+        ]
+
+        end = now_et
+        start = end - timedelta(days=300)  # 300 days for SMA200
+
+        request = StockBarsRequest(
+            symbol_or_symbols=scan_tickers,
+            timeframe=TimeFrame.Day,
+            start=start,
+            end=end,
+            feed=DataFeed.IEX,
+        )
+        bars = client.get_stock_bars(request)
+
+        # Find oversold candidates
+        import numpy as np
+        candidates = []
+        for ticker in scan_tickers:
+            if ticker not in bars.data or not bars.data[ticker]:
+                continue
+            closes = pd.Series([float(b.close) for b in bars.data[ticker]])
+            if len(closes) < 200:
+                continue
+
+            # RSI(2)
+            delta = closes.diff()
+            gain = delta.where(delta > 0, 0.0).rolling(2).mean()
+            loss = (-delta).where(delta < 0, 0.0).rolling(2).mean()
+            rs = gain / loss.replace(0, np.nan)
+            rsi = 100 - (100 / (1 + rs))
+            current_rsi = rsi.iloc[-1]
+
+            if np.isnan(current_rsi):
+                continue
+
+            # SMA(200) trend filter
+            sma200 = closes.rolling(200).mean().iloc[-1]
+            price = closes.iloc[-1]
+
+            if price <= sma200:
+                continue  # Below SMA200 = downtrend, skip
+
+            if current_rsi < 10:
+                candidates.append({
+                    "ticker": ticker,
+                    "price": price,
+                    "rsi": current_rsi,
+                    "sma200": sma200,
+                    "score": 10 - current_rsi,
+                })
+
+        # Mark as scanned today
+        state["rsi2_last_scan"] = today_str
+
+        if not candidates:
+            return {"action": "hold", "reason": "RSI2: aucun candidat oversold"}
+
+        # Take the most oversold
+        candidates.sort(key=lambda x: x["score"], reverse=True)
+        best = candidates[0]
+
+        # Check not already positioned
+        existing = state.get("intraday_positions", {})
+        if best["ticker"] in existing:
+            return {"action": "hold", "reason": f"RSI2: deja positionne sur {best['ticker']}"}
+
+        sl = round(best["price"] * 0.97, 2)   # 3% SL
+        tp = round(best["price"] * 1.04, 2)   # 4% TP
+
+        logger.info(
+            f"  [rsi2_meanrev] SIGNAL: LONG {best['ticker']} RSI2={best['rsi']:.1f} "
+            f"price=${best['price']:.2f} SMA200=${best['sma200']:.2f}"
+        )
+
+        return {
+            "action": "intraday_trade",
+            "direction": "BUY",
+            "ticker": best["ticker"],
+            "entry_price": best["price"],
+            "stop_loss": sl,
+            "take_profit": tp,
+            "qty": int(allocated_capital * 0.20 / best["price"]),  # 20% of allocation
+            "reason": f"RSI2={best['rsi']:.1f} oversold, above SMA200",
+            "metadata": {
+                "rsi2": best["rsi"],
+                "sma200": best["sma200"],
+                "candidates": len(candidates),
+            },
+        }
+
+    except Exception as e:
+        logger.warning(f"RSI2 scan error: {e}")
+        return {"action": "hold", "reason": f"RSI2: erreur {e}"}
+
+
 def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> dict:
     """
     Genere les signaux intraday en fetchant les barres 5M du jour depuis Alpaca
@@ -596,6 +740,10 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         "eod_sell_v2": EODSellV2Strategy,
         "high_beta_short": HighBetaUnderperfShortStrategy,
     }
+
+    # RSI2 swing strategy uses daily bars, not intraday 5min
+    if strategy_id == "rsi2_meanrev":
+        return _signal_rsi2_daily(allocated_capital, state)
 
     strat_class = STRAT_MAP.get(strategy_id)
     if not strat_class:
