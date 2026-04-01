@@ -501,15 +501,15 @@ class TestCryptoDrawdownCorruption:
             assert ks.is_killed, "Partial state with active=True should be respected"
 
     def test_extreme_drawdown_resets_baseline(self, crypto_rm):
-        """Extreme baseline mismatch (>5x) resets baselines instead of false kill."""
+        """Extreme baseline mismatch (>1.5x) resets baselines instead of false kill."""
         # Set peak very high then feed very low equity — baseline mismatch guard
         crypto_rm._peak_equity = 1_000_000
         crypto_rm._daily_start_equity = 1_000_000
-        ok, msg = crypto_rm.check_drawdown(1.0)
-        # Guard: 5x mismatch resets baselines to current equity (not a real DD)
+        ok, msg = crypto_rm.check_drawdown(100_000.0)
+        # Guard: >1.5x mismatch resets baselines to current equity
         assert ok, f"Extreme mismatch should reset baselines: {msg}"
         # Verify baselines were reset
-        assert crypto_rm._daily_start_equity == 1.0
+        assert crypto_rm._daily_start_equity == 100_000.0
 
     def test_check_all_with_nan_positions(self, crypto_rm):
         """NaN values in position dicts should not crash check_all."""

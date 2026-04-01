@@ -672,11 +672,11 @@ class CryptoRiskManager:
         if current_equity <= 0:
             return True, "equity=0 (API error?) — drawdown check skipped"
 
-        # Guard: if daily_start is wildly different from current (>5x), it's a config mismatch
+        # Guard: if daily_start is wildly different from current (>1.5x), it's a config mismatch
         # not a real drawdown. Reset baselines to current equity.
         if self._daily_start_equity > 0 and (
-            current_equity / self._daily_start_equity > 5
-            or self._daily_start_equity / current_equity > 5
+            current_equity / self._daily_start_equity > 1.5
+            or self._daily_start_equity / current_equity > 1.5
         ):
             logger.warning(
                 f"Drawdown baseline mismatch: start=${self._daily_start_equity:,.0f} "

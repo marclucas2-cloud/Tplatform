@@ -1409,7 +1409,7 @@ def _enrich_crypto_kwargs(
         try:
             # Fetch current borrow rate for primary asset
             asset = primary_symbol.replace("USDT", "").replace("USDC", "")
-            margin_info = broker._request("GET", "/sapi/v1/margin/asset", {"asset": asset}, signed=True)
+            margin_info = broker._get("/sapi/v1/margin/asset", {"asset": asset}, signed=True)
             if margin_info:
                 daily_rate = float(margin_info.get("marginRatio", 0.0003))
                 kwargs["borrow_rate"] = daily_rate
@@ -2063,7 +2063,9 @@ def run_crypto_cycle():
                 # Map USDT→USDC pour data + execution
                 trade_symbol = primary_symbol.replace("USDT", "USDC") if primary_symbol.endswith("USDT") else primary_symbol
                 df_full = None
-                if broker and (trade_symbol.endswith("USDC") or trade_symbol.endswith("USDT")):
+                # Skip price fetch for earn strategies (symbols are assets, not pairs)
+                market_type = config.get("market_type", "spot")
+                if broker and market_type != "earn" and (trade_symbol.endswith("USDC") or trade_symbol.endswith("USDT")):
                     try:
                         timeframe = config.get("timeframe", "4h")
                         price_data = broker.get_prices(
