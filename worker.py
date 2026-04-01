@@ -181,15 +181,29 @@ signal.signal(signal.SIGINT, _handle_sigterm)
 
 
 def _send_alert(message: str, level: str = "info"):
-    """Unified alert: try LiveAlertManager first, fallback to legacy."""
+    """Unified alert: routes to Telegram V2 smart notifications.
+
+    - critical → sent immediately (never throttled)
+    - warning → sent with 5 min throttle per type
+    - info → buffered into digest (never sent individually)
+    """
     try:
-        from core.alerting_live import LiveAlertManager
-        mgr = LiveAlertManager.get_instance()
-        if mgr:
-            mgr.send(message, level=level)
-            return
+        from core.telegram_v2 import tg
+        if level == "critical":
+            # Extract first line as title
+            title = message.split("\n")[0][:60]
+            details = "\n".join(message.split("\n")[1:])
+            tg.critical(title, details=details)
+        elif level == "warning":
+            title = message.split("\n")[0][:60]
+            details = "\n".join(message.split("\n")[1:])
+            tg.warning(title, details=details)
+        else:
+            tg.info(message[:100])
+        return
     except Exception:
         pass
+    # Fallback to legacy
     try:
         from core.telegram_alert import send_alert
         send_alert(message, level=level)
@@ -543,11 +557,7 @@ def log_heartbeat():
     except Exception as e:
         logger.info(f"  Alpaca: unavailable ({e})")
 
-    # Telegram heartbeat exhaustif multi-broker
-    try:
-        _telegram_heartbeat_full()
-    except Exception as tg_err:
-        logger.warning(f"Telegram heartbeat failed: {tg_err}")
+    # Telegram heartbeat: handled by V2 digest (5x/day, not every 30 min)
 
 
 def run_daily():
@@ -2391,14 +2401,21 @@ def run_crypto_cycle():
                         "filled_qty": filled,
                         "filled_price": result.get("filled_price"),
                     })
-                    # Telegram: notifier chaque trade execute
-                    _telegram_notify(
-                        f"TRADE {side} {signal.get('symbol', primary_symbol)}\n"
-                        f"Strat: {strat_name}\n"
-                        f"Size: ${notional:.0f} | SL: {stop_loss}\n"
-                        f"Status: {result.get('status', '?')}",
-                        level="INFO",
-                    )
+                    # Telegram V2: trade notification
+                    try:
+                        from core.telegram_v2 import tg
+                        tg.trade_entry(
+                            side=side,
+                            symbol=exec_symbol,
+                            qty=filled,
+                            price=_fill_price,
+                            sl=stop_loss or 0,
+                            strat=strat_id,
+                            broker="Binance",
+                            notional=notional,
+                        )
+                    except Exception:
+                        pass
                 except Exception as e:
                     logger.error(
                         f"  [{strat_id}] Erreur execution: {e}",
@@ -3211,10 +3228,38 @@ def main():
             time.sleep(60)
             continue
 
-        # === HEARTBEAT toutes les 30 min ===
+        # === HEARTBEAT toutes les 30 min (local log only) ===
         if time.time() - last_heartbeat >= HEARTBEAT_INTERVAL:
             log_heartbeat()
             last_heartbeat = time.time()
+
+            # Telegram V2 digest every 4h (not every 30 min)
+            if time.time() - last_heartbeat <= 60:  # Just after heartbeat
+                try:
+                    _h = now_paris.hour
+                    if _h in (7, 11, 15, 19, 23):  # 5x/day digest
+                        from core.telegram_v2 import tg
+                        _bnb_eq = 0
+                        _ibkr_eq = 0
+                        _alp_eq = 0
+                        try:
+                            from core.broker.binance_broker import BinanceBroker
+                            _bnb_eq = float(BinanceBroker().get_account_info().get("equity", 0))
+                        except Exception:
+                            pass
+                        try:
+                            from core.alpaca_client.client import AlpacaClient
+                            _alp_eq = float(AlpacaClient.from_env().get_account_info().get("equity", 0))
+                        except Exception:
+                            pass
+                        tg.send_digest(
+                            equity_binance=_bnb_eq,
+                            equity_ibkr=_ibkr_eq,
+                            equity_alpaca=_alp_eq,
+                            regime="BEAR_NORMAL",
+                        )
+                except Exception:
+                    pass
 
         # === CRO #4: AUTOMATED DRY-RUN (06:00 CET daily) ===
         if now_paris.hour == 6 and not _dry_run_done_today:
