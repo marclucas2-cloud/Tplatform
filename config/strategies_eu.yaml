@@ -15,21 +15,22 @@
 # =============================================================================
 
 strategies:
-  # ALLOCATIONS calibrees pour $10K IBKR live
-  # Min position $500 pour garder frais IBKR EU (min EUR 3) sous 0.6% A/R
-  # Total EU alloc = 50% (5 strats x 10%) = $5K max deployed
+  # ALLOCATIONS calibrees pour $10K IBKR live + levier 2x intraday
+  # Min position $1000/ticker pour garder frais IBKR EU (min EUR 3) sous 16% du TP
+  # Tickers reduits aux plus liquides pour minimiser slippage
+  # Total EU alloc = 40% cash ($4K) → $8K notional avec levier 2x
 
   bce_momentum_drift:
     name: "BCE Momentum Drift v2"
-    enabled: true
+    enabled: false  # Disabled: seulement 8 events/an, positions trop petites a $10K
     sharpe: 14.93
     trades: 99
     wf_status: "VALIDATED"
     edge_type: "event"
     market_hours: {start: "13:45", end: "17:30", tz: "Europe/Paris"}
-    tickers: ["BNP.PA", "GLE.PA", "DBK.DE", "ING.AS"]
+    tickers: ["BNP.PA", "GLE.PA"]
     allocation_pct: 0.10
-    max_position_pct: 0.08
+    max_position_pct: 0.10
     sl_pct: 0.015
     tp_pct: 0.03
 
@@ -41,9 +42,9 @@ strategies:
     wf_status: "VALIDATED"
     edge_type: "event"
     market_hours: {start: "09:00", end: "17:30", tz: "Europe/Paris"}
-    tickers: ["CON.DE", "SHA.DE", "ZIL.DE"]
-    allocation_pct: 0.10
-    max_position_pct: 0.08
+    tickers: ["CON.DE", "SHA.DE"]  # 2 plus liquides (ZIL retire = trop petit)
+    allocation_pct: 0.15
+    max_position_pct: 0.15
     sl_pct: 0.02
     tp_pct: 0.035
 
@@ -55,9 +56,9 @@ strategies:
     wf_status: "VALIDATED"
     edge_type: "momentum"
     market_hours: {start: "15:30", end: "20:00", tz: "Europe/Paris"}
-    tickers: ["BP.L", "SHEL.L", "TTE.PA"]
-    allocation_pct: 0.10
-    max_position_pct: 0.08
+    tickers: ["TTE.PA", "BP.L"]  # 2 plus liquides (SHEL retire)
+    allocation_pct: 0.15
+    max_position_pct: 0.15
     sl_pct: 0.015
     tp_pct: 0.025
 
@@ -69,10 +70,10 @@ strategies:
     wf_status: "VALIDATED"
     edge_type: "cross_timezone"
     market_hours: {start: "15:30", end: "21:00", tz: "Europe/Paris"}
-    tickers: ["SPY", "QQQ", "IWM"]
+    tickers: ["SPY", "QQQ"]
     execution_broker: "alpaca"
     allocation_pct: 0.10
-    max_position_pct: 0.08
+    max_position_pct: 0.10
     sl_pct: 0.01
     tp_pct: 0.02
 
@@ -84,8 +85,8 @@ strategies:
     wf_status: "VALIDATED"
     edge_type: "gap"
     market_hours: {start: "09:05", end: "12:00", tz: "Europe/Paris"}
-    tickers: ["MC.PA", "SAP.DE", "ASML.AS", "TTE.PA", "SIE.DE", "ALV.DE", "BNP.PA", "BMW.DE"]
-    allocation_pct: 0.10
-    max_position_pct: 0.08
+    tickers: ["SAP.DE", "ASML.AS"]  # 2 plus liquides (6 retires = positions trop petites)
+    allocation_pct: 0.15
+    max_position_pct: 0.15
     sl_pct: 0.01
     tp_pct: 0.02
