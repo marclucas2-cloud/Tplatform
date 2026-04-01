@@ -31,9 +31,9 @@ config/{allocation,crypto_allocation,limits_live,crypto_limits}.yaml
 ```
 
 ## Etat actuel (voir SYNTHESE_COMPLETE.md pour details)
-- **46 strats** : 12 crypto (Binance 20K EUR) + 15 FX/EU (IBKR $10K) + 7 US (Alpaca) + 8 futures + 4 P2/P3
-- **14 LIVE lundi** : 8 crypto + 6 FX/EU
-- **2,312 tests**, CRO 9/10
+- **46 strats** : 11 crypto (Binance 10K EUR) + 15 FX/EU (IBKR $10K) + 7 US (Alpaca) + 8 futures + 4 P2/P3
+- **14 LIVE** : 11 crypto + 1 FX carry
+- **2,964 tests**, CRO 8/10 post-audit V12
 - **Hetzner** : IB Gateway 10.45, port 4002, VNC :5900
 - **Data** : 265K candles (FX IBKR + crypto Binance)
 

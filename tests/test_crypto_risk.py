@@ -11,8 +11,13 @@ def risk_mgr():
 
 
 @pytest.fixture
-def kill_switch():
-    return CryptoKillSwitch()
+def kill_switch(tmp_path):
+    # Use tmp_path to avoid reading production state file
+    ks = CryptoKillSwitch()
+    ks._STATE_PATH = tmp_path / "test_kill_switch_state.json"
+    ks._active = False
+    ks._trigger_reason = ""
+    return ks
 
 
 class TestKillSwitchV2:

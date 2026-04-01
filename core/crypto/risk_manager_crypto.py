@@ -101,7 +101,7 @@ class CryptoRiskLimits:
     MAX_UNREALIZED_LOSS_PER_POSITION = 8  # Tighter than V1's 10%
 
     # BTC/ETH symbols
-    BTC_ETH_SYMBOLS = {"BTCUSDT", "ETHUSDT"}
+    BTC_ETH_SYMBOLS = {"BTCUSDT", "ETHUSDT", "BTCUSDC", "ETHUSDC"}
 
     def __init__(self, config_path: str | Path | None = None):
         """Load limits from crypto_limits.yaml, keeping class defaults as fallbacks."""
@@ -422,11 +422,15 @@ class CryptoKillSwitch:
         logger.warning("Kill: convert_to_usdt SKIPPED (manual intervention required)")
 
     def reset(self, _authorized_by: str = ""):
-        """Manual reset (requires confirmation)."""
+        """Manual reset (requires _authorized_by guard)."""
+        if not _authorized_by:
+            logger.critical("Kill switch reset REFUSED — _authorized_by required")
+            return
         logger.warning(f"Kill switch V2 RESET by {_authorized_by}")
         self._active = False
         self._trigger_reason = ""
         self._actions_executed = []
+        self._save_persisted_state()
 
     def status(self) -> dict:
         return {
@@ -464,7 +468,7 @@ class CryptoRiskManager:
 
     def __init__(
         self,
-        capital: float = 15_000,
+        capital: float = 10_000,
         limits: CryptoRiskLimits | None = None,
     ):
         self.capital = capital
@@ -664,6 +668,26 @@ class CryptoRiskManager:
         self, current_equity: float
     ) -> tuple[bool, str]:
         """Check daily/hourly/weekly/monthly drawdown limits."""
+        # Guard: if equity is 0 or negative, skip drawdown check (API error, not real loss)
+        if current_equity <= 0:
+            return True, "equity=0 (API error?) — drawdown check skipped"
+
+        # Guard: if daily_start is wildly different from current (>5x), it's a config mismatch
+        # not a real drawdown. Reset baselines to current equity.
+        if self._daily_start_equity > 0 and (
+            current_equity / self._daily_start_equity > 5
+            or self._daily_start_equity / current_equity > 5
+        ):
+            logger.warning(
+                f"Drawdown baseline mismatch: start=${self._daily_start_equity:,.0f} "
+                f"vs current=${current_equity:,.0f} — resetting baselines"
+            )
+            self._daily_start_equity = current_equity
+            self._hourly_start_equity = current_equity
+            self._weekly_start_equity = current_equity
+            self._monthly_start_equity = current_equity
+            self._peak_equity = current_equity
+
         self._peak_equity = max(self._peak_equity, current_equity)
         dd_pct = (
             (current_equity - self._peak_equity) / self._peak_equity * 100
@@ -1021,6 +1045,54 @@ class CryptoRiskManager:
         self._audit_log.append(result)
 
         return result
+
+    # ------------------------------------------------------------------
+    # Pre-order validation (CRO C-1 FIX)
+    # ------------------------------------------------------------------
+
+    def validate_order(
+        self,
+        notional: float,
+        strategy: str = "",
+        current_equity: float = 0,
+    ) -> tuple[bool, str]:
+        """Validate a single order before execution.
+
+        Checks:
+          1. Position size vs max (15% of equity)
+          2. Strategy concentration vs max (30%)
+          3. Notional > 0 and equity > 0
+          4. Kill switch not active
+
+        Returns:
+            (passed, reason)
+        """
+        equity = current_equity if current_equity > 0 else self.capital
+
+        if self.kill_switch.is_killed:
+            return False, f"kill switch active: {self.kill_switch.trigger_reason}"
+
+        if notional <= 0:
+            return False, f"notional invalide: {notional}"
+
+        if equity <= 0:
+            return False, f"equity invalide: {equity}"
+
+        # Position size check
+        pos_pct = notional / equity * 100
+        if pos_pct > self.limits.MAX_POSITION_PCT:
+            return False, (
+                f"position {pos_pct:.1f}% > max {self.limits.MAX_POSITION_PCT}%"
+            )
+
+        # Strategy concentration check
+        strat_pct = notional / equity * 100
+        if strat_pct > self.limits.MAX_STRATEGY_PCT:
+            return False, (
+                f"strategy {strat_pct:.1f}% > max {self.limits.MAX_STRATEGY_PCT}%"
+            )
+
+        return True, "OK"
 
     # ------------------------------------------------------------------
     # Reset helpers

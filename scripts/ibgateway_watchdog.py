@@ -281,6 +281,24 @@ def run_daemon():
                 _send_telegram("WORKER DOWN — systemd auto-restart", level="critical")
                 last_worker_alert = time.time()
 
+            # ── 4. Dead man's switch (CRO H-2) ──
+            _heartbeat_path = ROOT / "data" / "monitoring" / "heartbeat.json"
+            if _heartbeat_path.exists():
+                try:
+                    import json as _json
+                    _hb = _json.loads(_heartbeat_path.read_text(encoding="utf-8"))
+                    _hb_ts = datetime.fromisoformat(_hb["timestamp"])
+                    _hb_age = (datetime.now(timezone.utc) - _hb_ts).total_seconds()
+                    if _hb_age > 3600:  # No heartbeat for 1 hour
+                        logger.critical(f"DEAD MAN'S SWITCH: no heartbeat for {_hb_age/60:.0f} min")
+                        _send_telegram(
+                            f"DEAD MAN'S SWITCH: no heartbeat for {_hb_age/60:.0f} min\n"
+                            f"Last: {_hb['timestamp']}",
+                            level="critical",
+                        )
+                except Exception as _dms_err:
+                    logger.warning(f"Dead man's switch check: {_dms_err}")
+
         except Exception as e:
             logger.error(f"Watchdog error: {e}", exc_info=True)
 

@@ -1,0 +1,188 @@
+# Strategy Dependency Chain Map V12
+# Documents the full execution chain for each active strategy.
+# Used by preflight_check.py to verify each dependency.
+# Updated: 2026-04-01
+
+# --- CRYPTO STRATEGIES (Binance France) ---
+
+STRAT-001_btc_eth_dual_momentum:
+  data_source: binance_api_get_prices(BTCUSDC, 4h, 100) + binance_api_get_prices(ETHUSDC, 4h, 100)
+  signal_conditions: EMA20 > EMA50 AND momentum positive on BTC or ETH
+  execution_type: margin_long_or_short
+  broker_flow: ensure_margin_collateral -> margin_borrow -> create_position(margin)
+  cash_deps: [USDC in spot OR earn_flexible]
+  margin_deps: [BTCUSDC isolated margin enabled, ETHUSDC isolated margin enabled]
+  min_notional: 5
+  lot_size_step:
+    BTC: 0.00001
+    ETH: 0.0001
+  regime_multiplier_key: btc_eth_trend
+  allocation_pct: 0.20
+  timeframe: 4h
+
+STRAT-004_vol_breakout:
+  data_source: binance_api_get_prices(BTCUSDC/ETHUSDC/SOLUSDC, 4h, 100)
+  signal_conditions: volatility expansion + breakout from range
+  execution_type: margin_long_or_short
+  broker_flow: ensure_margin_collateral -> margin_borrow -> create_position(margin)
+  cash_deps: [USDC in spot OR earn_flexible]
+  margin_deps: [BTCUSDC/ETHUSDC/SOLUSDC isolated margin enabled]
+  min_notional: 5
+  lot_size_step:
+    BTC: 0.00001
+    ETH: 0.0001
+    SOL: 0.01
+  regime_multiplier_key: vol_regime
+  allocation_pct: 0.10
+  timeframe: 4h
+
+STRAT-005_btc_dominance_v2:
+  data_source: binance_api_get_prices(BTCUSDC/ETHUSDC/SOLUSDC, 1d, 100) + BTC.D dominance
+  signal_conditions: BTC dominance rising -> long BTC, falling -> long alts
+  execution_type: spot_buy
+  broker_flow: create_position(spot, BUY)
+  cash_deps: [USDC in spot OR earn_flexible]
+  margin_deps: []
+  min_notional: 5
+  lot_size_step:
+    BTC: 0.00001
+    ETH: 0.0001
+    SOL: 0.01
+  regime_multiplier_key: btc_dominance
+  allocation_pct: 0.10
+  timeframe: 1d
+
+STRAT-006_borrow_rate_carry:
+  data_source: binance_sapi_borrow_rates + binance_earn_positions
+  signal_conditions: borrow rate differential profitable after costs
+  execution_type: earn_subscribe_redeem
+  broker_flow: subscribe_earn(USDC/BTC/ETH) OR redeem_earn
+  cash_deps: [USDC/BTC/ETH in spot or earn]
+  margin_deps: []
+  min_notional: 5
+  lot_size_step: N/A
+  regime_multiplier_key: earn_yield
+  allocation_pct: 0.13
+  timeframe: 4h
+
+STRAT-007_liquidation_momentum:
+  data_source: binance_fapi_liquidation + binance_api_get_prices(BTCUSDC/ETHUSDC, 5m, 100)
+  signal_conditions: large liquidation cascade detected + momentum alignment
+  execution_type: margin_long_or_short
+  broker_flow: ensure_margin_collateral -> create_position(margin)
+  cash_deps: [USDC in spot OR earn_flexible]
+  margin_deps: [BTCUSDC/ETHUSDC isolated margin enabled]
+  min_notional: 5
+  lot_size_step:
+    BTC: 0.00001
+    ETH: 0.0001
+  regime_multiplier_key: margin_mean_reversion
+  allocation_pct: 0.10
+  timeframe: 5m
+
+STRAT-008_weekend_gap:
+  data_source: binance_api_get_prices(BTCUSDC, 1h, 100)
+  signal_conditions: weekend AND price gap from Friday close > threshold
+  execution_type: spot_buy_or_sell
+  broker_flow: create_position(spot)
+  cash_deps: [USDC in spot]
+  margin_deps: []
+  min_notional: 5
+  lot_size_step:
+    BTC: 0.00001
+  regime_multiplier_key: btc_eth_trend
+  allocation_pct: 0.10
+  timeframe: 1h
+  active_days: [saturday, sunday]
+
+STRAT-009_trend_short_v1:
+  data_source: binance_api_get_prices(BTCUSDC, 1h, 100)
+  signal_conditions: EMA fast < EMA slow AND RSI < threshold (bearish trend)
+  execution_type: margin_short
+  broker_flow: ensure_margin_collateral -> margin_borrow(BTC) -> margin_sell
+  cash_deps: [USDC in spot OR earn_flexible as collateral]
+  margin_deps: [BTCUSDC isolated margin enabled, BTC borrowable]
+  min_notional: 5
+  lot_size_step:
+    BTC: 0.00001
+  regime_multiplier_key: margin_short_hedge
+  allocation_pct: 0.15
+  timeframe: 1h
+
+STRAT-010_mr_scalp_v1:
+  data_source: binance_api_get_prices(BTCUSDC, 15m, 100)
+  signal_conditions: Bollinger Band reversion + RSI oversold/overbought
+  execution_type: spot_buy
+  broker_flow: create_position(spot, BUY)
+  cash_deps: [USDC in spot]
+  margin_deps: []
+  min_notional: 5
+  lot_size_step:
+    BTC: 0.00001
+  regime_multiplier_key: margin_mean_reversion
+  allocation_pct: 0.10
+  timeframe: 15m
+
+STRAT-011_liquidation_spike_v1:
+  data_source: binance_fapi_liquidation + binance_api_get_prices(BTCUSDC, 1h, 100)
+  signal_conditions: spike in liquidations above threshold
+  execution_type: spot_buy
+  broker_flow: create_position(spot, BUY)
+  cash_deps: [USDC in spot]
+  margin_deps: []
+  min_notional: 5
+  lot_size_step:
+    BTC: 0.00001
+  regime_multiplier_key: margin_mean_reversion
+  allocation_pct: 0.10
+  timeframe: 1h
+
+STRAT-014_range_bb_harvest:
+  data_source: binance_api_get_prices(BTCUSDC, 4h, 100)
+  signal_conditions: price > BB_upper AND ADX < 20 (range-bound, sell at resistance)
+  execution_type: spot_buy_or_sell
+  broker_flow: create_position(spot)
+  cash_deps: [USDC in spot OR earn_flexible]
+  margin_deps: []
+  min_notional: 5
+  lot_size_step:
+    BTC: 0.00001
+  regime_multiplier_key: crypto_range_bb
+  allocation_pct: 0.10
+  timeframe: 4h
+
+STRAT-012_vol_expansion_bear:
+  data_source: binance_api_get_prices(BTCUSDC, 4h, 100)
+  signal_conditions: volatility expansion in bearish regime + trend confirmation
+  execution_type: margin_short
+  broker_flow: ensure_margin_collateral -> margin_borrow(BTC) -> margin_sell
+  cash_deps: [USDC in spot OR earn_flexible as collateral]
+  margin_deps: [BTCUSDC isolated margin enabled, BTC borrowable]
+  min_notional: 5
+  lot_size_step:
+    BTC: 0.00001
+  regime_multiplier_key: margin_short_hedge
+  allocation_pct: 0.15
+  timeframe: 4h
+
+# --- FX STRATEGIES (IBKR) ---
+
+fx_carry_momentum_filter:
+  data_source: ibkr_reqHistoricalData(AUDJPY/USDJPY/EURJPY/NZDUSD, 1D, 90D)
+  signal_conditions: carry spread positive + momentum 63d positive
+  execution_type: ibkr_forex
+  broker_flow: IBKRBroker(client_id=10) -> get_positions -> reconcile -> create_position(forex)
+  cash_deps: [IBKR equity > $5K]
+  margin_deps: [IB Gateway port 4002 connected]
+  min_notional: 1000
+  lot_size_step: N/A (forex = notional)
+  regime_multiplier_key: fx_carry_momentum
+  allocation_pct: varies_by_pair
+  timeframe: 1d
+  data_parquets:
+    - data/fx/AUDJPY_1D.parquet
+    - data/fx/USDJPY_1D.parquet
+    - data/fx/EURJPY_1D.parquet
+    - data/fx/NZDUSD_1D.parquet
+  ibkr_client_id: 10
+  max_notional_per_pair: 40000

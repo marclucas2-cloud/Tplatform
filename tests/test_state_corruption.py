@@ -445,11 +445,12 @@ class TestCryptoDrawdownCorruption:
         ok_after, msg_after = crypto_rm.check_drawdown(19000.0)
         assert isinstance(ok_after, bool)
 
-    def test_negative_equity_triggers_circuit_breaker(self, crypto_rm):
-        """Negative equity signals extreme corruption -- must trigger kill switch."""
+    def test_negative_equity_skipped_as_api_error(self, crypto_rm):
+        """Negative equity = API error, not real loss -- must skip (not crash)."""
         ok, msg = crypto_rm.check_drawdown(-5000.0)
-        # Negative equity = huge drawdown from peak -> should fail
-        assert not ok, f"Negative equity must trigger circuit breaker: {msg}"
+        # Guard: equity <= 0 is API error, skip drawdown check
+        assert ok, f"Negative equity should be skipped as API error: {msg}"
+        assert "API error" in msg or "skipped" in msg
 
     def test_zero_equity_handled(self, crypto_rm):
         """Zero equity should not cause division by zero."""
@@ -499,13 +500,16 @@ class TestCryptoDrawdownCorruption:
             # Should load active=True from partial state
             assert ks.is_killed, "Partial state with active=True should be respected"
 
-    def test_extreme_drawdown_values(self, crypto_rm):
-        """Extreme drawdown percentages (>100%) from corrupt state."""
-        # Set peak very high then feed very low equity
+    def test_extreme_drawdown_resets_baseline(self, crypto_rm):
+        """Extreme baseline mismatch (>5x) resets baselines instead of false kill."""
+        # Set peak very high then feed very low equity — baseline mismatch guard
         crypto_rm._peak_equity = 1_000_000
+        crypto_rm._daily_start_equity = 1_000_000
         ok, msg = crypto_rm.check_drawdown(1.0)
-        # 99.9999% drawdown -- must trigger kill switch
-        assert not ok, f"Extreme drawdown must trigger protection: {msg}"
+        # Guard: 5x mismatch resets baselines to current equity (not a real DD)
+        assert ok, f"Extreme mismatch should reset baselines: {msg}"
+        # Verify baselines were reset
+        assert crypto_rm._daily_start_equity == 1.0
 
     def test_check_all_with_nan_positions(self, crypto_rm):
         """NaN values in position dicts should not crash check_all."""

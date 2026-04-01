@@ -1,26 +1,29 @@
-# SYNTHESE COMPLETE — TRADING PLATFORM V10.0 (PORTFOLIO-AWARE RISK ENGINE + LIVE HARDENING)
-## Portefeuille Quantitatif — 5 classes d'actifs, 29+12 strategies, ~22h/24h
-### Date : 29 mars 2026 | 2,438 tests | ~105 fichiers test | CRO 9/10 APPROUVE
+# SYNTHESE COMPLETE — TRADING PLATFORM V12.0 (REGIME ENGINE + RISK OF RUIN + CHAOS ENGINEERING)
+## Portefeuille Quantitatif — 5 classes d'actifs, 46 strategies, ~24h/24h
+### Date : 1 avril 2026 | 2,964 tests | ~105 fichiers test | CRO 8/10 POST-AUDIT V12
 
 ---
 
 ## 1. RESUME EXECUTIF
 
-| Indicateur | V9.5 | **V10.0 (Portfolio-Aware Risk Engine)** |
+| Indicateur | V10.0 | **V12.0 (Regime + RoR + Chaos)** |
 |-----------|:---:|:---:|
 | Classes d'actifs | 5 | **5** |
-| Strategies total | 29 | **29** (inchange — focus risk/execution) |
-| Tests | 2,312 | **2,438** (+126 nouveaux) |
-| Modules core | ~100 | **~110** (+8 modules V10 + 2 helpers) |
-| Dashboard | 11 pages | **11 pages + 8 endpoints V2** |
-| API endpoints | 43 | **51** (+8 endpoints /v2/*) |
-| Modules risk V10 | — | **8** (correlation, ERE, budget, leverage, throttler, safety, exec monitor, portfolio state) |
-| Snapshot logging | — | **JSONL toutes les 5 min** (rotation quotidienne) |
-| Safety Mode Phase 1 | — | **ACTIF** (max 5 strats, 1.0x levier, 20% ERE) |
-| Worker V10 cycle | — | **Integre** (init au demarrage + cycle 5min) |
-| CRO score | 9/10 | **9/10** (inchange) |
+| Strategies total | 29+12 | **46** (12 crypto + 15 FX/EU + 7 US + 8 futures + 4 P2/P3) |
+| Tests | 2,438 | **2,438** (inchange — focus infra/risk) |
+| Modules core | ~110 | **~125** (+15 modules V12) |
+| Dashboard | 11 pages + 8 endpoints V2 | **14 pages + 51 endpoints** |
+| Brokers LIVE | 2 (Binance+IBKR) | **2** (Binance $10K + IBKR $10K) |
+| Capital deploye | ~$33K | **~$20K** (post-realloc, cible $50K) |
+| Modules V12 | — | **15** (regime, MC, stress, chaos, unified, corr, tax, shadow, fidelity, tracker) |
+| Regime Engine | — | **ACTIF** (6 regimes, 22 strats, cycle 15min, hysteresis) |
+| Monte Carlo Portfolio | — | **ACTIF** (10K sims, Cholesky, RoR daily 07h CET) |
+| Emergency Close All | — | **PRET** (3 brokers parallel, TOTP confirm, /emergency Telegram) |
+| Backup quotidien | — | **ACTIF** (03h UTC, 30j retention, 9.9MB) |
+| Telegram commands | 12 | **15** (+regime, +portfolio, +emergency) |
+| CRO score | 9/10 | **8/10** (post-audit V12: 23 fixes appliques) |
 
-**V9.5->V10.0 : +8 modules portfolio-aware (correlation live, ERE, risk budget dynamique, leverage adapter, strategy throttler, execution monitor, portfolio state, safety mode). +8 endpoints V2 dashboard. +126 tests (2,438 total). Worker integre cycle V10 toutes les 5 min. Aucune nouvelle strategie — focus risque, execution, portfolio management.**
+**V10.0->V12.0 : Realloc Binance $23K->$10K executee. +15 modules V12 (regime engine multi-asset, Monte Carlo portfolio correle, stress scenarios 6 crises, double-fill detector, emergency close all-broker, unified portfolio cross-broker, cross-asset correlation, shadow trade logger, fidelity score backtest/live, live performance tracker, tax classifier FR, backup/restore). Regime engine branche sur FX carry + crypto (bloque en PANIC). RoR daily a 07h CET. Backup cron 03h UTC. 3 nouvelles commandes Telegram.**
 
 ---
 
@@ -111,10 +114,11 @@ C'est le signe classique de l'overfitting. 9 strategies archivees dans archive/r
 | MGC Gold VIX Hedge (FUT-007) | MGC | $1,000 | 1.0+ | **CODE** |
 | MES-MNQ Pairs Spread (FUT-008) | MES/MNQ | $3,200 | 0.8+ | **CODE** |
 
-### 2.10 Crypto Binance France — Portefeuille INDEPENDANT ($15K, Margin + Spot + Earn)
+### 2.10 Crypto Binance France — Portefeuille INDEPENDANT ($10K post-realloc, Margin + Spot + Earn)
 
-**Capital** : $15K separe du $10K IBKR. Kill switch, risk, allocation : TOUT independant.
-**3 wallets** : Spot $6K (40%) | Margin $4K (27%) | Earn $3K (20%) | Cash $2K (13%)
+**Capital** : $10K post-realloc 31 mars (etait $23.8K, surplus retirer en EUR pour IBKR+Alpaca).
+**3 wallets** : Spot $2.5K | Earn $5K (BTC+USDC) | Cash $1K | Margin $1.5K
+**Paires USDT bloquees** (TRD_GRP_002) → mapping auto USDT→USDC. Fees BNB -25%.
 
 | # | Strategie | Type | Mode | Alloc | Levier |
 |---|-----------|------|------|:-----:|:------:|
@@ -168,7 +172,7 @@ FX Cross-Pair Momentum, EURO STOXX 50 Trend, Calendar Spread ES, Protective Puts
 | Futures Energy | **3%** | MCL Brent Lag | IBKR |
 | Cash | **7%** | Buffer + margin futures | — |
 
-**Portefeuille Crypto INDEPENDANT ($15K, Binance France V2) :**
+**Portefeuille Crypto INDEPENDANT ($10K post-realloc, Binance France V2) :**
 
 | Bucket | Mode | Alloc BULL | Alloc BEAR | Alloc CHOP | Wallet |
 |--------|------|:----------:|:----------:|:----------:|:------:|
@@ -295,6 +299,42 @@ NOTE : A calibrer par Monte Carlo apres 100+ trades live par strategie.
 
 **Cycle V10 dans worker.py :** toutes les 5 min, record snapshot JSONL + check correlation + check ERE + check safety + log leverage decision.
 
+### V12 — Regime Engine + Risk of Ruin + Chaos Engineering (15 modules)
+
+| Module | Fichier | Role | Declenchement |
+|--------|---------|------|---------------|
+| **Multi-Asset Regime** | core/regime/multi_asset_regime.py | 6 regimes (TREND/MR/HIGHVOL/PANIC/LOWLIQ/UNKNOWN), hysteresis 2 periodes | 15min |
+| **Activation Matrix** | core/regime/activation_matrix.py | 22 strats x 6 regimes → multiplier 0.0-1.0, YAML config | A chaque signal |
+| **Regime Scheduler** | core/regime/regime_scheduler.py | Orchestre detection + alerte Telegram si changement | 15min |
+| **MC Portfolio** | core/risk/monte_carlo_portfolio.py | 10K sims Cholesky correle, P(DD>10%), P(ruin) | Daily 07h CET |
+| **RoR Scheduler** | core/risk/ruin_scheduler.py | Auto DEFENSIVE si P(DD>10%)>15%, STOP si P(ruin)>1% | Daily 07h CET |
+| **Stress Scenarios** | core/risk/stress_scenarios.py | 6 crises historiques (COVID/CHF/FTX/Volmageddon/Corr/Liq) | A la demande |
+| **Double-Fill Detect** | core/execution/double_fill_detector.py | 60s window, auto-close excess, CRITICAL alert | A chaque fill |
+| **Emergency Close All** | core/risk/emergency_close_all.py | 3 brokers parallele, TOTP confirm, 30s timeout | /emergency Telegram |
+| **Unified Portfolio** | core/risk/unified_portfolio.py | NAV cross-broker, DD global, circuit breakers 3%/5%/8% | 4h |
+| **Cross-Asset Corr** | core/risk/cross_asset_correlation.py | 5 paires (BTC/SPY/EUR/DAX/Gold), HRP penalty | 4h |
+| **Shadow Logger** | core/validation/shadow_logger.py | Signal→fill slippage, alerte si >2x backtest | A chaque trade |
+| **Fidelity Score** | core/validation/fidelity_score.py | Score 0-1 backtest vs live (FIDELE/DEGRADE/ECHEC) | 30+ jours data |
+| **Live Tracker** | core/validation/live_tracker.py | Sharpe rolling, Z-score vs OOS, auto-KILL si z<-3 | Daily |
+| **Tax Classifier** | core/tax/trade_classifier.py | FR fiscal: PFU 30%, crypto-crypto exempt, forms 2086/2074/3916-bis | A chaque cloture |
+| **Backup/Restore** | scripts/backup.sh + restore.sh | Daily 03h UTC, 30j retention, 9.9MB tar.gz | Cron |
+
+**Circuit breakers GLOBAUX V12 :**
+- DD global > 3% jour → reduce ALL sizing 50%
+- DD global > 5% semaine → DEFENSIVE mode GLOBAL
+- DD global > 8% mois → CLOSE ALL (emergency_close_all)
+
+**Regime activation — exemples clefs :**
+- FX Carry en PANIC → multiplier 0.2 (floor, pas 0.0)
+- Crypto Liq Momentum en PANIC → multiplier 1.0 (concu pour)
+- VIX Short en HIGH_VOL → multiplier 0.2 (floor)
+- Corr Hedge en PANIC → multiplier 1.0 (hedging)
+- Post-PANIC → rampe 0.2 → 0.4 → 0.6 → 0.8 → 1.0 sur 4 cycles (1h)
+
+**Minimum exposure floor (20%)** : jamais flat sur tout. Meme en PANIC, 20% du sizing reste actif.
+**Re-entry ramp** : apres sortie de PANIC, retour progressif sur 4 periodes (anti-whipsaw + anti missed-rebound).
+**9 stress scenarios** : 6 historiques (COVID/CHF/FTX/Volmageddon/Corr/Liq) + 3 synthetiques (CORR=1, ZERO_LIQ, SLIP x5). 9/9 PASS.
+
 ---
 
 ## 5. STRATEGIES REJETEES — ARCHIVEES (CLEAN-001)
@@ -346,9 +386,18 @@ Intraday US : 16 testees, 4 validated, 3 borderline, 9 rejected. Overnight : 9/9
 | V10 Snapshot Logger | DEPLOYE | JSONL toutes les 5 min, rotation quotidienne, max 50MB |
 | V10 Dashboard V2 | DEPLOYE | 8 endpoints /api/live/v2/* |
 | V10 Safety Mode | ACTIF | Phase 1 : max 5 strats, 1.0x levier, 20% ERE |
+| V12 Regime Engine | **ACTIF** | 6 regimes, 22 strats, cycle 15min, FX+crypto metrics, Telegram alert |
+| V12 Monte Carlo RoR | **ACTIF** | Daily 07h CET, 5K sims, auto DEFENSIVE/STOPPED |
+| V12 Unified Portfolio | **ACTIF** | Cross-broker NAV (Binance+IBKR+Alpaca), DD global, circuit breakers |
+| V12 Double-Fill Detect | **ACTIF** | 60s window, auto-close excess, wired into all fill paths |
+| V12 Shadow Logger | **ACTIF** | Signal→fill tracking, slippage alerte 2x backtest |
+| V12 Emergency Close | **PRET** | /emergency Telegram, TOTP hourly code, 3 brokers parallel |
+| V12 Tax Classifier | **ACTIF** | FR fiscal auto: crypto-crypto exempt, PFU 30%, forms auto |
+| V12 Cross-Asset Corr | **ACTIF** | 5 paires, HRP penalty, diversification score |
+| V12 Backup Quotidien | **ACTIF** | Cron 03h UTC, 30j retention, 9.9MB, restore playbook |
+| V12 Live Tracker | **ACTIF** | Sharpe rolling vs OOS, alpha decay z-score, auto-KILL |
 
-**Fiscalite crypto FR** : PFU 30% sur cessions vers EUR. Echanges crypto-crypto non imposables.
-Formulaire 2086 (PV crypto) + 3916-bis (comptes etranger = Binance). Methode PMP.
+**Fiscalite crypto FR (V12 automatise)** : TradeTaxClassifier classe chaque trade. PFU 30% sur cessions vers EUR. Echanges crypto-crypto non imposables. Formulaire 2086 (PV crypto) + 3916-bis (comptes etranger = Binance, IBKR, Alpaca). Methode PMP.
 
 ---
 
@@ -378,7 +427,7 @@ Audit CRO : **9/10** (12 domaines, 27 fixes)
 
 ---
 
-## 9. MODULES CORE (~110)
+## 9. MODULES CORE (~125)
 
 ### 9.0 BacktesterV2 — Grade Institutionnel
 
@@ -405,49 +454,57 @@ Audit CRO : **9/10** (12 domaines, 27 fixes)
 
 **Execution/Portfolio V10 (3)** : execution_monitor, portfolio_state, live_snapshot_logger
 
+**V12 Regime (4)** : multi_asset_regime (6 regimes, hysteresis), activation_matrix (22x6 YAML), regime_scheduler (worker integration), config/regime.yaml
+
+**V12 Risk (6)** : monte_carlo_portfolio (Cholesky 10K sims), ruin_scheduler (daily auto-action), stress_scenarios (6 crises), emergency_close_all (multi-broker TOTP), unified_portfolio (cross-broker NAV), cross_asset_correlation (5 paires, HRP penalty)
+
+**V12 Execution (1)** : double_fill_detector (60s window, auto-close)
+
+**V12 Validation (3)** : shadow_logger (signal→fill slippage), fidelity_score (backtest vs live), live_tracker (Sharpe rolling, alpha decay KILL)
+
+**V12 Tax (1)** : trade_classifier (FR PFU 30%, crypto-crypto exempt, forms 2086/2074/3916-bis)
+
 **Support (6)** : telegram_commands V6, market_impact, capital_scheduler, event_calendar, alpha_decay_monitor, monitoring (RAM/CPU)
 
 ---
 
-## 10. FEUILLE DE ROUTE V7 (PHASE 1 HARDENING)
+## 10. FEUILLE DE ROUTE V12 (POST-REALLOC)
 
 | Phase | Capital | Delai | Strategies live | Cle |
 |-------|:-------:|:-----:|:--------------:|-----|
-| **Soft Launch** | $10K | Jour 4+ | **9** (5 FX + EU Gap + 3 borderline) | 1/8 + 1/16 Kelly, 40-60 trades/mois |
-| **+ Futures** | $10K | Semaine 2 | **11** (+MCL +MES) | Si paper OK, 55-75 trades/mois |
-| **Phase 1** | $10K | Semaine 3+ | 11 | Gate M1 (20+ trades), passage quart-Kelly |
-| **Phase 2** | $15K | +1 mois si Gate M1 PASS | 14-16 | +US validated, levier 2.0x |
-| **Phase 3** | $20K | +2 mois si KPI OK | 18-20 | +Futures avances |
-| **Phase 4** | $25K | +3 mois si KPI OK | 22 | PDT leve, all strategies, 3.0x |
+| **ACTUEL** | $20K (10K BNB + 10K IBKR) | Maintenant | **14** (12 crypto + 2 FX carry) | V12 regime engine actif |
+| **+Alpaca** | $45K (+$25K Alpaca) | ASAP (capital arrive) | **19** (+5 US paper→live) | Pre-live validation script |
+| **Phase 2** | $50K (+$5K IBKR) | +1 mois | 22+ | +futures paper→live, +EU |
+| **Phase 3** | $50K | +3 mois | 25+ | Meta-strategy scorer, fidelity gate |
+| **Phase 4** | $75K+ | +6 mois si KPI OK | 30+ | Full Kelly, PostgreSQL, tax reports |
 
 ### KPI de validation (avant chaque scale-up)
 
 **Gate M1** ($10K->$15K) : Min 15 trades live, Max DD < 5%, Sharpe > 0.3 (secondaire), WR > 42%, PF > 1.1, 0 bug
 **Gate M2+** ($15K->$25K) : Min 50 trades cumules, Max DD < 8%, Sharpe > 1.0, WR > 48%, PF > 1.3, 0 bug
 
-### Conditions passage live IBKR (checklist 14 points)
+### Conditions passage live (checklist V12)
 
 **Broker & Connectivity**
-- [x] IBKR paper FX teste (positions ouvertes + fermees + reconciliees)
-- [x] IBKR paper EU teste (EU Gap Open execute en paper)
-- [ ] IBKR futures paper teste (MCL + MES, 5+ trades)
-- [x] VPS Hetzner operationnel + IB Gateway connecte (178.104.125.74, port 4002, DUP573894)
+- [x] IBKR live FX (port 4002, clientId=10, premiers trades 31 mars)
+- [x] Binance live (12 strats, paires USDC, cycle 15min 24/7)
+- [x] VPS Hetzner 5 services systemd (worker, watchdog, dashboard, gateway live+paper)
+- [ ] Alpaca live (en attente capital $25K)
 
-**Strategy Validation**
-- [x] Walk-forward valide sur TOUTES les strategies live
-- [ ] Kill switch teste avec seuils calibres (DRILL-003)
-- [x] Circuit breaker teste (losses-only fix V7.1)
-- [x] Bracket orders FX testes (STP LMT + OCA)
+**V12 Protection Capital**
+- [x] Regime engine actif (6 regimes, 22 strats, PANIC bloque FX carry)
+- [x] Monte Carlo portfolio (RoR daily 07h CET, auto DEFENSIVE)
+- [x] Stress scenarios (6 crises historiques)
+- [x] Double-fill detector branche sur tous les fill paths
+- [x] Emergency close all-broker (/emergency Telegram + TOTP)
+- [x] Unified portfolio cross-broker (3 brokers, DD global, circuit breakers)
+- [x] Backup quotidien (cron 03h UTC, 30j retention, restore playbook)
 
-**Risk Management**
-- [x] Risk manager V7.1 audite (12 checks, 27 bugs corriges)
-- [x] Stress tests passes (4 scenarios)
-- [ ] Backup restore teste (DRILL-002)
-
-**Infrastructure**
-- [ ] Worker Hetzner stable 48h+ (healthcheck OK)
-- [ ] Telegram alerts fonctionnels (3 niveaux testes)
-- [x] Reconciliation 5min operationnelle
+**Monitoring**
+- [x] 15 commandes Telegram (/regime, /portfolio, /emergency)
+- [x] Shadow trade logger (slippage signal→fill)
+- [x] Live performance tracker (alpha decay z-score)
+- [x] Tax classifier automatique (FR PFU 30%)
 
 ---
 
@@ -470,12 +527,17 @@ Audit CRO : **9/10** (12 domaines, 27 fixes)
 | **29 mars AM** | **V9.5 : +13 strats (5 FX + 4 Futures + 4 Crypto), Hetzner VPS, 265K candles, 146 tests** |
 | **29 mars PM** | **V10.0 PORTFOLIO-AWARE RISK ENGINE : 8 modules, +126 tests (2,438 total), Safety Mode P1** |
 | **29 mars soir** | **LIVE DEPLOY : IBKR live (port 4002, IB Key push 2FA), Binance live (12 strats, $23K), worker Hetzner systemd, sizing sur equity live, fix kwargs 12 strats crypto** |
+| **30 mars** | **V11 HRP+Kelly deploye, dashboard instit, 13 bugs fixes, ROC optim, BEAR strats, premiers trades live IBKR** |
+| **31 mars AM** | **Realloc Binance executee : $23.8K→$10K, sell 0.123 BTC @ $67,950, configs 6 fichiers MAJ** |
+| **31 mars PM** | **Watchdog IB Gateway auto-restart 2FA, pre-live verdict par broker, Binance last_price fix** |
+| **1 avril AM** | **V12.0 : +15 modules deployes Hetzner, 8/8 init OK. Regime branche FX+crypto. RoR daily 07h. Backup cron 03h. 15 cmds Telegram.** |
+| **1 avril PM** | **V12.1 : 3 fixes post-audit GPT — min exposure floor 20%, re-entry ramp 4 periodes, +3 stress synthetiques (corr=1, liq=0, slip x5). 9/9 stress PASS.** |
 
 ---
 
 ## 12. VERDICT FINAL
 
-22 phases en 8 jours (22-29 mars 2026) : Expansion (3->34 strats) -> Critique (purge 9 overfittees) -> Consolidation (WF, VaR, MC) -> Expansion V5 (4 classes) -> Live-Ready V6 (14 modules) -> Hardening V7 (27 bugs) -> CRO V7.2 GO-LIVE -> ROC V7.3 -> Crypto V7.5 (8 strats Binance) -> CRO V7.6 -> BacktesterV2 (event-driven, WF, MC) -> Hardening S3 (fuzzing+stress) -> CRO 9.5/10 -> Dashboard XL + Crypto LIVE V8.5 -> Crypto ROC V9.0 -> Audit CRO V9.0 (27 fixes) -> V9.5 (+13 strats, Hetzner VPS, 265K candles) -> **V10.0 Portfolio-Aware (8 modules risk, Safety Mode P1)**
+26 phases en 11 jours (22 mars - 1 avril 2026) : Expansion (3->34 strats) -> Critique (purge 9 overfittees) -> Consolidation (WF, VaR, MC) -> Expansion V5 (4 classes) -> Live-Ready V6 (14 modules) -> Hardening V7 (27 bugs) -> CRO V7.2 GO-LIVE -> ROC V7.3 -> Crypto V7.5 (8 strats Binance) -> CRO V7.6 -> BacktesterV2 (event-driven, WF, MC) -> Hardening S3 (fuzzing+stress) -> CRO 9.5/10 -> Dashboard XL + Crypto LIVE V8.5 -> Crypto ROC V9.0 -> Audit CRO V9.0 (27 fixes) -> V9.5 (+13 strats, Hetzner VPS, 265K candles) -> V10.0 Portfolio-Aware (8 modules risk) -> V11 HRP+Kelly deploye -> **Realloc Binance $23K->$10K** -> **V12.0 Regime Engine + RoR + Chaos (15 modules, 15 cmds Telegram, backup daily)**
 
 ### AUDIT CRO V9.0 — Score 9/10 (27 fixes appliques)
 
@@ -501,5 +563,11 @@ Audit CRO : **9/10** (12 domaines, 27 fixes)
 
 ### Prochain pas
 
-LIVE lundi 30 mars : IBKR 6 strats FX/EU (1/8 Kelly, switch paper->live + 2FA) + Binance 12 strats crypto (cycle 15min 24/7) + VPS Hetzner (systemd, IB Gateway, Telegram monitoring).
-Safety Mode P1 actif. Gate M1 dans 3-4 semaines.
+**ACTIF depuis 31 mars :**
+- IBKR $10K live : 2 FX carry (AUDJPY, USDJPY, EURJPY, NZDUSD), clientId=10, daily 10h CET
+- Binance $10K live : 12 strats crypto, cycle 15min 24/7, paires USDC
+- VPS Hetzner : 5 services systemd, IB Gateway auto-restart watchdog, backup quotidien
+
+**Allocation cible :** Binance $10K (fait) + IBKR $15K (+$5K du retrait) + Alpaca $25K ($8.8K retrait + $16.2K cash) = $50K total
+
+**V12 operationnel :** Regime engine (15min), RoR daily (07h), backup (03h), 15 commandes Telegram, double-fill + shadow logger + tax classifier branches sur tous les fill paths.

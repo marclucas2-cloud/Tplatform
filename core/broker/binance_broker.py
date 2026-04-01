@@ -173,7 +173,7 @@ class BinanceBroker(BaseBroker):
         self._get("/api/v3/ping")
         account = self._get("/api/v3/account", signed=True, weight=10)
         balances = {b["asset"]: float(b["free"]) + float(b["locked"]) for b in account.get("balances", []) if float(b["free"]) + float(b["locked"]) > 0}
-        usdt = balances.get("USDT", 0)
+        stablecoin = balances.get("USDC", 0) + balances.get("USDT", 0)
 
         margin_equity = 0
         try:
@@ -182,12 +182,12 @@ class BinanceBroker(BaseBroker):
         except BrokerError:
             pass
 
-        logger.info(f"Binance authenticated ({'TESTNET' if self._testnet else 'LIVE'}) — spot USDT={usdt:.2f}")
-        return {"status": "ok", "equity": usdt, "cash": usdt, "buying_power": usdt, "currency": "USDT", "paper": self._testnet, "account_number": "binance", "spot_usdt": usdt, "margin_equity_btc": margin_equity}
+        logger.info(f"Binance authenticated ({'TESTNET' if self._testnet else 'LIVE'}) — stablecoin=${stablecoin:.2f}")
+        return {"status": "ok", "equity": stablecoin, "cash": stablecoin, "buying_power": stablecoin, "currency": "USD", "paper": self._testnet, "account_number": "binance", "spot_usdt": stablecoin, "margin_equity_btc": margin_equity}
 
     def get_account_info(self) -> dict:
         account = self._get("/api/v3/account", signed=True, weight=10)
-        spot_usdt = 0.0
+        spot_stablecoin = 0.0  # USDT + USDC (Binance France uses USDC)
         spot_total_usd = 0.0
         # Track LD* tokens (Earn wrappers) to avoid double-counting with Earn API
         ld_assets = set()
@@ -196,17 +196,22 @@ class BinanceBroker(BaseBroker):
             locked = float(b["locked"])
             total = free + locked
             asset = b["asset"]
-            if asset == "USDT":
-                spot_usdt = total
+            if asset in ("USDT", "USDC"):
+                spot_stablecoin += total
                 spot_total_usd += total
             elif asset.startswith("LD"):
                 ld_assets.add(asset)  # Skip — counted via Earn API below
             elif total > 0:
+                # Try USDT pair first, fallback to USDC pair
                 try:
                     ticker = self._get("/api/v3/ticker/price", {"symbol": asset + "USDT"})
                     spot_total_usd += total * float(ticker["price"])
                 except BrokerError:
-                    pass
+                    try:
+                        ticker = self._get("/api/v3/ticker/price", {"symbol": asset + "USDC"})
+                        spot_total_usd += total * float(ticker["price"])
+                    except BrokerError:
+                        pass
 
         # Earn positions (flexible) — the real value of LD* tokens
         earn_total_usd = 0.0
@@ -221,11 +226,17 @@ class BinanceBroker(BaseBroker):
                 if asset in ("USDT", "USDC", "BUSD"):
                     earn_total_usd += amt
                 else:
-                    try:
-                        ticker = self._get("/api/v3/ticker/price", {"symbol": asset + "USDT"})
-                        earn_total_usd += amt * float(ticker["price"])
-                    except BrokerError:
-                        pass
+                    _priced = False
+                    for _q in ("USDC", "USDT"):
+                        try:
+                            ticker = self._get("/api/v3/ticker/price", {"symbol": asset + _q})
+                            earn_total_usd += amt * float(ticker["price"])
+                            _priced = True
+                            break
+                        except BrokerError:
+                            continue
+                    if not _priced:
+                        logger.warning(f"Earn asset {asset} ({amt}) has no USDC/USDT ticker — excluded from equity")
         except BrokerError:
             pass
 
@@ -247,9 +258,9 @@ class BinanceBroker(BaseBroker):
         equity = spot_total_usd + earn_total_usd
         return {
             "equity": round(equity, 2),
-            "cash": round(spot_usdt, 2),
-            "buying_power": round(spot_usdt, 2),
-            "spot_usdt": round(spot_usdt, 2),
+            "cash": round(spot_stablecoin, 2),
+            "buying_power": round(spot_stablecoin, 2),
+            "spot_usdt": round(spot_stablecoin, 2),  # Legacy key, now includes USDC
             "spot_total_usd": round(spot_total_usd, 2),
             "earn_total_usd": round(earn_total_usd, 2),
             "margin_level": round(margin_level, 2),
@@ -264,11 +275,21 @@ class BinanceBroker(BaseBroker):
             total = float(b["free"]) + float(b["locked"])
             if total <= 0 or b["asset"] in ("USDT", "BUSD", "USDC"):
                 continue
-            symbol = b["asset"] + "USDT"
-            try:
-                ticker = self._get("/api/v3/ticker/price", {"symbol": symbol})
-                price = float(ticker["price"])
-            except BrokerError:
+            if b["asset"].startswith("LD"):
+                continue  # Earn wrappers, not real positions
+            # Try USDC pair first (Binance France), fallback USDT
+            symbol = None
+            price = 0
+            for quote in ("USDC", "USDT"):
+                try:
+                    _sym = b["asset"] + quote
+                    ticker = self._get("/api/v3/ticker/price", {"symbol": _sym})
+                    price = float(ticker["price"])
+                    symbol = _sym
+                    break
+                except BrokerError:
+                    continue
+            if not symbol or price <= 0:
                 continue
             avg_entry = self._fill_prices.get(symbol, 0)
             unrealized_pl = round(total * (price - avg_entry), 2) if avg_entry > 0 else 0
@@ -362,7 +383,23 @@ class BinanceBroker(BaseBroker):
                 sl_order_id = str(sl_result.get("orderId", ""))
                 logger.info(f"Spot SL attached: {symbol} {sl_side} @ {stop_loss:.2f} [{authorized_by}]")
             except BrokerError as e:
-                logger.warning(f"Spot SL order failed for {symbol}: {e}")
+                # CRO C-3: spot position WITHOUT SL = unbounded loss → emergency close
+                logger.critical(f"Spot SL FAILED for {symbol}: {e} — EMERGENCY CLOSE")
+                try:
+                    close_side = "SELL" if side == "BUY" else "BUY"
+                    self._post("/api/v3/order", {
+                        "symbol": symbol, "side": close_side,
+                        "type": "MARKET", "quantity": str(filled_qty),
+                    })
+                    logger.critical(f"Emergency close: spot {side} {symbol} closed (SL failed)")
+                    return {"orderId": str(result.get("orderId", "")), "symbol": symbol,
+                            "side": side, "status": "CLOSED_NO_SL", "qty": 0,
+                            "filled_qty": 0, "filled_price": avg_price,
+                            "stop_loss": stop_loss, "sl_order_id": None,
+                            "paper": self._testnet, "authorized_by": authorized_by,
+                            "market_type": "spot", "reason": "sl_failed_emergency_close"}
+                except Exception as e2:
+                    logger.critical(f"EMERGENCY CLOSE FAILED for spot {symbol}: {e2}")
 
         return {"orderId": str(result.get("orderId", "")), "symbol": symbol, "side": side, "status": result.get("status", "FILLED"), "qty": filled_qty, "filled_qty": filled_qty, "filled_price": avg_price, "stop_loss": stop_loss, "sl_order_id": sl_order_id, "paper": self._testnet, "authorized_by": authorized_by, "market_type": "spot"}
 
@@ -371,8 +408,9 @@ class BinanceBroker(BaseBroker):
         if side not in ("BUY", "SELL"):
             raise BrokerError(f"Invalid direction: {direction}")
         # For margin shorts: borrow + sell
+        # CRO B-4 FIX: strip both USDT and USDC suffixes
         if side == "SELL":
-            base_asset = symbol.replace("USDT", "")
+            base_asset = symbol.replace("USDT", "").replace("USDC", "")
             self.margin_borrow(base_asset, qty, symbol=symbol)
         params = {"symbol": symbol, "side": side, "type": "MARKET", "quantity": str(qty), "isIsolated": "TRUE", "sideEffectType": "MARGIN_BUY" if side == "BUY" else "NO_SIDE_EFFECT"}
         result = self._post("/sapi/v1/margin/order", params)
@@ -433,14 +471,19 @@ class BinanceBroker(BaseBroker):
                     return {"orderId": None, "symbol": symbol, "status": "DUST_SKIP"}
                 if p["side"] == "SHORT":
                     result = self._create_margin_position(symbol, "BUY", qty, None, None, _authorized_by)
-                    base_asset = symbol.replace("USDT", "")
+                    base_asset = symbol.replace("USDT", "").replace("USDC", "")
                     try:
                         self.margin_repay(base_asset, qty, symbol=symbol)
                     except BrokerError as e:
                         logger.warning(f"Repay failed: {e}")
+                    # CRO H-7: cancel orphan SL orders for this symbol after close
+                    self._cancel_symbol_orders(symbol)
                     return result
                 else:
-                    return self._create_spot_position(symbol, "SELL", qty, None, None, _authorized_by)
+                    result = self._create_spot_position(symbol, "SELL", qty, None, None, _authorized_by)
+                    # CRO H-7: cancel orphan SL orders for this symbol after close
+                    self._cancel_symbol_orders(symbol)
+                    return result
         return {"orderId": None, "symbol": symbol, "status": "NO_POSITION"}
 
     def close_all_positions(self, _authorized_by: str | None = None) -> list[dict]:
@@ -456,6 +499,39 @@ class BinanceBroker(BaseBroker):
         self.cancel_all_orders(_authorized_by=_authorized_by)
         return results
 
+    def verify_sl_exists(self, symbol: str, sl_order_id: str | None = None) -> bool:
+        """Verify a stop-loss order exists for symbol. Called post-fill.
+
+        Returns True if SL order found, False if missing (position unprotected).
+        """
+        if not sl_order_id:
+            return False
+        try:
+            orders = self._get("/api/v3/openOrders", {"symbol": symbol}, signed=True, weight=6)
+            for o in orders:
+                if str(o.get("orderId")) == sl_order_id:
+                    return True
+                if o.get("type") in ("STOP_LOSS_LIMIT", "STOP_LOSS"):
+                    return True  # Any SL on this symbol counts
+            logger.critical(f"SL MISSING: {symbol} sl_order_id={sl_order_id} not found in open orders")
+            return False
+        except BrokerError as e:
+            logger.warning(f"verify_sl_exists {symbol}: {e}")
+            return False  # Assume missing if we can't check
+
+    def _cancel_symbol_orders(self, symbol: str):
+        """Cancel all open orders for a specific symbol (SL cleanup after close)."""
+        try:
+            orders = self._get("/api/v3/openOrders", {"symbol": symbol}, signed=True, weight=6)
+            for o in orders:
+                try:
+                    self._delete("/api/v3/order", {"symbol": symbol, "orderId": o["orderId"]})
+                    logger.info(f"Cancelled orphan order {symbol} #{o['orderId']} ({o.get('type')})")
+                except BrokerError:
+                    pass
+        except BrokerError:
+            pass
+
     def cancel_all_orders(self, _authorized_by: str | None = None) -> int:
         if not _authorized_by:
             raise BrokerError("_authorized_by is required for cancel_all_orders")
@@ -465,8 +541,8 @@ class BinanceBroker(BaseBroker):
             try:
                 self._delete("/api/v3/order", {"symbol": o["symbol"], "orderId": o["orderId"]})
                 count += 1
-            except BrokerError:
-                pass
+            except BrokerError as e:
+                logger.warning(f"cancel_order failed {o.get('symbol')} #{o.get('orderId')}: {e}")
         return count
 
     def get_prices(self, symbol: str, timeframe: str = "1D", bars: int = 500, start: str = "", end: str = "") -> dict:
@@ -485,8 +561,66 @@ class BinanceBroker(BaseBroker):
     # Margin-specific
     # ------------------------------------------------------------------
 
+    def margin_transfer(self, asset: str, amount: float, symbol: str, to_margin: bool = True) -> dict:
+        """Transfer between spot and isolated margin wallet.
+
+        Args:
+            asset: Asset to transfer (e.g. "USDC", "BTC").
+            amount: Amount to transfer.
+            symbol: Isolated margin pair (e.g. "BTCUSDC").
+            to_margin: True = spot→margin, False = margin→spot.
+        """
+        params = {
+            "asset": asset,
+            "symbol": symbol,
+            "amount": str(amount),
+            "transFrom": "SPOT" if to_margin else "ISOLATED_MARGIN",
+            "transTo": "ISOLATED_MARGIN" if to_margin else "SPOT",
+        }
+        result = self._post("/sapi/v1/margin/isolated/transfer", params)
+        direction = "spot->margin" if to_margin else "margin->spot"
+        logger.info(f"Margin transfer: {amount} {asset} {direction} ({symbol})")
+        return result
+
+    def ensure_margin_collateral(self, symbol: str, quote_asset: str = "USDC", min_collateral: float = 100) -> bool:
+        """Ensure isolated margin account has enough collateral.
+
+        Checks quote asset balance in isolated margin. If insufficient,
+        transfers from spot wallet automatically.
+
+        Returns True if collateral is sufficient after transfer attempt.
+        """
+        try:
+            acct = self.get_margin_account(symbol)
+            quote_free = acct.get("quote_free", 0)
+            if quote_free >= min_collateral:
+                return True
+
+            # Check spot balance
+            spot = self._get("/api/v3/account", signed=True)
+            spot_free = 0
+            for b in spot.get("balances", []):
+                if b["asset"] == quote_asset:
+                    spot_free = float(b["free"])
+                    break
+
+            transfer_amount = min(spot_free, max(min_collateral - quote_free, 200))
+            if transfer_amount < 10:
+                logger.warning(f"Not enough {quote_asset} on spot ({spot_free}) to fund margin {symbol}")
+                return False
+
+            self.margin_transfer(quote_asset, round(transfer_amount, 2), symbol, to_margin=True)
+            return True
+        except Exception as e:
+            logger.warning(f"ensure_margin_collateral failed for {symbol}: {e}")
+            return False
+
     def margin_borrow(self, asset: str, amount: float, symbol: str | None = None) -> dict:
         """Borrow an asset for margin trading (isolated)."""
+        # Auto-ensure collateral before borrowing
+        if symbol:
+            quote = "USDC" if symbol.endswith("USDC") else "USDT"
+            self.ensure_margin_collateral(symbol, quote, min_collateral=100)
         params: dict[str, Any] = {"asset": asset, "amount": str(amount), "isIsolated": "TRUE"}
         if symbol:
             params["symbol"] = symbol

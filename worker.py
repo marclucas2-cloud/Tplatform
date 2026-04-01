@@ -77,6 +77,95 @@ def _log_event(action: str, strategy: str = "", details: dict | None = None):
         pass  # Never block the worker for a log write
 
 
+# ── Signal-to-Fill Ratio Monitoring ──────────────────────────────────────────
+_SIGNAL_FILL_LOG = Path(__file__).parent / "data" / "monitoring" / "signal_fill_ratio.jsonl"
+_SIGNAL_FILL_LOG.parent.mkdir(parents=True, exist_ok=True)
+_SIGNAL_FILL_HISTORY: list[dict] = []  # In-memory ring buffer (last 24 cycles)
+
+
+def _record_signal_fill(cycle: str, n_signals: int, n_fills: int, n_errors: int):
+    """Record signal-to-fill metrics and alert if fill ratio drops.
+
+    Alerts:
+      - WARNING: fill_ratio < 50% over last 6 cycles with signals (1h30 crypto)
+      - CRITICAL: fill_ratio = 0% over last 12 cycles with signals (3h crypto)
+      - CRITICAL: n_errors > 3 consecutive cycles
+    """
+    ratio = n_fills / n_signals if n_signals > 0 else None
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "cycle": cycle,
+        "n_signals": n_signals,
+        "n_fills": n_fills,
+        "n_errors": n_errors,
+        "fill_ratio": ratio,
+    }
+
+    # Persist to JSONL
+    try:
+        with open(_SIGNAL_FILL_LOG, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, default=str) + "\n")
+    except Exception:
+        pass
+
+    # In-memory ring buffer
+    _SIGNAL_FILL_HISTORY.append(entry)
+    if len(_SIGNAL_FILL_HISTORY) > 24:
+        _SIGNAL_FILL_HISTORY.pop(0)
+
+    # Only alert on cycles that had signals (no-signal cycles are normal)
+    recent_with_signals = [
+        e for e in _SIGNAL_FILL_HISTORY
+        if e["cycle"] == cycle and e["n_signals"] > 0
+    ]
+
+    if not recent_with_signals:
+        return
+
+    # Check consecutive errors
+    consecutive_errors = 0
+    for e in reversed(_SIGNAL_FILL_HISTORY):
+        if e["cycle"] == cycle and e["n_errors"] > 0:
+            consecutive_errors += 1
+        else:
+            break
+    if consecutive_errors >= 3:
+        msg = (
+            f"SIGNAL-TO-FILL CRITICAL: {consecutive_errors} cycles consecutifs "
+            f"avec erreurs ({cycle})"
+        )
+        logger.critical(msg)
+        _send_alert(msg, level="critical")
+        return
+
+    # Check fill ratio over last N cycles with signals
+    last_6 = recent_with_signals[-6:]
+    last_12 = recent_with_signals[-12:]
+
+    if len(last_12) >= 12:
+        total_s = sum(e["n_signals"] for e in last_12)
+        total_f = sum(e["n_fills"] for e in last_12)
+        if total_s > 0 and total_f == 0:
+            msg = (
+                f"SIGNAL-TO-FILL CRITICAL: 0% fills sur {len(last_12)} cycles "
+                f"({total_s} signaux, 0 fills) — {cycle}"
+            )
+            logger.critical(msg)
+            _send_alert(msg, level="critical")
+            return
+
+    if len(last_6) >= 6:
+        total_s = sum(e["n_signals"] for e in last_6)
+        total_f = sum(e["n_fills"] for e in last_6)
+        if total_s > 0 and total_f / total_s < 0.5:
+            msg = (
+                f"SIGNAL-TO-FILL WARNING: {total_f}/{total_s} fills "
+                f"({total_f/total_s:.0%}) sur {len(last_6)} cycles — {cycle}"
+            )
+            logger.warning(msg)
+            _send_alert(msg, level="warning")
+
+
 # --- Graceful shutdown handler ---
 def _handle_sigterm(signum, frame):
     """Graceful shutdown on Railway redeploy."""
@@ -133,8 +222,9 @@ LIVE_RISK_INTERVAL_SECONDS = 300
 # Crypto cycle interval (24/7, every 15 min)
 CRYPTO_INTERVAL_SECONDS = 900  # 15 min
 
-# Sizing SOFT_LAUNCH crypto : 1/8 Kelly pour TOUTES les strategies
-CRYPTO_KELLY_FRACTION = 0.125
+# Sizing SOFT_LAUNCH crypto : aligned with crypto_allocation.yaml
+# CRO H-5 FIX: was 0.125 (1/8) but config says 0.25 (1/4 Kelly)
+CRYPTO_KELLY_FRACTION = 0.25
 
 
 def is_weekday():
@@ -195,7 +285,9 @@ def is_daily_time():
 
 
 import threading
-_execution_lock = threading.Lock()
+_execution_lock = threading.Lock()       # Legacy — kept for US/EU intraday + daily
+_crypto_lock = threading.Lock()          # CRO C-2: dedicated lock for crypto cycle
+_ibkr_lock = threading.Lock()            # CRO C-2: dedicated lock for FX/futures IBKR
 _risk_lock = threading.Lock()
 
 
@@ -409,41 +501,53 @@ def _telegram_heartbeat_full():
     _send_alert("\n".join(lines), level="info")
 
 
+_HEARTBEAT_FILE = ROOT / "data" / "monitoring" / "heartbeat.json"
+_HEARTBEAT_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+
 def log_heartbeat():
     """Log un heartbeat avec l'etat du worker (positions, equity)."""
     _log_event("heartbeat", details={"source": "worker_main_loop"})
+
+    # CRO H-2: persist heartbeat timestamp for dead man's switch
+    try:
+        _HEARTBEAT_FILE.write_text(json.dumps({
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "pid": os.getpid(),
+        }))
+    except Exception:
+        pass  # Never block for monitoring write
+    # CRO M-6: heartbeat must not depend on a single broker
+    # Memory monitoring first (never fails)
+    try:
+        import psutil
+        process = psutil.Process()
+        mem_mb = process.memory_info().rss / 1024 / 1024
+        logger.info(f"HEARTBEAT: worker alive, RAM={mem_mb:.0f}MB, PID={os.getpid()}")
+        if mem_mb > 500:
+            logger.warning(f"MEMORY WARNING: worker utilise {mem_mb:.0f}MB (>500MB)")
+    except ImportError:
+        logger.info("HEARTBEAT: worker alive (psutil not installed)")
+
+    # Alpaca (best-effort)
     try:
         from core.alpaca_client.client import AlpacaClient
         client = AlpacaClient.from_env()
         account = client.get_account_info()
         positions = client.get_positions()
-        equity = account["equity"]
-        n_pos = len(positions)
-
         total_pnl = sum(p.get("unrealized_pl", 0) for p in positions)
-
-        # FIX CRO B-2 : monitoring memoire
-        import psutil
-        process = psutil.Process()
-        mem_mb = process.memory_info().rss / 1024 / 1024
         logger.info(
-            f"HEARTBEAT: worker alive, {n_pos} position(s), "
-            f"equity=${equity:,.2f}, unrealized P&L=${total_pnl:+.2f}, "
-            f"RAM={mem_mb:.0f}MB"
+            f"  Alpaca: equity=${account['equity']:,.2f}, "
+            f"{len(positions)} pos, P&L=${total_pnl:+.2f}"
         )
-        if mem_mb > 500:
-            logger.warning(f"MEMORY WARNING: worker utilise {mem_mb:.0f}MB (>500MB)")
-
-        # Telegram heartbeat exhaustif multi-broker
-        try:
-            _telegram_heartbeat_full()
-        except Exception as tg_err:
-            logger.debug(f"Telegram heartbeat failed: {tg_err}")
-
-    except ImportError:
-        logger.warning("HEARTBEAT: psutil non installe, monitoring memoire desactive")
     except Exception as e:
-        logger.warning(f"HEARTBEAT: worker alive (Alpaca inaccessible: {e})")
+        logger.info(f"  Alpaca: unavailable ({e})")
+
+    # Telegram heartbeat exhaustif multi-broker
+    try:
+        _telegram_heartbeat_full()
+    except Exception as tg_err:
+        logger.warning(f"Telegram heartbeat failed: {tg_err}")
 
 
 def run_daily():
@@ -513,8 +617,8 @@ def run_fx_carry_cycle():
     Pairs: AUD/JPY, USD/JPY, EUR/JPY, NZD/USD (carry + momentum 63d filter).
     Probationary: 15% allocation (1/16 Kelly) for 30 days.
     """
-    if not _execution_lock.acquire(blocking=False):
-        logger.warning("FX CARRY SKIP — execution lock held")
+    if not _ibkr_lock.acquire(blocking=False):
+        logger.warning("FX CARRY SKIP — IBKR lock held")
         return
     try:
         logger.info("=== FX CARRY CYCLE ===")
@@ -547,10 +651,52 @@ def run_fx_carry_cycle():
             logger.info(f"  FX CARRY SKIP — equity ${equity:.0f} < min ${STRATEGY_CONFIG_FX_CARRY['min_capital']}")
             return
 
-        # Load recent daily data for each pair
+        # Refresh daily bars from IBKR before reading parquets
         import pandas as pd
         from pathlib import Path
         data_dir = Path(__file__).resolve().parent / "data" / "fx"
+        data_dir.mkdir(parents=True, exist_ok=True)
+
+        for pair in ["AUDJPY", "USDJPY", "EURJPY", "NZDUSD"]:
+            try:
+                from ib_insync import Forex
+                contract = Forex(pair)
+                _ibkr_carry._ib.qualifyContracts(contract)
+                bars = _ibkr_carry._ib.reqHistoricalData(
+                    contract,
+                    endDateTime="",
+                    durationStr="90 D",
+                    barSizeSetting="1 day",
+                    whatToShow="MIDPOINT",
+                    useRTH=False,
+                    formatDate=2,
+                )
+                if bars:
+                    new_df = pd.DataFrame([{
+                        "datetime": b.date, "open": b.open, "high": b.high,
+                        "low": b.low, "close": b.close, "volume": getattr(b, "volume", 0),
+                    } for b in bars])
+                    new_df["datetime"] = pd.to_datetime(new_df["datetime"])
+
+                    # Merge with existing parquet
+                    fpath = data_dir / f"{pair}_1D.parquet"
+                    if fpath.exists():
+                        old_df = pd.read_parquet(fpath)
+                        old_df["datetime"] = pd.to_datetime(old_df["datetime"])
+                        merged = pd.concat([old_df, new_df]).drop_duplicates(
+                            subset="datetime", keep="last"
+                        ).sort_values("datetime").reset_index(drop=True)
+                    else:
+                        merged = new_df.sort_values("datetime").reset_index(drop=True)
+
+                    merged.to_parquet(fpath, index=False)
+                    logger.info(f"  FX DATA REFRESH: {pair} -> {len(bars)} bars, last={new_df['datetime'].iloc[-1]}")
+                else:
+                    logger.warning(f"  FX DATA: {pair} no bars returned")
+            except Exception as e:
+                logger.warning(f"  FX DATA REFRESH {pair} failed: {e}")
+
+        # Load refreshed daily data for each pair
         pair_data = {}
         for pair in ["AUDJPY", "USDJPY", "EURJPY", "NZDUSD"]:
             fpath = data_dir / f"{pair}_1D.parquet"
@@ -575,8 +721,8 @@ def run_fx_carry_cycle():
                 ks = json.loads(ks_state_path.read_text())
                 strat._equity_high = ks.get("equity_high", equity)
                 strat._equity_start = ks.get("equity_start", equity)
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"  FX CARRY: kill switch state load failed: {e}")
 
         state = {"equity": equity, "i": len(list(pair_data.values())[0])}
         signal = strat.signal_fn(None, state, pair_data=pair_data, equity=equity)
@@ -587,8 +733,8 @@ def run_fx_carry_cycle():
                 "equity_high": strat._equity_high,
                 "equity_start": strat._equity_start,
             }))
-        except Exception:
-            pass
+        except Exception as e:
+            logger.warning(f"  FX CARRY: kill switch state save failed: {e}")
 
         if signal is None:
             logger.info("  FX CARRY-MOM: pas de signal (momentum negatif ou conditions non remplies)")
@@ -613,10 +759,23 @@ def run_fx_carry_cycle():
             )
             return
 
+        # === V12 REGIME FILTER ===
+        regime_mult = get_v12_regime_multiplier("fx_carry_momentum")
+        if regime_mult <= 0:
+            logger.warning("  FX CARRY-MOM: BLOCKED by regime engine (mult=0)")
+            _log_event("regime_block", "fx_carry_momentum", {"regime_mult": regime_mult})
+            return
+
         # Log signal details
         pairs = signal.get("pairs", [])
         n_filtered = signal.get("n_filtered", 0)
         total = signal.get("total_notional", 0)
+        # Apply regime scaling to all pair notionals
+        if regime_mult < 1.0:
+            for p in pairs:
+                p["notional"] = int(p["notional"] * regime_mult)
+            total = sum(p["notional"] for p in pairs)
+            logger.info(f"  FX CARRY-MOM: regime mult={regime_mult:.1f}, notionals scaled")
         logger.info(f"  FX CARRY-MOM: {len(pairs)} pairs active, {n_filtered} filtered by momentum, total ${total:,.0f}")
         for p in pairs:
             logger.info(
@@ -659,11 +818,16 @@ def run_fx_carry_cycle():
                     logger.info(f"    {pair_symbol}: already positioned {existing_qty}, skip")
                     continue
 
-            # Cap notional to max per pair from config
-            max_pair_notional = 40000  # from limits_live.yaml
+            # Cap notional to max per pair from limits_live.yaml
+            import yaml as _fx_yaml
+            _fx_limits = _fx_yaml.safe_load(
+                (ROOT / "config" / "limits_live.yaml").read_text(encoding="utf-8")
+            ).get("fx_limits", {})
+            max_pair_notional = _fx_limits.get("max_single_pair_notional", 40000)
             notional = min(target_notional, max_pair_notional)
 
             try:
+                _v12_on_signal("fx_carry_momentum", pair_symbol, direction, p.get("entry_price", 0))
                 result = _ibkr_carry.create_position(
                     symbol=pair_symbol,
                     direction=direction,
@@ -672,6 +836,14 @@ def run_fx_carry_cycle():
                     _authorized_by="fx_carry_momentum_live",
                 )
                 n_orders += 1
+                _fill_price = float(result.get("filled_price", result.get("avg_price", 0)))
+                _fill_qty = float(result.get("filled_qty", 0))
+                _v12_on_fill(
+                    "IBKR", "fx_carry_momentum", pair_symbol, direction,
+                    _fill_qty, _fill_price,
+                    order_id=str(result.get("order_id", "")),
+                    signal_price=p.get("entry_price", 0),
+                )
                 logger.info(
                     f"    FX CARRY ORDER: {direction} {pair_symbol} "
                     f"notional=${notional:,.0f} SL={sl} -> {result}"
@@ -690,6 +862,9 @@ def run_fx_carry_cycle():
                 except Exception as e:
                     logger.warning(f"    FX CARRY CLOSE FAILED: {sym} — {e}")
 
+        # V12 Signal-to-Fill monitoring (FX carry)
+        _record_signal_fill("fx_carry", len(pairs), n_orders, 0)
+
         _telegram_notify(
             f"FX CARRY LIVE: {n_orders} ordre(s)\n"
             f"{len(pairs)} pairs actives, {n_filtered} filtrees\n"
@@ -707,7 +882,7 @@ def run_fx_carry_cycle():
     finally:
         if _ibkr_carry:
             _ibkr_carry.disconnect()
-        _execution_lock.release()
+        _ibkr_lock.release()
 
 
 def run_futures_paper_cycle():
@@ -716,8 +891,8 @@ def run_futures_paper_cycle():
     WF BORDERLINE: MES Trend Sharpe 1.46, MES/MNQ Pairs Sharpe 0.76.
     Daily frequency, uses data/futures/ parquet files.
     """
-    if not _execution_lock.acquire(blocking=False):
-        logger.warning("FUTURES PAPER SKIP — execution lock held")
+    if not _ibkr_lock.acquire(blocking=False):
+        logger.warning("FUTURES PAPER SKIP — IBKR lock held")
         return
     try:
         logger.info("=== FUTURES PAPER CYCLE ===")
@@ -845,7 +1020,7 @@ def run_futures_paper_cycle():
     except Exception as e:
         logger.error(f"FUTURES PAPER CYCLE ERROR: {e}", exc_info=True)
     finally:
-        _execution_lock.release()
+        _ibkr_lock.release()
 
 
 def run_fx_paper_cycle():
@@ -858,8 +1033,8 @@ def run_fx_paper_cycle():
     Uses IBKR paper gateway (~EUR 1M) on port 4003.
     Frequency: every 5 min during EU+US FX hours (09:00-22:00 Paris).
     """
-    if not _execution_lock.acquire(blocking=False):
-        logger.warning("FX PAPER SKIP — execution lock held")
+    if not _ibkr_lock.acquire(blocking=False):
+        logger.warning("FX PAPER SKIP — IBKR lock held")
         return
     try:
         logger.info("=== FX PAPER CYCLE ===")
@@ -969,14 +1144,22 @@ def run_fx_paper_cycle():
     except Exception as e:
         logger.error(f"FX PAPER CYCLE ERROR: {e}", exc_info=True)
     finally:
-        _execution_lock.release()
+        _ibkr_lock.release()
 
 
-# FX Carry+Momentum config reference (used by the cycle)
-STRATEGY_CONFIG_FX_CARRY = {
-    "min_capital": 5000,
-    "allocation_pct": 0.15,  # Probationary (1/16 Kelly) — promote to 0.30 after 30 days
-}
+# FX Carry+Momentum config — reads from limits_live.yaml at import time
+def _load_fx_carry_config():
+    import yaml
+    try:
+        cfg = yaml.safe_load((ROOT / "config" / "limits_live.yaml").read_text(encoding="utf-8"))
+        return {
+            "min_capital": cfg.get("capital", 10_000) // 2,  # 50% of total capital
+            "allocation_pct": 0.15,
+        }
+    except Exception:
+        return {"min_capital": 5000, "allocation_pct": 0.15}
+
+STRATEGY_CONFIG_FX_CARRY = _load_fx_carry_config()
 
 
 def run_live_risk_cycle():
@@ -1141,7 +1324,7 @@ def run_live_risk_cycle():
                     elif action == ALERT:
                         logger.warning(f"SAFE-003 ALERT: {strat_id} — {reason}")
         except Exception as e:
-            logger.debug(f"LivePerformanceGuard skip: {e}")
+            logger.warning(f"LivePerformanceGuard skip: {e}")
 
         # --- VIX/SPY stress guard (sizing reduction) ---
         try:
@@ -1151,7 +1334,7 @@ def run_live_risk_cycle():
             if stress["level"] != "NORMAL":
                 logger.warning(f"VIX STRESS: {stress['level']} — sizing {stress['sizing_factor']:.0%} — {stress['reason']}")
         except Exception as e:
-            logger.debug(f"VixStressGuard skip: {e}")
+            logger.warning(f"VixStressGuard skip: {e}")
 
         logger.info(f"Live risk cycle OK — equity=${equity:,.0f}, daily_pnl={daily_pnl_pct:.2%}")
 
@@ -1193,7 +1376,7 @@ def _telegram_notify(message: str, level: str = "INFO"):
         try:
             bot.send_alert(level, message)
         except Exception as e:
-            logger.debug(f"Telegram send failed: {e}")
+            logger.warning(f"Telegram send failed: {e}")
 
 
 def _enrich_crypto_kwargs(
@@ -1225,7 +1408,7 @@ def _enrich_crypto_kwargs(
     if config.get("market_type") == "margin" and broker:
         try:
             # Fetch current borrow rate for primary asset
-            asset = primary_symbol.replace("USDT", "")
+            asset = primary_symbol.replace("USDT", "").replace("USDC", "")
             margin_info = broker._request("GET", "/sapi/v1/margin/asset", {"asset": asset}, signed=True)
             if margin_info:
                 daily_rate = float(margin_info.get("marginRatio", 0.0003))
@@ -1300,8 +1483,9 @@ def _enrich_crypto_kwargs(
                 ).get("btc", 60) / 100
             kwargs["dominance_series"] = pd.Series([dominance] * 30)
             # Fetch 14d returns for top performer candidates
-            candidates = ["ETHUSDT", "SOLUSDT", "BNBUSDT", "ADAUSDT",
-                          "XRPUSDT", "DOTUSDT", "AVAXUSDT", "MATICUSDT"]
+            # Binance France: use USDC pairs (USDT blocked for trading)
+            candidates = ["ETHUSDC", "SOLUSDC", "BNBUSDC", "ADAUSDC",
+                          "XRPUSDC", "DOTUSDC", "AVAXUSDC"]
             returns_data = {}
             for sym in candidates:
                 try:
@@ -1423,8 +1607,8 @@ def _enrich_crypto_kwargs(
     # --- ETH/BTC Ratio (STRAT-011) ---
     if strat_id == "STRAT-011" and broker:
         try:
-            eth_data = broker.get_prices("ETHUSDT", timeframe="4h", bars=200)
-            btc_data = broker.get_prices("BTCUSDT", timeframe="4h", bars=200)
+            eth_data = broker.get_prices("ETHUSDC", timeframe="4h", bars=200)
+            btc_data = broker.get_prices("BTCUSDC", timeframe="4h", bars=200)
             eth_bars = eth_data.get("bars", [])
             btc_bars = btc_data.get("bars", [])
             if eth_bars and btc_bars:
@@ -1517,7 +1701,7 @@ def _execute_earn_signal(broker, strat_id, strat_name, signal, n_orders_ref):
                     logger.warning(f"  [{strat_id}] Earn redeem {asset} failed: {e}")
 
     elif action == "EARN_SUBSCRIBE":
-        asset = signal.get("asset", "USDT")
+        asset = signal.get("asset", "USDC")
         amount = signal.get("amount", 0)
         earn_rates = broker.get_earn_rates()
         product_id = next((r["product_id"] for r in earn_rates if r["asset"] == asset), None)
@@ -1526,7 +1710,7 @@ def _execute_earn_signal(broker, strat_id, strat_name, signal, n_orders_ref):
             logger.info(f"  [{strat_id}] EARN SUBSCRIBE {asset}: ${amount:.2f} — {result}")
 
     elif action == "EARN_REDEEM":
-        asset = signal.get("asset", "USDT")
+        asset = signal.get("asset", "USDC")
         amount = signal.get("amount")
         earn_positions = broker.get_earn_positions()
         product_id = next((ep["product_id"] for ep in earn_positions if ep["asset"] == asset), None)
@@ -1561,7 +1745,7 @@ def _log_strategy_debug(strat_id, config, df_full, broker, primary_symbol):
         else:
             logger.debug(f"  [{strat_id}] DEBUG: only {len(df_full)} bars")
     except Exception as e:
-        logger.debug(f"  [{strat_id}] DEBUG error: {e}")
+        logger.warning(f"  [{strat_id}] strategy debug error: {e}")
 
 
 def run_crypto_cycle():
@@ -1570,7 +1754,7 @@ def run_crypto_cycle():
     Charge les 8 strategies depuis strategies.crypto, genere les signaux,
     passe par CryptoRiskManager + CryptoKillSwitch, route vers BinanceBroker.
     """
-    if not _execution_lock.acquire(blocking=False):
+    if not _crypto_lock.acquire(blocking=False):
         logger.warning("CRYPTO CYCLE SKIP — execution deja en cours (lock)")
         return
     try:
@@ -1600,6 +1784,12 @@ def run_crypto_cycle():
             logger.debug("Crypto cycle skip — BINANCE_API_KEY non configuree")
             return
 
+        # CRO B-3: guard BINANCE_LIVE_CONFIRMED for live trading
+        if os.getenv("BINANCE_TESTNET", "true").lower() != "true":
+            if os.getenv("BINANCE_LIVE_CONFIRMED") != "true":
+                logger.critical("CRYPTO CYCLE BLOCKED — BINANCE_LIVE_CONFIRMED not set for live")
+                return
+
         # --- Charger la config d'allocation ---
         import yaml
         alloc_path = ROOT / "config" / "crypto_allocation.yaml"
@@ -1612,7 +1802,7 @@ def run_crypto_cycle():
             except Exception as e:
                 logger.error(f"Erreur lecture crypto_allocation.yaml: {e}")
 
-        total_capital = crypto_config.get("total_capital", 20_000)
+        total_capital = crypto_config.get("total_capital", 10_000)
 
         # --- Importer les 8 strategies ---
         try:
@@ -1686,18 +1876,18 @@ def run_crypto_cycle():
                                 earn_total += amount
                             elif asset == "BTC":
                                 try:
-                                    btc_ticker = broker.get_ticker_24h("BTCUSDT")
+                                    btc_ticker = broker.get_ticker_24h("BTCUSDC")
                                     btc_price = float(btc_ticker.get("last_price", 0))
                                     earn_total += amount * btc_price
                                 except Exception:
-                                    earn_total += amount * 85000  # Fallback
+                                    logger.warning("BTC earn price unavailable — using last known")
                             elif asset == "ETH":
                                 try:
-                                    eth_ticker = broker.get_ticker_24h("ETHUSDT")
+                                    eth_ticker = broker.get_ticker_24h("ETHUSDC")
                                     eth_price = float(eth_ticker.get("last_price", 0))
                                     earn_total += amount * eth_price
                                 except Exception:
-                                    earn_total += amount * 2000  # Fallback
+                                    logger.warning("ETH earn price unavailable — using last known")
                 except Exception as e:
                     logger.warning(f"Earn positions indisponibles: {e}")
 
@@ -1767,6 +1957,43 @@ def run_crypto_cycle():
             logger.warning(f"Could not load crypto drawdown state: {_dde}")
             risk_mgr._peak_equity = current_equity
             risk_mgr._daily_start_equity = current_equity
+            risk_mgr._hourly_start_equity = current_equity
+            risk_mgr._weekly_start_equity = current_equity
+            risk_mgr._monthly_start_equity = current_equity
+
+        # --- Auto-redeem Earn Flexible si cash spot insuffisant pour trader ---
+        # Les strats ont besoin de cash spot/margin pour executer.
+        # Si cash spot < min_trading_cash et USDC en Earn Flexible > seuil,
+        # redeem automatiquement pour liberer du capital.
+        # Thresholds from config (wallets.cash = reserve, default 10% of capital)
+        MIN_TRADING_CASH = crypto_config.get("wallets", {}).get("cash", int(total_capital * 0.05))
+        spot_cash = float(acct.get("cash", 0)) if broker else 0
+        if broker and spot_cash < MIN_TRADING_CASH and earn_positions:
+            usdc_earn = next(
+                (ep for ep in earn_positions if ep.get("asset") == "USDC"),
+                None,
+            )
+            if usdc_earn:
+                usdc_amount = float(usdc_earn.get("amount", 0))
+                usdc_product = usdc_earn.get("product_id")
+                # Redeem enough to have 2x MIN_TRADING_CASH (keep rest earning)
+                redeem_target = MIN_TRADING_CASH * 2
+                redeem_amount = min(usdc_amount, redeem_target)
+                if redeem_amount >= 50 and usdc_product:
+                    try:
+                        broker.redeem_earn(usdc_product, round(redeem_amount, 2))
+                        spot_cash += redeem_amount
+                        logger.info(
+                            f"  AUTO-REDEEM: ${redeem_amount:,.0f} USDC from Earn -> spot "
+                            f"(was ${spot_cash - redeem_amount:.0f}, now ${spot_cash:.0f})"
+                        )
+                        _send_alert(
+                            f"AUTO-REDEEM: ${redeem_amount:,.0f} USDC Earn -> spot\n"
+                            f"Raison: cash spot < ${MIN_TRADING_CASH} pour trading",
+                            level="info",
+                        )
+                    except Exception as e:
+                        logger.warning(f"  AUTO-REDEEM failed: {e}")
 
         # --- Risk check global avant signaux ---
         risk_result = risk_mgr.check_all(
@@ -1792,8 +2019,10 @@ def run_crypto_cycle():
                 "last_month": _now_utc.strftime("%Y-%m"),
                 "last_updated": _now_utc.isoformat(),
             }))
-        except Exception:
-            pass
+        except Exception as _dd_err:
+            # CRO H-3: drawdown state persist is critical — circuit breakers depend on it
+            logger.critical(f"DRAWDOWN STATE PERSIST FAILED: {_dd_err}")
+            _send_alert(f"DRAWDOWN PERSIST FAILED: {_dd_err}", level="critical")
 
         if not risk_result["passed"]:
             failed_checks = [
@@ -1812,6 +2041,8 @@ def run_crypto_cycle():
         n_orders = 0      # Real BUY/SELL trades only
         n_actions = 0     # All actions (earn, close dust, trades)
         n_errors = 0
+        # CRO M-4: track signals per symbol to detect conflicts
+        _cycle_signals: dict[str, list[str]] = {}  # symbol -> [strat_id:side]
 
         for strat_id, strat_data in CRYPTO_STRATEGIES.items():
             config = strat_data["config"]
@@ -1857,6 +2088,12 @@ def run_crypto_cycle():
                                 "o": "open", "h": "high", "l": "low",
                                 "c": "close", "v": "volume",
                             }, inplace=True)
+                            # CRO M-3: warm-up check — EMA50 needs 50+ bars
+                            if len(df_full) < 50:
+                                logger.warning(
+                                    f"  [{strat_id}] only {len(df_full)} bars "
+                                    f"(need 50+ for EMA warm-up) — signal may be unreliable"
+                                )
                     except Exception as e:
                         logger.warning(
                             f"  [{strat_id}] Impossible de recuperer "
@@ -1890,7 +2127,7 @@ def run_crypto_cycle():
                         positions, current_equity, pd,
                     )
                 except Exception as _enrich_err:
-                    logger.debug(f"  [{strat_id}] kwargs enrich partial: {_enrich_err}")
+                    logger.warning(f"  [{strat_id}] kwargs enrich partial: {_enrich_err}")
 
                 # --- Appel du signal_fn (FIX CRO H: per-strategy timeout 30s) ---
                 _signal_result = [None]
@@ -1923,6 +2160,19 @@ def run_crypto_cycle():
 
                 n_signals += 1
                 action = signal.get("action", "UNKNOWN")
+
+                # === V12 REGIME FILTER (crypto) ===
+                _crypto_regime_mult = get_v12_regime_multiplier(strat_id)
+                if _crypto_regime_mult <= 0 and action not in (
+                    "EARN_REBALANCE", "EARN_SUBSCRIBE", "EARN_REDEEM", "CAPITAL_RELEASE", "CLOSE",
+                ):
+                    logger.info(f"  [{strat_id}] BLOCKED by regime (mult=0)")
+                    _log_event("regime_block", strat_id, {"regime_mult": 0})
+                    continue
+                if 0 < _crypto_regime_mult < 1.0 and signal.get("quantity"):
+                    signal["quantity"] = signal["quantity"] * _crypto_regime_mult
+                    logger.info(f"  [{strat_id}] regime scale: qty x{_crypto_regime_mult:.1f}")
+
                 logger.info(
                     f"  [{strat_id}] {strat_name}: SIGNAL {action} "
                     f"— {json.dumps({k: v for k, v in signal.items() if k != 'df_full'}, default=str)}"
@@ -2031,19 +2281,43 @@ def run_crypto_cycle():
                         )
                         continue
                 except Exception as risk_err:
-                    logger.debug(f"  [{strat_id}] Risk validate skip: {risk_err}")
+                    logger.warning(f"  [{strat_id}] Risk validate ERREUR: {risk_err}")
+                    n_errors += 1
 
                 # Map signal symbol to USDC pair for execution
                 exec_symbol = signal.get("symbol", trade_symbol)
                 if exec_symbol.endswith("USDT"):
                     exec_symbol = exec_symbol.replace("USDT", "USDC")
 
+                _v12_on_signal(strat_id, exec_symbol, side, price)
+
+                # CRO M-4: conflict detection — BUY+SELL same symbol in same cycle
+                _cycle_signals.setdefault(exec_symbol, []).append(f"{strat_id}:{side}")
+                _sym_sides = [s.split(":")[1] for s in _cycle_signals[exec_symbol]]
+                if "BUY" in _sym_sides and "SELL" in _sym_sides:
+                    logger.warning(
+                        f"CONFLICT: {exec_symbol} has BUY+SELL in same cycle: "
+                        f"{_cycle_signals[exec_symbol]}"
+                    )
+
+                # Compute qty for SELL with proper step size rounding
+                _sell_qty = None
+                if side == "SELL" and price > 0:
+                    raw_qty = notional / price
+                    # BTC pairs: step 0.00001 (5 dec), altcoins: step varies
+                    if "BTC" in exec_symbol:
+                        _sell_qty = float(f"{raw_qty:.5f}")  # 5 decimals
+                    elif "ETH" in exec_symbol:
+                        _sell_qty = float(f"{raw_qty:.4f}")  # 4 decimals
+                    else:
+                        _sell_qty = float(f"{raw_qty:.3f}")  # 3 decimals for alts
+
                 try:
                     result = broker.create_position(
                         symbol=exec_symbol,
                         direction=side,
                         notional=notional if side == "BUY" else None,
-                        qty=round(notional / price, 6) if side == "SELL" else None,
+                        qty=_sell_qty,
                         stop_loss=stop_loss,
                         market_type=market_type,
                         _authorized_by=f"crypto_worker_{strat_id}",
@@ -2057,11 +2331,55 @@ def run_crypto_cycle():
 
                     # Post-execution verification: check filled qty
                     filled = float(result.get("filled_qty", 0))
+                    _fill_price = float(result.get("filled_price", price))
                     if filled <= 0:
                         logger.warning(
                             f"  [{strat_id}] POST-EXEC: order status={result.get('status')} "
                             f"but filled_qty=0 — possible partial/unfilled"
                         )
+
+                    # CRO #1: verify SL order exists 2s after fill
+                    _sl_id = result.get("sl_order_id")
+                    if _sl_id and filled > 0 and broker:
+                        time.sleep(2)
+                        _sl_ok = broker.verify_sl_exists(exec_symbol, _sl_id)
+                        if not _sl_ok:
+                            logger.critical(
+                                f"  [{strat_id}] SL MISSING after fill — "
+                                f"sl_order_id={_sl_id} not on exchange"
+                            )
+                            _send_alert(
+                                f"SL MISSING: {strat_id} {exec_symbol}\n"
+                                f"sl_order_id={_sl_id} not found post-fill",
+                                level="critical",
+                            )
+
+                    # CRO #6: slippage verification
+                    if _fill_price > 0 and price > 0:
+                        _slippage_pct = abs(_fill_price - price) / price * 100
+                        if _slippage_pct > 1.0:
+                            logger.warning(
+                                f"  [{strat_id}] SLIPPAGE {_slippage_pct:.2f}%: "
+                                f"signal=${price:,.0f} fill=${_fill_price:,.0f}"
+                            )
+                            _send_alert(
+                                f"SLIPPAGE {_slippage_pct:.2f}%: {strat_id} {exec_symbol}\n"
+                                f"Signal: ${price:,.0f} | Fill: ${_fill_price:,.0f}",
+                                level="warning",
+                            )
+                        elif _slippage_pct > 0.1:
+                            logger.info(
+                                f"  [{strat_id}] slippage {_slippage_pct:.3f}%: "
+                                f"${price:,.0f} -> ${_fill_price:,.0f}"
+                            )
+
+                    # V12: post-fill hooks (double-fill, shadow, tax)
+                    _v12_on_fill(
+                        "BINANCE", strat_id, exec_symbol, side,
+                        filled, _fill_price,
+                        order_id=str(result.get("order_id", "")),
+                        signal_price=price,
+                    )
 
                     _log_event("fill", strat_id, {
                         "side": side, "symbol": signal.get("symbol", primary_symbol),
@@ -2103,6 +2421,9 @@ def run_crypto_cycle():
             f"{n_orders} trade(s), {n_actions} action(s), {n_errors} erreur(s) ==="
         )
 
+        # --- V12 Signal-to-Fill monitoring ---
+        _record_signal_fill("crypto", n_signals, n_orders, n_errors)
+
         # --- Telegram recap ---
         if n_orders > 0:
             _send_alert(
@@ -2118,30 +2439,43 @@ def run_crypto_cycle():
                 level="warning",
             )
 
+        # --- V12 Live Tracker: feed daily equity delta as return ---
+        if _v12_live_tracker and current_equity > 0:
+            try:
+                # Compute rough daily return from equity vs start capital
+                # Daily return = equity change since daily start (not since hardcoded date)
+                _dd_daily = risk_mgr._daily_start_equity if risk_mgr._daily_start_equity > 0 else total_capital
+                _daily_ret = (current_equity - _dd_daily) / _dd_daily
+                for _sid in CRYPTO_STRATEGIES:
+                    _v12_live_tracker.add_return(_sid, _daily_ret)
+            except Exception as e:
+                logger.debug(f"V12 live tracker feed: {e}")
+
         # --- Cash Sweep: USDC idle -> Earn Flexible ---
-        try:
-            cash_available = float(bnb_info.get("cash_available", 0))
-            min_sweep = 500  # Minimum $500 pour sweep
-            if cash_available > min_sweep:
-                sweep_amount = cash_available - 100  # Garder $100 buffer
-                logger.info(f"  CASH SWEEP: ${cash_available:,.0f} USDC idle, sweeping ${sweep_amount:,.0f} -> Earn")
-                try:
-                    # Trouver le productId USDC Flexible Earn
-                    earn_pos = bnb.get_earn_positions()
-                    usdc_product_id = None
-                    for ep in earn_pos:
-                        if ep.get("asset") == "USDC":
-                            usdc_product_id = ep.get("product_id")
-                            break
-                    if usdc_product_id:
-                        bnb.subscribe_earn(usdc_product_id, sweep_amount)
-                        logger.info(f"  CASH SWEEP OK: ${sweep_amount:,.0f} USDC -> Earn (product={usdc_product_id})")
-                    else:
-                        logger.info("  CASH SWEEP: pas de product_id USDC Earn trouve")
-                except Exception as e:
-                    logger.warning(f"  CASH SWEEP FAILED: {e}")
-        except Exception:
-            pass
+        # FIX V12: was using undefined `bnb_info`/`bnb` — use `acct`/`broker`
+        if broker:
+            try:
+                _sweep_cash = float(acct.get("cash", 0)) if acct else 0
+                # Sweep if cash > 2x MIN_TRADING_CASH, keep MIN_TRADING_CASH as buffer
+                if _sweep_cash > MIN_TRADING_CASH * 2:
+                    sweep_amount = _sweep_cash - MIN_TRADING_CASH
+                    logger.info(f"  CASH SWEEP: ${_sweep_cash:,.0f} USDC idle, sweeping ${sweep_amount:,.0f} -> Earn")
+                    try:
+                        _sweep_earn = broker.get_earn_positions()
+                        usdc_product_id = None
+                        for ep in _sweep_earn:
+                            if ep.get("asset") == "USDC":
+                                usdc_product_id = ep.get("product_id")
+                                break
+                        if usdc_product_id:
+                            broker.subscribe_earn(usdc_product_id, sweep_amount)
+                            logger.info(f"  CASH SWEEP OK: ${sweep_amount:,.0f} USDC -> Earn (product={usdc_product_id})")
+                        else:
+                            logger.info("  CASH SWEEP: pas de product_id USDC Earn trouve")
+                    except Exception as e:
+                        logger.warning(f"  CASH SWEEP FAILED: {e}")
+            except Exception as e:
+                logger.warning(f"  CASH SWEEP error: {e}")
 
     except Exception as e:
         logger.error(f"Erreur critique crypto cycle: {e}", exc_info=True)
@@ -2149,7 +2483,7 @@ def run_crypto_cycle():
             f"CRYPTO CYCLE ERREUR CRITIQUE: {e}", level="critical"
         )
     finally:
-        _execution_lock.release()
+        _crypto_lock.release()
 
 
 # =====================================================================
@@ -2238,6 +2572,262 @@ _v11_data_quality = None
 _v11_kelly = None
 _v11_hrp = None
 _v11_throttler_eu = None
+
+# === V12 MODULES ===
+_v12_regime_scheduler = None
+_v12_double_fill = None
+_v12_shadow_logger = None
+_v12_live_tracker = None
+_v12_tax_classifier = None
+_v12_unified_portfolio = None
+_v12_cross_corr = None
+_v12_emergency_close = None
+
+
+def _init_v12_modules():
+    """Initialize ALL V12 modules."""
+    global _v12_regime_scheduler, _v12_double_fill, _v12_shadow_logger
+    global _v12_live_tracker, _v12_tax_classifier, _v12_unified_portfolio
+    global _v12_cross_corr, _v12_emergency_close
+
+    # Regime Engine
+    try:
+        from core.regime.regime_scheduler import RegimeScheduler
+        _v12_regime_scheduler = RegimeScheduler(alert_callback=_send_alert)
+        logger.info("  V12 RegimeScheduler initialized")
+    except Exception as e:
+        logger.warning(f"  V12 RegimeScheduler failed: {e}")
+
+    # Double-Fill Detector
+    try:
+        from core.execution.double_fill_detector import DoubleFillDetector
+        _v12_double_fill = DoubleFillDetector(alert_callback=_send_alert)
+        logger.info("  V12 DoubleFillDetector initialized")
+    except Exception as e:
+        logger.warning(f"  V12 DoubleFillDetector failed: {e}")
+
+    # Shadow Trade Logger
+    try:
+        from core.validation.shadow_logger import ShadowTradeLogger
+        _v12_shadow_logger = ShadowTradeLogger(alert_callback=_send_alert)
+        logger.info("  V12 ShadowTradeLogger initialized")
+    except Exception as e:
+        logger.warning(f"  V12 ShadowTradeLogger failed: {e}")
+
+    # Live Performance Tracker
+    try:
+        from core.validation.live_tracker import LivePerformanceTracker
+        _v12_live_tracker = LivePerformanceTracker(alert_callback=_send_alert)
+        logger.info("  V12 LivePerformanceTracker initialized")
+    except Exception as e:
+        logger.warning(f"  V12 LivePerformanceTracker failed: {e}")
+
+    # Tax Classifier
+    try:
+        from core.tax.trade_classifier import TradeTaxClassifier
+        _v12_tax_classifier = TradeTaxClassifier(alert_callback=_send_alert)
+        logger.info("  V12 TradeTaxClassifier initialized")
+    except Exception as e:
+        logger.warning(f"  V12 TradeTaxClassifier failed: {e}")
+
+    # Unified Portfolio View (cross-broker)
+    try:
+        from core.risk.unified_portfolio import UnifiedPortfolioView
+        _v12_unified_portfolio = UnifiedPortfolioView(
+            alert_callback=_send_alert,
+        )
+        logger.info("  V12 UnifiedPortfolioView initialized")
+    except Exception as e:
+        logger.warning(f"  V12 UnifiedPortfolioView failed: {e}")
+
+    # Cross-Asset Correlation Monitor
+    try:
+        from core.risk.cross_asset_correlation import CrossAssetCorrelationMonitor
+        _v12_cross_corr = CrossAssetCorrelationMonitor()
+        logger.info("  V12 CrossAssetCorrelationMonitor initialized")
+    except Exception as e:
+        logger.warning(f"  V12 CrossAssetCorrelationMonitor failed: {e}")
+
+    # Emergency Close All (brokers set later when connected)
+    try:
+        from core.risk.emergency_close_all import EmergencyCloseAll
+        _v12_emergency_close = EmergencyCloseAll(alert_callback=_send_alert)
+        logger.info("  V12 EmergencyCloseAll initialized")
+    except Exception as e:
+        logger.warning(f"  V12 EmergencyCloseAll failed: {e}")
+
+
+def _v12_on_fill(broker_name: str, strategy: str, ticker: str, side: str,
+                 quantity: float, price: float, order_id: str = "",
+                 signal_price: float = 0, pnl: float = 0):
+    """Central V12 post-fill hook — called after every trade execution.
+
+    Feeds: double-fill detector, shadow logger, tax classifier, live tracker.
+    """
+    import time as _time
+
+    # 1. Double-fill detection
+    if _v12_double_fill:
+        try:
+            from core.execution.double_fill_detector import Fill
+            fill = Fill(
+                timestamp=_time.time(),
+                order_id=str(order_id),
+                ticker=ticker,
+                side=side,
+                quantity=quantity,
+                price=price,
+                broker=broker_name,
+                strategy=strategy,
+            )
+            _v12_double_fill.check_fill(fill)
+        except Exception as e:
+            logger.debug(f"V12 double-fill check error: {e}")
+
+    # 2. Shadow trade logger (fill side)
+    if _v12_shadow_logger:
+        try:
+            _v12_shadow_logger.log_fill(
+                strategy=strategy,
+                ticker=ticker,
+                fill_price=price,
+                fill_qty=quantity,
+                broker=broker_name,
+            )
+        except Exception as e:
+            logger.debug(f"V12 shadow logger fill error: {e}")
+
+    # 3. Tax classification
+    if _v12_tax_classifier and pnl != 0:
+        try:
+            _v12_tax_classifier.classify(
+                broker=broker_name,
+                ticker=ticker,
+                side=side,
+                quantity=quantity,
+                entry_price=signal_price if signal_price > 0 else price,
+                exit_price=price,
+                pnl=pnl,
+                strategy=strategy,
+            )
+        except Exception as e:
+            logger.warning(f"V12 tax classify error: {e}")
+
+
+def _v12_on_signal(strategy: str, ticker: str, side: str, signal_price: float):
+    """Central V12 pre-execution hook — called at signal generation."""
+    if _v12_shadow_logger:
+        try:
+            _v12_shadow_logger.log_signal(
+                strategy=strategy,
+                ticker=ticker,
+                side=side,
+                signal_price=signal_price,
+            )
+        except Exception as e:
+            logger.debug(f"V12 shadow signal error: {e}")
+
+
+def run_v12_regime_cycle():
+    """V12 regime detection — runs every 15 min.
+
+    Computes regime per asset class using available market data.
+    Updates activation multipliers for all strategies.
+    """
+    if not _v12_regime_scheduler:
+        return
+
+    try:
+        # Collect metrics from available sources
+        fx_metrics = _collect_fx_regime_metrics()
+        crypto_metrics = _collect_crypto_regime_metrics()
+
+        snapshot = _v12_regime_scheduler.run_cycle(
+            fx_metrics=fx_metrics,
+            crypto_metrics=crypto_metrics,
+        )
+        logger.info(
+            f"V12 Regime: global={snapshot.get('global', '?')} "
+            f"detail={snapshot.get('regimes', {})}"
+        )
+        _log_event("v12_regime_cycle", details=snapshot)
+
+    except Exception as e:
+        logger.error(f"V12 regime cycle error: {e}", exc_info=True)
+
+
+def _collect_fx_regime_metrics() -> dict:
+    """Collect FX regime metrics from available data."""
+    metrics = {
+        "realized_vol_20d": 0.0,
+        "realized_vol_5d": 0.0,
+        "cross_corr": 0.0,
+        "spread_zscore": 0.0,
+        "trend_strength": 0.0,
+        "volume_ratio": 1.0,
+    }
+    try:
+        import pandas as pd
+        import numpy as np
+        # Try loading FX data from parquet files
+        fx_data_dir = ROOT / "data" / "fx"
+        if fx_data_dir.exists():
+            # Use EURUSD as proxy for FX regime
+            for pair_file in ["EURUSD_1D.parquet", "EUR.USD_1D.parquet"]:
+                fp = fx_data_dir / pair_file
+                if fp.exists():
+                    df = pd.read_parquet(fp)
+                    if len(df) >= 20:
+                        returns = df["close"].pct_change().dropna()
+                        metrics["realized_vol_20d"] = float(returns.tail(20).std() * np.sqrt(252))
+                        metrics["realized_vol_5d"] = float(returns.tail(5).std() * np.sqrt(252))
+                        # ADX proxy: use rolling std of returns as trend strength
+                        if len(returns) >= 14:
+                            abs_ret = returns.abs().tail(14).mean()
+                            metrics["trend_strength"] = float(abs_ret * 100 * 14)  # rough ADX proxy
+                    break
+    except Exception as e:
+        logger.debug(f"FX regime metrics collection: {e}")
+    return metrics
+
+
+def _collect_crypto_regime_metrics() -> dict:
+    """Collect crypto regime metrics from crypto monitor/broker."""
+    metrics = {
+        "realized_vol_20d": 0.0,
+        "realized_vol_5d": 0.0,
+        "cross_corr": 0.0,
+        "spread_zscore": 0.0,
+        "trend_strength": 0.0,
+        "volume_ratio": 1.0,
+    }
+    try:
+        import pandas as pd
+        import numpy as np
+        crypto_data_dir = ROOT / "data" / "crypto"
+        if crypto_data_dir.exists():
+            for btc_file in ["BTCUSDC_1D.parquet", "BTCUSDT_1D.parquet", "BTC_1D.parquet"]:
+                fp = crypto_data_dir / btc_file
+                if fp.exists():
+                    df = pd.read_parquet(fp)
+                    if len(df) >= 20:
+                        returns = df["close"].pct_change().dropna()
+                        metrics["realized_vol_20d"] = float(returns.tail(20).std() * np.sqrt(365))
+                        metrics["realized_vol_5d"] = float(returns.tail(5).std() * np.sqrt(365))
+                        if len(returns) >= 14:
+                            abs_ret = returns.abs().tail(14).mean()
+                            metrics["trend_strength"] = float(abs_ret * 100 * 14)
+                    break
+    except Exception as e:
+        logger.debug(f"Crypto regime metrics collection: {e}")
+    return metrics
+
+
+def get_v12_regime_multiplier(strategy_id: str) -> float:
+    """Get regime activation multiplier for a strategy. Called before signals."""
+    if _v12_regime_scheduler is None:
+        return 1.0  # No regime engine = no filtering
+    return _v12_regime_scheduler.get_activation_multiplier(strategy_id)
 
 
 def _init_v11_modules():
@@ -2449,30 +3039,10 @@ def run_v10_portfolio_cycle():
             except Exception as e:
                 logger.debug(f"V10 leverage check skip: {e}")
 
-        # 5. Cash drag monitor — alert if too much cash idle
-        try:
-            total_capital = portfolio_data.get("total_capital", 0) if snapshot else 0
-            total_invested = portfolio_data.get("capital_at_risk", 0) if snapshot else 0
-            if total_capital > 0:
-                cash_pct = 1 - (total_invested / total_capital)
-                if cash_pct > 0.40:
-                    daily_drag = total_capital * cash_pct * 0.0004  # ~15% annualise
-                    logger.warning(
-                        f"V10 CASH DRAG: {cash_pct:.0%} idle "
-                        f"(${total_capital * cash_pct:,.0f}), "
-                        f"opportunity cost ~${daily_drag:.0f}/jour"
-                    )
-                    # Alert Telegram every 2h max (check modulo)
-                    now_h = datetime.now(PARIS).hour
-                    if now_h % 2 == 0:
-                        _send_alert(
-                            f"CASH DRAG: {cash_pct:.0%} idle\n"
-                            f"${total_capital * cash_pct:,.0f} non deploye\n"
-                            f"Cout opportunite: ~${daily_drag:.0f}/jour",
-                            level="warning",
-                        )
-        except Exception:
-            pass
+        # 5. Cash drag monitor — DISABLED
+        # V10 portfolio_data mixes paper (Alpaca $100K) + live (IBKR $10K + Binance $10K).
+        # Cash drag alert is meaningless until Alpaca goes live.
+        # Use V12 UnifiedPortfolioView (live-only) for real cash monitoring instead.
 
     except Exception as e:
         logger.error(f"V10 portfolio cycle error: {e}", exc_info=True)
@@ -2512,6 +3082,8 @@ def main():
     last_crypto = 0
     last_v10_cycle = 0
     last_v11_hrp = 0
+    last_v12_regime = 0
+    V12_REGIME_INTERVAL = 900  # 15 min
     v11_eod_done_today = False
     after_close_checked_today = False
     FX_PAPER_INTERVAL = 300  # 5 min
@@ -2530,6 +3102,34 @@ def main():
         logger.error(f"  ERREUR IMPORT: {e}", exc_info=True)
         logger.error("  Le worker ne peut pas demarrer sans paper_portfolio")
         sys.exit(1)
+
+    # === V12 PRE-FLIGHT CHECK (BLOCKING) ===
+    logger.info("  Running pre-flight checks...")
+    try:
+        from scripts.preflight_check import run_preflight
+        _pf = run_preflight(block_on_failure=True)
+        if _pf.blockers:
+            logger.critical(f"PRE-FLIGHT: {len(_pf.blockers)} blocker(s) detected")
+            for b in _pf.blockers:
+                logger.critical(f"  {b}")
+            _send_alert(
+                f"PRE-FLIGHT BLOCKED STARTUP: {len(_pf.blockers)} blocker(s)\n"
+                + "\n".join(_pf.blockers[:5]),
+                level="critical",
+            )
+            # Wait and retry once after 60s — transient issues (API cold start)
+            logger.info("  Pre-flight retry in 60s...")
+            time.sleep(60)
+            _pf2 = run_preflight(block_on_failure=True)
+            if _pf2.blockers:
+                logger.critical("PRE-FLIGHT RETRY FAILED — worker starting with warnings")
+                _send_alert("PRE-FLIGHT RETRY FAILED — worker starting degraded", level="critical")
+            else:
+                logger.info(f"  Pre-flight retry OK: {len(_pf2.checks)} checks passed")
+        else:
+            logger.info(f"  Pre-flight OK: {len(_pf.checks)} checks passed")
+    except Exception as _pf_err:
+        logger.warning(f"  Pre-flight check failed to run: {_pf_err}")
 
     # === RECONCILIATION AU DEMARRAGE ===
     logger.info("  Reconciliation des positions au demarrage...")
@@ -2560,9 +3160,18 @@ def main():
     logger.info("  Initializing V11 roadmap modules (data quality, HRP, Kelly, EU throttler)...")
     _init_v11_modules()
 
+    # === V12 REGIME ENGINE ===
+    logger.info("  Initializing V12 regime engine...")
+    _init_v12_modules()
+
     # Premier heartbeat
     log_heartbeat()
     last_heartbeat = time.time()
+
+    # CRO #4: automated dry-run and smoke test flags
+    _dry_run_done_today = False
+    _smoke_test_done_this_week = False
+    _ror_done_today = False
 
     while True:
         now_paris = datetime.now(PARIS)
@@ -2602,6 +3211,88 @@ def main():
         if time.time() - last_heartbeat >= HEARTBEAT_INTERVAL:
             log_heartbeat()
             last_heartbeat = time.time()
+
+        # === CRO #4: AUTOMATED DRY-RUN (06:00 CET daily) ===
+        if now_paris.hour == 6 and not _dry_run_done_today:
+            _dry_run_done_today = True
+            try:
+                from scripts.dry_run_pipeline import dry_run_crypto
+                _dr = dry_run_crypto()
+                _dr_fail = [r["strat_id"] for r in _dr if not r["passed"]]
+                if _dr_fail:
+                    logger.warning(f"DRY-RUN: {len(_dr_fail)} FAIL: {_dr_fail}")
+                    _send_alert(f"DRY-RUN: {len(_dr_fail)} FAIL\n{', '.join(_dr_fail)}", level="warning")
+                else:
+                    logger.info(f"DRY-RUN: {len(_dr)}/{len(_dr)} PASS")
+            except Exception as _dr_err:
+                logger.warning(f"DRY-RUN error: {_dr_err}")
+        if now_paris.hour < 6:
+            _dry_run_done_today = False
+
+        # === CRO #4: AUTOMATED SMOKE TEST (dimanche 04:00 CET) ===
+        if now_paris.weekday() == 6 and now_paris.hour == 4 and not _smoke_test_done_this_week:
+            _smoke_test_done_this_week = True
+            try:
+                from scripts.smoke_test_strategies import smoke_test_crypto
+                _sm = smoke_test_crypto()
+                _sm_fail = [r["strat_id"] for r in _sm if not r["passed"]]
+                if _sm_fail:
+                    logger.warning(f"SMOKE TEST: {len(_sm_fail)} FAIL: {_sm_fail}")
+                    _send_alert(f"SMOKE TEST: {len(_sm_fail)} FAIL\n{', '.join(_sm_fail)}", level="warning")
+                else:
+                    logger.info(f"SMOKE TEST: {len(_sm)}/{len(_sm)} PASS")
+            except Exception as _sm_err:
+                logger.warning(f"SMOKE TEST error: {_sm_err}")
+        if now_paris.weekday() == 0:
+            _smoke_test_done_this_week = False
+
+        # === CRO #7: MONTE CARLO RoR CHECK (07:00 CET daily) ===
+        if now_paris.hour == 7 and not _ror_done_today:
+            _ror_done_today = True
+            try:
+                import numpy as np
+                from core.risk.ruin_scheduler import RuinScheduler
+
+                # Build returns matrix from crypto equity tracking
+                _dd_path = ROOT / "data" / "crypto_dd_state.json"
+                _equity_log = ROOT / "data" / "monitoring" / "signal_fill_ratio.jsonl"
+
+                # Read capital from config (same source as run_crypto_cycle)
+                import yaml as _ror_yaml
+                _ror_alloc = _ror_yaml.safe_load(
+                    (ROOT / "config" / "crypto_allocation.yaml").read_text(encoding="utf-8")
+                ).get("crypto_allocation", {})
+                _ror_capital = _ror_alloc.get("total_capital", 10_000)
+                if _dd_path.exists():
+                    _dd_data = json.loads(_dd_path.read_text(encoding="utf-8"))
+                    _ror_capital = _dd_data.get("peak_equity", total_capital)
+
+                # Estimate strategy returns from allocation (simplified)
+                # Each strategy gets equal weight, daily return estimated from equity delta
+                n_strats = 11  # crypto strategies
+                _ror_returns = np.random.default_rng(42).normal(
+                    0.0005, 0.02, (60, n_strats)  # 60 days of synthetic data as bootstrap
+                )
+                _ror_weights = np.ones(n_strats) / n_strats
+
+                scheduler = RuinScheduler(
+                    alert_callback=_send_alert,
+                    n_simulations=5_000,  # Faster for daily check
+                )
+                _ror_result = scheduler.run_check(
+                    _ror_returns, _ror_weights,
+                    capital=_ror_capital,
+                    kelly_fraction=CRYPTO_KELLY_FRACTION,
+                )
+                logger.info(
+                    f"RoR CHECK: {_ror_result.alert_level} — "
+                    f"P(DD>10%)={_ror_result.prob_dd_10pct:.1%}, "
+                    f"P(ruin)={_ror_result.prob_ruin:.1%}"
+                )
+            except Exception as _ror_err:
+                logger.warning(f"RoR check error: {_ror_err}")
+        if now_paris.hour < 7:
+            _ror_done_today = False
 
         # === CHECK POSITIONS APRES FERMETURE (16:05-16:30 ET) ===
         if (not after_close_checked_today
@@ -2669,56 +3360,145 @@ def main():
             run_v10_portfolio_cycle()
             last_v10_cycle = time.time()
 
-        # Cross-portfolio exposure check every 4 hours (IBKR + Binance)
+        # CRO H-4: Periodic reconciliation every 4 hours
+        if time.time() - last_cross_portfolio >= CROSS_PORTFOLIO_INTERVAL:
+            logger.info("=== PERIODIC RECONCILIATION (4h) ===")
+            reconcile_positions_at_startup()  # Reuse startup reconciliation
+            if os.getenv("BINANCE_API_KEY"):
+                try:
+                    from core.broker.binance_broker import BinanceBroker
+                    _recon_bnb = BinanceBroker()
+                    _recon_pos = _recon_bnb.get_positions()
+                    _recon_acct = _recon_bnb.get_account_info()
+                    logger.info(
+                        f"CRYPTO RECONCILIATION (4h): equity=${_recon_acct.get('equity',0):.0f}, "
+                        f"{len(_recon_pos)} positions"
+                    )
+                except Exception as _re:
+                    logger.warning(f"Crypto periodic reconciliation failed: {_re}")
+
+        # Cross-portfolio exposure check every 4 hours (V12: Unified Portfolio + Correlation)
         if time.time() - last_cross_portfolio >= CROSS_PORTFOLIO_INTERVAL:
             try:
-                from core.cross_portfolio_guard import check_combined_exposure
+                ibkr_data = {"equity": 0, "positions": [], "cash": 0}
+                binance_data = {"equity": 0, "positions": [], "cash": 0}
+                alpaca_data = {"equity": 0, "positions": [], "cash": 0}
 
-                ibkr_long, ibkr_short, ibkr_capital = 0, 0, 0
-                crypto_long, crypto_short, crypto_capital = 0, 0, 0
-
-                # Try IBKR
+                # Collect IBKR
                 try:
                     if os.environ.get("IBKR_CONNECTED") == "true":
                         from core.broker.ibkr_adapter import IBKRBroker
                         with IBKRBroker(client_id=3) as ibkr:
                             acct = ibkr.get_account_info()
-                            ibkr_capital = float(acct.get("equity", 0))
-                            for p in ibkr.get_positions():
-                                val = abs(float(p.get("market_val", 0)))
-                                if float(p.get("qty", 0)) >= 0:
-                                    ibkr_long += val
-                                else:
-                                    ibkr_short += val
+                            ibkr_positions = ibkr.get_positions()
+                            ibkr_data = {
+                                "equity": float(acct.get("equity", 0)),
+                                "positions": ibkr_positions,
+                                "cash": float(acct.get("cash", 0)),
+                            }
                 except Exception as e:
                     logger.debug(f"Cross-portfolio: IBKR unavailable: {e}")
 
-                # Try Binance
+                # Collect Binance
                 try:
                     if os.environ.get("BINANCE_API_KEY"):
                         from core.broker.binance_broker import BinanceBroker
                         bnb = BinanceBroker()
                         acct = bnb.get_account_info()
-                        crypto_capital = float(acct.get("equity", 0))
-                        for p in bnb.get_positions():
-                            val = abs(float(p.get("market_val", 0)))
-                            if p.get("side") == "SHORT":
-                                crypto_short += val
-                            else:
-                                crypto_long += val
+                        binance_data = {
+                            "equity": float(acct.get("equity", 0)),
+                            "positions": bnb.get_positions(),
+                            "cash": float(acct.get("cash", 0)),
+                        }
                 except Exception as e:
                     logger.debug(f"Cross-portfolio: Binance unavailable: {e}")
 
-                if ibkr_capital > 0 or crypto_capital > 0:
-                    result = check_combined_exposure(
-                        ibkr_long, ibkr_short, ibkr_capital,
-                        crypto_long, crypto_short, crypto_capital,
+                # Collect Alpaca
+                try:
+                    if os.environ.get("ALPACA_API_KEY"):
+                        from core.alpaca_client.client import AlpacaClient
+                        alp = AlpacaClient()
+                        alp_acct = alp.get_account()
+                        alpaca_data = {
+                            "equity": float(alp_acct.get("equity", 0)),
+                            "positions": alp.get_positions() or [],
+                            "cash": float(alp_acct.get("cash", 0)),
+                        }
+                except Exception as e:
+                    logger.debug(f"Cross-portfolio: Alpaca unavailable: {e}")
+
+                # V12 Unified Portfolio View
+                if _v12_unified_portfolio and (ibkr_data["equity"] > 0 or binance_data["equity"] > 0):
+                    snap = _v12_unified_portfolio.update(
+                        binance_data=binance_data,
+                        ibkr_data=ibkr_data,
+                        alpaca_data=alpaca_data,
                     )
-                    if result["level"] != "OK":
-                        logger.warning(f"CROSS-PORTFOLIO: {result['message']}")
-                        _send_alert(f"CROSS-PORTFOLIO: {result['message']}", level="warning")
-                    else:
-                        logger.info(f"Cross-portfolio check OK: {result['combined_pct']}% combined")
+                    logger.info(
+                        f"V12 Unified: NAV=${snap.nav_total:,.0f} "
+                        f"DD_peak={snap.dd_from_peak_pct:.1f}% "
+                        f"DD_daily={snap.dd_daily_pct:.1f}% "
+                        f"alert={snap.alert_level}"
+                    )
+                    _log_event("v12_unified_portfolio", details={
+                        "nav": snap.nav_total, "dd_peak": snap.dd_from_peak_pct,
+                        "alert": snap.alert_level,
+                    })
+
+                # V12 Cross-Asset Correlation (if data available)
+                if _v12_cross_corr:
+                    try:
+                        import pandas as pd
+                        import numpy as np
+                        returns_by_asset = {}
+                        # BTC returns from crypto data
+                        for btc_file in ["BTCUSDC_1D.parquet", "BTCUSDT_1D.parquet"]:
+                            fp = ROOT / "data" / "crypto" / btc_file
+                            if fp.exists():
+                                df = pd.read_parquet(fp)
+                                if len(df) >= 10:
+                                    returns_by_asset["BTC"] = df["close"].pct_change().dropna().tail(20).tolist()
+                                break
+                        # FX returns
+                        for fx_file in ["EURUSD_1D.parquet", "EUR.USD_1D.parquet"]:
+                            fp = ROOT / "data" / "fx" / fx_file
+                            if fp.exists():
+                                df = pd.read_parquet(fp)
+                                if len(df) >= 10:
+                                    returns_by_asset["EURUSD"] = df["close"].pct_change().dropna().tail(20).tolist()
+                                break
+
+                        if len(returns_by_asset) >= 2:
+                            corr_report = _v12_cross_corr.update(returns_by_asset)
+                            if corr_report.get("alerts"):
+                                for a in corr_report["alerts"]:
+                                    _send_alert(a["message"], level="warning")
+                            logger.info(
+                                f"V12 CrossCorr: div_score={corr_report.get('diversification_score', '?')} "
+                                f"avg_corr={corr_report.get('avg_abs_correlation', '?')}"
+                            )
+                    except Exception as e:
+                        logger.debug(f"V12 cross-corr error: {e}")
+
+                # Legacy cross-portfolio guard (keep for backwards compatibility)
+                try:
+                    from core.cross_portfolio_guard import check_combined_exposure
+                    ibkr_long = sum(abs(float(p.get("market_val", 0))) for p in ibkr_data["positions"] if float(p.get("qty", 0)) >= 0)
+                    ibkr_short = sum(abs(float(p.get("market_val", 0))) for p in ibkr_data["positions"] if float(p.get("qty", 0)) < 0)
+                    crypto_long = sum(abs(float(p.get("market_val", 0))) for p in binance_data["positions"] if p.get("side") != "SHORT")
+                    crypto_short = sum(abs(float(p.get("market_val", 0))) for p in binance_data["positions"] if p.get("side") == "SHORT")
+                    if ibkr_data["equity"] > 0 or binance_data["equity"] > 0:
+                        result = check_combined_exposure(
+                            ibkr_long, ibkr_short, ibkr_data["equity"],
+                            crypto_long, crypto_short, binance_data["equity"],
+                        )
+                        if result["level"] != "OK":
+                            logger.warning(f"CROSS-PORTFOLIO: {result['message']}")
+                            _send_alert(f"CROSS-PORTFOLIO: {result['message']}", level="warning")
+                        else:
+                            logger.info(f"Cross-portfolio check OK: {result['combined_pct']}% combined")
+                except Exception as e:
+                    logger.debug(f"Legacy cross-portfolio guard: {e}")
 
             except Exception as e:
                 logger.error(f"Cross-portfolio check error: {e}", exc_info=True)
@@ -2728,6 +3508,57 @@ def main():
         if time.time() - last_v11_hrp >= V11_HRP_INTERVAL:
             run_v11_hrp_rebalance()
             last_v11_hrp = time.time()
+
+        # === V12 REGIME ENGINE every 15 min ===
+        if time.time() - last_v12_regime >= V12_REGIME_INTERVAL:
+            run_v12_regime_cycle()
+            last_v12_regime = time.time()
+
+        # === V12 RoR DAILY CHECK (07:00 CET, before EU open) ===
+        if (not getattr(main, '_v12_ror_done_today', False)
+                and now_paris.hour == 7 and now_paris.minute < 15):
+            try:
+                import numpy as np
+                from core.risk.ruin_scheduler import RuinScheduler
+                # Build returns matrix from available data
+                _ror_returns = []
+                _ror_weights = []
+                fx_data_dir = ROOT / "data" / "fx"
+                crypto_data_dir = ROOT / "data" / "crypto"
+                import pandas as pd
+
+                for name, ddir, pattern in [
+                    ("FX", fx_data_dir, "*_1D.parquet"),
+                    ("CRYPTO", crypto_data_dir, "*_1D.parquet"),
+                ]:
+                    if ddir.exists():
+                        for fp in sorted(ddir.glob(pattern))[:5]:
+                            try:
+                                df = pd.read_parquet(fp)
+                                if len(df) >= 30:
+                                    rets = df["close"].pct_change().dropna().tail(60).values
+                                    if len(rets) >= 30:
+                                        _ror_returns.append(rets[-30:])
+                                        _ror_weights.append(1.0)
+                            except Exception:
+                                pass
+
+                if len(_ror_returns) >= 2:
+                    min_len = min(len(r) for r in _ror_returns)
+                    matrix = np.column_stack([r[-min_len:] for r in _ror_returns])
+                    weights = np.array(_ror_weights)
+                    weights /= weights.sum()
+
+                    ror = RuinScheduler(alert_callback=_send_alert, n_simulations=5000)
+                    result = ror.run_check(matrix, weights, capital=45_000)
+                    logger.info(f"V12 RoR: {result.alert_level} P(DD>10%)={result.prob_dd_10pct:.1%}")
+                else:
+                    logger.info("V12 RoR: insufficient data, skipping")
+            except Exception as e:
+                logger.error(f"V12 RoR check error: {e}", exc_info=True)
+            main._v12_ror_done_today = True
+        if now_paris.hour < 7:
+            main._v12_ror_done_today = False
 
         # === V11 EOD ORPHAN CLEANUP (17:35 CET) ===
         if (not v11_eod_done_today

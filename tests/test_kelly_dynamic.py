@@ -63,18 +63,18 @@ class TestPositionMultiplier:
         values = [100_000 + i * 2000 for i in range(30)]
         feed_equity(km_no_hysteresis, values)
         mult = km_no_hysteresis.get_position_multiplier()
-        assert mult == 1.0
+        assert mult == 2.0  # AGGRESSIVE = 2.0x Kelly
 
     def test_nominal_multiplier(self, km):
         feed_equity(km, [100_000] * 25)
         mult = km.get_position_multiplier()
-        assert mult == 0.5
+        assert mult == 1.0  # NOMINAL = 1.0x Kelly
 
     def test_defensive_multiplier(self, km_no_hysteresis):
         values = [100_000 - i * 2000 for i in range(30)]
         feed_equity(km_no_hysteresis, values)
         mult = km_no_hysteresis.get_position_multiplier()
-        assert mult <= 0.125
+        assert mult <= 0.25  # DEFENSIVE = 0.25x Kelly
 
 
 class TestHysteresis:

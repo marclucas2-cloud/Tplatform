@@ -1,0 +1,27 @@
+[Unit]
+Description=Trading Platform Worker (24/7 scheduler)
+After=network.target ibgateway-live.service
+Wants=ibgateway-live.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/trading-platform
+ExecStart=/usr/bin/python3 worker.py
+Restart=always
+RestartSec=10
+StartLimitBurst=5
+StartLimitIntervalSec=300
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/opt/trading-platform/.env
+
+# Logging
+StandardOutput=append:/opt/trading-platform/logs/worker/worker_systemd.log
+StandardError=append:/opt/trading-platform/logs/worker/worker_systemd.log
+
+# Safety
+KillSignal=SIGTERM
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

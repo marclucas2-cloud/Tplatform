@@ -28,8 +28,12 @@ def crypto_rm():
 
 
 @pytest.fixture
-def crypto_ks():
-    return CryptoKillSwitch(config_path="__nonexistent__")
+def crypto_ks(tmp_path):
+    ks = CryptoKillSwitch(config_path="__nonexistent__")
+    ks._STATE_PATH = tmp_path / "test_crypto_ks_state.json"
+    ks._active = False
+    ks._trigger_reason = ""
+    return ks
 
 
 @pytest.fixture

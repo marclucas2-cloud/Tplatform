@@ -365,11 +365,12 @@ class TestFillCommission:
 
 class TestIBKRCosts:
     def test_ibkr_fx_commission(self, ibkr_cost):
-        """FX: max($2, 0.2 bps * notional)."""
+        """FX: max($2, 0.2 bps * notional) + spread ~1 bps."""
         order = _StubOrder(asset_class="FX", quantity=10_000, symbol="EURUSD")
-        # notional = 10,000 * 1.10 = 11,000 => 0.2 bps = $0.022 < $2
+        # notional = 10,000 * 1.10 = 11,000
+        # commission = max($2, 0.2bps*11000=$0.022) + spread(1bps*11000=$1.10) = $3.10
         comm = ibkr_cost.calculate_commission(order, fill_price=1.10)
-        assert comm == 2.0  # flat minimum
+        assert comm == 3.1  # flat minimum + spread cost
 
         # Large notional
         big = _StubOrder(asset_class="FX", quantity=1_000_000, symbol="EURUSD")

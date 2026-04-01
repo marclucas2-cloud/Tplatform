@@ -561,15 +561,15 @@ class TestExtremePriceInjection:
         assert not passed, f"Negative equity should reject all, got: {msg}"
 
     def test_max_positions_exceeded(self, rm):
-        """Already at max positions (6) + new symbol -> REJECTED."""
+        """Already at max positions (10) + new symbol -> REJECTED."""
         positions = [
             _position(symbol=f"SYM{i}", notional=200, side="LONG")
-            for i in range(6)
+            for i in range(10)  # max_positions=10 in limits_live.yaml
         ]
         order = _make_order(symbol="NEW_SYMBOL", notional=200)
         portfolio = _make_portfolio(equity=10_000, cash=5_000, positions=positions)
         passed, msg = rm.validate_order(order, portfolio)
-        assert not passed, f"7th symbol should be rejected (max 6), got: {msg}"
+        assert not passed, f"11th symbol should be rejected (max 10), got: {msg}"
         assert "position" in msg.lower() or "max" in msg.lower()
 
 
@@ -687,10 +687,10 @@ class TestConcurrentGuard:
 class TestStrategyConcentrationGuard:
     """Verify per-strategy cap (20% in limits_live.yaml) blocks over-concentration."""
 
-    def test_strategy_over_20pct_rejected(self, rm):
-        """Existing 15% + new 6% = 21% on same strategy -> REJECTED."""
+    def test_strategy_over_25pct_rejected(self, rm):
+        """Existing 20% + new 6% = 26% on same strategy -> REJECTED (max 25%)."""
         positions = [
-            _position(symbol="AAPL", notional=1500, strategy="momentum_us"),
+            _position(symbol="AAPL", notional=2000, strategy="momentum_us"),
         ]
         order = _make_order(
             symbol="MSFT",
@@ -701,7 +701,7 @@ class TestStrategyConcentrationGuard:
             equity=10_000, cash=6_000, positions=positions,
         )
         passed, msg = rm.validate_order(order, portfolio)
-        assert not passed, f"21% strategy concentration should be rejected, got: {msg}"
+        assert not passed, f"26% strategy concentration should be rejected, got: {msg}"
         assert "trategy" in msg.lower()
 
     def test_strategy_within_limit_accepted(self, rm):

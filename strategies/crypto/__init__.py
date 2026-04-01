@@ -65,6 +65,9 @@ except Exception as e:
     logger.warning(f"Failed to load STRAT-008 (weekend_gap): {e}")
 
 # BEAR regime strategies (V11 ROC optim)
+# NOTE: STRAT-009/010/011 initially WF-rejected in standalone but approved
+# for BEAR-regime-only activation (regime_mult=0 outside BEAR).
+# They are filtered by V12 regime engine — never trade in BULL/CHOP.
 try:
     from strategies.crypto.trend_short_v1 import (
         STRATEGY_CONFIG as STRAT_009_CONFIG,
