@@ -576,8 +576,10 @@ def run_intraday(market: str = "US"):
     Args:
         market: 'US' (default, 15:35-22:00 Paris) or 'EU' (09:00-17:30 Paris)
     """
-    if not _execution_lock.acquire(blocking=False):
-        logger.warning("INTRADAY RUN SKIP — execution deja en cours (lock)")
+    # EU uses IBKR live (same as FX carry), US uses Alpaca (execution_lock)
+    _lock = _ibkr_lock if market == "EU" else _execution_lock
+    if not _lock.acquire(blocking=False):
+        logger.warning(f"INTRADAY RUN ({market}) SKIP — lock held")
         return
     try:
         logger.info(f"=== INTRADAY RUN ({market}) ===")
@@ -607,7 +609,7 @@ def run_intraday(market: str = "US"):
         logger.error(f"Erreur intraday run ({market}): {e}", exc_info=True)
         _send_alert(f"INTRADAY {market} ERREUR: {type(e).__name__}: {str(e)[:100]}", level="critical")
     finally:
-        _execution_lock.release()
+        _lock.release()
 
 
 def run_fx_carry_cycle():

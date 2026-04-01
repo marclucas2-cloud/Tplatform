@@ -1,16 +1,13 @@
 #!/usr/bin/env python3
 """
-Paper Portfolio EU — pipeline multi-strategies europeennes sur IBKR paper.
+Portfolio EU LIVE — pipeline multi-strategies europeennes sur IBKR live (port 4002).
 
-INFRA-005 : Refactored to support multiple strategies simultaneously.
-Loads strategy registry from config/strategies_eu.yaml.
-
-Strategies actives :
+4 strats actives sur IBKR live $10K (clientId=11) :
   - BCE Momentum Drift v2 (Sharpe 14.93, event BCE)
   - Auto Sector German (Sharpe 13.43, event auto sector)
   - Brent Lag Play (Sharpe 4.08, momentum oil)
-  - EU Close -> US Afternoon (Sharpe 2.43, cross-timezone)
   - EU Gap Open (Sharpe 8.56, gap opening EU)
+  - EU Close -> US Afternoon : DISABLED (needs Alpaca live)
 
 Usage :
     python scripts/paper_portfolio_eu.py              # execution
@@ -58,7 +55,9 @@ STATE_FILE = ROOT / "paper_portfolio_eu_state.json"
 # CONFIGURATION
 # =============================================================================
 
-INITIAL_CAPITAL_EU = 100_000.0       # IBKR paper — $100K alloue au pipe EU
+# Capital initial sert uniquement de fallback si IBKR indisponible au 1er run
+# En fonctionnement normal, l'equity live IBKR est utilisee
+_FALLBACK_CAPITAL_EU = 10_000.0
 MAX_DAILY_DRAWDOWN = 0.05            # 5% circuit-breaker
 MAX_POSITION_SIZE = 0.10             # 10% max par position individuelle
 MAX_LIVE_POSITIONS = 10              # Max positions simultanees EU
@@ -150,10 +149,10 @@ def load_state() -> dict:
 
     logger.info("Reconstruction du state EU...")
     state = {
-        "capital": INITIAL_CAPITAL_EU,
+        "capital": _FALLBACK_CAPITAL_EU,
         "positions": {},
         "allocations": {},
-        "daily_capital_start": INITIAL_CAPITAL_EU,
+        "daily_capital_start": _FALLBACK_CAPITAL_EU,
         "daily_pnl": 0.0,
         "last_run_date": None,
         "history": [],
@@ -198,32 +197,14 @@ def save_state(state: dict):
 # =============================================================================
 
 def _get_ibkr():
-    """Retourne une connexion IBKR PAPER (port 4003) pour le pipeline EU.
+    """Retourne une connexion IBKR LIVE (port 4002) pour le pipeline EU.
 
-    Utilise un port separe du live (4002) pour eviter les conflits.
-    Le paper gateway a ~EUR 1M de capital simule.
+    Partage le meme compte IBKR $10K que FX carry.
+    ClientId=11 pour eviter conflit avec FX carry (clientId=10).
     """
-    import os
-    # Force paper mode on port 4003 (separate from live gateway on 4002)
-    _saved_port = os.environ.get("IBKR_PORT")
-    _saved_paper = os.environ.get("IBKR_PAPER")
-    os.environ["IBKR_PORT"] = os.environ.get("IBKR_PAPER_PORT", "4003")
-    os.environ["IBKR_PAPER"] = "true"
-    try:
-        from core.broker.ibkr_adapter import IBKRBroker
-        # Don't use get_broker() cache — we need a separate connection
-        broker = IBKRBroker()
-        return broker
-    finally:
-        # Restore env vars
-        if _saved_port is not None:
-            os.environ["IBKR_PORT"] = _saved_port
-        elif "IBKR_PORT" in os.environ:
-            del os.environ["IBKR_PORT"]
-        if _saved_paper is not None:
-            os.environ["IBKR_PAPER"] = _saved_paper
-        elif "IBKR_PAPER" in os.environ:
-            del os.environ["IBKR_PAPER"]
+    from core.broker.ibkr_adapter import IBKRBroker
+    broker = IBKRBroker(client_id=11)  # EU pipeline = clientId 11
+    return broker
 
 
 def _get_smart_router():
@@ -895,7 +876,7 @@ def execute_eu_signals(
                     qty=qty,
                     stop_loss=sl,
                     take_profit=tp,
-                    _authorized_by="paper_portfolio_eu",
+                    _authorized_by="eu_pipeline_live",
                 )
                 order_id = result.get("orderId", "?")
                 status = result.get("status", "?")
@@ -972,7 +953,7 @@ def close_eu_positions(state: dict, dry_run: bool = False):
                     ibkr = _get_ibkr()
                 exec_broker = ibkr
 
-            exec_broker.close_position(ticker, _authorized_by="paper_portfolio_eu_close")
+            exec_broker.close_position(ticker, _authorized_by="eu_pipeline_live_close")
             logger.info("  FERME %s", ticker)
             closed_tickers.append(ticker)
 
@@ -1007,7 +988,7 @@ def run_eu(dry_run: bool = False):
     # Reset daily PnL si nouveau jour
     today = now.strftime("%Y-%m-%d")
     if state.get("last_run_date") != today:
-        state["daily_capital_start"] = state.get("capital", INITIAL_CAPITAL_EU)
+        state["daily_capital_start"] = state.get("capital", _FALLBACK_CAPITAL_EU)
         state["daily_pnl"] = 0.0
         state["last_run_date"] = today
 
@@ -1016,7 +997,7 @@ def run_eu(dry_run: bool = False):
         ibkr = _get_ibkr()
         info = ibkr.authenticate()
         equity = info["equity"]
-        capital = min(equity, INITIAL_CAPITAL_EU)
+        capital = equity  # Utiliser 100% equity live IBKR
         state["capital"] = equity
     except Exception as e:
         logger.error("  Connexion IBKR impossible: %s", e)
@@ -1025,7 +1006,7 @@ def run_eu(dry_run: bool = False):
 
     logger.info("  Equity IBKR: $%s", f"{equity:,.2f}")
     logger.info("  Capital alloue EU: $%s", f"{capital:,.2f}")
-    logger.info("  Mode: %s", "DRY-RUN" if dry_run else "PAPER TRADING")
+    logger.info("  Mode: %s", "DRY-RUN" if dry_run else "LIVE TRADING")
 
     # Circuit-breaker
     if check_circuit_breaker_eu(state, equity):
@@ -1162,8 +1143,8 @@ def show_status():
     print(f"  PAPER PORTFOLIO EU — MULTI-STRATEGY DASHBOARD")
     print(f"{'='*60}")
 
-    total_capital = state.get("capital", INITIAL_CAPITAL_EU)
-    port_return = (total_capital / INITIAL_CAPITAL_EU - 1) * 100
+    total_capital = state.get("capital", _FALLBACK_CAPITAL_EU)
+    port_return = (total_capital / _FALLBACK_CAPITAL_EU - 1) * 100
 
     print(f"  Capital  : ${total_capital:,.2f}")
     print(f"  Return   : {port_return:+.2f}%")
