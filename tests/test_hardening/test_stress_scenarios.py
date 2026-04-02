@@ -46,12 +46,18 @@ def ibkr_ks(tmp_path):
 @pytest.fixture
 def crypto_rm():
     """CryptoRiskManager with $15K capital."""
-    return CryptoRiskManager(capital=15_000, limits=CryptoRiskLimits(config_path="__nonexistent__"))
+    rm = CryptoRiskManager(capital=15_000, limits=CryptoRiskLimits(config_path="__nonexistent__"))
+    rm._check_count = 10  # Skip warmup for stress tests
+    rm.kill_switch._active = False  # Ensure fresh state
+    return rm
 
 
 @pytest.fixture
 def crypto_ks():
-    return CryptoKillSwitch(config_path="__nonexistent__")
+    ks = CryptoKillSwitch(config_path="__nonexistent__")
+    ks._active = False
+    ks._trigger_reason = ""
+    return ks
 
 
 @pytest.fixture

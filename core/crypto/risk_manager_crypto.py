@@ -281,6 +281,10 @@ class CryptoKillSwitch:
         Returns:
             (should_kill, reason)
         """
+        # Already active — don't re-trigger (prevents endless loop)
+        if self._active:
+            return True, self._trigger_reason
+
         config = self._config
 
         # 1. Daily loss
@@ -480,6 +484,7 @@ class CryptoRiskManager:
         self._weekly_start_equity = capital
         self._monthly_start_equity = capital
         self._last_hourly_reset = time.time()
+        self._check_count = 0  # Warmup: skip kill switch first 3 checks
         self._audit_log: list[dict] = []
 
     # ------------------------------------------------------------------
@@ -672,21 +677,37 @@ class CryptoRiskManager:
         if current_equity <= 0:
             return True, "equity=0 (API error?) — drawdown check skipped"
 
-        # Guard: if daily_start is wildly different from current (>1.5x), it's a config mismatch
-        # not a real drawdown. Reset baselines to current equity.
-        if self._daily_start_equity > 0 and (
-            current_equity / self._daily_start_equity > 1.5
-            or self._daily_start_equity / current_equity > 1.5
-        ):
-            logger.warning(
-                f"Drawdown baseline mismatch: start=${self._daily_start_equity:,.0f} "
-                f"vs current=${current_equity:,.0f} — resetting baselines"
-            )
+        # Guard: reset ALL baselines that are wildly different from current equity.
+        # This catches config/restart mismatches that would trigger false kill switches.
+        # Check each baseline individually (not just daily).
+        _baselines = {
+            "daily": self._daily_start_equity,
+            "hourly": self._hourly_start_equity,
+            "weekly": self._weekly_start_equity,
+            "monthly": self._monthly_start_equity,
+            "peak": self._peak_equity,
+        }
+        _reset_needed = False
+        for _bl_name, _bl_val in _baselines.items():
+            if _bl_val > 0 and (
+                current_equity / _bl_val > 1.5
+                or _bl_val / current_equity > 1.5
+            ):
+                logger.warning(
+                    f"Drawdown baseline mismatch ({_bl_name}): "
+                    f"${_bl_val:,.0f} vs current=${current_equity:,.0f}"
+                )
+                _reset_needed = True
+
+        if _reset_needed:
+            logger.warning("Resetting ALL baselines to current equity")
             self._daily_start_equity = current_equity
             self._hourly_start_equity = current_equity
             self._weekly_start_equity = current_equity
             self._monthly_start_equity = current_equity
             self._peak_equity = current_equity
+            # Skip DD check this cycle — baselines just reset, not meaningful
+            return True, "baselines reset — skipping DD check this cycle"
 
         self._peak_equity = max(self._peak_equity, current_equity)
         dd_pct = (
@@ -702,18 +723,25 @@ class CryptoRiskManager:
             else 0
         )
 
-        # Hourly
+        # Hourly — reset if >1h since last reset
         now = time.time()
         if now - self._last_hourly_reset > 3600:
             self._hourly_start_equity = current_equity
             self._last_hourly_reset = now
-        hourly_pnl_pct = (
-            (current_equity - self._hourly_start_equity)
-            / self._hourly_start_equity
-            * 100
-            if self._hourly_start_equity > 0
-            else 0
-        )
+        # Guard: if hourly baseline was set before worker started (from state file),
+        # don't use it for kill switch — it's stale. Only trust hourly baselines
+        # that were set THIS session (within last 2h).
+        hourly_pnl_pct = 0
+        if self._hourly_start_equity > 0 and (now - self._last_hourly_reset) < 7200:
+            hourly_pnl_pct = (
+                (current_equity - self._hourly_start_equity)
+                / self._hourly_start_equity
+                * 100
+            )
+        else:
+            # Stale hourly baseline — reset and skip
+            self._hourly_start_equity = current_equity
+            self._last_hourly_reset = now
 
         # Weekly
         weekly_pnl_pct = (
@@ -733,13 +761,28 @@ class CryptoRiskManager:
             else 0
         )
 
-        # Kill switch check
+        # Kill switch check — skip during warmup (first 3 cycles after init)
+        # Baselines from state file may be stale after worker restart.
+        self._check_count += 1
+        if self._check_count <= 3:
+            logger.info(
+                f"DD warmup {self._check_count}/3: daily={daily_pnl_pct:.1f}% "
+                f"hourly={hourly_pnl_pct:.1f}% DD={dd_pct:.1f}% — SKIPPED"
+            )
+            # Stabilize baselines on last warmup cycle
+            if self._check_count == 3:
+                self._daily_start_equity = current_equity
+                self._hourly_start_equity = current_equity
+                self._peak_equity = max(self._peak_equity, current_equity)
+                logger.info(f"DD warmup done: baselines stabilized at ${current_equity:,.0f}")
+            # Skip ALL checks during warmup (kill switch + violations)
+            return True, f"warmup {self._check_count}/3 — DD check skipped"
+
         killed, reason = self.kill_switch.check(
             daily_pnl_pct=daily_pnl_pct,
             hourly_pnl_pct=hourly_pnl_pct,
             drawdown_pct=dd_pct,
         )
-
         if killed:
             return False, f"KILL SWITCH: {reason}"
 

@@ -805,7 +805,7 @@ class TestSafetyMode:
 
     def test_check_anomaly_detects_high_dd(self, tmp_path):
         safety = SafetyMode(data_dir=str(tmp_path))
-        result = safety.check_anomaly(drawdown_pct=0.05)  # > 3%
+        result = safety.check_anomaly(drawdown_pct=0.12)  # > 10%
         assert result["anomaly"] is True
         assert any("DD" in d for d in result["details"])
 

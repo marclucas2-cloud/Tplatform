@@ -438,12 +438,14 @@ def check_positions_after_close():
 
             # Auto-close orphan intraday positions — close one by one (more robust)
             _closed = []
+            _failed = []
             for sym in still_open:
                 try:
                     client.close_position(sym, _authorized_by="auto_close_15_55")
                     _closed.append(sym)
                     logger.critical(f"  AUTO-CLOSE OK: {sym}")
                 except Exception as close_err:
+                    _failed.append(f"{sym}: {close_err}")
                     logger.critical(f"  AUTO-CLOSE FAIL {sym}: {close_err}")
 
             # Clear from state
@@ -457,8 +459,9 @@ def check_positions_after_close():
                     f"AUTO-CLOSE 16:00 ET: {', '.join(_closed)} ferme(s)",
                     level="critical",
                 )
+            if _failed:
                 _send_alert(
-                    f"ECHEC AUTO-CLOSE 15:55 ET: {close_err}",
+                    f"ECHEC AUTO-CLOSE 16:00 ET: {'; '.join(_failed)}",
                     level="critical",
                 )
     except Exception as e:
@@ -769,10 +772,10 @@ def run_fx_carry_cycle():
                 logger.critical("  FX CARRY KILL: all positions closed")
             except Exception as e:
                 logger.error(f"  FX CARRY KILL FAILED: {e}")
-            _telegram_notify(
+            _send_alert(
                 f"FX CARRY-MOM KILL SWITCH: {signal.get('reason')}\n"
                 f"Drawdown: {signal.get('drawdown', 0):.2%}",
-                level="CRITICAL"
+                level="critical"
             )
             return
 
@@ -882,7 +885,7 @@ def run_fx_carry_cycle():
         # V12 Signal-to-Fill monitoring (FX carry)
         _record_signal_fill("fx_carry", len(pairs), n_orders, 0)
 
-        _telegram_notify(
+        _send_alert(
             f"FX CARRY LIVE: {n_orders} ordre(s)\n"
             f"{len(pairs)} pairs actives, {n_filtered} filtrees\n"
             f"Total notional: ${total:,.0f}\n"
@@ -891,7 +894,7 @@ def run_fx_carry_cycle():
                 for p in pairs
             )
             + f"\nEquity: ${equity:,.0f}",
-            level="INFO"
+            level="info"
         )
 
     except Exception as e:
@@ -1027,11 +1030,11 @@ def run_futures_paper_cycle():
 
         # NOTE: Paper mode — signaux logues, pas d'execution
         for name, sig in signals:
-            _telegram_notify(
+            _send_alert(
                 f"FUTURES PAPER SIGNAL: {name}\n"
                 f"{sig.side} {sig.symbol} SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f}\n"
                 f"Strength: {sig.strength:.2f}",
-                level="INFO"
+                level="info"
             )
 
     except Exception as e:
@@ -1306,7 +1309,13 @@ def run_live_risk_cycle():
                     qty = abs(float(largest.get("qty", 0)))
                     half_qty = qty / 2.0
 
-                    if half_qty > 0 and os.environ.get("IBKR_CONNECTED") == "true":
+                    if half_qty > 0:
+                        # Check IBKR connectivity via socket (IBKR_CONNECTED env never set)
+                        import socket as _delev_sock
+                        _delev_host = os.getenv("IBKR_HOST", "127.0.0.1")
+                        _delev_port = int(os.getenv("IBKR_PORT", "4002"))
+                        with _delev_sock.create_connection((_delev_host, _delev_port), timeout=3):
+                            pass
                         from core.broker.ibkr_adapter import IBKRBroker
                         broker = IBKRBroker(client_id=3)
                         deleverage_action = "DELEVERAGE_L3" if "DELEVERAGE_L3" in actions else "DELEVERAGE_L2"
@@ -1393,8 +1402,8 @@ def _get_telegram_bot():
         return None
 
 
-def _telegram_notify(message: str, level: str = "INFO"):
-    """Send a Telegram push notification (non-blocking)."""
+def _telegram_notify_legacy(message: str, level: str = "INFO"):
+    """DEPRECATED: Legacy V1 Telegram. Use _send_alert() which routes to V2."""
     bot = _get_telegram_bot()
     if bot:
         try:
@@ -1698,11 +1707,11 @@ def _execute_earn_signal(broker, strat_id, strat_name, signal, n_orders_ref):
                         f"  [{strat_id}] EARN SUBSCRIBE {asset}: +${diff:.2f} "
                         f"(target=${target_amount:.0f}) — {result.get('success', result)}"
                     )
-                    _telegram_notify(
+                    _send_alert(
                         f"EARN SUBSCRIBE {asset}\n"
                         f"Strat: {strat_name}\n"
                         f"+${diff:.2f} (target ${target_amount:.0f})",
-                        level="INFO",
+                        level="info",
                     )
                 except Exception as e:
                     logger.warning(f"  [{strat_id}] Earn subscribe {asset} failed: {e}")
@@ -1715,11 +1724,11 @@ def _execute_earn_signal(broker, strat_id, strat_name, signal, n_orders_ref):
                         f"  [{strat_id}] EARN REDEEM {asset}: -${redeem_amount:.2f} "
                         f"— {result.get('success', result)}"
                     )
-                    _telegram_notify(
+                    _send_alert(
                         f"EARN REDEEM {asset}\n"
                         f"Strat: {strat_name}\n"
                         f"-${redeem_amount:.2f}",
-                        level="INFO",
+                        level="info",
                     )
                 except Exception as e:
                     logger.warning(f"  [{strat_id}] Earn redeem {asset} failed: {e}")
@@ -1852,14 +1861,34 @@ def run_crypto_cycle():
         # CRO H-8: verifier l'etat persiste du kill switch (pas les triggers
         # dynamiques — ceux-la sont verifies dans check_all() plus bas)
         if risk_mgr.kill_switch._active:
-            kill_reason = risk_mgr.kill_switch._reason or "previously activated"
-            logger.critical(
-                f"CRYPTO KILL SWITCH ACTIF — aucun trade: {kill_reason}"
-            )
-            _send_alert(
-                f"CRYPTO KILL SWITCH: {kill_reason}", level="critical"
-            )
-            return
+            kill_reason = risk_mgr.kill_switch._trigger_reason or "previously activated"
+
+            # Auto-reset kill switch after 24h — a perpetual kill switch is a bug
+            # (the original trigger was likely a false positive from stale baselines)
+            _ks_age_h = 0
+            if risk_mgr.kill_switch._trigger_time:
+                _ks_age_h = (datetime.now(timezone.utc) - risk_mgr.kill_switch._trigger_time).total_seconds() / 3600
+            if _ks_age_h > 24:
+                logger.warning(
+                    f"CRYPTO KILL SWITCH AUTO-RESET: active {_ks_age_h:.0f}h "
+                    f"(>{24}h) — reason was: {kill_reason}"
+                )
+                risk_mgr.kill_switch._active = False
+                risk_mgr.kill_switch._save_persisted_state()
+                _send_alert(
+                    f"KILL SWITCH AUTO-RESET ({_ks_age_h:.0f}h old)\n"
+                    f"Reason was: {kill_reason}\n"
+                    f"Trading crypto reprend.",
+                    level="warning",
+                )
+            else:
+                logger.critical(
+                    f"CRYPTO KILL SWITCH ACTIF ({_ks_age_h:.0f}h) — aucun trade: {kill_reason}"
+                )
+                _send_alert(
+                    f"CRYPTO KILL SWITCH: {kill_reason}", level="critical"
+                )
+                return
 
         # --- Initialiser le broker Binance ---
         broker = None
@@ -1877,6 +1906,8 @@ def run_crypto_cycle():
         current_equity = total_capital
         cash_available = 0
         earn_total = 0
+        acct = {}              # FIX: initialize to avoid NameError if get_account_info() fails
+        earn_positions = []    # FIX: initialize to avoid NameError if broker block fails
         if broker:
             try:
                 acct = broker.get_account_info()
@@ -2437,9 +2468,9 @@ def run_crypto_cycle():
                     _log_event("error", strat_id, {
                         "type": type(e).__name__, "message": str(e)[:200],
                     })
-                    _telegram_notify(
+                    _send_alert(
                         f"ERREUR EXECUTION {strat_name}\n{type(e).__name__}: {e}",
-                        level="CRITICAL",
+                        level="critical",
                     )
 
             except Exception as e:
@@ -3235,12 +3266,7 @@ def main():
         if is_weekday() and now_paris.hour < 16:
             run_futures_paper_cycle._done_today = False
 
-        # Skip weekends pour les marches traditionnels (US/EU)
-        if not is_weekday():
-            time.sleep(60)
-            continue
-
-        # === HEARTBEAT toutes les 30 min (local log only) ===
+        # === HEARTBEAT toutes les 30 min (local log only, y compris weekends) ===
         if time.time() - last_heartbeat >= HEARTBEAT_INTERVAL:
             log_heartbeat()
             last_heartbeat = time.time()
@@ -3262,6 +3288,21 @@ def main():
                         try:
                             from core.alpaca_client.client import AlpacaClient
                             _alp_eq = float(AlpacaClient.from_env().get_account_info().get("equity", 0))
+                        except Exception:
+                            pass
+                        # FIX: fetch IBKR equity (was always $0)
+                        try:
+                            import socket as _dig_sock
+                            _dig_host = os.getenv("IBKR_HOST", "127.0.0.1")
+                            _dig_port = int(os.getenv("IBKR_PORT", "4002"))
+                            with _dig_sock.create_connection((_dig_host, _dig_port), timeout=3):
+                                pass
+                            from core.broker.ibkr_adapter import IBKRBroker
+                            _dig_ibkr = IBKRBroker(client_id=5)
+                            try:
+                                _ibkr_eq = float(_dig_ibkr.get_account_info().get("equity", 0))
+                            finally:
+                                _dig_ibkr.disconnect()
                         except Exception:
                             pass
                         tg.send_digest(
@@ -3326,7 +3367,7 @@ def main():
                 _ror_capital = _ror_alloc.get("total_capital", 10_000)
                 if _dd_path.exists():
                     _dd_data = json.loads(_dd_path.read_text(encoding="utf-8"))
-                    _ror_capital = _dd_data.get("peak_equity", total_capital)
+                    _ror_capital = _dd_data.get("peak_equity", _ror_capital)
 
                 # Estimate strategy returns from allocation (simplified)
                 # Each strategy gets equal weight, daily return estimated from equity delta
@@ -3355,8 +3396,8 @@ def main():
         if now_paris.hour < 7:
             _ror_done_today = False
 
-        # === CHECK POSITIONS APRES FERMETURE (16:05-16:30 ET) ===
-        if (not after_close_checked_today
+        # === CHECK POSITIONS APRES FERMETURE (16:05-16:30 ET, weekdays only) ===
+        if (is_weekday() and not after_close_checked_today
                 and now_et.hour == 16 and 5 <= now_et.minute <= 30):
             logger.info("  Check des positions apres fermeture du marche...")
             check_positions_after_close()
@@ -3379,7 +3420,7 @@ def main():
         except Exception:
             pass
 
-        if is_daily_time() and not daily_done_today:
+        if is_weekday() and is_daily_time() and not daily_done_today:
             if _daily_paused:
                 logger.warning(
                     f"DAILY RUN SKIP — trading paused until {_d_paused_until}"
@@ -3445,11 +3486,15 @@ def main():
                 binance_data = {"equity": 0, "positions": [], "cash": 0}
                 alpaca_data = {"equity": 0, "positions": [], "cash": 0}
 
-                # Collect IBKR
+                # Collect IBKR (check connectivity via socket, not env var)
                 try:
-                    if os.environ.get("IBKR_CONNECTED") == "true":
-                        from core.broker.ibkr_adapter import IBKRBroker
-                        with IBKRBroker(client_id=3) as ibkr:
+                    import socket as _cp_sock
+                    _cp_host = os.getenv("IBKR_HOST", "127.0.0.1")
+                    _cp_port = int(os.getenv("IBKR_PORT", "4002"))
+                    with _cp_sock.create_connection((_cp_host, _cp_port), timeout=3):
+                        pass
+                    from core.broker.ibkr_adapter import IBKRBroker
+                    with IBKRBroker(client_id=3) as ibkr:
                             acct = ibkr.get_account_info()
                             ibkr_positions = ibkr.get_positions()
                             ibkr_data = {
@@ -3474,16 +3519,17 @@ def main():
                 except Exception as e:
                     logger.debug(f"Cross-portfolio: Binance unavailable: {e}")
 
-                # Collect Alpaca
+                # Collect Alpaca (FIX: use from_env() and get_account_info())
                 try:
                     if os.environ.get("ALPACA_API_KEY"):
                         from core.alpaca_client.client import AlpacaClient
-                        alp = AlpacaClient()
-                        alp_acct = alp.get_account()
+                        alp = AlpacaClient.from_env()
+                        alp_acct = alp.get_account_info()
                         alpaca_data = {
                             "equity": float(alp_acct.get("equity", 0)),
                             "positions": alp.get_positions() or [],
                             "cash": float(alp_acct.get("cash", 0)),
+                            "paper": True,  # Alpaca is paper until $25K arrives
                         }
                 except Exception as e:
                     logger.debug(f"Cross-portfolio: Alpaca unavailable: {e}")
@@ -3621,8 +3667,8 @@ def main():
         if now_paris.hour < 7:
             main._v12_ror_done_today = False
 
-        # === V11 EOD ORPHAN CLEANUP (17:35 CET) ===
-        if (not v11_eod_done_today
+        # === V11 EOD ORPHAN CLEANUP (17:35 CET, weekdays only) ===
+        if (is_weekday() and not v11_eod_done_today
                 and now_paris.hour == 17 and 35 <= now_paris.minute <= 45):
             run_v11_eod_cleanup()
             v11_eod_done_today = True

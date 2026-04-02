@@ -907,7 +907,7 @@ class TestForceCloseEuPositions:
 
         # Position fermee
         mock_ibkr.close_position.assert_called_once_with(
-            "BNP.PA", _authorized_by="paper_portfolio_eu_close",
+            "BNP.PA", _authorized_by="eu_pipeline_live_close",
         )
         assert "BNP.PA" not in base_state["intraday_positions"]
 
@@ -993,7 +993,7 @@ class TestExecutionAuthorization:
             qty=5,
             stop_loss=792.0,
             take_profit=816.0,
-            _authorized_by="paper_portfolio_eu",
+            _authorized_by="eu_pipeline_live",
         )
         assert len(orders) == 1
         assert orders[0]["action"] == "executed"

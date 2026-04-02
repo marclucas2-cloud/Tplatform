@@ -38,7 +38,12 @@ def crypto_rm():
 
 @pytest.fixture
 def crypto_ks():
-    return CryptoKillSwitch(config_path="__nonexistent__")
+    ks = CryptoKillSwitch(config_path="__nonexistent__")
+    # Ensure fresh state (not polluted by state file or prior tests)
+    ks._active = False
+    ks._trigger_reason = ""
+    ks._actions_executed = []
+    return ks
 
 
 @pytest.fixture
