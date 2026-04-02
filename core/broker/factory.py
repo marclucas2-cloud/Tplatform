@@ -136,21 +136,30 @@ class SmartRouter:
             self._brokers[broker_type] = get_broker(broker_type)
         return self._brokers[broker_type]
 
+    # Crypto quote currencies — if symbol ends with one of these, it's crypto
+    CRYPTO_QUOTES = {"USDT", "USDC", "BUSD", "BTC", "ETH", "BNB"}
+
     @staticmethod
     def detect_asset_type(symbol: str) -> str:
         """Detecte le type d'actif a partir du symbole.
 
-        Reconnait automatiquement les symboles futures (MES, MNQ, MCL, MGC, etc.)
-        pour eviter de devoir passer asset_type="future" explicitement.
+        Reconnait automatiquement:
+          - Futures: MES, MNQ, MCL, MGC, etc.
+          - Crypto: tout symbole finissant par USDT/USDC/BUSD ou connu crypto
 
         Args:
             symbol: ticker
 
         Returns:
-            "future", "equity", etc.
+            "future", "crypto", "equity"
         """
-        if symbol.upper() in FUTURES_SYMBOLS:
+        sym = symbol.upper()
+        if sym in FUTURES_SYMBOLS:
             return "future"
+        # Crypto detection: BTCUSDT, ETHUSDC, SOLUSDT, etc.
+        for quote in SmartRouter.CRYPTO_QUOTES:
+            if sym.endswith(quote) and len(sym) > len(quote):
+                return "crypto"
         return "equity"
 
     def route(

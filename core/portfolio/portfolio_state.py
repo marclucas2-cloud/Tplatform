@@ -184,13 +184,13 @@ class PortfolioStateEngine:
         daily_pnl = total_equity - self._daily_start_equity
         daily_pnl_pct = daily_pnl / self._daily_start_equity if self._daily_start_equity > 0 else 0.0
 
-        # ERE
+        # ERE — live brokers only (same filter as aggregates above)
         capital_at_risk = 0.0
         capital_at_risk_pct = 0.0
         if self.ere_calculator is not None:
             try:
                 all_positions = []
-                for b in brokers_state:
+                for b in live_brokers:
                     all_positions.extend(b.positions)
                 ere_result = self.ere_calculator.calculate(all_positions, total_equity)
                 capital_at_risk = ere_result.ere_absolute

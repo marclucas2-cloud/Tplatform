@@ -166,7 +166,7 @@ class EmergencyCloseAll:
         # 1. Cancel all open orders
         try:
             if hasattr(broker, "cancel_all_orders"):
-                cancelled = broker.cancel_all_orders()
+                cancelled = broker.cancel_all_orders(_authorized_by="emergency_close_all")
                 result["orders_cancelled"] = cancelled if isinstance(cancelled, int) else 0
                 logger.info("  %s: cancelled %s orders", name, result["orders_cancelled"])
             elif hasattr(broker, "get_open_orders"):

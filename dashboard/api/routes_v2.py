@@ -200,8 +200,16 @@ def _load_all_trades(source: str = "real") -> list[dict]:
 
     # 1. Trades reels
     if source in ("real", "all"):
-        # API Alpaca (source primaire — les vrais trades paper)
-        all_trades.extend(_get_alpaca_trades_cached())
+        # API Alpaca — only include if NOT paper mode
+        is_paper = os.environ.get("PAPER_TRADING", "true").lower() == "true"
+        if not is_paper:
+            all_trades.extend(_get_alpaca_trades_cached())
+        elif source == "all":
+            # "all" includes paper trades with tag
+            paper_trades = _get_alpaca_trades_cached()
+            for t in paper_trades:
+                t["trade_source"] = "paper"
+            all_trades.extend(paper_trades)
 
         # SQLite journals (si le trade_journal.py ecrit dedans)
         for db_name, origin in (("paper_journal.db", "paper"), ("live_journal.db", "live")):
@@ -1843,7 +1851,7 @@ def cross_exposure():
                 capital_crypto = bnb_info.get("equity", 0)
                 binance_positions = bnb.get_positions()
         except Exception:
-            capital_crypto = _load_yaml(CONFIG_DIR / "crypto_limits.yaml").get("capital", 20_000)
+            capital_crypto = _load_yaml(CONFIG_DIR / "crypto_limits.yaml").get("capital", 10_000)
 
         # ── Alpaca (paper) ──
         capital_alpaca = 0
