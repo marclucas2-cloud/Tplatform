@@ -30,7 +30,7 @@ class SafetyLimits:
     max_strategies: int = 5
     max_leverage: float = 1.0
     max_ere_pct: float = 0.20  # 20%
-    max_drawdown_pct: float = 0.03  # 3%
+    max_drawdown_pct: float = 0.10  # 10% (was 3% — too aggressive pre-trade)
     max_correlation_score: float = 0.80
     max_positions: int = 10
 

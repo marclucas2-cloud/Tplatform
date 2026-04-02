@@ -1190,20 +1190,27 @@ def run_live_risk_cycle():
         portfolio = {"equity": risk_mgr.capital, "positions": [], "cash": risk_mgr.capital}
 
         try:
-            # Try to get real portfolio from IBKR if available
-            if os.environ.get("IBKR_CONNECTED") == "true":
-                from core.broker.ibkr_adapter import IBKRBroker
-                with IBKRBroker(client_id=3) as broker:
-                    account = broker.get_account_info()
-                    positions = broker.get_positions()
-                    portfolio = {
-                        "equity": float(account.get("equity", risk_mgr.capital)),
-                        "cash": float(account.get("cash", risk_mgr.capital)),
-                        "positions": positions,
-                        "margin_used_pct": float(account.get("margin_used_pct", 0)),
-                    }
+            # Try to get real portfolio from IBKR (always try, not gated by env var)
+            import socket
+            _ibkr_host = os.getenv("IBKR_HOST", "127.0.0.1")
+            _ibkr_port = int(os.getenv("IBKR_PORT", "4002"))
+            with socket.create_connection((_ibkr_host, _ibkr_port), timeout=2):
+                pass
+            from core.broker.ibkr_adapter import IBKRBroker
+            _risk_ibkr = IBKRBroker(client_id=3)
+            try:
+                account = _risk_ibkr.get_account_info()
+                positions = _risk_ibkr.get_positions()
+                portfolio = {
+                    "equity": float(account.get("equity", risk_mgr.capital)),
+                    "cash": float(account.get("cash", risk_mgr.capital)),
+                    "positions": positions,
+                    "margin_used_pct": float(account.get("margin_used_pct", 0)),
+                }
+            finally:
+                _risk_ibkr.disconnect()
         except Exception as e:
-            logger.warning(f"Could not fetch IBKR portfolio for risk cycle: {e}")
+            logger.info(f"Live risk cycle: IBKR unavailable ({e}), using config capital")
 
         # FIX: update risk manager capital from live equity
         equity_live = portfolio.get("equity", risk_mgr.capital)
