@@ -121,14 +121,14 @@ class UnifiedPortfolioView:
         nav_total = bnb_eq + ibkr_eq + (alp_eq if not alp_is_paper else 0)
         nav_display = bnb_eq + ibkr_eq + alp_eq  # For display only
 
-        # Positions
+        # Positions — LIVE only (exclude paper Alpaca)
         all_positions = (
             list(bnb.get("positions", []))
             + list(ibkr.get("positions", []))
-            + list(alp.get("positions", []))
+            + (list(alp.get("positions", [])) if not alp_is_paper else [])
         )
 
-        # Exposure
+        # Exposure — computed on live positions only
         gross_long = 0.0
         gross_short = 0.0
         for p in all_positions:
@@ -144,11 +144,11 @@ class UnifiedPortfolioView:
         gross_pct = (gross / nav_total * 100) if nav_total > 0 else 0
         net_pct = (net / nav_total * 100) if nav_total > 0 else 0
 
-        # Cash
+        # Cash — LIVE only
         total_cash = (
             float(bnb.get("cash", 0))
             + float(ibkr.get("cash", 0))
-            + float(alp.get("cash", 0))
+            + (float(alp.get("cash", 0)) if not alp_is_paper else 0)
         )
         cash_pct = (total_cash / nav_total * 100) if nav_total > 0 else 0
 
@@ -178,6 +178,9 @@ class UnifiedPortfolioView:
             self._nav_start_day = nav_total
             self._day_of_year = today
         if weekday == 0 and self._day_of_week != 0:
+            self._nav_start_week = nav_total
+        # FIX: initialize weekly baseline on first update (mid-week restart)
+        if self._nav_start_week <= 0 and nav_total > 0:
             self._nav_start_week = nav_total
         self._day_of_week = weekday
 

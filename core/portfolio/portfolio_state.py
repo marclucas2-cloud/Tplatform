@@ -149,15 +149,18 @@ class PortfolioStateEngine:
         """
         brokers_state = self._collect_broker_states()
 
-        # Aggregates
-        total_equity = sum(b.equity for b in brokers_state)
-        total_cash = sum(b.cash for b in brokers_state)
-        total_long = sum(b.exposure_long for b in brokers_state)
-        total_short = sum(b.exposure_short for b in brokers_state)
+        # Aggregates — LIVE only (exclude paper brokers from risk metrics)
+        live_brokers = [b for b in brokers_state if not getattr(b, "paper", False)]
+        if not live_brokers:
+            live_brokers = brokers_state  # Fallback if all paper (dev mode)
+        total_equity = sum(b.equity for b in live_brokers)
+        total_cash = sum(b.cash for b in live_brokers)
+        total_long = sum(b.exposure_long for b in live_brokers)
+        total_short = sum(b.exposure_short for b in live_brokers)
         total_net = total_long - total_short
         total_gross = total_long + total_short
-        total_unrealized = sum(b.unrealized_pnl for b in brokers_state)
-        total_positions = sum(b.n_positions for b in brokers_state)
+        total_unrealized = sum(b.unrealized_pnl for b in live_brokers)
+        total_positions = sum(b.n_positions for b in live_brokers)
 
         # Invested = equity - cash
         total_invested = max(0, total_equity - total_cash)

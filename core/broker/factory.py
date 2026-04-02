@@ -194,7 +194,14 @@ class SmartRouter:
         if preferred in self._available:
             return self._get_broker(preferred)
 
-        # 3. Fallback sur ce qui est disponible
+        # 3. Fail-closed for crypto — never route to Alpaca/IBKR
+        if asset_type and asset_type.startswith("crypto"):
+            raise BrokerError(
+                f"Crypto ({symbol}) requiert Binance. "
+                f"Configurez BINANCE_API_KEY. Pas de fallback vers {self._available}."
+            )
+
+        # 4. Fallback sur ce qui est disponible (equity/forex only)
         if "alpaca" in self._available:
             return self._get_broker("alpaca")
         if "ibkr" in self._available:
