@@ -107,6 +107,7 @@ class ShadowTradeLogger:
         ticker: str,
         fill_price: float,
         fill_qty: float = 0,
+        side: str = "",
         spread: float = 0.0,
         broker: str = "",
     ) -> Optional[dict]:
@@ -114,14 +115,19 @@ class ShadowTradeLogger:
 
         Returns trade record if matching signal found, None otherwise.
         """
-        # Find matching signal — match strategy + ticker + side
+        # Find matching signal — exact match strategy + ticker + side
         matching_key = None
-        for key, signal in self._pending_signals.items():
-            if (signal["strategy"] == strategy
-                    and signal["ticker"] == ticker
-                    and signal["side"].upper() == key.split(":")[-1].upper()):
-                matching_key = key
-                break
+        if side:
+            # Prefer exact match with side
+            exact_key = f"{strategy}:{ticker}:{side.upper()}"
+            if exact_key in self._pending_signals:
+                matching_key = exact_key
+        if not matching_key:
+            # Fallback: match by strategy + ticker (oldest signal first)
+            for key, signal in self._pending_signals.items():
+                if signal["strategy"] == strategy and signal["ticker"] == ticker:
+                    matching_key = key
+                    break
 
         if not matching_key:
             # Fill without signal — log anyway

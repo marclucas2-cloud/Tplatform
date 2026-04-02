@@ -1293,6 +1293,24 @@ def run_live_risk_cycle():
                 reason=ks_result["reason"],
                 trigger_type=ks_result["trigger_type"],
             )
+            # Close ALL positions on ALL brokers
+            _send_alert(
+                f"KILL SWITCH LIVE: {ks_result['reason']}\nClosing all positions...",
+                level="critical",
+            )
+            if _v12_emergency_close:
+                try:
+                    _v12_emergency_close.execute(force=True)
+                except Exception as _ec_err:
+                    logger.critical(f"Emergency close failed: {_ec_err}")
+            else:
+                # Fallback: close IBKR positions directly
+                try:
+                    from core.broker.ibkr_adapter import IBKRBroker
+                    with IBKRBroker(client_id=3) as _ks_ibkr:
+                        _ks_ibkr.close_all_positions(_authorized_by="kill_switch_live")
+                except Exception as _ks_err:
+                    logger.critical(f"Kill switch IBKR close failed: {_ks_err}")
 
         # Log deleveraging level
         delev = risk_result.get("deleveraging", {})
@@ -2680,17 +2698,20 @@ def _init_v12_modules():
     try:
         from core.execution.double_fill_detector import DoubleFillDetector
 
-        def _double_fill_close(ticker, side, qty, broker_name):
+        def _double_fill_close(ticker, side, quantity, broker, reason=""):
             """Auto-close excess position from double fill."""
             try:
-                if broker_name == "BINANCE" and os.getenv("BINANCE_API_KEY"):
+                if broker == "BINANCE" and os.getenv("BINANCE_API_KEY"):
                     from core.broker.binance_broker import BinanceBroker
                     BinanceBroker().close_position(ticker, _authorized_by="double_fill_close")
-                elif broker_name == "IBKR":
+                elif broker == "IBKR":
                     from core.broker.ibkr_adapter import IBKRBroker
                     with IBKRBroker(client_id=8) as ibkr:
                         ibkr.close_position(ticker, _authorized_by="double_fill_close")
-                logger.critical(f"DOUBLE FILL AUTO-CLOSE: {ticker} {side} {qty} on {broker_name}")
+                elif broker == "ALPACA":
+                    from core.alpaca_client.client import AlpacaClient
+                    AlpacaClient.from_env().close_position(ticker, _authorized_by="double_fill_close")
+                logger.critical(f"DOUBLE FILL AUTO-CLOSE: {ticker} {side} {quantity} on {broker}")
             except Exception as e:
                 logger.critical(f"DOUBLE FILL AUTO-CLOSE FAILED: {ticker} — {e}")
 
@@ -2754,8 +2775,29 @@ def _init_v12_modules():
     # Emergency Close All (brokers set later when connected)
     try:
         from core.risk.emergency_close_all import EmergencyCloseAll
-        _v12_emergency_close = EmergencyCloseAll(alert_callback=_send_alert)
-        logger.info("  V12 EmergencyCloseAll initialized")
+        # Wire up all available brokers for emergency close
+        _ec_brokers = {}
+        try:
+            if os.getenv("BINANCE_API_KEY"):
+                from core.broker.binance_broker import BinanceBroker
+                _ec_brokers["BINANCE"] = BinanceBroker()
+        except Exception:
+            pass
+        try:
+            from core.broker.ibkr_adapter import IBKRBroker
+            import socket as _ec_sock
+            _ec_host = os.getenv("IBKR_HOST", "127.0.0.1")
+            _ec_port = int(os.getenv("IBKR_PORT", "4002"))
+            with _ec_sock.create_connection((_ec_host, _ec_port), timeout=2):
+                pass
+            _ec_brokers["IBKR"] = IBKRBroker(client_id=9)
+        except Exception:
+            pass
+        _v12_emergency_close = EmergencyCloseAll(
+            brokers=_ec_brokers,
+            alert_callback=_send_alert,
+        )
+        logger.info(f"  V12 EmergencyCloseAll initialized ({list(_ec_brokers.keys())})")
     except Exception as e:
         logger.warning(f"  V12 EmergencyCloseAll failed: {e}")
 
@@ -2795,6 +2837,7 @@ def _v12_on_fill(broker_name: str, strategy: str, ticker: str, side: str,
                 ticker=ticker,
                 fill_price=price,
                 fill_qty=quantity,
+                side=side,
                 broker=broker_name,
             )
         except Exception as e:
@@ -3225,8 +3268,15 @@ def main():
             time.sleep(60)
             _pf2 = run_preflight(block_on_failure=True)
             if _pf2.blockers:
-                logger.critical("PRE-FLIGHT RETRY FAILED — worker starting with warnings")
-                _send_alert("PRE-FLIGHT RETRY FAILED — worker starting degraded", level="critical")
+                # Non-critical blockers (e.g. margin check) → continue degraded
+                # Critical blockers (Binance auth, IBKR down) → would have sys.exit
+                _critical = [b for b in _pf2.blockers if "auth" in b.lower() or "binance" in b.lower()]
+                if _critical:
+                    logger.critical(f"PRE-FLIGHT CRITICAL FAIL — {_critical}")
+                    _send_alert(f"PRE-FLIGHT CRITICAL: {_critical}", level="critical")
+                    # Don't exit — brokers may come up later
+                logger.critical(f"PRE-FLIGHT RETRY FAILED ({len(_pf2.blockers)} blockers) — worker starting degraded")
+                _send_alert(f"PRE-FLIGHT DEGRADED: {len(_pf2.blockers)} blockers\n{chr(10).join(_pf2.blockers[:3])}", level="critical")
             else:
                 logger.info(f"  Pre-flight retry OK: {len(_pf2.checks)} checks passed")
         else:
