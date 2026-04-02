@@ -1227,28 +1227,34 @@ def run_live_risk_cycle():
         if equity_live > 0:
             risk_mgr.update_capital(equity_live)
 
-        # FIX CRO H-4 : PnL calculation using actual daily starting equity,
-        # NOT risk_mgr.capital (static config value like $10K).
-        # Load daily_start_equity from state file; fallback to current equity.
+        # PnL calculation using actual daily starting equity.
+        # FIX: use dedicated file (not paper_portfolio_state.json which is paper)
         equity = portfolio.get("equity", risk_mgr.capital)
         daily_start_equity = equity  # fallback
+        _live_dd_path = ROOT / "data" / "live_risk_dd_state.json"
         try:
-            _state_path = ROOT / "paper_portfolio_state.json"
-            if _state_path.exists():
-                _state = json.loads(_state_path.read_text(encoding="utf-8"))
-                _saved_equity = _state.get("daily_start_equity")
-                if _saved_equity and float(_saved_equity) > 0:
-                    daily_start_equity = float(_saved_equity)
+            _live_dd_path.parent.mkdir(parents=True, exist_ok=True)
+            if _live_dd_path.exists():
+                _ldd = json.loads(_live_dd_path.read_text(encoding="utf-8"))
+                _saved_eq = _ldd.get("daily_start_equity")
+                _saved_date = _ldd.get("date", "")
+                today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                if _saved_date == today_str and _saved_eq and float(_saved_eq) > 0:
+                    daily_start_equity = float(_saved_eq)
                 else:
-                    # First check of the day — persist current equity as the baseline
-                    _state["daily_start_equity"] = equity
-                    _state_path.write_text(
-                        json.dumps(_state, indent=2, default=str),
-                        encoding="utf-8",
-                    )
+                    # New day or first check — set baseline
+                    _live_dd_path.write_text(json.dumps({
+                        "daily_start_equity": equity,
+                        "date": today_str,
+                    }))
                     daily_start_equity = equity
+            else:
+                _live_dd_path.write_text(json.dumps({
+                    "daily_start_equity": equity,
+                    "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                }))
         except Exception as _e:
-            logger.warning(f"Could not load daily_start_equity: {_e}, using current equity")
+            logger.warning(f"Could not load live daily_start_equity: {_e}")
 
         daily_pnl_pct = (equity - daily_start_equity) / daily_start_equity if daily_start_equity > 0 else 0
 
@@ -1293,6 +1299,14 @@ def run_live_risk_cycle():
                 reason=ks_result["reason"],
                 trigger_type=ks_result["trigger_type"],
             )
+            # Arm crypto kill switch too (prevent re-entry on next crypto cycle)
+            try:
+                from core.crypto.risk_manager_crypto import CryptoKillSwitch
+                CryptoKillSwitch()._activate(f"live_kill_{ks_result['reason']}")
+                logger.critical("Crypto kill switch armed (prevent re-entry)")
+            except Exception:
+                pass
+
             # Close ALL positions on ALL brokers
             _send_alert(
                 f"KILL SWITCH LIVE: {ks_result['reason']}\nClosing all positions...",
@@ -1304,7 +1318,6 @@ def run_live_risk_cycle():
                 except Exception as _ec_err:
                     logger.critical(f"Emergency close failed: {_ec_err}")
             else:
-                # Fallback: close IBKR positions directly
                 try:
                     from core.broker.ibkr_adapter import IBKRBroker
                     with IBKRBroker(client_id=3) as _ks_ibkr:
@@ -3270,11 +3283,11 @@ def main():
             if _pf2.blockers:
                 # Non-critical blockers (e.g. margin check) → continue degraded
                 # Critical blockers (Binance auth, IBKR down) → would have sys.exit
-                _critical = [b for b in _pf2.blockers if "auth" in b.lower() or "binance" in b.lower()]
+                _critical = [b for b in _pf2.blockers
+                            if any(kw in b.lower() for kw in ("auth", "binance", "ibkr", "4002", "gateway"))]
                 if _critical:
                     logger.critical(f"PRE-FLIGHT CRITICAL FAIL — {_critical}")
                     _send_alert(f"PRE-FLIGHT CRITICAL: {_critical}", level="critical")
-                    # Don't exit — brokers may come up later
                 logger.critical(f"PRE-FLIGHT RETRY FAILED ({len(_pf2.blockers)} blockers) — worker starting degraded")
                 _send_alert(f"PRE-FLIGHT DEGRADED: {len(_pf2.blockers)} blockers\n{chr(10).join(_pf2.blockers[:3])}", level="critical")
             else:

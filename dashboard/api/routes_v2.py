@@ -219,8 +219,11 @@ def _load_all_trades(source: str = "real") -> list[dict]:
                 t["trade_source"] = "paper"
             all_trades.extend(paper_trades)
 
-        # SQLite journals (si le trade_journal.py ecrit dedans)
-        for db_name, origin in (("paper_journal.db", "paper"), ("live_journal.db", "live")):
+        # SQLite journals — only live_journal in "real" mode
+        _journal_sources = [("live_journal.db", "live")]
+        if source == "all":
+            _journal_sources.append(("paper_journal.db", "paper"))
+        for db_name, origin in _journal_sources:
             db_path = DATA_DIR / db_name
             if db_path.exists():
                 try:
@@ -237,12 +240,13 @@ def _load_all_trades(source: str = "real") -> list[dict]:
                 except Exception:
                     continue
 
-        # State file (strategy_pnl_log — P&L quotidiens)
-        state = _load_state()
-        for t in state.get("trades_log", []):
-            t_copy = dict(t)
-            t_copy.setdefault("trade_source", "paper")
-            all_trades.append(t_copy)
+        # State file trades_log — only in "all" mode (paper state)
+        if source == "all":
+            state = _load_state()
+            for t in state.get("trades_log", []):
+                t_copy = dict(t)
+                t_copy.setdefault("trade_source", "paper")
+                all_trades.append(t_copy)
 
     # 2. Trades backtest (simulations CSV — PAS des trades reels)
     if source in ("backtest", "all"):
@@ -352,15 +356,44 @@ def risk_overview():
 
         capital_ibkr = limits_ibkr.get("capital", 10_000)
         capital_crypto = limits_crypto.get("capital", 15_000)
-        daily_pnl = state.get("daily_pnl", 0.0)
+
+        # FIX: read LIVE equity from dedicated file (not paper state)
+        equity = capital_ibkr + capital_crypto  # fallback
+        daily_pnl = 0.0
+        try:
+            _live_dd = DATA_DIR / "live_risk_dd_state.json"
+            if _live_dd.exists():
+                _ldd = json.loads(_live_dd.read_text(encoding="utf-8"))
+                _start = float(_ldd.get("daily_start_equity", equity))
+                daily_pnl = equity - _start
+        except Exception:
+            pass
+        # Try IBKR snapshot for real equity
+        try:
+            from main import _get_ibkr_equity_from_snapshot
+            _ibkr_eq = _get_ibkr_equity_from_snapshot()
+            if _ibkr_eq > 0:
+                equity = _ibkr_eq + capital_crypto
+        except Exception:
+            pass
 
         # Drawdown actuel
-        equity = state.get("capital", 100_000)
-        peak = max(equity, state.get("daily_capital_start", equity))
-        drawdown_pct = (equity - peak) / peak * 100 if peak > 0 else 0
+        peak = max(equity, equity)  # Will be better with DD state tracking
+        drawdown_pct = 0.0
+        try:
+            _crypto_dd = DATA_DIR / "crypto_dd_state.json"
+            if _crypto_dd.exists():
+                _cdd = json.loads(_crypto_dd.read_text(encoding="utf-8"))
+                _peak = float(_cdd.get("peak_equity", equity))
+                _daily_start = float(_cdd.get("daily_start", equity))
+                if _peak > 0:
+                    drawdown_pct = (equity - _peak) / _peak * 100
+                daily_pnl = equity - _daily_start
+        except Exception:
+            pass
 
         # VaR parametrique simplifiee (95%, 1 jour)
-        portfolio_vol_daily = 0.012  # ~1.2% daily vol estimee
+        portfolio_vol_daily = 0.012
         var_95 = equity * portfolio_vol_daily * 1.645
         var_99 = equity * portfolio_vol_daily * 2.326
 
