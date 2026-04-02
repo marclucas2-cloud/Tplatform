@@ -1617,6 +1617,17 @@ def run_intraday(dry_run: bool = False):
             signals[sid] = {"action": "hold", "reason": "kill switch"}
             continue
 
+        # V12 regime filter
+        try:
+            from worker import get_v12_regime_multiplier
+            _regime_mult = get_v12_regime_multiplier(sid)
+            if _regime_mult <= 0:
+                print(f"    {name:<25} -- regime BLOCKED (mult=0)")
+                signals[sid] = {"action": "hold", "reason": "regime blocked"}
+                continue
+        except Exception:
+            _regime_mult = 1.0
+
         sig = signal_intraday(sid, alloc_capital, state)
         signals[sid] = sig
         if sig["action"] == "intraday_trade":

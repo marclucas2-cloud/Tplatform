@@ -86,10 +86,18 @@ def _load_kill_switch_state() -> dict:
 
 def _load_crypto_kill_switch_state() -> dict:
     """Charge l'etat du kill switch crypto."""
-    ks_path = DATA_DIR / "crypto" / "kill_switch_state.json"
+    # Primary path (where CryptoKillSwitch writes)
+    ks_path = DATA_DIR / "crypto_kill_switch_state.json"
     if ks_path.exists():
         try:
             return json.loads(ks_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+    # Legacy fallback
+    ks_path2 = DATA_DIR / "crypto" / "kill_switch_state.json"
+    if ks_path2.exists():
+        try:
+            return json.loads(ks_path2.read_text(encoding="utf-8"))
         except Exception:
             pass
     return {}

@@ -1069,6 +1069,17 @@ def run_eu(dry_run: bool = False):
             all_signals[sid] = []
             continue
 
+        # V12 regime filter
+        try:
+            from worker import get_v12_regime_multiplier
+            _regime_mult = get_v12_regime_multiplier(sid)
+            if _regime_mult <= 0:
+                logger.info("    %-30s -- regime BLOCKED (mult=0)", name)
+                all_signals[sid] = []
+                continue
+        except Exception:
+            pass
+
         # Generer le signal via la dispatch map
         signal_fn = SIGNAL_DISPATCH.get(sid)
         if signal_fn is None:

@@ -359,7 +359,7 @@ async def cmd_risk(update: Update, context: ContextTypes.DEFAULT_TYPE):
     except Exception:
         pass
     try:
-        ks_path = ROOT / "data" / "crypto" / "kill_switch_state.json"
+        ks_path = ROOT / "data" / "crypto_kill_switch_state.json"
         if ks_path.exists():
             ks = json.loads(ks_path.read_text())
             if ks.get("active"):

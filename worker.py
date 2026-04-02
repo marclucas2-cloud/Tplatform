@@ -2514,13 +2514,18 @@ def run_crypto_cycle():
                 level="warning",
             )
 
-        # --- V12 Live Tracker: feed daily equity delta as return ---
+        # --- V12 Live Tracker: feed per-strategy P&L as return ---
         if _v12_live_tracker and dd_equity > 0:
             try:
-                _dd_daily = risk_mgr._daily_start_equity if risk_mgr._daily_start_equity > 0 else dd_equity
-                _daily_ret = (dd_equity - _dd_daily) / _dd_daily
+                # Only feed strategies that actually traded this cycle
                 for _sid in CRYPTO_STRATEGIES:
-                    _v12_live_tracker.add_return(_sid, _daily_ret)
+                    _strat_pnl = sum(
+                        float(p.get("unrealized_pl", 0))
+                        for p in positions
+                        if p.get("strategy") == _sid
+                    )
+                    if abs(_strat_pnl) > 0 and dd_equity > 0:
+                        _v12_live_tracker.add_return(_sid, _strat_pnl / dd_equity)
             except Exception as e:
                 logger.debug(f"V12 live tracker feed: {e}")
 
@@ -2674,7 +2679,25 @@ def _init_v12_modules():
     # Double-Fill Detector
     try:
         from core.execution.double_fill_detector import DoubleFillDetector
-        _v12_double_fill = DoubleFillDetector(alert_callback=_send_alert)
+
+        def _double_fill_close(ticker, side, qty, broker_name):
+            """Auto-close excess position from double fill."""
+            try:
+                if broker_name == "BINANCE" and os.getenv("BINANCE_API_KEY"):
+                    from core.broker.binance_broker import BinanceBroker
+                    BinanceBroker().close_position(ticker, _authorized_by="double_fill_close")
+                elif broker_name == "IBKR":
+                    from core.broker.ibkr_adapter import IBKRBroker
+                    with IBKRBroker(client_id=8) as ibkr:
+                        ibkr.close_position(ticker, _authorized_by="double_fill_close")
+                logger.critical(f"DOUBLE FILL AUTO-CLOSE: {ticker} {side} {qty} on {broker_name}")
+            except Exception as e:
+                logger.critical(f"DOUBLE FILL AUTO-CLOSE FAILED: {ticker} — {e}")
+
+        _v12_double_fill = DoubleFillDetector(
+            alert_callback=_send_alert,
+            close_callback=_double_fill_close,
+        )
         logger.info("  V12 DoubleFillDetector initialized")
     except Exception as e:
         logger.warning(f"  V12 DoubleFillDetector failed: {e}")
@@ -2690,7 +2713,14 @@ def _init_v12_modules():
     # Live Performance Tracker
     try:
         from core.validation.live_tracker import LivePerformanceTracker
-        _v12_live_tracker = LivePerformanceTracker(alert_callback=_send_alert)
+        def _tracker_kill(strategy_id, reason):
+            logger.critical(f"LIVE TRACKER KILL: {strategy_id} — {reason}")
+            _send_alert(f"ALPHA DECAY KILL: {strategy_id}\n{reason}", level="critical")
+
+        _v12_live_tracker = LivePerformanceTracker(
+            alert_callback=_send_alert,
+            kill_callback=_tracker_kill,
+        )
         logger.info("  V12 LivePerformanceTracker initialized")
     except Exception as e:
         logger.warning(f"  V12 LivePerformanceTracker failed: {e}")
@@ -2770,8 +2800,8 @@ def _v12_on_fill(broker_name: str, strategy: str, ticker: str, side: str,
         except Exception as e:
             logger.debug(f"V12 shadow logger fill error: {e}")
 
-    # 3. Tax classification
-    if _v12_tax_classifier and pnl != 0:
+    # 3. Tax classification (classify ALL trades, not just realized P&L)
+    if _v12_tax_classifier:
         try:
             _v12_tax_classifier.classify(
                 broker=broker_name,
