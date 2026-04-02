@@ -303,7 +303,7 @@ export default function Overview() {
         </div>
         <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-3">
           <span className="text-xs text-[var(--color-text-secondary)]">
-            Capital: <span className="font-mono text-[var(--color-text-primary)]">${(portfolio.equity || 0).toLocaleString()}</span>
+            Capital Live: <span className="font-mono text-[var(--color-text-primary)]">${(nav?.nav_live || portfolio.live_equity || portfolio.equity || 0).toLocaleString()}</span>
           </span>
         </div>
       </div>

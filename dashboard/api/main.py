@@ -151,20 +151,26 @@ def _tier_for_strategy(sid: str, tier_alloc: dict) -> str:
 
 @app.get("/api/portfolio")
 def get_portfolio():
-    """Etat global du portefeuille — multi-broker."""
+    """Etat global du portefeuille — LIVE et PAPER séparés.
+
+    equity = LIVE only (Binance + IBKR).
+    Alpaca paper est affiché séparément.
+    """
     try:
-        # Alpaca
+        # Alpaca (PAPER — $100K, not real money)
         alpaca_equity, alpaca_cash, alpaca_positions = 0, 0, []
+        alpaca_is_paper = True
         try:
             client = _get_alpaca_client()
             account = client.get_account_info()
             alpaca_positions = client.get_positions()
             alpaca_equity = account["equity"]
             alpaca_cash = account["cash"]
+            alpaca_is_paper = os.environ.get("PAPER_TRADING", "true").lower() == "true"
         except Exception:
             pass
 
-        # Binance
+        # Binance (LIVE)
         binance_equity = 0
         try:
             if os.environ.get("BINANCE_API_KEY"):
@@ -175,16 +181,21 @@ def get_portfolio():
         except Exception:
             pass
 
-        # IBKR (read from worker snapshot — no direct connection to avoid client_id conflicts)
+        # IBKR (LIVE — read from worker snapshot)
         ibkr_equity = _get_ibkr_equity_from_snapshot()
 
-        equity = alpaca_equity + binance_equity + ibkr_equity
-        cash = alpaca_cash
+        # LIVE equity = Binance + IBKR (real money only)
+        live_equity = binance_equity + ibkr_equity
+        # Include Alpaca only if NOT paper
+        if not alpaca_is_paper:
+            live_equity += alpaca_equity
+
         total_pnl = sum(p.get("unrealized_pl", 0) for p in alpaca_positions)
 
+        # Daily P&L based on live equity only
         state = _load_state()
-        daily_start = state.get("daily_capital_start", equity or 100_000)
-        pnl_day = equity - daily_start if daily_start > 0 else 0
+        daily_start = state.get("live_daily_start", live_equity or 20_000)
+        pnl_day = live_equity - daily_start if daily_start > 0 else 0
 
         # Regime
         try:
@@ -194,17 +205,22 @@ def get_portfolio():
             regime = {"regime": "UNKNOWN"}
 
         return {
-            "equity": round(equity, 2),
-            "cash": round(cash, 2),
+            "equity": round(live_equity, 2),
+            "cash": round(alpaca_cash if not alpaca_is_paper else 0, 2),
             "pnl_day": round(pnl_day, 2),
             "pnl_day_pct": round(pnl_day / daily_start * 100, 2) if daily_start > 0 else 0,
             "pnl_unrealized": round(total_pnl, 2),
             "positions_count": len(alpaca_positions),
+            # Per-broker breakdown
             "alpaca_equity": round(alpaca_equity, 2),
+            "alpaca_is_paper": alpaca_is_paper,
             "ibkr_equity": round(ibkr_equity, 2),
             "binance_equity": round(binance_equity, 2),
+            # Paper vs Live totals
+            "live_equity": round(live_equity, 2),
+            "paper_equity": round(alpaca_equity if alpaca_is_paper else 0, 2),
             "initial_capital": daily_start,
-            "total_return_pct": round((equity - daily_start) / daily_start * 100, 2) if daily_start > 0 else 0,
+            "total_return_pct": round((live_equity - daily_start) / daily_start * 100, 2) if daily_start > 0 else 0,
             "regime": regime.get("regime", "UNKNOWN"),
             "regime_detail": regime,
             "market_open": _is_market_open(),
