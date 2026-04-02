@@ -502,7 +502,7 @@ async def cmd_health(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/kill CONFIRM — Ferme toutes les positions."""
+    """/kill CONFIRM — Kill switch: ferme TOUTES positions + persiste l'etat."""
     if not _auth(update):
         return
 
@@ -510,29 +510,55 @@ async def cmd_kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if args.upper() != "CONFIRM":
         await update.message.reply_text(
             "⚠️ *KILL SWITCH*\n\n"
-            "Ceci fermera TOUTES les positions live.\n"
+            "Ceci va:\n"
+            "1. Fermer TOUTES les positions (3 brokers)\n"
+            "2. Annuler TOUS les ordres\n"
+            "3. Activer le kill switch (bloque les trades)\n\n"
             "Envoyez `/kill CONFIRM` pour executer.",
             parse_mode="Markdown"
         )
         return
 
-    # Execute kill switch
     results = []
-    try:
-        from core.broker.binance_broker import BinanceBroker
-        bnb = BinanceBroker()
-        bnb.cancel_all_orders()
-        results.append("Binance: ordres annules")
-    except Exception as e:
-        results.append(f"Binance: erreur {e}")
 
+    # 1. Activate kill switches (persist state BEFORE closing)
     try:
-        from core.broker.ibkr_adapter import IBKRBroker
-        with IBKRBroker(client_id=50) as ibkr:
-            ibkr.cancel_all_orders()
-            results.append("IBKR: ordres annules")
+        from core.kill_switch_live import LiveKillSwitch
+        ks = LiveKillSwitch()
+        ks.activate(reason="operator_telegram_kill", trigger_type="MANUAL")
+        results.append("Kill switch IBKR: ACTIVE")
     except Exception as e:
-        results.append(f"IBKR: erreur {e}")
+        results.append(f"Kill switch IBKR: {e}")
+    try:
+        from core.crypto.risk_manager_crypto import CryptoKillSwitch
+        cks = CryptoKillSwitch()
+        cks._activate("operator_telegram_kill")
+        results.append("Kill switch crypto: ACTIVE")
+    except Exception as e:
+        results.append(f"Kill switch crypto: {e}")
+
+    # 2. Close all positions + cancel orders via EmergencyCloseAll
+    try:
+        from core.risk.emergency_close_all import EmergencyCloseAll
+        brokers = {}
+        try:
+            from core.broker.binance_broker import BinanceBroker
+            brokers["BINANCE"] = BinanceBroker()
+        except Exception:
+            pass
+        try:
+            from core.broker.ibkr_adapter import IBKRBroker
+            brokers["IBKR"] = IBKRBroker(client_id=50)
+        except Exception:
+            pass
+        closer = EmergencyCloseAll(brokers=brokers)
+        report = closer.execute(force=True)
+        results.append(
+            f"Close: {report.get('total_positions_closed', 0)} pos, "
+            f"{report.get('total_orders_cancelled', 0)} ordres"
+        )
+    except Exception as e:
+        results.append(f"Close: {e}")
 
     text = "🔴 *KILL SWITCH ACTIVE*\n\n" + "\n".join(f"  {r}" for r in results)
     await update.message.reply_text(text, parse_mode="Markdown")
@@ -667,7 +693,7 @@ async def cmd_emergency(update: Update, context: ContextTypes.DEFAULT_TYPE):
         from core.risk.emergency_close_all import EmergencyCloseAll, _generate_confirmation_code
         expected = _generate_confirmation_code()
         if code != expected:
-            await update.message.reply_text(f"Invalid code. Expected: {expected}")
+            await update.message.reply_text("Invalid confirmation code.")
             return
 
         # Build broker dict from available connections
@@ -684,7 +710,23 @@ async def cmd_emergency(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             pass
 
-        closer = EmergencyCloseAll(brokers=brokers)
+        # Kill switch callback — activate BOTH kill switches to prevent re-entry
+        def _emergency_kill(level):
+            try:
+                from core.kill_switch_live import LiveKillSwitch
+                LiveKillSwitch().activate(reason=f"emergency_{level}", trigger_type="EMERGENCY")
+            except Exception:
+                pass
+            try:
+                from core.crypto.risk_manager_crypto import CryptoKillSwitch
+                CryptoKillSwitch()._activate(f"emergency_{level}")
+            except Exception:
+                pass
+
+        closer = EmergencyCloseAll(
+            brokers=brokers,
+            kill_switch_callback=_emergency_kill,
+        )
         result = closer.execute(confirmation_code=code)
 
         text = (

@@ -225,17 +225,21 @@ def _verify_state_coherence(pre_snapshot: dict):
         except Exception as e:
             issues.append(f"Cannot read post-restart state: {e}")
 
-    # Check kill switch state
-    ks_path = ROOT / "data" / "kill_switch_state.json"
-    if ks_path.exists():
-        try:
-            ks = json.loads(ks_path.read_text(encoding="utf-8"))
-            if ks.get("_active"):
-                issues.append(f"Kill switch is ACTIVE: {ks.get('_activation_reason')}")
-            else:
-                logger.info("  ✓ Kill switch: armed and ready")
-        except Exception as e:
-            issues.append(f"Cannot read kill switch state: {e}")
+    # Check kill switch states (IBKR + crypto)
+    for ks_name, ks_file in [
+        ("IBKR", "kill_switch_state.json"),
+        ("Crypto", "crypto_kill_switch_state.json"),
+    ]:
+        ks_path = ROOT / "data" / ks_file
+        if ks_path.exists():
+            try:
+                ks = json.loads(ks_path.read_text(encoding="utf-8"))
+                if ks.get("active"):  # FIX: was "_active" (wrong key)
+                    issues.append(f"Kill switch {ks_name} ACTIVE: {ks.get('reason', ks.get('_activation_reason'))}")
+                else:
+                    logger.info(f"  ✓ Kill switch {ks_name}: OK")
+            except Exception as e:
+                issues.append(f"Cannot read {ks_name} kill switch state: {e}")
 
     if issues:
         logger.error("  COHERENCE ISSUES:")
