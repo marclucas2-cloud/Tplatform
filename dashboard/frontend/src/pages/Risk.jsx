@@ -4,7 +4,7 @@ import CorrelationHeatmap from '../components/charts/CorrelationHeatmap'
 import { ShieldAlert, ShieldCheck, ShieldOff, Activity, Zap } from 'lucide-react'
 import Tooltip from '../components/common/Tooltip'
 import { TOOLTIPS } from '../utils/tooltips'
-import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from 'recharts'
+import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip as ChartTooltip, CartesianGrid } from 'recharts'
 
 function ProgressBar({ label, current, max, unit = '', warn = 0.7, danger = 0.9, invertColor = false }) {
   const ratio = max > 0 ? Math.min(current / max, 1) : 0
@@ -182,7 +182,7 @@ export default function Risk() {
                   tickFormatter={(d) => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' })} />
                 <YAxis tick={{ fill: '#6b7280', fontSize: 10 }} stroke="#2a2b3d"
                   tickFormatter={(v) => `${v.toFixed(1)}%`} />
-                <Tooltip
+                <ChartTooltip
                   contentStyle={{ background: '#1a1a2e', border: '1px solid #333', borderRadius: 8, fontSize: 12 }}
                   formatter={(v) => [`${v.toFixed(2)}%`, 'Drawdown']}
                   labelFormatter={(d) => new Date(d).toLocaleDateString('fr-FR')} />
