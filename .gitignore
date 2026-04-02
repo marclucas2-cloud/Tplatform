@@ -33,6 +33,17 @@ intraday-backtesterV2/data_cache/
 paper_portfolio_state.json
 paper_trading_state.json
 
+# === Runtime data (historique ops, logs structurés) ===
+data/cash_flows.jsonl
+data/*_log.jsonl
+data/monitoring/
+data/execution/
+data/risk/
+data/tax/
+data/validation/
+data/regime_transitions.jsonl
+output/
+
 # === Base de donnees locale ===
 *.db
 *.sqlite

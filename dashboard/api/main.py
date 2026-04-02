@@ -385,8 +385,8 @@ def get_strategies():
 
 
 def _load_strategy_registry() -> dict:
-    """Charge le registre des strategies depuis le fichier Python (exec safe)."""
-    # Essayer plusieurs chemins possibles
+    """Charge le registre des strategies via importlib (pas exec)."""
+    import importlib.util
     candidates = [
         API_DIR / "strategy_registry.py",
         ROOT / "dashboard" / "api" / "strategy_registry.py",
@@ -396,9 +396,10 @@ def _load_strategy_registry() -> dict:
         try:
             registry_path = registry_path.resolve()
             if registry_path.exists():
-                ns = {}
-                exec(registry_path.read_text(encoding="utf-8"), ns)
-                reg = ns.get("STRATEGY_REGISTRY", {})
+                spec = importlib.util.spec_from_file_location("strategy_registry", registry_path)
+                mod = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(mod)
+                reg = getattr(mod, "STRATEGY_REGISTRY", {})
                 if reg:
                     logger.info(f"Strategy registry loaded: {len(reg)} strategies from {registry_path}")
                     return reg
@@ -493,7 +494,7 @@ def get_crypto_strategies():
         wallets = crypto_config.get("wallets", {})
 
         # Equity Binance LIVE (remplace le YAML statique)
-        total_capital = crypto_config.get("total_capital", 20_000)
+        total_capital = crypto_config.get("total_capital", 10_000)
         binance_info = {}
         try:
             if os.environ.get("BINANCE_API_KEY"):
@@ -723,6 +724,16 @@ connected_clients: list[WebSocket] = []
 
 @app.websocket("/ws/live")
 async def websocket_live(websocket: WebSocket):
+    # Auth: require valid JWT token as query param ?token=...
+    token = websocket.query_params.get("token", "")
+    if token:
+        from auth import _verify_token
+        if _verify_token(token) is None:
+            await websocket.close(code=4001, reason="Invalid token")
+            return
+    else:
+        await websocket.close(code=4001, reason="Missing token")
+        return
     await websocket.accept()
     connected_clients.append(websocket)
     try:

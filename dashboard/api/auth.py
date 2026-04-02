@@ -23,7 +23,10 @@ logger = logging.getLogger("dashboard-auth")
 
 # ── JWT config ───────────────────────────────────────────────────────────────
 
-JWT_SECRET = os.environ.get("DASHBOARD_JWT_SECRET", "change-me-in-production-!!!")
+JWT_SECRET = os.environ.get("DASHBOARD_JWT_SECRET", "")
+if not JWT_SECRET:
+    logger.critical("DASHBOARD_JWT_SECRET not set — auth will reject all tokens")
+    JWT_SECRET = os.urandom(32).hex()  # Random per-restart, invalidates all sessions
 JWT_ALGORITHM = "HS256"
 JWT_EXPIRY_HOURS = 72  # 3 days
 

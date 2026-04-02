@@ -12,7 +12,7 @@ import time
 from pathlib import Path
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 logger = logging.getLogger("dashboard-chat")
@@ -136,17 +136,23 @@ INFOS SYSTEME:
 
 
 @router.post("", response_model=ChatResponse)
-def chat(req: ChatRequest):
+def chat(req: ChatRequest, request: Request = None):
     """Chat with Haiku about the trading platform."""
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         return ChatResponse(response="ANTHROPIC_API_KEY non configure sur le serveur.")
 
-    # Rate limit
+    # Rate limit per client IP (was global — one user could block others)
     now = time.time()
-    if now - _last_request.get("last", 0) < RATE_LIMIT_SECONDS:
+    client_ip = "default"
+    try:
+        if request:
+            client_ip = request.client.host or "default"
+    except Exception:
+        pass
+    if now - _last_request.get(client_ip, 0) < RATE_LIMIT_SECONDS:
         return ChatResponse(response="Trop de requetes. Attends quelques secondes.")
-    _last_request["last"] = now
+    _last_request[client_ip] = now
 
     # Build context
     context = _get_live_context()

@@ -153,10 +153,12 @@ def _load_cash_flows():
 def _strategy_phases():
     """Load strategy phases from registry."""
     try:
+        import importlib.util
         reg_path = ROOT / "dashboard" / "api" / "strategy_registry.py"
-        ns = {}
-        exec(reg_path.read_text(encoding="utf-8"), ns)
-        return ns.get("STRATEGY_PHASES", {})
+        spec = importlib.util.spec_from_file_location("strategy_registry", reg_path)
+        mod = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(mod)
+        return getattr(mod, "STRATEGY_PHASES", {})
     except Exception:
         return {}
 
@@ -554,10 +556,146 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "💸 /costs — Couts trading\n"
         "🏥 /health — Infra status\n"
         "🔴 /kill CONFIRM — KILL SWITCH\n"
+        "📊 /regime — Regime marche V12\n"
+        "💼 /portfolio — NAV cross-broker V12\n"
+        "🚨 /emergency — CLOSE ALL brokers V12\n"
         "❓ /help — Cette aide\n\n"
         "🌐 Dashboard: trading.aucoeurdeville-laval.fr"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
+
+
+# ── V12 Commands ─────────────────────────────────────────────────────────────
+
+async def cmd_regime(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """V12: Show current market regime per asset class."""
+    if not _auth(update):
+        return
+    try:
+        # Read regime transitions log
+        regime_file = ROOT / "data" / "regime_transitions.jsonl"
+        regime_snapshot = ROOT / "data" / "risk" / "unified_portfolio.json"
+
+        lines = ["<b>Market Regime (V12)</b>\n"]
+
+        # Read last regime state from worker event log
+        events_file = ROOT / "logs" / "worker" / "worker.log"
+        if events_file.exists():
+            import subprocess
+            result = subprocess.run(
+                ["grep", "-o", "V12 Regime:.*", str(events_file)],
+                capture_output=True, text=True, timeout=5,
+            )
+            last_lines = result.stdout.strip().split("\n")[-3:]
+            for l in last_lines:
+                if l.strip():
+                    lines.append(f"  {l.strip()}")
+
+        if regime_file.exists():
+            recent = regime_file.read_text().strip().split("\n")[-5:]
+            if recent and recent[0]:
+                lines.append("\n<b>Recent transitions:</b>")
+                for r in recent:
+                    try:
+                        d = json.loads(r)
+                        lines.append(f"  {d.get('asset_class')}: {d.get('old_regime')} -> {d.get('new_regime')}")
+                    except Exception:
+                        pass
+        else:
+            lines.append("  No regime transitions yet")
+
+        await update.message.reply_text("\n".join(lines), parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def cmd_portfolio(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """V12: Show unified cross-broker portfolio."""
+    if not _auth(update):
+        return
+    try:
+        snap_file = ROOT / "data" / "risk" / "unified_portfolio.json"
+        if not snap_file.exists():
+            await update.message.reply_text("No unified portfolio data yet (next cross-portfolio cycle will generate it)")
+            return
+
+        snap = json.loads(snap_file.read_text())
+        text = (
+            "<b>Unified Portfolio (V12)</b>\n\n"
+            f"NAV: ${snap.get('nav_total', 0):,.0f}\n"
+            f"  Binance: ${snap.get('binance_equity', 0):,.0f}\n"
+            f"  IBKR: ${snap.get('ibkr_equity', 0):,.0f}\n"
+            f"  Alpaca: ${snap.get('alpaca_equity', 0):,.0f}\n\n"
+            f"DD peak: {snap.get('dd_from_peak_pct', 0):.1f}%\n"
+            f"DD daily: {snap.get('dd_daily_pct', 0):.1f}%\n"
+            f"DD weekly: {snap.get('dd_weekly_pct', 0):.1f}%\n\n"
+            f"Gross exp: {snap.get('gross_exposure_pct', 0):.0f}%\n"
+            f"Net exp: {snap.get('net_exposure_pct', 0):.0f}%\n"
+            f"Cash: {snap.get('cash_pct', 0):.0f}%\n\n"
+            f"Alert: <b>{snap.get('alert_level', '?')}</b>"
+        )
+        await update.message.reply_text(text, parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text(f"Error: {e}")
+
+
+async def cmd_emergency(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """V12: Emergency close all brokers."""
+    if not _auth(update):
+        return
+
+    args = " ".join(context.args) if context.args else ""
+
+    if not args.strip():
+        try:
+            from core.risk.emergency_close_all import _generate_confirmation_code
+            code = _generate_confirmation_code()
+            await update.message.reply_text(
+                f"<b>EMERGENCY CLOSE ALL</b>\n\n"
+                f"This will close ALL positions on ALL brokers.\n"
+                f"Current code: <b>{code}</b>\n\n"
+                f"Send /emergency {code} to execute.",
+                parse_mode="HTML",
+            )
+        except Exception as e:
+            await update.message.reply_text(f"Error: {e}")
+        return
+
+    # Execute
+    code = args.strip().upper()
+    try:
+        from core.risk.emergency_close_all import EmergencyCloseAll, _generate_confirmation_code
+        expected = _generate_confirmation_code()
+        if code != expected:
+            await update.message.reply_text(f"Invalid code. Expected: {expected}")
+            return
+
+        # Build broker dict from available connections
+        brokers = {}
+        try:
+            if os.environ.get("BINANCE_API_KEY"):
+                from core.broker.binance_broker import BinanceBroker
+                brokers["BINANCE"] = BinanceBroker()
+        except Exception:
+            pass
+        try:
+            from core.broker.ibkr_adapter import IBKRBroker
+            brokers["IBKR"] = IBKRBroker(client_id=50)
+        except Exception:
+            pass
+
+        closer = EmergencyCloseAll(brokers=brokers)
+        result = closer.execute(confirmation_code=code)
+
+        text = (
+            f"<b>EMERGENCY CLOSE {'DONE' if result['status'] == 'EXECUTED' else result['status']}</b>\n"
+            f"Positions closed: {result.get('total_positions_closed', 0)}\n"
+            f"Orders cancelled: {result.get('total_orders_cancelled', 0)}\n"
+            f"Time: {result.get('elapsed_seconds', 0):.1f}s"
+        )
+        await update.message.reply_text(text, parse_mode="HTML")
+    except Exception as e:
+        await update.message.reply_text(f"EMERGENCY ERROR: {e}")
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
@@ -577,10 +715,13 @@ def main():
     app.add_handler(CommandHandler("costs", cmd_costs))
     app.add_handler(CommandHandler("health", cmd_health))
     app.add_handler(CommandHandler("kill", cmd_kill))
+    app.add_handler(CommandHandler("regime", cmd_regime))
+    app.add_handler(CommandHandler("portfolio", cmd_portfolio))
+    app.add_handler(CommandHandler("emergency", cmd_emergency))
     app.add_handler(CommandHandler("help", cmd_help))
     app.add_handler(CommandHandler("start", cmd_help))
 
-    logger.info("Bot polling started — 12 commands active")
+    logger.info("Bot polling started — 15 commands active")
     app.run_polling(drop_pending_updates=True)
 
 
