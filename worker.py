@@ -408,15 +408,16 @@ def check_positions_after_close():
 
         state = load_state()
         intraday_pos = state.get("intraday_positions", {})
-        if not intraday_pos:
-            return  # Rien a verifier
 
         client = AlpacaClient.from_env()
         alpaca_positions = client.get_positions()
-        alpaca_symbols = {p["symbol"] for p in alpaca_positions}
 
-        # Verifier si des positions intraday sont encore ouvertes
-        still_open = set(intraday_pos.keys()) & alpaca_symbols
+        # FIX: check ALL Alpaca positions, not just those in state
+        # (orphan positions not tracked in state must also be closed)
+        if not alpaca_positions:
+            return  # No positions, nothing to close
+
+        still_open = {p["symbol"] for p in alpaca_positions}
         if still_open:
             logger.critical(
                 f"POSITIONS INTRADAY NON FERMEES APRES 16:00 ET: {sorted(still_open)}. "
@@ -435,22 +436,26 @@ def check_positions_after_close():
                             f"val=${p['market_val']:,.2f} P&L=${p['unrealized_pl']:+.2f}"
                         )
 
-            # Auto-close orphan intraday positions
-            try:
-                result = client.close_all_positions(_authorized_by="auto_close_15_55")
-                for r in result if isinstance(result, list) else [result]:
-                    logger.critical(
-                        f"  AUTO-CLOSE: {r.get('symbol', '?')} — "
-                        f"status={r.get('status', '?')}"
-                    )
+            # Auto-close orphan intraday positions — close one by one (more robust)
+            _closed = []
+            for sym in still_open:
+                try:
+                    client.close_position(sym, _authorized_by="auto_close_15_55")
+                    _closed.append(sym)
+                    logger.critical(f"  AUTO-CLOSE OK: {sym}")
+                except Exception as close_err:
+                    logger.critical(f"  AUTO-CLOSE FAIL {sym}: {close_err}")
+
+            # Clear from state
+            for sym in _closed:
+                intraday_pos.pop(sym, None)
+            from scripts.paper_portfolio import save_state
+            save_state(state)
+
+            if _closed:
                 _send_alert(
-                    f"AUTO-CLOSE 15:55 ET: {len(still_open)} position(s) intraday "
-                    f"fermees automatiquement: {sorted(still_open)}",
+                    f"AUTO-CLOSE 16:00 ET: {', '.join(_closed)} ferme(s)",
                     level="critical",
-                )
-            except Exception as close_err:
-                logger.critical(
-                    f"ECHEC AUTO-CLOSE positions intraday: {close_err}"
                 )
                 _send_alert(
                     f"ECHEC AUTO-CLOSE 15:55 ET: {close_err}",
