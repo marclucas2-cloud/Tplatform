@@ -150,8 +150,9 @@ def _check_ibkr_live(result: PreflightResult):
         return
 
     try:
+        import random
         from core.broker.ibkr_adapter import IBKRBroker
-        ibkr = IBKRBroker(client_id=99)  # clientId dedie preflight
+        ibkr = IBKRBroker(client_id=random.randint(90, 99))  # Random clientId to avoid conflicts
         try:
             info = ibkr.get_account_info()
             equity = float(info.get("equity", 0))
