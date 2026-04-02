@@ -2806,9 +2806,23 @@ def _init_v12_modules():
             _ec_brokers["IBKR"] = IBKRBroker(client_id=9)
         except Exception:
             pass
+        def _ec_kill_switch(level):
+            """Arm both kill switches on emergency close."""
+            try:
+                from core.kill_switch_live import LiveKillSwitch
+                LiveKillSwitch().activate(reason=f"emergency_{level}", trigger_type="EMERGENCY")
+            except Exception:
+                pass
+            try:
+                from core.crypto.risk_manager_crypto import CryptoKillSwitch
+                CryptoKillSwitch()._activate(f"emergency_{level}")
+            except Exception:
+                pass
+
         _v12_emergency_close = EmergencyCloseAll(
             brokers=_ec_brokers,
             alert_callback=_send_alert,
+            kill_switch_callback=_ec_kill_switch,
         )
         logger.info(f"  V12 EmergencyCloseAll initialized ({list(_ec_brokers.keys())})")
     except Exception as e:
