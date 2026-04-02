@@ -1948,73 +1948,88 @@ def run_crypto_cycle():
 
                 current_equity = spot_equity + earn_total
 
-                # Les stablecoins en Earn Flexible sont recuperables en < 1 min
-                # Ils comptent comme cash disponible pour le risk check
+                # DD equity = stablecoins only + active position P&L
+                # Exclut la valorisation BTC/ETH en earn (fluctuation passive,
+                # pas une perte de trading). Seules les stablecoins earn comptent
+                # car leur valeur est stable ($1 = $1).
                 stable_earn = sum(
                     float(ep.get("amount", 0))
                     for ep in earn_positions
                     if ep.get("asset") in ("USDT", "USDC", "BUSD")
                 ) if earn_positions else 0
+                positions_pnl = sum(
+                    float(p.get("unrealized_pl", 0))
+                    for p in positions
+                )
+                # trading_equity = ce qu'on contrôle par nos trades
+                # = spot (stablecoins + assets achetés) + stablecoins earn
+                # Exclut: BTC/ETH earn (passive, pas un trade)
+                trading_equity = spot_equity + stable_earn
+
+                # Les stablecoins en Earn Flexible sont recuperables en < 1 min
+                # Ils comptent comme cash disponible pour le risk check
                 cash_available = float(acct.get("cash", 0)) + spot_equity + stable_earn
 
                 logger.info(
                     f"  Equity: spot=${spot_equity:,.0f} + earn=${earn_total:,.0f} "
                     f"= total=${current_equity:,.0f} "
-                    f"(cash_available=${cash_available:,.0f})"
+                    f"(trading=${trading_equity:,.0f}, cash=${cash_available:,.0f})"
                 )
             except Exception as e:
                 logger.warning(f"Binance account info indisponible: {e}")
 
-        # --- FIX: recaler capital et baselines sur l'equity REELLE ---
-        # Le capital du risk manager doit refleter l'equity reelle
-        # (pas 20K config quand BTC a monte et earn=23K)
-        if current_equity > 0:
-            risk_mgr.capital = current_equity
+        # --- FIX: recaler capital sur trading_equity (pas earn BTC/ETH) ---
+        # Le capital du risk manager utilise trading_equity pour le DD
+        # mais current_equity (avec earn) pour le sizing positions.
+        _dd_base = trading_equity if trading_equity > 0 else current_equity
+        if _dd_base > 0:
+            risk_mgr.capital = _dd_base
         # Le CryptoRiskManager est recree a chaque cycle avec capital=20K,
         # donc _daily_start_equity = 20K. Mais l'equity reelle peut etre
         # differente (earn fluctue, BTC prix change). On persiste l'etat
         # drawdown entre les cycles via un fichier JSON.
+        # DD baselines use trading_equity (excl BTC/ETH earn price fluctuation)
         _crypto_dd_path = ROOT / "data" / "crypto_dd_state.json"
         try:
             if _crypto_dd_path.exists():
                 _dd = json.loads(_crypto_dd_path.read_text(encoding="utf-8"))
-                risk_mgr._peak_equity = _dd.get("peak_equity", current_equity)
-                risk_mgr._daily_start_equity = _dd.get("daily_start", current_equity)
-                risk_mgr._hourly_start_equity = _dd.get("hourly_start", current_equity)
-                risk_mgr._weekly_start_equity = _dd.get("weekly_start", current_equity)
-                risk_mgr._monthly_start_equity = _dd.get("monthly_start", current_equity)
+                risk_mgr._peak_equity = _dd.get("peak_equity", _dd_base)
+                risk_mgr._daily_start_equity = _dd.get("daily_start", _dd_base)
+                risk_mgr._hourly_start_equity = _dd.get("hourly_start", _dd_base)
+                risk_mgr._weekly_start_equity = _dd.get("weekly_start", _dd_base)
+                risk_mgr._monthly_start_equity = _dd.get("monthly_start", _dd_base)
                 risk_mgr._last_hourly_reset = _dd.get("last_hourly_reset", time.time())
 
                 # Auto-reset daily/weekly/monthly si le jour/semaine/mois a change
                 last_date = _dd.get("last_date", "")
                 today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
                 if last_date != today_str:
-                    risk_mgr._daily_start_equity = current_equity
-                    logger.info(f"  Crypto DD: daily reset {last_date} -> {today_str}, start=${current_equity:,.0f}")
+                    risk_mgr._daily_start_equity = _dd_base
+                    logger.info(f"  Crypto DD: daily reset {last_date} -> {today_str}, start=${_dd_base:,.0f}")
 
                 last_week = _dd.get("last_week", "")
                 this_week = datetime.now(timezone.utc).strftime("%Y-W%W")
                 if last_week != this_week:
-                    risk_mgr._weekly_start_equity = current_equity
+                    risk_mgr._weekly_start_equity = _dd_base
 
                 last_month = _dd.get("last_month", "")
                 this_month = datetime.now(timezone.utc).strftime("%Y-%m")
                 if last_month != this_month:
-                    risk_mgr._monthly_start_equity = current_equity
+                    risk_mgr._monthly_start_equity = _dd_base
             else:
-                # Premier cycle : initialiser avec l'equity reelle
-                risk_mgr._peak_equity = current_equity
-                risk_mgr._daily_start_equity = current_equity
-                risk_mgr._hourly_start_equity = current_equity
-                risk_mgr._weekly_start_equity = current_equity
-                risk_mgr._monthly_start_equity = current_equity
+                # Premier cycle : initialiser avec trading equity
+                risk_mgr._peak_equity = _dd_base
+                risk_mgr._daily_start_equity = _dd_base
+                risk_mgr._hourly_start_equity = _dd_base
+                risk_mgr._weekly_start_equity = _dd_base
+                risk_mgr._monthly_start_equity = _dd_base
         except Exception as _dde:
             logger.warning(f"Could not load crypto drawdown state: {_dde}")
-            risk_mgr._peak_equity = current_equity
-            risk_mgr._daily_start_equity = current_equity
-            risk_mgr._hourly_start_equity = current_equity
-            risk_mgr._weekly_start_equity = current_equity
-            risk_mgr._monthly_start_equity = current_equity
+            risk_mgr._peak_equity = _dd_base
+            risk_mgr._daily_start_equity = _dd_base
+            risk_mgr._hourly_start_equity = _dd_base
+            risk_mgr._weekly_start_equity = _dd_base
+            risk_mgr._monthly_start_equity = _dd_base
 
         # --- Auto-redeem Earn Flexible si cash spot insuffisant pour trader ---
         # Les strats ont besoin de cash spot/margin pour executer.
@@ -2051,9 +2066,12 @@ def run_crypto_cycle():
                         logger.warning(f"  AUTO-REDEEM failed: {e}")
 
         # --- Risk check global avant signaux ---
+        # FIX: use trading_equity (excl. BTC/ETH earn) for DD calculation
+        # so passive crypto price drops don't trigger kill switch.
+        # current_equity (with earn) is still used for position sizing.
         risk_result = risk_mgr.check_all(
             positions=positions,
-            current_equity=current_equity,
+            current_equity=trading_equity,
             cash_available=cash_available,
             earn_total=earn_total,
         )
@@ -2504,12 +2522,11 @@ def run_crypto_cycle():
             )
 
         # --- V12 Live Tracker: feed daily equity delta as return ---
-        if _v12_live_tracker and current_equity > 0:
+        if _v12_live_tracker and _dd_base > 0:
             try:
-                # Compute rough daily return from equity vs start capital
-                # Daily return = equity change since daily start (not since hardcoded date)
-                _dd_daily = risk_mgr._daily_start_equity if risk_mgr._daily_start_equity > 0 else total_capital
-                _daily_ret = (current_equity - _dd_daily) / _dd_daily
+                # Compute daily return from trading equity (excl passive earn)
+                _dd_daily = risk_mgr._daily_start_equity if risk_mgr._daily_start_equity > 0 else _dd_base
+                _daily_ret = (_dd_base - _dd_daily) / _dd_daily
                 for _sid in CRYPTO_STRATEGIES:
                     _v12_live_tracker.add_return(_sid, _daily_ret)
             except Exception as e:
