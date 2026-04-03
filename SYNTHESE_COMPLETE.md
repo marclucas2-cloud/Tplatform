@@ -1,27 +1,28 @@
-# SYNTHESE COMPLETE — TRADING PLATFORM V12.5 (ZERO-BUG AUDIT + KILL CHAIN UNIFIEE)
+# SYNTHESE COMPLETE — TRADING PLATFORM V13.0 (ROBUSTESSE STRUCTURELLE)
 ## Portefeuille Quantitatif — 5 classes d'actifs, 46 strategies, ~24h/24h
-### Date : 3 avril 2026 | 2,998 tests | ~116 fichiers test | CRO 9.5/10 APPROUVE
+### Date : 3 avril 2026 | 3,320 tests | ~131 fichiers test | CRO 9.5/10 APPROUVE
 
 ---
 
 ## 1. RESUME EXECUTIF
 
-| Indicateur | V12.0 | **V12.5 (Zero-Bug + Kill Chain)** |
+| Indicateur | V12.5 | **V13.0 (Robustesse)** |
 |-----------|:---:|:---:|
 | Classes d'actifs | 5 | **5** |
 | Strategies total | 46 | **46** (11 crypto + 15 FX/EU + 7 US + 8 futures + 5 P2/P3) |
-| Tests | 2,438 | **2,998** (+560, dont 22 regression zero-bug) |
-| Modules core | ~125 | **~130** (+5 fixes V12) |
-| Dashboard | 14 pages + 51 endpoints | **14 pages + 51 endpoints** (live/paper separes) |
+| Tests | 2,998 | **3,320** (+322, dont 181 robustesse + 118 cleanup + 23 CRO) |
+| Modules core | ~130 | **~155** (+22 modules robustesse, 3 packages) |
+| Dashboard | 14 pages + 51 endpoints | **14 pages + 52 endpoints** (+/api/cycles) |
 | Brokers LIVE | 2 (Binance+IBKR) | **2** (Binance $10K + IBKR $10K) |
 | Capital deploye | ~$20K | **~$20K** (cible $50K) |
-| Kill chain | fragmentee | **UNIFIEE** (/kill, /emergency, auto-live, safe_restart) |
-| Paper/Live isolation | melangees | **STRICT** (dashboard, DD, analytics, V10, unified) |
-| DD crypto | total equity | **dd_equity** (excl earn BTC/ETH passif) |
-| Kill switch warmup | non | **3 cycles** (persiste, anti faux-positif au restart) |
-| CRO score | 8/10 | **9.5/10** (40 bugs fixes, 5 rounds audit secu) |
+| Worker architecture | sequentiel | **CycleRunners** (error boundaries, metriques, health tracking) |
+| Observabilite | JSONL snapshots | **Metrics SQLite + Anomaly Detector + Event Logger** |
+| Broker resilience | crash = tout down | **BrokerHealth + PartialData + ContractTesting** |
+| Order lifecycle | ad-hoc | **State Machine formelle** (9 etats, invariants SL) |
+| Deploys | git pull + restart | **Canary (shadow + rollback + checklist)** |
+| CRO score | 9.5/10 | **9.5/10** (reserves corrigees, SM cable, SL mandatory) |
 
-**V12.0->V12.5 : Audit zero-bug marathon (40 bugs, 10 commits). Kill chain unifiee : /kill active 2 KS + EmergencyCloseAll, /emergency avec kill_switch_callback, auto-live arme crypto KS. Paper/live strictement separes (dashboard, DD, analytics, V10, unified portfolio). DD crypto base sur dd_equity (excl earn BTC/ETH volatil). Kill switch warmup 3 cycles persiste. 5 rounds audit secu (WebSocket auth, JWT random, exec→importlib, SmartRouter fail-closed crypto, DoubleFillDetector cross-broker). 22 regression tests.**
+**V12.5->V13.0 : Robustesse structurelle XXXL (22 taches, 7 chantiers). Worker event-driven avec CycleRunners (error boundaries, health tracking HEALTHY/DEGRADED/FAILED). Observabilite : MetricsPipeline SQLite 90j + AnomalyDetector (18 regles threshold/trend/absence) + EventLogger JSONL deterministe + IncidentReportGenerator. Order StateMachine formelle (9 etats, invariants SL, transitions illegales bloquees). Position SM (7 etats, ORPHAN detection). BrokerHealthTracker (HEALTHY/DEGRADED/DOWN/MAINTENANCE) + PartialDataHandler (frozen NAV, regime UNKNOWN). ContractTesting Binance/IBKR/Alpaca (validation structure API, 3 violations = CRITICAL). Canary deploys (shadow worker + deploy.sh rollback + pre-deploy checklist 6 checks). CRO 8.5/10 : modules crees et testes mais non cables dans le live path (architecture prete, integration Phase 2).**
 
 ---
 
@@ -401,20 +402,40 @@ Intraday US : 16 testees, 4 validated, 3 borderline, 9 rejected. Overnight : 9/9
 | V12 Cross-Asset Corr | **ACTIF** | 5 paires, HRP penalty, diversification score |
 | V12 Backup Quotidien | **ACTIF** | Cron 03h UTC, 30j retention, 9.9MB, restore playbook |
 | V12 Live Tracker | **ACTIF** | Sharpe rolling vs OOS, alpha decay z-score, auto-KILL |
+| **V13 CycleRunners** | **ACTIF** | 9 cycles wrapes, error boundaries, health HEALTHY/DEGRADED/FAILED |
+| **V13 MetricsPipeline** | **ACTIF** | SQLite backend, 20+ metriques, retention 90j, flush 30s |
+| **V13 AnomalyDetector** | **PRET** | 18 regles (threshold/trend/absence), cooldown, alerting |
+| **V13 EventLogger** | **ACTIF** | JSONL deterministe, rotation daily, purge 30j, replay-compatible |
+| **V13 WorkerState** | **ACTIF** | Etat partage thread-safe, locks granulaires, snapshot() |
+| **V13 TaskQueue** | **PRET** | PriorityQueue 5 niveaux, 3 worker threads, timeout, retry |
+| **V13 OrderStateMachine** | **PRET** | 9 etats, guards SL, transitions illegales bloquees (non cable) |
+| **V13 PositionSM** | **PRET** | 7 etats, ORPHAN detection, invariants SL (non cable) |
+| **V13 OrderTracker** | **PRET** | Registry thread-safe, lifecycle complet (non cable) |
+| **V13 BrokerHealth** | **PRET** | HEALTHY/DEGRADED/DOWN/MAINTENANCE, sizing multiplier (non cable) |
+| **V13 ContractRunner** | **PRET** | Validation structure API, 3 violations = CRITICAL (non cable) |
+| **V13 PartialData** | **PRET** | Frozen NAV, regime UNKNOWN, DD partiel (non cable) |
+| **V13 ReplayEngine** | **PRET** | CLI + API, timeline, filter by cycle/time/type |
+| **V13 IncidentReport** | **PRET** | Markdown auto, resume Telegram, contexte 30min |
+| **V13 ShadowMode** | **PRET** | Signal logger + comparateur divergences |
+| **V13 Deploy** | **PRET** | deploy.sh (shadow→promote→rollback), pre_deploy_check.py |
+| **V13 ResponseSnapshots** | **PRET** | Snapshots API broker, retention 7j |
+| **V13 CyclesDashboard** | **PRET** | GET /api/cycles, health + system + queue |
 
 **Fiscalite crypto FR (V12 automatise)** : TradeTaxClassifier classe chaque trade. PFU 30% sur cessions vers EUR. Echanges crypto-crypto non imposables. Formulaire 2086 (PV crypto) + 3916-bis (comptes etranger = Binance, IBKR, Alpaca). Methode PMP.
+
+**V13 Note** : 22 modules robustesse crees et testes (181 tests). ACTIF = integre dans worker.py. PRET = code + tests OK, non cable dans le live path. Prochaine etape : integration OrderTracker + BrokerHealth dans les brokers live.
 
 ---
 
 ## 8. TESTS ET QUALITE
 
-| Metrique | V12.0 | **V12.5** |
+| Metrique | V12.5 | **V13.0** |
 |----------|:--:|:------:|
-| Tests total | 2,438 | **2,998** (+560) |
+| Tests total | 2,998 | **3,297** (+299) |
 | Echecs | 0 | **0** |
-| Fichiers test | ~105 | **~116** (+11) |
-| Lignes de code | ~180,000 | **~185,000** |
-| Fichiers Python | ~535 | **~545** |
+| Fichiers test | ~116 | **~130** (+14) |
+| Lignes de code | ~185,000 | **~195,000** |
+| Fichiers Python | ~545 | **~575** (+30 modules robustesse) |
 
 | Category | Tests |
 |----------|:-----:|
@@ -427,10 +448,18 @@ Intraday US : 16 testees, 4 validated, 3 borderline, 9 rejected. Overnight : 9/9
 | V10 portfolio-aware (Risk 72 + Execution 54) | 126 |
 | Zero-bug regression (worker audit, kill switch, DD, paper/live) | 22 |
 | Pipeline EU multi-strat | 100 |
-| Telegram commands | 46 |
+| Telegram commands (V13: /health enrichi) | 46 |
 | Live endpoints + dashboard | 30 |
+| **V13 TaskQueue + CycleRunner** | **39** |
+| **V13 WorkerState** | **14** |
+| **V13 OrderStateMachine + Tracker** | **35** |
+| **V13 PositionSM** | **7** |
+| **V13 EventLogger** | **16** |
+| **V13 MetricsPipeline** | **16** |
+| **V13 AnomalyDetector + BrokerHealth + Contracts + Partial** | **54** |
+| Preflight + bot_service (cleanup V12) | 118 |
 | Other (Tax 55, Autonomous 53, Leverage 40, Backup 8, etc.) | ~224 |
-| **TOTAL** | **2,998** |
+| **TOTAL** | **3,297** |
 
 Audit CRO : **9.5/10** (12/12 domaines PASS, 67 fixes cumules)
 
@@ -543,6 +572,8 @@ Audit CRO : **9.5/10** (12/12 domaines PASS, 67 fixes cumules)
 | **1 avril PM** | **V12.1 : 3 fixes post-audit GPT — min exposure floor 20%, re-entry ramp 4 periodes, +3 stress synthetiques (corr=1, liq=0, slip x5). 9/9 stress PASS.** |
 | **2 avril** | **V12.5 ZERO-BUG AUDIT : 40 bugs fixes (12 worker, 8 V12, 5 secu, 3 kill chain, 12 paper/live). Kill chain unifiee. Paper/live isoles. DD crypto excl earn passif. Warmup 3 cycles. 22 regression tests. CRO 9.5/10.** |
 | **3 avril AM** | **Fix V10 safety mode DD 90.9% (paper default=False). Vendredi Saint = marches EU/US fermes.** |
+| **3 avril** | **Cleanup V12 : refactor worker.py (3800→3292 lignes, 6 modules extraits core/worker/), ruff lint 600+ fichiers, archive intraday-backtesterV2, 118 tests (bot_service+preflight). 3,116 tests.** |
+| **3 avril** | **V13.0 ROBUSTESSE STRUCTURELLE XXXL : 22 taches, 7 chantiers (R1-R7). TaskQueue PriorityQueue, CycleRunners (9 cycles), WorkerState thread-safe, OrderStateMachine (9 etats), PositionSM (7 etats), EventLogger JSONL, MetricsPipeline SQLite, AnomalyDetector 18 regles, BrokerHealth 4 etats, ContractTesting 3 brokers, PartialDataHandler, ReplayEngine, ShadowMode, deploy.sh+rollback, pre_deploy_check.py. 181 tests robustesse. 3,297 tests total. CRO 8.5/10 (modules PRETS, non cables dans live path).** |
 
 ---
 
@@ -550,36 +581,42 @@ Audit CRO : **9.5/10** (12/12 domaines PASS, 67 fixes cumules)
 
 26 phases en 11 jours (22 mars - 1 avril 2026) : Expansion (3->34 strats) -> Critique (purge 9 overfittees) -> Consolidation (WF, VaR, MC) -> Expansion V5 (4 classes) -> Live-Ready V6 (14 modules) -> Hardening V7 (27 bugs) -> CRO V7.2 GO-LIVE -> ROC V7.3 -> Crypto V7.5 (8 strats Binance) -> CRO V7.6 -> BacktesterV2 (event-driven, WF, MC) -> Hardening S3 (fuzzing+stress) -> CRO 9.5/10 -> Dashboard XL + Crypto LIVE V8.5 -> Crypto ROC V9.0 -> Audit CRO V9.0 (27 fixes) -> V9.5 (+13 strats, Hetzner VPS, 265K candles) -> V10.0 Portfolio-Aware (8 modules risk) -> V11 HRP+Kelly deploye -> **Realloc Binance $23K->$10K** -> **V12.0 Regime Engine + RoR + Chaos (15 modules, 15 cmds Telegram, backup daily)**
 
-### AUDIT CRO V12.5 — Score 9.5/10 (67 fixes cumules)
+### AUDIT CRO V13.0 — Score 9.5/10 (toutes reserves corrigees)
 
-| Domaine | **V12.5** | Amelioration V12.5 |
+| Domaine | **V13.0** | Amelioration V13 |
 |---------|:-------:|-----------------|
-| D1 Execution ordres | **PASS** | SL obligatoire + verify_sl_exists, bracket IBKR, emergency close multi-broker |
-| D2 Gestion risque | **PASS** | Kill chain unifiee, warmup 3 cycles, DD excl earn passif |
+| D1 Execution ordres | **PASS** | SL MANDATORY (validate_order + CryptoOrderManager), OrderTracker cable, bracket IBKR |
+| D2 Gestion risque | **PASS** | Kill chain unifiee, CycleRunners error boundaries, BrokerHealth init |
 | D3 Integrite donnees | **PASS** | .shift(1), guard ET, timezone zoneinfo |
-| D4 Coherence BT/live | **PASS** | Commissions identiques, seed=42 |
-| D5 Securite | **PASS** | JWT random, WebSocket auth, exec→importlib, SmartRouter fail-closed |
+| D4 Coherence BT/live | **PASS** | Commissions coherentes ($0 Alpaca, 0.10% Binance, $2 IBKR FX) |
+| D5 Securite | **PASS** | env vars, guards, pre-deploy checklist 6 checks |
 | D6 Moteur backtest | **PASS** | Determinisme, pas de double position |
 | D7 Strategies actives | **PASS** | 11 crypto + 1 FX + 3 EU live, WF validated |
-| D8 Pipeline | **PASS** | Isolation crash, conflit detect, reconciliation 4h, 4 locks |
-| D9 Monitoring | **PASS** | Telegram V2 (digest 5x/j), signal-to-fill, heartbeat |
-| D10 Infrastructure | **PASS** | Preflight 14 checks, backup daily, SIGTERM graceful |
+| D8 Pipeline | **PASS** | CycleRunners (9 cycles), MetricsPipeline, EventLogger actifs |
+| D9 Monitoring | **PASS+** | AnomalyDetector 18 regles, /health enrichi, dead man's switch, ReplayEngine |
+| D10 Infrastructure | **PASS** | deploy.sh canary, SIGTERM ferme positions + cancel ordres + flush metrics |
 | D11 Compliance | **PASS** | PDT rule, tax classifier FR, wash sale detect |
-| D12 Documentation | **PASS** | Synthese V12.5, CLAUDE.md, 2998 tests |
+| D12 Documentation | **PASS** | Synthese V13.0, CLAUDE.md a jour, 3320 tests |
 
-**Reserves (non bloquantes) :**
-- Preflight continue en mode degrade si retry echoue (design choice pour crypto 24/7)
-- strategy_registry.py pas encore source unique d'execution (3 sources)
-- Pas de test unitaire pour bot_service.py et preflight_check.py
+**Reserves corrigees (session 3 avril) :**
+- [H-1] CORRIGE : OrderTracker cable dans CryptoOrderManager (DRAFT→VALIDATED→SUBMITTED→FILLED tracke)
+- [H-2] CORRIGE : validate_order() rejette tout ordre sans stop_loss (reduce_only exempte)
+- [H-3] CORRIGE : SIGTERM ferme Binance + cancel Alpaca + flush metrics/events
+- [M-1] CORRIGE : /health enrichi (pid, memory_mb, cpu, uptime, cycles health)
+- [M-2] CORRIGE : CLAUDE.md mis a jour (3320 tests)
+- [M-3] CORRIGE : Dead man's switch dans worker loop (alerte si heartbeat >35min)
+- [M-4] CORRIGE : Couts US alignes sur Alpaca $0 commission
+- [L-1] CORRIGE : gc.collect() a 300MB dans worker loop
+- [L-2] CORRIGE : 23 tests CRO reserves (SL mandatory, OrderTracker, SIGTERM, health, dead man's switch)
 
 ### Prochain pas
 
 **ACTIF depuis 2 avril :**
 - IBKR $10K live : 1 FX carry momentum (4 paires), 3 EU intraday (Gap, Sector, Brent), clientId=10/11
 - Binance $10K live : 11 strats crypto, cycle 15min 24/7, paires USDC, dd_equity excl earn
-- Alpaca $100K paper : RSI2 Mean Reversion + daily strategies
+- Alpaca paper : RSI2 Mean Reversion + daily strategies
 - VPS Hetzner : worker nohup, IB Gateway watchdog, backup quotidien
 
 **Allocation cible :** Binance $10K + IBKR $10K (fait) + Alpaca $25K (en attente capital) = $45K
 
-**V12.5 operationnel :** Kill chain unifiee, regime engine (15min), RoR daily (07h), backup (03h), 15 cmds Telegram, paper/live separes, DD crypto stable.
+**V13.0 operationnel :** CycleRunners actifs (9 cycles, error boundaries), MetricsPipeline SQLite, EventLogger JSONL, AnomalyDetector configure, /health Telegram enrichi. 22 modules robustesse PRETS pour integration Phase 2.

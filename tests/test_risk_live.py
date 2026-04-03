@@ -89,17 +89,17 @@ class TestPositionLimit:
     """max_position_pct = 0.15 -> $1,500 max per position on $10K."""
 
     def test_position_under_limit_passes(self, live_rm, base_portfolio):
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1400, "strategy": "test"}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1400, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is True
 
     def test_position_at_limit_passes(self, live_rm, base_portfolio):
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "test"}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is True
 
     def test_position_over_limit_rejected(self, live_rm, base_portfolio):
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1600, "strategy": "test"}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1600, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is False
         assert "Position limit" in msg
@@ -110,7 +110,7 @@ class TestPositionLimit:
             {"symbol": "AAPL", "notional": 1000, "side": "LONG", "strategy": "test"},
         ]
         base_portfolio["cash"] = 9000
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 600, "strategy": "test"}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 600, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is False
         assert "Position limit" in msg
@@ -124,7 +124,7 @@ class TestStrategyLimit:
     """max_strategy_pct = 0.25 -> $2,500 max per strategy on $10K."""
 
     def test_strategy_under_limit_passes(self, live_rm, base_portfolio):
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "momentum"}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "momentum", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is True
 
@@ -133,7 +133,7 @@ class TestStrategyLimit:
             {"symbol": "AAPL", "notional": 2000, "side": "LONG", "strategy": "momentum"},
         ]
         base_portfolio["cash"] = 8000
-        order = {"symbol": "MSFT", "direction": "LONG", "notional": 600, "strategy": "momentum"}
+        order = {"symbol": "MSFT", "direction": "LONG", "notional": 600, "strategy": "momentum", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is False
         assert "Strategy limit" in msg
@@ -147,7 +147,7 @@ class TestLongExposure:
     """max_long_pct = 0.60 -> $6,000 max long."""
 
     def test_long_under_limit_passes(self, live_rm, base_portfolio):
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "test"}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is True
 
@@ -163,7 +163,7 @@ class TestLongExposure:
             ],
             "margin_used_pct": 0.0,
         }
-        order = {"symbol": "NVDA", "direction": "LONG", "notional": 200, "strategy": "e"}
+        order = {"symbol": "NVDA", "direction": "LONG", "notional": 200, "strategy": "e", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, portfolio)
         assert passed is False
         assert "Long exposure" in msg
@@ -177,7 +177,7 @@ class TestShortExposure:
     """max_short_pct = 0.40 -> $4,000 max short."""
 
     def test_short_under_limit_passes(self, live_rm, base_portfolio):
-        order = {"symbol": "AAPL", "direction": "SHORT", "notional": 1500, "strategy": "test"}
+        order = {"symbol": "AAPL", "direction": "SHORT", "notional": 1500, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is True
 
@@ -191,7 +191,7 @@ class TestShortExposure:
             ],
             "margin_used_pct": 0.0,
         }
-        order = {"symbol": "XOM", "direction": "SHORT", "notional": 1200, "strategy": "c"}
+        order = {"symbol": "XOM", "direction": "SHORT", "notional": 1200, "strategy": "c", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, portfolio)
         assert passed is False
         assert "Short exposure" in msg
@@ -205,7 +205,7 @@ class TestGrossExposure:
     """max_gross_pct = 1.20 -> $12,000 max gross."""
 
     def test_gross_under_limit_passes(self, live_rm, base_portfolio):
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "test"}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is True
 
@@ -258,7 +258,7 @@ class TestMaxPositions:
             ],
             "margin_used_pct": 0.0,
         }
-        order = {"symbol": "HD", "direction": "LONG", "notional": 500, "strategy": "f"}
+        order = {"symbol": "HD", "direction": "LONG", "notional": 500, "strategy": "f", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, portfolio)
         assert passed is True
 
@@ -278,7 +278,7 @@ class TestMaxPositions:
             "margin_used_pct": 0.0,
         }
         # Adding to existing AAPL -> still 6 positions
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 200, "strategy": "a"}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 200, "strategy": "a", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, portfolio)
         assert passed is True
 
@@ -293,7 +293,7 @@ class TestMaxPositions:
             ],
             "margin_used_pct": 0.0,
         }
-        order = {"symbol": "NEW_SYM", "direction": "LONG", "notional": 100, "strategy": "new"}
+        order = {"symbol": "NEW_SYM", "direction": "LONG", "notional": 100, "strategy": "new", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, portfolio)
         assert passed is False
         assert "Max positions" in msg
@@ -308,7 +308,7 @@ class TestCashReserve:
 
     def test_enough_cash_passes(self, live_rm, base_portfolio):
         # 10000 - 1500 = 8500 cash / 10000 = 85% > 10%
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "test"}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is True
 
@@ -322,7 +322,7 @@ class TestCashReserve:
             "margin_used_pct": 0.0,
         }
         # 1200 - 700 = 500 / 10000 = 5% < 10%
-        order = {"symbol": "MSFT", "direction": "LONG", "notional": 700, "strategy": "test"}
+        order = {"symbol": "MSFT", "direction": "LONG", "notional": 700, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, portfolio)
         assert passed is False
         assert "Cash reserve" in msg
@@ -510,7 +510,7 @@ class TestMarginBlock:
             "positions": [],
             "margin_used_pct": 0.90,
         }
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 500, "strategy": "test"}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 500, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, portfolio)
         assert passed is False
         assert "Margin block" in msg
@@ -568,7 +568,7 @@ class TestSectorLimit:
             {"symbol": "AAPL", "notional": 1500, "side": "LONG", "strategy": "a"},
         ]
         base_portfolio["cash"] = 8500
-        order = {"symbol": "MSFT", "direction": "LONG", "notional": 1400, "strategy": "b"}
+        order = {"symbol": "MSFT", "direction": "LONG", "notional": 1400, "strategy": "b", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is True
 
@@ -579,7 +579,7 @@ class TestSectorLimit:
         ]
         base_portfolio["cash"] = 7000
         # Tech sector: AAPL 1500 + MSFT 1500 + NVDA 500 = 3500 = 35% > 30%
-        order = {"symbol": "NVDA", "direction": "LONG", "notional": 500, "strategy": "c"}
+        order = {"symbol": "NVDA", "direction": "LONG", "notional": 500, "strategy": "c", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is False
         assert "Sector limit" in msg
@@ -594,7 +594,7 @@ class TestNoBypass:
 
     def test_validate_order_runs_all_checks(self, live_rm, base_portfolio):
         """A valid order must pass through all checks without short-circuit."""
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 500, "strategy": "test"}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 500, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is True
         assert msg == "OK"
@@ -602,7 +602,7 @@ class TestNoBypass:
     def test_zero_equity_always_fails(self, live_rm):
         """Zero equity must fail (division by zero guard)."""
         portfolio = {"equity": 0, "cash": 0, "positions": [], "margin_used_pct": 0.0}
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 100, "strategy": "test"}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 100, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, portfolio)
         assert passed is False
         assert "Equity" in msg
@@ -610,13 +610,13 @@ class TestNoBypass:
     def test_negative_equity_always_fails(self, live_rm):
         """Negative equity must fail."""
         portfolio = {"equity": -1000, "cash": 0, "positions": [], "margin_used_pct": 0.0}
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 100, "strategy": "test"}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 100, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, portfolio)
         assert passed is False
 
     def test_missing_fields_dont_crash(self, live_rm, base_portfolio):
         """Missing optional fields should not crash the validator."""
-        order = {"symbol": "AAPL", "notional": 500}
+        order = {"symbol": "AAPL", "notional": 500, "stop_loss": 145.0}
         # Should not raise, might fail on some checks
         passed, msg = live_rm.validate_order(order, base_portfolio)
         # We just assert it doesn't raise an exception
@@ -709,7 +709,7 @@ class TestAuditLogging:
         original_dir = risk_manager_live.AUDIT_LOG_DIR
         risk_manager_live.AUDIT_LOG_DIR = tmp_path
         try:
-            order = {"symbol": "AAPL", "direction": "LONG", "notional": 500, "strategy": "test"}
+            order = {"symbol": "AAPL", "direction": "LONG", "notional": 500, "strategy": "test", "stop_loss": 145.0}
             live_rm.validate_order(order, base_portfolio)
             # Check that audit files were created
             audit_files = list(tmp_path.glob("audit_*.jsonl"))

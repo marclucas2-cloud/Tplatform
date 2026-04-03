@@ -77,17 +77,57 @@ from core.worker.time_windows import (  # noqa: E402
     is_weekday,
 )
 
+# ── R1/R2/R5: Robustesse structurelle ───────────────────────────────────────
+from core.worker.cycle_runner import CycleRunner  # noqa: E402
+from core.worker.event_logger import get_event_logger  # noqa: E402
+from core.worker.worker_state import WorkerState  # noqa: E402
+from core.monitoring.metrics_pipeline import get_metrics  # noqa: E402
+from core.execution.order_tracker import OrderTracker  # noqa: E402
+from core.broker.broker_health import BrokerHealthRegistry  # noqa: E402
+
 
 
 
 
 # --- Graceful shutdown handler ---
 def _handle_sigterm(signum, frame):
-    """Graceful shutdown on Railway redeploy."""
+    """Graceful shutdown on Railway redeploy — closes positions and cancels orders."""
     logger.critical("SIGTERM received — graceful shutdown initiated")
     _log_event("worker_stop", details={"signal": signum})
-    _send_alert("Worker SIGTERM — shutting down gracefully", level="warning")
-    # Let the scheduler shut down gracefully
+
+    # CRO H-3: Cancel pending orders and close positions before exit
+    try:
+        # Cancel Alpaca pending orders
+        from core.alpaca_client.client import AlpacaClient
+        client = AlpacaClient.from_env()
+        client.cancel_all_orders()
+        logger.info("SIGTERM: Alpaca orders cancelled")
+    except Exception as e:
+        logger.warning(f"SIGTERM: Alpaca cancel failed: {e}")
+
+    try:
+        # Close crypto positions via emergency close
+        if os.getenv("BINANCE_API_KEY"):
+            from core.broker.binance_broker import BinanceBroker
+            bnb = BinanceBroker()
+            bnb.close_all_positions(_authorized_by="sigterm_graceful_shutdown")
+            logger.info("SIGTERM: Binance positions closed")
+    except Exception as e:
+        logger.warning(f"SIGTERM: Binance close failed: {e}")
+
+    # Flush metrics and events
+    try:
+        from core.monitoring.metrics_pipeline import get_metrics
+        get_metrics().flush()
+    except Exception:
+        pass
+    try:
+        from core.worker.event_logger import get_event_logger
+        get_event_logger().close()
+    except Exception:
+        pass
+
+    _send_alert("Worker SIGTERM — positions closed, shutting down", level="warning")
     raise SystemExit(0)
 
 
@@ -2844,6 +2884,56 @@ def main():
     _smoke_test_done_this_week = False
     _ror_done_today = False
 
+    # ── R1/R2/R5: Initialisation robustesse ─────────────────────────────
+    _event_logger = get_event_logger()
+    _metrics = get_metrics()
+    _worker_state = WorkerState()
+    _order_tracker = OrderTracker(alert_callback=lambda msg: _send_alert(msg, level="critical"))
+    _broker_health = BrokerHealthRegistry()
+    _broker_health.register("binance")
+    _broker_health.register("ibkr")
+    _broker_health.register("alpaca")
+
+    def _cycle_alert(msg):
+        _send_alert(msg, level="warning")
+
+    def _cycle_metrics_cb(name, duration, success, error):
+        _metrics.emit(f"cycle.{name}.duration_seconds", duration,
+                      tags={"success": str(success)})
+        if not success:
+            _metrics.emit(f"cycle.{name}.error", 1.0, tags={"error": error or ""})
+
+    _runners = {
+        "crypto": CycleRunner("crypto", run_crypto_cycle,
+                              alert_callback=_cycle_alert,
+                              metrics_callback=_cycle_metrics_cb),
+        "fx_carry": CycleRunner("fx_carry", run_fx_carry_cycle,
+                                alert_callback=_cycle_alert,
+                                metrics_callback=_cycle_metrics_cb),
+        "futures": CycleRunner("futures", run_futures_paper_cycle,
+                               alert_callback=_cycle_alert,
+                               metrics_callback=_cycle_metrics_cb),
+        "fx_paper": CycleRunner("fx_paper", run_fx_paper_cycle,
+                                alert_callback=_cycle_alert,
+                                metrics_callback=_cycle_metrics_cb),
+        "live_risk": CycleRunner("live_risk", run_live_risk_cycle,
+                                 alert_callback=_cycle_alert,
+                                 metrics_callback=_cycle_metrics_cb),
+        "v10_portfolio": CycleRunner("v10_portfolio", run_v10_portfolio_cycle,
+                                     alert_callback=_cycle_alert,
+                                     metrics_callback=_cycle_metrics_cb),
+        "v11_hrp": CycleRunner("v11_hrp", run_v11_hrp_rebalance,
+                               alert_callback=_cycle_alert,
+                               metrics_callback=_cycle_metrics_cb),
+        "v12_regime": CycleRunner("v12_regime", run_v12_regime_cycle,
+                                  alert_callback=_cycle_alert,
+                                  metrics_callback=_cycle_metrics_cb),
+        "v11_eod": CycleRunner("v11_eod", run_v11_eod_cleanup,
+                               alert_callback=_cycle_alert,
+                               metrics_callback=_cycle_metrics_cb),
+    }
+    logger.info(f"  CycleRunners initialized: {list(_runners.keys())}")
+
     while True:
         now_paris = datetime.now(PARIS)
         now_et = datetime.now(ET)
@@ -2856,19 +2946,19 @@ def main():
 
         # === CRYPTO CYCLE 24/7 (y compris weekends) — toutes les 15 min ===
         if time.time() - last_crypto >= CRYPTO_INTERVAL_SECONDS:
-            run_crypto_cycle()
+            _runners["crypto"].run()
             last_crypto = time.time()
 
         # === FX CARRY DAILY (lun-ven, 10h Paris) ===
         if is_weekday() and now_paris.hour == 10 and not getattr(run_fx_carry_cycle, '_done_today', False):
-            run_fx_carry_cycle()
+            _runners["fx_carry"].run()
             run_fx_carry_cycle._done_today = True
         if is_weekday() and now_paris.hour < 10:
             run_fx_carry_cycle._done_today = False
 
         # === FUTURES PAPER DAILY (lun-ven, 16h Paris = ouverture US) ===
         if is_weekday() and now_paris.hour == 16 and not getattr(run_futures_paper_cycle, '_done_today', False):
-            run_futures_paper_cycle()
+            _runners["futures"].run()
             run_futures_paper_cycle._done_today = True
         if is_weekday() and now_paris.hour < 16:
             run_futures_paper_cycle._done_today = False
@@ -3055,19 +3145,19 @@ def main():
         if is_fx_window():
             elapsed = time.time() - last_fx_paper
             if elapsed >= FX_PAPER_INTERVAL:
-                run_fx_paper_cycle()
+                _runners["fx_paper"].run()
                 last_fx_paper = time.time()
 
         # Live risk monitoring every 5 min (09:00-22:00 Paris)
         if is_live_risk_window():
             elapsed = time.time() - last_live_risk
             if elapsed >= LIVE_RISK_INTERVAL_SECONDS:
-                run_live_risk_cycle()
+                _runners["live_risk"].run()
                 last_live_risk = time.time()
 
         # === V10 PORTFOLIO CYCLE every 5 min (always, including weekends for crypto) ===
         if time.time() - last_v10_cycle >= V10_CYCLE_INTERVAL:
-            run_v10_portfolio_cycle()
+            _runners["v10_portfolio"].run()
             last_v10_cycle = time.time()
 
         # CRO H-4: Periodic reconciliation every 4 hours
@@ -3221,12 +3311,12 @@ def main():
 
         # === V11 HRP REBALANCE every 4 hours ===
         if time.time() - last_v11_hrp >= V11_HRP_INTERVAL:
-            run_v11_hrp_rebalance()
+            _runners["v11_hrp"].run()
             last_v11_hrp = time.time()
 
         # === V12 REGIME ENGINE every 15 min ===
         if time.time() - last_v12_regime >= V12_REGIME_INTERVAL:
-            run_v12_regime_cycle()
+            _runners["v12_regime"].run()
             last_v12_regime = time.time()
 
         # === V12 RoR DAILY CHECK (07:00 CET, before EU open) ===
@@ -3279,10 +3369,54 @@ def main():
         # === V11 EOD ORPHAN CLEANUP (17:35 CET, weekdays only) ===
         if (is_weekday() and not v11_eod_done_today
                 and now_paris.hour == 17 and 35 <= now_paris.minute <= 45):
-            run_v11_eod_cleanup()
+            _runners["v11_eod"].run()
             v11_eod_done_today = True
         if now_paris.hour < 17:
             v11_eod_done_today = False
+
+        # Emit system metrics every tick
+        try:
+            import psutil
+            _proc = psutil.Process()
+            _mem_mb = _proc.memory_info().rss / 1024 / 1024
+            _metrics.emit("system.cpu.percent", psutil.cpu_percent())
+            _metrics.emit("system.ram.percent", psutil.virtual_memory().percent)
+            _metrics.emit("system.disk.percent", psutil.disk_usage("/").percent)
+            _metrics.emit("system.memory.worker_mb", _mem_mb)
+
+            # CRO L-1: Proactive memory management
+            if _mem_mb > 300:
+                import gc
+                gc.collect()
+                logger.warning(f"GC triggered: worker at {_mem_mb:.0f}MB (>300MB)")
+        except ImportError:
+            pass
+        except Exception:
+            pass
+
+        # CRO M-3: Dead man's switch — check heartbeat age
+        try:
+            _hb_file = ROOT / "data" / "monitoring" / "heartbeat.json"
+            if _hb_file.exists():
+                import json as _hb_json
+                _hb_data = _hb_json.loads(_hb_file.read_text(encoding="utf-8"))
+                _hb_ts = datetime.fromisoformat(_hb_data["timestamp"])
+                _hb_age_min = (datetime.now(UTC) - _hb_ts).total_seconds() / 60
+                _metrics.emit("system.heartbeat.age_minutes", _hb_age_min)
+                if _hb_age_min > 35:  # Heartbeat should be every 30min
+                    _send_alert(
+                        f"DEAD MAN'S SWITCH: heartbeat stale ({_hb_age_min:.0f}min old)",
+                        level="critical",
+                    )
+        except Exception:
+            pass
+
+        # Record cycle health into worker state
+        for _rn, _rr in _runners.items():
+            _worker_state.record_cycle_metrics(_rn, _rr.metrics.to_dict())
+
+        # Periodic metrics flush (every tick = 30s)
+        _metrics.flush()
 
         # Sleep 30s entre les checks
         time.sleep(30)

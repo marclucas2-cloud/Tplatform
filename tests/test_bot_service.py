@@ -526,7 +526,7 @@ class TestHealth:
             await bot.cmd_health(update, ctx)
 
         reply = update.message.reply_text.call_args[0][0]
-        assert "Infrastructure" in reply
+        assert "Health" in reply
         assert "OFF" in reply
 
     @pytest.mark.asyncio
@@ -541,7 +541,7 @@ class TestHealth:
             await bot.cmd_health(update, ctx)
 
         reply = update.message.reply_text.call_args[0][0]
-        assert "Infrastructure" in reply
+        assert "Health" in reply
 
 
 # =============================================================================

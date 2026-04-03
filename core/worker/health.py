@@ -18,7 +18,29 @@ class HealthHandler(BaseHTTPRequestHandler):
                 "status": "ok",
                 "timestamp": datetime.now(UTC).isoformat(),
                 "worker": "running",
+                "pid": os.getpid(),
             }
+            # CRO M-1: Enrich health with system metrics
+            try:
+                import psutil
+                proc = psutil.Process()
+                health["memory_mb"] = round(proc.memory_info().rss / 1024 / 1024, 1)
+                health["cpu_percent"] = psutil.cpu_percent()
+                health["uptime_hours"] = round(
+                    (datetime.now(UTC).timestamp() - proc.create_time()) / 3600, 1
+                )
+            except ImportError:
+                pass
+            # Cycle metrics if available
+            try:
+                from dashboard.api.routes.cycles import get_cycles_health
+                cycles = get_cycles_health()
+                health["cycles"] = {
+                    k: v.get("health", "?")
+                    for k, v in cycles.get("cycles", {}).items()
+                }
+            except Exception:
+                pass
             self.wfile.write(json.dumps(health).encode())
         else:
             self.send_response(404)

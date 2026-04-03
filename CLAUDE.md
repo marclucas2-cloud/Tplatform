@@ -4,13 +4,13 @@
 ```bash
 python worker.py                                 # Worker 24/7
 python scripts/paper_portfolio.py --status       # Dashboard
-python -m pytest tests/ -v --tb=short            # Tests (2312)
+python -m pytest tests/ -v --tb=short            # Tests (3320)
 ssh -i ~/.ssh/id_hetzner root@178.104.125.74     # VPS Hetzner
 ```
 
 ## Regles critiques
 - **No lookahead** : guard 9:35-15:55 ET, .shift(1), df_full.iloc[:i]
-- **Couts reels** : $0.005/share + 0.02% slippage (US), 0.10% (Binance), $2 (IBKR FX)
+- **Couts reels** : $0 commission + 0.02% slippage (Alpaca US), 0.10% (Binance), $2 (IBKR FX)
 - **Walk-forward obligatoire** : >= 50% fenetres OOS profitables
 - **Paper d'abord** : PAPER_TRADING=true, guard AlpacaClient + BINANCE_LIVE_CONFIRMED
 - **SL obligatoire** : tout ordre doit avoir un stop-loss (CRO audit)
@@ -19,21 +19,26 @@ ssh -i ~/.ssh/id_hetzner root@178.104.125.74     # VPS Hetzner
 
 ## Architecture (fichiers cles)
 ```
-worker.py                          # Scheduler Railway+Hetzner 24/7
-core/broker/{binance_broker,ibkr_bracket,factory}.py  # 3 brokers
+worker.py                          # Scheduler 24/7 + CycleRunners (9 cycles)
+core/worker/{task_queue,cycle_runner,worker_state,event_logger}.py  # Robustesse
+core/broker/{binance_broker,ibkr_bracket,factory,broker_health}.py  # 3 brokers + health
+core/broker/contracts/{binance,ibkr,alpaca}_contracts.py            # Contract testing
 core/{risk_manager_live,kill_switch_live}.py           # Risk 12 checks + kill switch
 core/crypto/{risk_manager_crypto,allocator_crypto}.py  # Crypto risk + allocation
+core/execution/{order_state_machine,position_state_machine,order_tracker}.py  # SM formelles
+core/monitoring/{metrics_pipeline,anomaly_detector,incident_report}.py  # Observabilite
 strategies/crypto/                 # 12 strats Binance (8 live + 4 new)
 strategies_v2/fx/                  # 12 strats FX IBKR
 strategies_v2/futures/             # 8 strats futures IBKR
 scripts/{wf_fx_all,wf_crypto_all}.py  # Walk-forward scripts
+scripts/{deploy.sh,pre_deploy_check.py}  # Canary deploy + checklist
 config/{allocation,crypto_allocation,limits_live,crypto_limits}.yaml
 ```
 
 ## Etat actuel (voir SYNTHESE_COMPLETE.md pour details)
 - **46 strats** : 11 crypto (Binance 10K EUR) + 15 FX/EU (IBKR $10K) + 7 US (Alpaca) + 8 futures + 4 P2/P3
 - **14 LIVE** : 11 crypto + 1 FX carry
-- **2,964 tests**, CRO 8/10 post-audit V12
+- **3,320 tests**, CRO 9.5/10 post-robustesse V13
 - **Hetzner** : IB Gateway 10.45, port 4002, VNC :5900
 - **Data** : 265K candles (FX IBKR + crypto Binance)
 

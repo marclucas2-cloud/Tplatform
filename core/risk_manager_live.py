@@ -108,6 +108,19 @@ class LiveRiskManager(RiskManager):
             (passed: bool, message: str)
         """
         with self._validate_lock:
+            # CRO H-2: Stop-loss is MANDATORY for all non-closing orders
+            reduce_only = order.get("reduce_only", False)
+            if not reduce_only and not order.get("stop_loss"):
+                self._audit_log("stop_loss_required", False, {
+                    "symbol": order.get("symbol", ""),
+                    "message": "Order rejected: stop_loss is MANDATORY",
+                })
+                logger.warning(
+                    f"LIVE RISK REJECT [stop_loss_required]: "
+                    f"{order.get('symbol', '?')} — no stop_loss provided"
+                )
+                return False, "stop_loss is MANDATORY for all new orders"
+
             checks = [
                 ("position_limit", self._check_position_limit(order, portfolio)),
                 ("strategy_limit", self._check_strategy_limit(order, portfolio)),

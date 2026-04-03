@@ -27,7 +27,7 @@ def _make_order(
     notional=1000,
     strategy="test_strat",
     asset_class="EQUITY",
-    stop_loss=None,
+    stop_loss=145.0,
     **extra,
 ):
     """Build a minimal order dict for LiveRiskManager.validate_order."""
@@ -37,9 +37,8 @@ def _make_order(
         "notional": notional,
         "strategy": strategy,
         "asset_class": asset_class,
+        "stop_loss": stop_loss,
     }
-    if stop_loss is not None:
-        order["stop_loss"] = stop_loss
     order.update(extra)
     return order
 

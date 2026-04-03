@@ -326,6 +326,7 @@ class TestPortfolioStateCorruption:
             "notional": 500,
             "strategy": "momentum_us",
             "asset_class": "equity",
+            "stop_loss": 145.0,
         }
 
     def test_none_portfolio_blocks_orders(self, live_rm, base_order):

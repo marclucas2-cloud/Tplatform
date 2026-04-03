@@ -290,6 +290,7 @@ class TestTradingFuzzer:
                     "symbol": "AAPL", "direction": "LONG",
                     "notional": 500, "strategy": f"strat_{i}",
                     "asset_class": "EQUITY",
+                    "stop_loss": 145.0,
                 }
                 live_rm.validate_order(order, portfolio_10k)
             except Exception as e:

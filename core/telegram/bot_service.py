@@ -471,9 +471,12 @@ async def cmd_costs(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_health(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/health — Status infrastructure."""
+    """/health — Status infrastructure + cycle health + brokers."""
     if not _auth(update):
         return
+
+    from datetime import datetime
+    now = datetime.now().strftime("%d/%m %H:%M")
 
     worker_ok = _worker_running()
     ibkr_ok = _ibkr_connected()
@@ -487,20 +490,54 @@ async def cmd_health(update: Update, context: ContextTypes.DEFAULT_TYPE):
         except Exception:
             services[svc] = False
 
-    text = (
-        f"🏥 *Infrastructure*\n"
-        f"{'─' * 28}\n"
-    )
+    text = f"System Health — {now}\n\n"
+
+    # --- Cycle health from metrics ---
+    try:
+        from dashboard.api.routes.cycles import get_cycles_health
+        health = get_cycles_health()
+        if health.get("cycles"):
+            text += "Cycles:\n"
+            for name, info in health["cycles"].items():
+                h = info.get("health", "UNKNOWN")
+                icon = "OK" if h == "HEALTHY" else ("!!" if h == "FAILED" else "?")
+                avg = info.get("avg_duration_seconds", 0)
+                runs = info.get("total_runs_24h", 0)
+                fails = info.get("total_failures_24h", 0)
+                trend = info.get("trend", "")
+                trend_txt = f" {trend}" if trend not in ("STABLE", "") else ""
+                text += f"  [{icon}] {name} {avg:.1f}s avg ({runs} runs, {fails} fail){trend_txt}\n"
+
+            sys = health.get("system", {})
+            if sys.get("cpu_percent"):
+                text += f"\nSystem: CPU {sys['cpu_percent']:.0f}%, RAM {sys['ram_percent']:.0f}%, Disk {sys['disk_percent']:.0f}%\n"
+    except Exception:
+        pass
+
+    # --- Anomalies 24h ---
+    try:
+        from core.monitoring.anomaly_detector import AnomalyDetector
+        from core.monitoring.metrics_pipeline import get_metrics
+        detector = AnomalyDetector(get_metrics())
+        anomalies = detector.get_recent_anomalies(hours=24)
+        if anomalies:
+            text += f"\nAnomalies 24h: {len(anomalies)}\n"
+            for a in anomalies[-3:]:
+                text += f"  {a.detected_at.strftime('%H:%M')} {a.message[:60]}\n"
+    except Exception:
+        pass
+
+    text += f"\nServices:\n"
     for svc, ok in services.items():
         name = svc.replace("trading-", "").replace("ibgateway", "IB Gateway").title()
-        text += f"  {'🟢' if ok else '🔴'} {name}: `{'ON' if ok else 'OFF'}`\n"
+        text += f"  [{'ON' if ok else 'OFF'}] {name}\n"
 
     text += (
-        f"\n*Health checks:*\n"
-        f"  Worker HTTP: `{'OK' if worker_ok else 'FAIL'}`\n"
-        f"  IBKR TCP: `{'OK' if ibkr_ok else 'FAIL'}`\n"
+        f"\nHealth checks:\n"
+        f"  Worker HTTP: {'OK' if worker_ok else 'FAIL'}\n"
+        f"  IBKR TCP: {'OK' if ibkr_ok else 'FAIL'}\n"
     )
-    await update.message.reply_text(text, parse_mode="Markdown")
+    await update.message.reply_text(f"```\n{text}```", parse_mode="Markdown")
 
 
 async def cmd_kill(update: Update, context: ContextTypes.DEFAULT_TYPE):

@@ -30,12 +30,13 @@ BINANCE_ERRORS = {
 class CryptoOrderManager:
     """Manage order execution on Binance with safety checks."""
 
-    def __init__(self, broker, risk_manager=None, alerter=None):
+    def __init__(self, broker, risk_manager=None, alerter=None, order_tracker=None):
         self._broker = broker
         self._risk_manager = risk_manager
         self._alerter = alerter
         self._pending_orders: list[dict] = []
         self._filled_orders: list[dict] = []
+        self._order_tracker = order_tracker
 
     def submit_order(
         self,
@@ -59,9 +60,24 @@ class CryptoOrderManager:
         if not _authorized_by:
             raise BrokerError("_authorized_by required")
 
+        # CRO H-2: SL mandatory for new orders (not reduce-only closes)
+        if not reduce_only and stop_loss is None:
+            logger.warning(f"Order rejected: stop_loss MANDATORY for {symbol}")
+            return {"error": "stop_loss_mandatory", "symbol": symbol}
+
+        # Track order via OrderStateMachine if tracker available
+        _osm = None
+        if self._order_tracker:
+            _osm = self._order_tracker.create_order(
+                symbol=symbol, side=direction, quantity=qty,
+                broker="binance", strategy=strategy,
+            )
+
         # Reject futures/perp — not available on Binance France
         if market_type == "futures":
             logger.warning("Order rejected: futures/perp not available on Binance France")
+            if _osm:
+                self._order_tracker.reject(_osm.order_id)
             return {"error": "futures_perp_not_available_binance_france", "symbol": symbol}
 
         # Pre-trade risk check
@@ -77,6 +93,8 @@ class CryptoOrderManager:
             ok, msg = self._risk_manager.check_position_size(notional)
             if not ok:
                 logger.warning(f"Order rejected by risk: {msg}")
+                if _osm:
+                    self._order_tracker.reject(_osm.order_id)
                 return {"error": f"risk_check_failed: {msg}", "symbol": symbol}
 
             # HIGH-4: Validate leverage against portfolio limits
@@ -85,11 +103,19 @@ class CryptoOrderManager:
                 lev_ok, lev_msg = self._risk_manager.check_leverage(pos_for_check)
                 if not lev_ok:
                     logger.warning(f"Order rejected by leverage check: {lev_msg}")
+                    if _osm:
+                        self._order_tracker.reject(_osm.order_id)
                     return {"error": f"leverage_check_failed: {lev_msg}", "symbol": symbol}
 
             if self._risk_manager.kill_switch.is_killed:
                 logger.warning("Order rejected: kill switch active")
+                if _osm:
+                    self._order_tracker.reject(_osm.order_id)
                 return {"error": "kill_switch_active", "symbol": symbol}
+
+        # Validate via OrderTracker
+        if _osm:
+            self._order_tracker.validate(_osm.order_id, risk_approved=True)
 
         # Retry loop
         last_error = None
@@ -108,6 +134,17 @@ class CryptoOrderManager:
                 )
 
                 self._filled_orders.append(result)
+
+                # Track SUBMITTED → FILLED in OrderTracker
+                if _osm:
+                    broker_id = str(result.get("orderId", result.get("order_id", "")))
+                    self._order_tracker.submit(_osm.order_id, broker_id or "unknown")
+                    has_sl = stop_loss is not None and stop_loss > 0
+                    self._order_tracker.fill(
+                        _osm.order_id,
+                        has_sl=has_sl or reduce_only,
+                        sl_order_id=result.get("sl_order_id"),
+                    )
 
                 # Alert on trade
                 if self._alerter:
@@ -148,6 +185,8 @@ class CryptoOrderManager:
                 time.sleep(backoff)
 
         logger.error(f"Order failed after {max_retries} retries: {last_error}")
+        if _osm:
+            self._order_tracker.error(_osm.order_id)
         return {"error": str(last_error), "symbol": symbol}
 
     def submit_margin_hedge(

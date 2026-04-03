@@ -248,6 +248,7 @@ class TestFxAccepted:
             "margin_used": 750,       # 7.5% of equity (well under 40%)
             "strategy": "fx_carry_eur",
             "asset_class": "FX",
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, empty_portfolio)
         assert passed, f"Should accept FX order within limits, got: {msg}"
@@ -264,6 +265,7 @@ class TestFxAccepted:
             "margin_used": 750,
             "strategy": "fx_carry_eurgbp",
             "asset_class": "FX",
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, portfolio_with_fx)
         assert passed, f"Should accept 4th FX pair, got: {msg}"
@@ -283,6 +285,7 @@ class TestFxRejectedNotional:
             "margin_used": 1_200,     # 12% margin (OK, under 40%)
             "strategy": "fx_carry_eur",
             "asset_class": "FX",
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, empty_portfolio)
         assert not passed, "Should reject FX order exceeding notional limit"
@@ -307,6 +310,7 @@ class TestFxRejectedMargin:
             "margin_used": 2_000,     # Would push total to 42.5% (> 40%)
             "strategy": "fx_carry_nzd",
             "asset_class": "FX",
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, portfolio_with_fx)
         assert not passed, "Should reject FX order exceeding margin limit"
@@ -326,6 +330,7 @@ class TestEquityUnaffected:
             "notional": 1_000,
             "strategy": "momentum_daily",
             "asset_class": "EQUITY",
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, empty_portfolio)
         assert passed, f"Equity order should pass, got: {msg}"
@@ -349,6 +354,7 @@ class TestEquityUnaffected:
             "notional": 1_000,
             "strategy": "momentum_daily",
             "asset_class": "EQUITY",
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, portfolio)
         assert passed, f"Equity order should not be blocked by FX limits, got: {msg}"
@@ -369,6 +375,7 @@ class TestFuturesAccepted:
             "strategy": "futures_energy",
             "asset_class": "FUTURES",
             "qty": 1,
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, empty_portfolio)
         assert passed, f"Should accept futures order within limits, got: {msg}"
@@ -394,6 +401,7 @@ class TestFuturesRejectedMargin:
             "strategy": "futures_energy_v2",
             "asset_class": "FUTURES",
             "qty": 1,
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, portfolio_with_futures)
         assert not passed, "Should reject futures order exceeding margin limit"
@@ -415,6 +423,7 @@ class TestFuturesRejectedContract:
             "strategy": "futures_metals",
             "asset_class": "FUTURES",
             "qty": 1,
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, empty_portfolio)
         assert not passed, "Should reject non-whitelisted futures contract"
@@ -439,6 +448,7 @@ class TestCombinedMarginMix:
             "notional": 1_000,
             "strategy": "momentum_intra",
             "asset_class": "EQUITY",
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, mixed_portfolio)
         assert passed, f"Mixed portfolio under 80% combined margin, got: {msg}"
@@ -483,6 +493,7 @@ class TestCombinedMarginMix:
             "margin_used": 750,       # Would push to 82.5% (> 80%)
             "strategy": "fx_carry_gbp",
             "asset_class": "FX",
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, portfolio)
         assert not passed, "Should reject when combined margin > 80%"
@@ -506,6 +517,7 @@ class TestCashReserveCombined:
             "margin_used": 750,
             "strategy": "fx_carry_eurgbp",
             "asset_class": "FX",
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, mixed_portfolio)
         assert passed, f"Cash still above 20%, got: {msg}"
@@ -540,6 +552,7 @@ class TestCashReserveCombined:
             "margin_used": 900,       # Cash: $2800 - $900 = $1900 = 19% (< 20%)
             "strategy": "fx_carry_gbp",
             "asset_class": "FX",
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, portfolio)
         assert not passed, "Should reject when cash would fall below 20%"
@@ -600,6 +613,7 @@ class TestFullMixAllPass:
             "strategy": "futures_index",
             "asset_class": "FUTURES",
             "qty": 1,
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, portfolio)
         assert passed, f"Full mix should pass all checks, got: {msg}"
@@ -645,6 +659,7 @@ class TestMinCashBreach:
             "notional": 1_000,
             "strategy": "momentum_intra",
             "asset_class": "EQUITY",
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, portfolio)
         assert not passed, "Should reject when order breaches min cash"
@@ -676,6 +691,7 @@ class TestMinCashBreach:
             "strategy": "futures_index",
             "asset_class": "FUTURES",
             "qty": 1,
+            "stop_loss": 145.0,
         }
         passed, msg = live_rm.validate_order(order, portfolio)
         assert not passed, "Should reject when futures order breaches min cash"
