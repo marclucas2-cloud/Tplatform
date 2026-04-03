@@ -36,9 +36,8 @@ from __future__ import annotations
 import json
 import logging
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -212,7 +211,7 @@ class CryptoKillSwitch:
         self._config = self._load_config(config_path)
         self._active = False
         self._trigger_reason = ""
-        self._trigger_time: Optional[datetime] = None
+        self._trigger_time: datetime | None = None
         self._daily_pnl_history: list[dict] = []
         self._hourly_pnl_history: list[dict] = []
         self._actions_executed: list[str] = []
@@ -324,7 +323,7 @@ class CryptoKillSwitch:
     def _activate(self, reason: str) -> tuple[bool, str]:
         self._active = True
         self._trigger_reason = reason
-        self._trigger_time = datetime.now(timezone.utc)
+        self._trigger_time = datetime.now(UTC)
         self._save_persisted_state()  # CRO H-5: persist across restarts
         logger.critical(f"CRYPTO KILL SWITCH V2 ACTIVATED: {reason}")
         return True, reason
@@ -1081,7 +1080,7 @@ class CryptoRiskManager:
             "n_failed": sum(1 for c in checks.values() if not c["passed"]),
             "checks": checks,
             "kill_switch": self.kill_switch.status(),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         # Audit log

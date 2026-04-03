@@ -29,20 +29,17 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import sys
 import time
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 # Ajouter le root du projet au path
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.broker.ibkr_futures import FuturesContractManager
 
 logger = logging.getLogger(__name__)
 

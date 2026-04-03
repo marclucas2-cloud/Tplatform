@@ -7,7 +7,7 @@ expecting a mean-reversion gap fill by Monday. Spot long only.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -60,7 +60,7 @@ class WeekendGap(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         # Only trade on weekends (Saturday=5, Sunday=6)
         if bar.timestamp.dayofweek not in (5, 6):
             return None

@@ -15,17 +15,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from core.backtest.pairs_engine import PairsBacktestEngine
 from core.data.loader import OHLCVData
 from core.data.pairs import (
-    PairStats,
     PairDiscovery,
+    PairStats,
+    adf_test,
+    compute_halflife,
     compute_hedge_ratio,
     compute_spread,
-    compute_halflife,
-    adf_test,
 )
-from core.backtest.pairs_engine import PairsBacktestEngine, PairTrade
-
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 

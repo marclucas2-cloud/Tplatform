@@ -33,7 +33,7 @@ class BinanceCostModel(CostModel):
         """
         self.bnb_discount = bnb_discount
 
-    def calculate_commission(self, order: "Order", fill_price: float) -> float:
+    def calculate_commission(self, order: Order, fill_price: float) -> float:
         """Calculate Binance commission.
 
         Args:
@@ -52,7 +52,7 @@ class BinanceCostModel(CostModel):
         else:
             return self._spot_commission(notional, order)
 
-    def _spot_commission(self, notional: float, order: "Order") -> float:
+    def _spot_commission(self, notional: float, order: Order) -> float:
         """Spot/margin commission with optional BNB discount."""
         order_type = getattr(order, "order_type", "MARKET").upper()
 
@@ -66,7 +66,7 @@ class BinanceCostModel(CostModel):
 
         return notional * rate
 
-    def _futures_commission(self, notional: float, order: "Order") -> float:
+    def _futures_commission(self, notional: float, order: Order) -> float:
         """USDT-M futures commission (no BNB discount on futures)."""
         order_type = getattr(order, "order_type", "MARKET").upper()
 

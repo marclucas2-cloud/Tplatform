@@ -27,20 +27,18 @@ from __future__ import annotations
 
 import asyncio
 import logging
-import os
 import sys
 from pathlib import Path
-from typing import Any
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from agents.base_agent import AgentMessage
-from agents.research.agent import ResearchAgent
 from agents.backtest.agent import BacktestAgent
-from agents.validation.agent import ValidationAgent
-from agents.portfolio.agent import PortfolioManagerAgent
+from agents.base_agent import AgentMessage
 from agents.execution.agent import ExecutionAgent
 from agents.monitoring.agent import MonitoringAgent
+from agents.portfolio.agent import PortfolioManagerAgent
+from agents.research.agent import ResearchAgent
+from agents.validation.agent import ValidationAgent
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +150,7 @@ class Orchestrator:
 
                 self.bus.task_done()
 
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue
             except asyncio.CancelledError:
                 break

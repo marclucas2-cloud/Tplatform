@@ -14,8 +14,8 @@ Marches supportes :
 
 import logging
 import time as _time
-from datetime import datetime, date, time, timedelta, timezone
-from typing import Dict, List, Optional, Tuple
+from datetime import UTC, date, datetime, time, timedelta
+from typing import Dict, Tuple
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -23,7 +23,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 # -- Fuseaux horaires de reference --
-_UTC = timezone.utc
+_UTC = UTC
 _PARIS = ZoneInfo("Europe/Paris")
 _NEW_YORK = ZoneInfo("America/New_York")
 
@@ -75,7 +75,7 @@ class AuditDST:
     verifie l'alignement des bougies et la synchronisation d'horloge.
     """
 
-    def __init__(self, reference_date: Optional[date] = None):
+    def __init__(self, reference_date: date | None = None):
         """
         Args:
             reference_date: date de reference pour les calculs.
@@ -455,7 +455,7 @@ class AuditDST:
 
     def get_market_calendar(
         self, market: str, target_date: date
-    ) -> Tuple[Optional[datetime], Optional[datetime]]:
+    ) -> Tuple[datetime | None, datetime | None]:
         """Retourne (open_time, close_time) en UTC pour un marche et une date.
 
         Args:
@@ -505,7 +505,7 @@ class AuditDST:
 
     def _find_next_dst_transition(
         self, tz: ZoneInfo, start_date: date, max_days: int = 180
-    ) -> Optional[Tuple[date, timedelta, timedelta]]:
+    ) -> Tuple[date, timedelta, timedelta] | None:
         """Trouve la prochaine transition DST apres start_date.
 
         Parcourt les jours a partir de start_date et detecte un changement
@@ -551,7 +551,7 @@ class AuditDST:
 
     def _get_fx_session(
         self, target_date: date
-    ) -> Tuple[Optional[datetime], Optional[datetime]]:
+    ) -> Tuple[datetime | None, datetime | None]:
         """Retourne la session FX pour une date donnee.
 
         FX est continu du dimanche 17:00 ET au vendredi 17:00 ET.

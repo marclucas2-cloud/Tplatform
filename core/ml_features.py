@@ -17,9 +17,8 @@ Integration :
 import json
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +56,7 @@ class FeatureCollector:
     SCHEMA_VERSION = 1
     DEFAULT_DB_PATH = "data_cache/ml_features.db"
 
-    def __init__(self, db_path: Optional[str] = None):
+    def __init__(self, db_path: str | None = None):
         if db_path is None:
             db_path = str(Path(__file__).parent.parent / self.DEFAULT_DB_PATH)
         self.db_path = db_path
@@ -141,7 +140,7 @@ class FeatureCollector:
             "symbol": trade_context.get("symbol", ""),
             "direction": trade_context.get("direction", ""),
             "timestamp": str(
-                trade_context.get("timestamp", datetime.now(timezone.utc).isoformat())
+                trade_context.get("timestamp", datetime.now(UTC).isoformat())
             ),
             "schema_version": self.SCHEMA_VERSION,
         }
@@ -239,7 +238,7 @@ class FeatureCollector:
         finally:
             conn.close()
 
-    def get_features_df(self, strategy: Optional[str] = None) -> list:
+    def get_features_df(self, strategy: str | None = None) -> list:
         """Recupere les features stockees sous forme de liste de dicts.
 
         Args:

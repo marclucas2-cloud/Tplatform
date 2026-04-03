@@ -96,7 +96,7 @@ class AlpacaClient:
         self._rate_limiter = _RateLimiter()  # FIX CRO H-1: 200 req/min limiter
 
     @classmethod
-    def from_env(cls) -> "AlpacaClient":
+    def from_env(cls) -> AlpacaClient:
         """Construit le client depuis les variables d'environnement."""
         required = ["ALPACA_API_KEY", "ALPACA_SECRET_KEY"]
         missing = [k for k in required if not os.getenv(k)]
@@ -220,8 +220,8 @@ class AlpacaClient:
         client = self._get_trading_client()
 
         try:
-            from alpaca.trading.requests import GetAssetsRequest
             from alpaca.trading.enums import AssetClass, AssetStatus
+            from alpaca.trading.requests import GetAssetsRequest
         except ImportError:
             raise AlpacaAPIError("alpaca-py non installé — pip install alpaca-py")
 
@@ -270,7 +270,7 @@ class AlpacaClient:
 
         if start:
             kwargs["start"] = datetime.datetime.fromisoformat(start).replace(
-                tzinfo=datetime.timezone.utc)
+                tzinfo=datetime.UTC)
         else:
             if tf_unit == "Day":
                 days_back = bars * 1.5
@@ -279,13 +279,13 @@ class AlpacaClient:
             else:
                 days_back = (bars / (6.5 * 60 / tf_val)) * 1.5
             kwargs["start"] = (
-                datetime.datetime.now(datetime.timezone.utc)
+                datetime.datetime.now(datetime.UTC)
                 - datetime.timedelta(days=max(int(days_back), 30))
             )
 
         if end:
             kwargs["end"] = datetime.datetime.fromisoformat(end).replace(
-                tzinfo=datetime.timezone.utc)
+                tzinfo=datetime.UTC)
 
         return kwargs
 
@@ -405,10 +405,12 @@ class AlpacaClient:
                 f"d'allocation (paper_portfolio.py ou ExecutionAgent)."
             )
         try:
+            from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
             from alpaca.trading.requests import (
-                MarketOrderRequest, StopLossRequest, TakeProfitRequest,
+                MarketOrderRequest,
+                StopLossRequest,
+                TakeProfitRequest,
             )
-            from alpaca.trading.enums import OrderSide, TimeInForce, OrderClass
         except ImportError:
             raise AlpacaAPIError("alpaca-py non installe — pip install alpaca-py")
 

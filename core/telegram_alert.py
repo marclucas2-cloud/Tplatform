@@ -10,11 +10,11 @@ Usage :
     send_alert("CIRCUIT-BREAKER DECLENCHE", level="critical")
     send_heartbeat(equity=100000, n_positions=3, pnl=150)
 """
-import os
-import logging
-import urllib.request
-import urllib.parse
 import json
+import logging
+import os
+import urllib.parse
+import urllib.request
 
 logger = logging.getLogger("telegram")
 

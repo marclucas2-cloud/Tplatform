@@ -18,19 +18,19 @@ from __future__ import annotations
 
 import argparse
 import csv
+import logging
 import sys
 import time
-import logging
 from pathlib import Path
 
 # Ajouter le root au path pour imports relatifs
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.data.loader import OHLCVLoader
 from core.backtest.engine import BacktestEngine
-from core.strategy_schema.validator import StrategyValidator
-from core.ranking.ranker import StrategyRanker
+from core.data.loader import OHLCVLoader
 from core.portfolio.correlation import PortfolioCorrelation
+from core.ranking.ranker import StrategyRanker
+from core.strategy_schema.validator import StrategyValidator
 
 logging.basicConfig(level=logging.WARNING)  # Silencer les logs info pendant le batch
 
@@ -74,7 +74,7 @@ def load_all_strategies(strategies_dir: Path, name_filter: str = "",
     return strategies
 
 
-def fetch_data(asset: str, timeframe: str, verbose: bool = True) -> "OHLCVData | None":
+def fetch_data(asset: str, timeframe: str, verbose: bool = True) -> OHLCVData | None:
     """Télécharge les données yfinance avec fallback si timeframe intraday trop court."""
     actual_tf = timeframe
     fallback_used = False

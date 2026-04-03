@@ -13,21 +13,20 @@ Couvre :
 """
 
 import sys
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
+
+import pytest
 
 # Setup paths
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from core.continuous_gate import (
-    ContinuousGateEvaluator,
     PRIMARY_CRITERIA,
-    SECONDARY_CRITERIA,
     SECONDARY_MIN_PASS,
+    ContinuousGateEvaluator,
 )
-
 
 # =============================================================================
 # FIXTURES

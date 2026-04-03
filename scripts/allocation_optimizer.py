@@ -1,6 +1,4 @@
 """Allocation optimizer — optimal capital split across 3 brokers."""
-import numpy as np
-
 
 BROKERS = {
     "IBKR": {

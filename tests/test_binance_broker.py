@@ -1,8 +1,10 @@
 """Tests for BinanceBroker V2 (margin + spot + earn) — 22 tests."""
+from unittest.mock import patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from core.broker.binance_broker import BinanceBroker, RateLimiter
+
 from core.broker.base import BrokerError
+from core.broker.binance_broker import BinanceBroker, RateLimiter
 
 
 class TestRateLimiter:

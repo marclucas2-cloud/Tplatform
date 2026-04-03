@@ -15,14 +15,14 @@ Covers:
 """
 
 import sys
-import pytest
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.timezone_allocator import TimezoneCapitalAllocator, DEFAULT_SCHEDULE
-
+from core.timezone_allocator import TimezoneCapitalAllocator
 
 # =============================================================================
 # FIXTURES

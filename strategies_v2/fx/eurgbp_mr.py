@@ -6,7 +6,7 @@ Classic mean-reversion on a low-volatility FX pair.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -24,7 +24,7 @@ class EURGBPMeanReversion(StrategyBase):
         self.rsi_overbought: float = 70.0
         self.bb_period: int = 20
         self.bb_std: float = 2.0
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -43,7 +43,7 @@ class EURGBPMeanReversion(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
         sym = self.SYMBOL

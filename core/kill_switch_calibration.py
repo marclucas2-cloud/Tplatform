@@ -18,9 +18,10 @@ Usage :
 
 import json
 import logging
-import numpy as np
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
+
+import numpy as np
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +40,7 @@ class KillSwitchCalibrator:
         lookback_days: int = 5,
         max_false_positive_rate: float = 0.05,
         min_detection_rate: float = 0.95,
-        seed: Optional[int] = None,
+        seed: int | None = None,
     ):
         """
         Args:
@@ -165,7 +166,7 @@ class KillSwitchCalibrator:
         strategy_name: str,
         daily_returns: List[float],
         current_threshold: float = -0.02,
-        sharpe_oos: Optional[float] = None,
+        sharpe_oos: float | None = None,
     ) -> dict:
         """Calibre le seuil du kill switch pour une strategie.
 
@@ -251,7 +252,7 @@ class KillSwitchCalibrator:
         self,
         strategy_returns: Dict[str, List[float]],
         current_threshold: float = -0.02,
-        output_path: Optional[str] = None,
+        output_path: str | None = None,
     ) -> Dict[str, dict]:
         """Calibre le kill switch pour toutes les strategies.
 

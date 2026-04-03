@@ -21,19 +21,18 @@ Usage:
 """
 from __future__ import annotations
 
-import json
 import logging
 import os
 import socket
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(ROOT / "archive" / "intraday-backtesterV2"))
 
 try:
     from dotenv import load_dotenv
@@ -86,9 +85,9 @@ def _check_account() -> dict | None:
         os.environ["IBKR_PORT"] = str(IBKR_PORT)
         os.environ["IBKR_HOST"] = IBKR_HOST
         os.environ["IBKR_PAPER"] = os.getenv("IBKR_PAPER", "false")
-        from core.broker.ibkr_adapter import IBKRBroker
         # Clear broker cache to force fresh connection
         from core.broker.factory import _broker_cache
+        from core.broker.ibkr_adapter import IBKRBroker
         _broker_cache.pop("ibkr", None)
         # clientId=99 pour eviter conflit avec worker (clientId=1)
         broker = IBKRBroker(client_id=99)
@@ -228,7 +227,7 @@ def run_daemon():
     logger.info("  PLATFORM WATCHDOG started")
     logger.info(f"  Live gateway: {IBKR_HOST}:{IBKR_PORT}")
     logger.info(f"  Paper gateway: {IBKR_HOST}:{os.getenv('IBKR_PAPER_PORT', '4003')}")
-    logger.info(f"  Worker: trading-worker.service")
+    logger.info("  Worker: trading-worker.service")
     logger.info(f"  Check interval: {CHECK_INTERVAL}s")
     logger.info("=" * 50)
 
@@ -288,7 +287,7 @@ def run_daemon():
                     import json as _json
                     _hb = _json.loads(_heartbeat_path.read_text(encoding="utf-8"))
                     _hb_ts = datetime.fromisoformat(_hb["timestamp"])
-                    _hb_age = (datetime.now(timezone.utc) - _hb_ts).total_seconds()
+                    _hb_age = (datetime.now(UTC) - _hb_ts).total_seconds()
                     if _hb_age > 3600:  # No heartbeat for 1 hour
                         logger.critical(f"DEAD MAN'S SWITCH: no heartbeat for {_hb_age/60:.0f} min")
                         _send_telegram(

@@ -1,14 +1,11 @@
 """Tests for FX Carry + Momentum Filter strategy."""
 import numpy as np
 import pandas as pd
-import pytest
 
 from strategies_v2.fx.fx_carry_momentum_filter import (
-    FXCarryMomentumFilter,
     CARRY_PAIRS,
-    MOMENTUM_LOOKBACK,
-    VOL_LOOKBACK,
     STRATEGY_CONFIG,
+    FXCarryMomentumFilter,
 )
 
 

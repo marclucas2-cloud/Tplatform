@@ -3,8 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any, Dict, Optional
-
+from typing import Any, Dict
 
 # Historical average daily borrow rates (annualized / 365)
 _DEFAULT_BORROW_RATES: Dict[str, float] = {
@@ -31,7 +30,7 @@ class FundingCostModel:
 
     def __init__(
         self,
-        rate_overrides: Optional[Dict[str, float]] = None,
+        rate_overrides: Dict[str, float] | None = None,
         default_rate: float = 0.0005,
     ) -> None:
         """Initialize funding cost model.
@@ -45,7 +44,7 @@ class FundingCostModel:
             self._rates.update(rate_overrides)
         self._default_rate = default_rate
 
-    def get_rate(self, asset: str, timestamp: Optional[datetime] = None) -> float:
+    def get_rate(self, asset: str, timestamp: datetime | None = None) -> float:
         """Get daily borrow rate for an asset.
 
         Args:

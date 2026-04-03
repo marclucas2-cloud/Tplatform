@@ -25,8 +25,6 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -88,7 +86,7 @@ class PaperTradingReport:
 
     def print(self):
         print(f"\n{'='*55}")
-        print(f"  PAPER TRADING REPORT")
+        print("  PAPER TRADING REPORT")
         print(f"{'='*55}")
         print(f"  Bars traites   : {self.n_bars_processed}")
         print(f"  Trades total   : {self.total_trades}")
@@ -98,7 +96,7 @@ class PaperTradingReport:
         print(f"  Capital final  : {self.final_capital:.2f}")
         print(f"  Max drawdown   : {self.max_drawdown_pct:.2f}%")
         if self.strategy_stats:
-            print(f"\n  Par strategie :")
+            print("\n  Par strategie :")
             for sid, stats in self.strategy_stats.items():
                 print(f"    {sid:<35} trades={stats['trades']:3d}  pnl={stats['pnl']:+.4f}")
         print(f"{'='*55}")

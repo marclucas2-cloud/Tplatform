@@ -19,9 +19,8 @@ from __future__ import annotations
 import logging
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
+from dataclasses import dataclass
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -158,7 +157,7 @@ class BorrowRateMonitor:
                         f"threshold {self._max_daily_rate:.4%}/day"
                     ),
                     rate=daily_rate,
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                 )
                 alerts.append(alert)
                 logger.warning("BorrowMonitor: %s — %s", asset, alert.message)
@@ -173,7 +172,7 @@ class BorrowRateMonitor:
                         f"{SPIKE_MULTIPLIER:.0f}× increase in last hour"
                     ),
                     rate=daily_rate,
-                    timestamp=datetime.now(timezone.utc).isoformat(),
+                    timestamp=datetime.now(UTC).isoformat(),
                 )
                 alerts.append(alert)
                 logger.critical("BorrowMonitor: %s — %s", asset, alert.message)
@@ -190,7 +189,7 @@ class BorrowRateMonitor:
                     f"(threshold: {self._max_monthly_cost_pct:.1f}%)"
                 ),
                 rate=monthly_cost_pct / 100,
-                timestamp=datetime.now(timezone.utc).isoformat(),
+                timestamp=datetime.now(UTC).isoformat(),
             )
             alerts.append(alert)
             logger.critical("BorrowMonitor: %s", alert.message)
@@ -203,7 +202,7 @@ class BorrowRateMonitor:
     def auto_close_expensive_shorts(
         self,
         positions: list[dict],
-        broker: Optional[object] = None,
+        broker: object | None = None,
     ) -> list[str]:
         """Auto-close most expensive shorts until total cost < threshold.
 
@@ -342,10 +341,10 @@ class BorrowRateMonitor:
             "total_assets_monitored": len(asset_reports),
             "capital": self._capital,
             "last_check": datetime.fromtimestamp(
-                self._last_check, tz=timezone.utc
+                self._last_check, tz=UTC
             ).isoformat() if self._last_check > 0 else None,
             "recent_alerts": len(self._alerts),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     def get_recent_alerts(self, limit: int = 50) -> list[dict]:

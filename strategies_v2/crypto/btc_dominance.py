@@ -7,7 +7,7 @@ long BTC and short alts. When falling, the opposite.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -63,7 +63,7 @@ class BTCDominance(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         dom_sym = self.dominance_symbol
         ema_f = self.data_feed.get_indicator(dom_sym, "ema", self.ema_fast)
         ema_s = self.data_feed.get_indicator(dom_sym, "ema", self.ema_slow)

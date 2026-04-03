@@ -7,15 +7,14 @@ Only external broker APIs are mocked; risk logic runs unmodified.
 """
 import pytest
 
+from core.cross_portfolio_guard import check_combined_exposure
 from core.crypto.risk_manager_crypto import (
     CryptoKillSwitch,
     CryptoRiskLimits,
     CryptoRiskManager,
 )
-from core.cross_portfolio_guard import check_combined_exposure
 from core.kill_switch_live import LiveKillSwitch
 from core.risk_manager_live import LiveRiskManager
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

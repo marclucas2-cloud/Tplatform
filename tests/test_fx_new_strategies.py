@@ -24,23 +24,18 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from core.backtester_v2.data_feed import DataFeed
-from core.backtester_v2.types import Bar, PortfolioState, Signal
+from core.backtester_v2.types import Bar, PortfolioState
 from strategies_v2.fx.fx_asian_range_breakout import (
     FXAsianRangeBreakout,
-    SUPPORTED_PAIRS as ARB_PAIRS,
 )
 from strategies_v2.fx.fx_bollinger_squeeze import (
     FXBollingerSqueeze,
-    SUPPORTED_PAIRS as BB_PAIRS,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers

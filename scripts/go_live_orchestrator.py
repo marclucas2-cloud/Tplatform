@@ -25,17 +25,16 @@ from __future__ import annotations
 
 import json
 import logging
-import os
 import subprocess
 import sys
 import time
-from datetime import datetime, timedelta
-from pathlib import Path
 import zoneinfo
+from datetime import datetime
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(ROOT / "archive" / "intraday-backtesterV2"))
 
 try:
     from dotenv import load_dotenv
@@ -110,7 +109,7 @@ def _run_script(script_name: str, args: list[str] = None, label: str = ""):
     script_path = str(SCRIPTS / script_name)
     cmd = [PYTHON, script_path] + args
 
-    logger.info(f"")
+    logger.info("")
     logger.info(f"{'='*60}")
     logger.info(f"  STEP: {label or script_name}")
     logger.info(f"  Time: {_now().strftime('%H:%M:%S CET')}")
@@ -154,7 +153,7 @@ def _run_script(script_name: str, args: list[str] = None, label: str = ""):
         return success, output_json or {"returncode": result.returncode}
 
     except subprocess.TimeoutExpired:
-        logger.error(f"  → TIMEOUT (5 min)")
+        logger.error("  → TIMEOUT (5 min)")
         return False, {"error": "timeout"}
     except Exception as e:
         logger.error(f"  → ERROR: {e}")
@@ -163,10 +162,10 @@ def _run_script(script_name: str, args: list[str] = None, label: str = ""):
 
 def _abort(reason: str):
     """Abort the go-live sequence."""
-    logger.critical(f"")
+    logger.critical("")
     logger.critical(f"{'='*60}")
     logger.critical(f"  ⛔ GO-LIVE ABORTED: {reason}")
-    logger.critical(f"  Trading INTERDIT")
+    logger.critical("  Trading INTERDIT")
     logger.critical(f"{'='*60}")
     _send_telegram(
         f"GO-LIVE ABORTED\n"

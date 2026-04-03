@@ -9,15 +9,13 @@ Usage:
     python scripts/collect_fx_history_ibkr.py
 """
 
+import logging
 import sys
 import time
-import logging
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timedelta, timezone
 
 import pandas as pd
-import numpy as np
-
 from ib_insync import IB, Forex, util
 
 # ---------------------------------------------------------------------------
@@ -112,7 +110,7 @@ def request_historical(
         return pd.DataFrame()
 
     if not bars:
-        log.warning(f"  No bars returned")
+        log.warning("  No bars returned")
         return pd.DataFrame()
 
     df = util.df(bars)
@@ -141,7 +139,7 @@ def request_1h_chunked(ib: IB, contract, years: int = 2) -> pd.DataFrame:
     some combinations). We chunk into 6-month blocks working backwards.
     """
     all_dfs = []
-    end_dt = datetime.now(timezone.utc).replace(tzinfo=None)
+    end_dt = datetime.now(UTC).replace(tzinfo=None)
     chunk_months = 6
     total_months = years * 12
 
@@ -388,7 +386,7 @@ def main():
                     "gap_warnings": 0, "status": "NO_DATA",
                 })
         else:
-            log.warning(f"  Skipping 4H — no 1H data available")
+            log.warning("  Skipping 4H — no 1H data available")
             validation_results.append({
                 "symbol": pair, "timeframe": "4H", "candles": 0,
                 "start": None, "end": None, "ohlc_errors": 0,

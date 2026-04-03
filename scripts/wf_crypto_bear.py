@@ -1,10 +1,11 @@
 """WF validation for 3 BEAR crypto strategies on 4H BTC data."""
 import sys
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 df = pd.read_parquet("data/crypto/candles/BTCUSDT_4h.parquet")
 df.columns = [c.lower() for c in df.columns]

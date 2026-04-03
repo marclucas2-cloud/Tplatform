@@ -16,8 +16,8 @@ Contraintes :
 
 import logging
 import math
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from datetime import UTC, datetime
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +50,7 @@ class ConvictionSizer:
         self,
         base_kelly_fraction: float = 0.125,
         max_kelly_fraction: float = 0.25,
-        multipliers: Optional[Dict] = None,
+        multipliers: Dict | None = None,
     ):
         """
         Args:
@@ -214,7 +214,7 @@ class ConvictionSizer:
             "level": level,
             "base_size": base_size,
             "adjusted_size": adjusted_size,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "pnl": None,  # A remplir apres cloture du trade
             "won": None,
         }
@@ -293,7 +293,7 @@ class ConvictionSizer:
         multi_timeframe_alignment: float = 0.0,
         regime_alignment: float = 0.0,
         historical_edge: float = 0.0,
-        weights: Optional[Dict[str, float]] = None,
+        weights: Dict[str, float] | None = None,
     ) -> float:
         """Calcule le score de conviction a partir de composantes individuelles.
 

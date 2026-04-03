@@ -17,9 +17,8 @@ Couts modeles :
 import argparse
 import csv
 import logging
-import os
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +34,7 @@ def load_trades_from_csv(filepath: str) -> List[dict]:
     """Charge les trades depuis un fichier CSV."""
     trades = []
     try:
-        with open(filepath, "r", encoding="utf-8") as f:
+        with open(filepath, encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 trades.append(row)
@@ -71,7 +70,7 @@ def estimate_trade_costs(trade: dict) -> dict:
 
     # Essayer differents noms de colonnes
     for qty_col in ["qty", "shares", "quantity", "size"]:
-        if qty_col in trade and trade[qty_col]:
+        if trade.get(qty_col):
             try:
                 qty = abs(float(trade[qty_col]))
                 break
@@ -79,7 +78,7 @@ def estimate_trade_costs(trade: dict) -> dict:
                 pass
 
     for notional_col in ["notional", "trade_value", "value"]:
-        if notional_col in trade and trade[notional_col]:
+        if trade.get(notional_col):
             try:
                 notional = abs(float(trade[notional_col]))
                 break
@@ -89,7 +88,7 @@ def estimate_trade_costs(trade: dict) -> dict:
     # Si pas de notional mais entry_price + qty
     if notional == 0:
         for price_col in ["entry_price", "price", "fill_price"]:
-            if price_col in trade and trade[price_col]:
+            if trade.get(price_col):
                 try:
                     price = float(trade[price_col])
                     if qty > 0:
@@ -101,7 +100,7 @@ def estimate_trade_costs(trade: dict) -> dict:
     # Si pas de qty mais notional + prix
     if qty == 0 and notional > 0:
         for price_col in ["entry_price", "price", "fill_price"]:
-            if price_col in trade and trade[price_col]:
+            if trade.get(price_col):
                 try:
                     price = float(trade[price_col])
                     if price > 0:
@@ -112,7 +111,7 @@ def estimate_trade_costs(trade: dict) -> dict:
 
     # PnL brut
     for pnl_col in ["pnl", "profit", "gross_pnl", "net_pnl", "return"]:
-        if pnl_col in trade and trade[pnl_col]:
+        if trade.get(pnl_col):
             try:
                 gross_pnl = float(trade[pnl_col])
                 break
@@ -272,7 +271,7 @@ def generate_report(analysis: dict) -> str:
         "# Analyse des Couts par Strategie",
         "",
         f"> Date : {__import__('datetime').datetime.now().strftime('%Y-%m-%d %H:%M')}",
-        f"> Modele : commission $0.005/share + slippage 0.02%",
+        "> Modele : commission $0.005/share + slippage 0.02%",
         "",
         "---",
         "",
@@ -283,8 +282,8 @@ def generate_report(analysis: dict) -> str:
     lines.extend([
         "## Resume",
         "",
-        f"| Metrique | Valeur |",
-        f"|----------|--------|",
+        "| Metrique | Valeur |",
+        "|----------|--------|",
         f"| Strategies analysees | {s.get('total_strategies', 0)} |",
         f"| Trades total | {s.get('total_trades', 0)} |",
         f"| PnL brut total | ${s.get('total_gross_pnl', 0):,.2f} |",

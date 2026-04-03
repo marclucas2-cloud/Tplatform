@@ -1,12 +1,11 @@
 """Tests for all 8 crypto strategies V2 (margin+spot+earn) — 40 tests."""
 import importlib.util
-import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
-import pytest
 import numpy as np
 import pandas as pd
-from datetime import datetime, timezone
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 STRAT_DIR = ROOT / "strategies" / "crypto"
@@ -48,7 +47,7 @@ class TestDualMomentum:
             assert col in result.columns
 
     def test_signal_early_none(self):
-        candle = pd.Series({"close": 40000, "timestamp": datetime.now(timezone.utc)})
+        candle = pd.Series({"close": 40000, "timestamp": datetime.now(UTC)})
         assert self.mod.signal_fn(candle, {"positions": [], "capital": 15000, "i": 5}) is None
 
     def test_borrow_rate_check(self):
@@ -141,7 +140,7 @@ class TestMeanReversion:
 
     def test_no_short(self):
         """Spot only = long only."""
-        candle = pd.Series({"close": 40000, "rsi": 80, "timestamp": datetime.now(timezone.utc)})
+        candle = pd.Series({"close": 40000, "rsi": 80, "timestamp": datetime.now(UTC)})
         state = {"positions": [], "capital": 15000, "i": 300}
         result = self.mod.signal_fn(candle, state)
         if result:

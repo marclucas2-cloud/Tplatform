@@ -6,11 +6,8 @@ Tests pour les modules P2/P3 :
   - Cost Analysis (scripts/cost_analysis.py)
 """
 
-import os
-import sys
-import tempfile
 import sqlite3
-from datetime import datetime, timedelta
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -21,9 +18,6 @@ import pytest
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.regime_detector_hmm import RegimeDetectorHMM, MacroRegime
-from core.position_sizer import CorrelationAwareSizer
-from core.ml_features import FeatureCollector
 from scripts.cost_analysis import (
     analyze_costs,
     estimate_trade_costs,
@@ -31,6 +25,9 @@ from scripts.cost_analysis import (
     generate_report,
 )
 
+from core.ml_features import FeatureCollector
+from core.position_sizer import CorrelationAwareSizer
+from core.regime_detector_hmm import MacroRegime, RegimeDetectorHMM
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # Fixtures

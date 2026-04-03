@@ -375,7 +375,7 @@ def print_universe():
         print()
 
     # Alpaca etendu
-    print(f"=== Univers Alpaca etendu ===\n")
+    print("=== Univers Alpaca etendu ===\n")
     print(f"  S&P 500  : {len(ALPACA_SP500)} tickers")
     print(f"  ETFs     : {len(ALPACA_ETFS)} tickers")
     print(f"  Crypto   : {len(ALPACA_CRYPTO)} paires")

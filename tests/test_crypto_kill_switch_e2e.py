@@ -20,11 +20,10 @@ Action sequence verification (full_kill):
 from __future__ import annotations
 
 import sys
-import time
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
-from unittest.mock import MagicMock, patch, call
+from typing import Dict, List
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -72,7 +71,7 @@ class CryptoKillSwitch:
         self,
         broker=None,
         alert_callback=None,
-        thresholds: Optional[dict] = None,
+        thresholds: dict | None = None,
     ):
         self.broker = broker
         self.alert_callback = alert_callback
@@ -80,11 +79,11 @@ class CryptoKillSwitch:
 
         # State
         self._killed = False
-        self._kill_reason: Optional[str] = None
-        self._kill_timestamp: Optional[str] = None
+        self._kill_reason: str | None = None
+        self._kill_timestamp: str | None = None
         self._actions_executed: List[str] = []
         self._peak_equity: float = 0.0
-        self._api_last_ok: Optional[datetime] = None
+        self._api_last_ok: datetime | None = None
         self._borrow_rates_history: Dict[str, List[dict]] = {}
 
     @property
@@ -159,9 +158,9 @@ class CryptoKillSwitch:
             }
         return {"triggered": False}
 
-    def check_api_down(self, api_reachable: bool, now: Optional[datetime] = None) -> dict:
+    def check_api_down(self, api_reachable: bool, now: datetime | None = None) -> dict:
         """Check API down trigger (> 10 min unreachable)."""
-        now = now or datetime.now(timezone.utc)
+        now = now or datetime.now(UTC)
 
         if api_reachable:
             self._api_last_ok = now
@@ -233,7 +232,7 @@ class CryptoKillSwitch:
 
         Idempotent: if already killed, returns without re-executing actions.
         """
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
 
         if self._killed:
             return {
@@ -481,7 +480,7 @@ class TestApiDown10Min:
 
     def test_api_down_10min(self, kill_switch):
         """API down for 11 minutes should trigger."""
-        base_time = datetime(2026, 3, 28, 12, 0, 0, tzinfo=timezone.utc)
+        base_time = datetime(2026, 3, 28, 12, 0, 0, tzinfo=UTC)
 
         # First: API is OK
         kill_switch.check_api_down(True, now=base_time)
@@ -501,7 +500,7 @@ class TestApiDown10Min:
 
     def test_api_down_recovers(self, kill_switch):
         """API recovering before 10 min should NOT trigger."""
-        base_time = datetime(2026, 3, 28, 12, 0, 0, tzinfo=timezone.utc)
+        base_time = datetime(2026, 3, 28, 12, 0, 0, tzinfo=UTC)
 
         kill_switch.check_api_down(True, now=base_time)
         kill_switch.check_api_down(False, now=base_time + timedelta(minutes=1))
@@ -515,7 +514,7 @@ class TestApiDown10Min:
 
     def test_api_short_outage(self, kill_switch):
         """API down for 5 min should NOT trigger."""
-        base_time = datetime(2026, 3, 28, 12, 0, 0, tzinfo=timezone.utc)
+        base_time = datetime(2026, 3, 28, 12, 0, 0, tzinfo=UTC)
 
         kill_switch.check_api_down(True, now=base_time)
         result = kill_switch.check_api_down(

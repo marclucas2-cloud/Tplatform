@@ -30,7 +30,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-
 STRATEGY_CONFIG = {
     "name": "Liquidation Spike",
     "id": "STRAT-011",

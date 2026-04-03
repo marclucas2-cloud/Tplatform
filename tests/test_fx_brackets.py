@@ -24,10 +24,10 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from core.broker.ibkr_bracket import (
-    BracketOrderError,
-    BracketOrderManager,
     FX_MIN_LOT,
     FX_SL_PIP_OFFSET,
+    BracketOrderError,
+    BracketOrderManager,
     FXBracketHandler,
 )
 

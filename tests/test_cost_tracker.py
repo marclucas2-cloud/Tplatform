@@ -13,21 +13,19 @@ Verifie :
   - Gestion donnees vides
   - Validation des entrees
 """
-import os
-import sys
-import pytest
 import sqlite3
-import math
+import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock
+
+import pytest
 
 # Setup paths
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from core.cost_tracker import CostTracker
-
 
 # =============================================================================
 # FIXTURES
@@ -60,7 +58,7 @@ def tracker_with_alert(tmp_db, mock_alert):
 def _insert_old_commission(db_path, trade_id, strategy, days_ago,
                            commission=0.50, notional=1000.0, pnl=10.0):
     """Insert a commission with a timestamp in the past for period filtering tests."""
-    ts = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+    ts = (datetime.now(UTC) - timedelta(days=days_ago)).isoformat()
     cost_ratio = commission / abs(pnl) if pnl else None
     with sqlite3.connect(str(db_path)) as conn:
         conn.execute(

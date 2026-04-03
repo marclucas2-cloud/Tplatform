@@ -17,13 +17,12 @@ import json
 import os
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 import yaml
 
-from core.trading_engine import TradingEngine, Pipeline, PipelineConfig
-
+from core.trading_engine import Pipeline, PipelineConfig, TradingEngine
 
 # ---------------------------------------------------------------------------
 # Fixtures

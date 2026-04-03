@@ -1,5 +1,4 @@
 """ROC Projection 1 an — 5 scenarios basees sur WF+MC reels."""
-import numpy as np
 
 # Capital reel
 CAPITAL_BINANCE = 23_400
@@ -111,7 +110,7 @@ def main():
     print("  PROJECTIONS ROC 1 AN — 5 SCENARIOS")
     print(f"  Capital reel: ${CAPITAL_BINANCE + CAPITAL_IBKR_TARGET:,.0f}"
           f" (Binance ${CAPITAL_BINANCE:,.0f} + IBKR cible ${CAPITAL_IBKR_TARGET:,.0f})")
-    print(f"  19 strategies (12 VALIDATED + 7 BORDERLINE) | HRP +28% | Kelly dynamique")
+    print("  19 strategies (12 VALIDATED + 7 BORDERLINE) | HRP +28% | Kelly dynamique")
     print("=" * 105)
 
     summary_rows = []

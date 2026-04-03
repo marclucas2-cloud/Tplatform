@@ -12,7 +12,6 @@ import pytest
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.types import Bar
 
-
 # ─── Fixtures ────────────────────────────────────────────────────────
 
 

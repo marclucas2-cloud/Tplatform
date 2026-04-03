@@ -25,7 +25,7 @@ Mapping tickers Yahoo Finance :
 from __future__ import annotations
 
 import hashlib
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -72,7 +72,7 @@ class OHLCVData:
     def n_bars(self) -> int:
         return len(self.df)
 
-    def split(self, train_pct: float = 0.7) -> tuple["OHLCVData", "OHLCVData"]:
+    def split(self, train_pct: float = 0.7) -> tuple[OHLCVData, OHLCVData]:
         """Découpe en train/test sans overlap — essentiel pour validation out-of-sample."""
         n = len(self.df)
         split_idx = int(n * train_pct)
@@ -82,7 +82,7 @@ class OHLCVData:
         test = OHLCVData(test_df, self.asset, self.timeframe, self.source)
         return train, test
 
-    def walk_forward_windows(self, n_windows: int = 4, oos_pct: float = 0.3) -> list[tuple["OHLCVData", "OHLCVData"]]:
+    def walk_forward_windows(self, n_windows: int = 4, oos_pct: float = 0.3) -> list[tuple[OHLCVData, OHLCVData]]:
         """
         Génère des fenêtres walk-forward (in-sample + out-of-sample).
         Aucun overlap entre les fenêtres OOS — évite le data snooping.
@@ -236,7 +236,7 @@ class OHLCVLoader:
                       period: str | None = None,
                       start: str | None = None,
                       end: str | None = None,
-                      ticker: str | None = None) -> "OHLCVData":
+                      ticker: str | None = None) -> OHLCVData:
         """
         Charge des données réelles depuis Yahoo Finance (gratuit, sans clé API).
 
@@ -317,7 +317,7 @@ class OHLCVLoader:
                     bars: int = 1000,
                     api_key: str | None = None,
                     secret_key: str | None = None,
-                    regular_hours_only: bool = False) -> "OHLCVData":
+                    regular_hours_only: bool = False) -> OHLCVData:
         """
         Charge des données OHLCV depuis Alpaca Markets.
 

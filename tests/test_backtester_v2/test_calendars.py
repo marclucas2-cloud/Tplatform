@@ -1,15 +1,13 @@
 """Tests for market calendars — US, EU, FX, futures, crypto."""
 
-import pytest
 import pandas as pd
 
-from core.backtester_v2.calendars.us_calendar import USMarketCalendar
-from core.backtester_v2.calendars.eu_calendar import EUMarketCalendar
-from core.backtester_v2.calendars.fx_calendar import FXCalendar
-from core.backtester_v2.calendars.futures_calendar import FuturesCalendar
-from core.backtester_v2.calendars.crypto_calendar import CryptoCalendar
 from core.backtester_v2.calendars.base import CalendarFactory
-
+from core.backtester_v2.calendars.crypto_calendar import CryptoCalendar
+from core.backtester_v2.calendars.eu_calendar import EUMarketCalendar
+from core.backtester_v2.calendars.futures_calendar import FuturesCalendar
+from core.backtester_v2.calendars.fx_calendar import FXCalendar
+from core.backtester_v2.calendars.us_calendar import USMarketCalendar
 
 # ---------------------------------------------------------------------------
 # US Calendar
@@ -224,9 +222,6 @@ class TestCalendarFactory:
     def test_factory_creates_registered(self):
         """Factory should create calendars for registered asset classes."""
         # Ensure registrations from imports
-        import core.backtester_v2.calendars.us_calendar  # noqa: F401
-        import core.backtester_v2.calendars.fx_calendar  # noqa: F401
-        import core.backtester_v2.calendars.crypto_calendar  # noqa: F401
 
         cals = CalendarFactory.create(["equity", "fx", "crypto"])
         assert "equity" in cals

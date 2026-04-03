@@ -3,14 +3,11 @@ Tests Sprint 4 — Trailing stop, Expectancy, Rolling Sharpe, 3 nouvelles strat�
 σ-bands VWAP, Portfolio correlation & allocation.
 """
 import pytest
-import pandas as pd
-import numpy as np
 
-from core.data.loader import OHLCVLoader
 from core.backtest.engine import BacktestEngine
-from core.strategy_schema.validator import StrategyValidator
+from core.data.loader import OHLCVLoader
 from core.portfolio.correlation import PortfolioCorrelation
-
+from core.strategy_schema.validator import StrategyValidator
 
 # ─── Fixtures ─────────────────────────────────────────────────────────────────
 

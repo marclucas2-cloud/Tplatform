@@ -1,12 +1,15 @@
 """Audit — check for duplicate orders from Railway+Hetzner double-worker period."""
-import os, sys
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 os.environ.setdefault("DOTENV_PATH", os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 from dotenv import load_dotenv
+
 load_dotenv(os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), ".env"))
 
-from core.broker.binance_broker import BinanceBroker
 from core.alpaca_client.client import AlpacaClient
+from core.broker.binance_broker import BinanceBroker
 
 print("=" * 60)
 print("  AUDIT DOUBLONS — Railway + Hetzner")
@@ -69,6 +72,7 @@ except Exception as e:
 # Worker logs
 print("\n--- WORKER UPTIME ---")
 import subprocess
+
 r = subprocess.run(["systemctl", "show", "trading-worker", "-p", "ActiveEnterTimestamp"], capture_output=True, text=True)
 print(f"  {r.stdout.strip()}")
 

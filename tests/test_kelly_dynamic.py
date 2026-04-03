@@ -1,5 +1,5 @@
 """Tests for DynamicKellyManager — equity momentum-based Kelly switching."""
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -19,7 +19,7 @@ def km_no_hysteresis():
 def feed_equity(km, values, start=None):
     """Feed a series of equity values."""
     if start is None:
-        start = datetime(2026, 1, 2, tzinfo=timezone.utc)
+        start = datetime(2026, 1, 2, tzinfo=UTC)
     for i, v in enumerate(values):
         km.update_equity(start + timedelta(days=i), v)
 
@@ -84,7 +84,7 @@ class TestHysteresis:
         mode1 = km.get_kelly_mode()["mode"]
         assert mode1 == "NOMINAL"
         # Tiny oscillation within same SMA band
-        km.update_equity(datetime(2026, 2, 1, tzinfo=timezone.utc), 100_050)
+        km.update_equity(datetime(2026, 2, 1, tzinfo=UTC), 100_050)
         mode2 = km.get_kelly_mode()["mode"]
         assert mode2 == "NOMINAL"  # Still NOMINAL
 
@@ -117,7 +117,7 @@ class TestEquityStats:
 
 class TestEdgeCases:
     def test_single_equity_point(self, km):
-        km.update_equity(datetime(2026, 1, 2, tzinfo=timezone.utc), 100_000)
+        km.update_equity(datetime(2026, 1, 2, tzinfo=UTC), 100_000)
         mode = km.get_kelly_mode()
         assert mode["mode"] == "NOMINAL"
 

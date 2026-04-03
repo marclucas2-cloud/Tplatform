@@ -13,14 +13,14 @@ Tests cover:
 
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock
 
 import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.broker.ibkr_bracket import BracketOrderManager, BracketOrderError
+from core.broker.ibkr_bracket import BracketOrderError, BracketOrderManager
 
 
 @pytest.fixture(autouse=True)

@@ -17,8 +17,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -50,7 +49,7 @@ class CryptoRegimeResult:
     votes: dict[str, str]            # signal_name -> regime vote
     scores: dict[str, float]         # signal_name -> raw score
     timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
     def __str__(self) -> str:
@@ -83,7 +82,7 @@ class CryptoRegimeDetector:
         print(result.regime, result.confidence)
     """
 
-    def __init__(self, weights: Optional[dict[str, float]] = None):
+    def __init__(self, weights: dict[str, float] | None = None):
         """Initialise with optional custom weights.
 
         Args:

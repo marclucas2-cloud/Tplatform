@@ -20,12 +20,12 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(ROOT / "archive" / "intraday-backtesterV2"))
 
 try:
     from dotenv import load_dotenv
@@ -154,7 +154,7 @@ def test_ibkr_fx(dry_run: bool = False):
         _log_result("IBKR", "verify_closed", False, str(e))
 
     # Log PnL
-    logger.info(f"  IBKR test trade complete — check fills for PnL")
+    logger.info("  IBKR test trade complete — check fills for PnL")
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -234,7 +234,7 @@ def test_binance(dry_run: bool = False):
     time.sleep(1)
 
     # 6. Close (sell)
-    logger.info(f"  Closing BTCUSDT...")
+    logger.info("  Closing BTCUSDT...")
     try:
         close_result = broker.create_position(
             symbol="BTCUSDT",
@@ -265,9 +265,9 @@ def test_worker_cycle():
 
     # 1. Signal generation
     try:
-        from strategies_v2.fx.fx_carry_momentum_filter import FXCarryMomentumFilter, CARRY_PAIRS
         import pandas as pd
-        import numpy as np
+
+        from strategies_v2.fx.fx_carry_momentum_filter import CARRY_PAIRS, FXCarryMomentumFilter
 
         strat = FXCarryMomentumFilter()
 
@@ -298,7 +298,7 @@ def test_worker_cycle():
         event_log = ROOT / "logs" / "events.jsonl"
         event_log.parent.mkdir(parents=True, exist_ok=True)
         event = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "strategy": "test_live_trade",
             "action": "signal",
             "details": {"test": True, "source": "pre_live_validation"},
@@ -326,7 +326,7 @@ def main():
 
     logger.info("=" * 60)
     logger.info("  LIVE TRADE TEST")
-    logger.info(f"  {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    logger.info(f"  {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     logger.info(f"  Mode: {'DRY RUN' if dry_run else 'LIVE EXECUTION'}")
     logger.info("=" * 60)
 
@@ -376,7 +376,7 @@ def main():
         "status": status,
         "results": _results,
         "errors": errors,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "dry_run": dry_run,
     }, indent=2))
     logger.info(f"  Results saved to {results_path}")

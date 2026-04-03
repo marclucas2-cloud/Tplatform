@@ -10,6 +10,8 @@ CRYPTO_STRATEGIES = {}
 try:
     from strategies.crypto.btc_eth_dual_momentum import (
         STRATEGY_CONFIG as STRAT_001_CONFIG,
+    )
+    from strategies.crypto.btc_eth_dual_momentum import (
         signal_fn as strat_001_signal,
     )
     CRYPTO_STRATEGIES["STRAT-001"] = {"config": STRAT_001_CONFIG, "signal_fn": strat_001_signal}
@@ -22,6 +24,8 @@ except Exception as e:
 try:
     from strategies.crypto.vol_breakout import (
         STRATEGY_CONFIG as STRAT_004_CONFIG,
+    )
+    from strategies.crypto.vol_breakout import (
         signal_fn as strat_004_signal,
     )
     CRYPTO_STRATEGIES["STRAT-004"] = {"config": STRAT_004_CONFIG, "signal_fn": strat_004_signal}
@@ -31,6 +35,8 @@ except Exception as e:
 try:
     from strategies.crypto.btc_dominance_v2 import (
         STRATEGY_CONFIG as STRAT_005_CONFIG,
+    )
+    from strategies.crypto.btc_dominance_v2 import (
         signal_fn as strat_005_signal,
     )
     CRYPTO_STRATEGIES["STRAT-005"] = {"config": STRAT_005_CONFIG, "signal_fn": strat_005_signal}
@@ -40,6 +46,8 @@ except Exception as e:
 try:
     from strategies.crypto.borrow_rate_carry import (
         STRATEGY_CONFIG as STRAT_006_CONFIG,
+    )
+    from strategies.crypto.borrow_rate_carry import (
         signal_fn as strat_006_signal,
     )
     CRYPTO_STRATEGIES["STRAT-006"] = {"config": STRAT_006_CONFIG, "signal_fn": strat_006_signal}
@@ -49,6 +57,8 @@ except Exception as e:
 try:
     from strategies.crypto.liquidation_momentum import (
         STRATEGY_CONFIG as STRAT_007_CONFIG,
+    )
+    from strategies.crypto.liquidation_momentum import (
         signal_fn as strat_007_signal,
     )
     CRYPTO_STRATEGIES["STRAT-007"] = {"config": STRAT_007_CONFIG, "signal_fn": strat_007_signal}
@@ -58,6 +68,8 @@ except Exception as e:
 try:
     from strategies.crypto.weekend_gap import (
         STRATEGY_CONFIG as STRAT_008_CONFIG,
+    )
+    from strategies.crypto.weekend_gap import (
         signal_fn as strat_008_signal,
     )
     CRYPTO_STRATEGIES["STRAT-008"] = {"config": STRAT_008_CONFIG, "signal_fn": strat_008_signal}
@@ -71,6 +83,8 @@ except Exception as e:
 try:
     from strategies.crypto.trend_short_v1 import (
         STRATEGY_CONFIG as STRAT_009_CONFIG,
+    )
+    from strategies.crypto.trend_short_v1 import (
         signal_fn as strat_009_signal,
     )
     CRYPTO_STRATEGIES["STRAT-009"] = {"config": STRAT_009_CONFIG, "signal_fn": strat_009_signal}
@@ -80,6 +94,8 @@ except Exception as e:
 try:
     from strategies.crypto.mr_scalp_v1 import (
         STRATEGY_CONFIG as STRAT_010_CONFIG,
+    )
+    from strategies.crypto.mr_scalp_v1 import (
         signal_fn as strat_010_signal,
     )
     CRYPTO_STRATEGIES["STRAT-010"] = {"config": STRAT_010_CONFIG, "signal_fn": strat_010_signal}
@@ -89,6 +105,8 @@ except Exception as e:
 try:
     from strategies.crypto.liquidation_spike_v1 import (
         STRATEGY_CONFIG as STRAT_011_CONFIG,
+    )
+    from strategies.crypto.liquidation_spike_v1 import (
         signal_fn as strat_011_signal,
     )
     CRYPTO_STRATEGIES["STRAT-011"] = {"config": STRAT_011_CONFIG, "signal_fn": strat_011_signal}
@@ -99,6 +117,8 @@ except Exception as e:
 try:
     from strategies.crypto.range_bb_harvest import (
         STRATEGY_CONFIG as STRAT_014_CONFIG,
+    )
+    from strategies.crypto.range_bb_harvest import (
         signal_fn as strat_014_signal,
     )
     CRYPTO_STRATEGIES["STRAT-014"] = {"config": STRAT_014_CONFIG, "signal_fn": strat_014_signal}
@@ -108,6 +128,8 @@ except Exception as e:
 try:
     from strategies.crypto.vol_expansion_bear import (
         STRATEGY_CONFIG as STRAT_012_CONFIG,
+    )
+    from strategies.crypto.vol_expansion_bear import (
         signal_fn as strat_012_signal,
     )
     CRYPTO_STRATEGIES["STRAT-012"] = {"config": STRAT_012_CONFIG, "signal_fn": strat_012_signal}

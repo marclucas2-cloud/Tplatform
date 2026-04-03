@@ -12,9 +12,10 @@ Aucun appel reseau reel — tout est mocke.
 """
 
 import sys
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
@@ -217,8 +218,8 @@ class TestIBKRDisconnectReconnectMock:
         mock_ib.isConnected.return_value = False
         mock_ib.connect.side_effect = Exception("Connection refused")
 
-        from core.broker.ibkr_adapter import IBKRBroker
         from core.broker.base import BrokerError
+        from core.broker.ibkr_adapter import IBKRBroker
         broker = IBKRBroker.__new__(IBKRBroker)
         broker._ib = mock_ib
         broker._paper = True

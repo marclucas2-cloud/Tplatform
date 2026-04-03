@@ -6,8 +6,6 @@ Trail distance = 1.0x ATR (tighter than initial SL of 2x ATR).
 Never moves the stop backwards.
 """
 import logging
-from datetime import datetime, timezone
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -42,7 +40,7 @@ class FXTrailingStop:
         self._activated: dict[str, bool] = {}
 
     def update(self, position_id: str, entry_price: float, current_price: float,
-               current_atr: float, direction: int, current_stop: float) -> Optional[float]:
+               current_atr: float, direction: int, current_stop: float) -> float | None:
         """Calculate new trailing stop price if applicable.
 
         Args:

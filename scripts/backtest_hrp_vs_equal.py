@@ -9,7 +9,6 @@ Usage:
     python scripts/backtest_hrp_vs_equal.py [--lookback-months 6]
 """
 import argparse
-import json
 import logging
 import sys
 from datetime import datetime

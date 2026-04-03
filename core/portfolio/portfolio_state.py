@@ -17,7 +17,7 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -134,12 +134,12 @@ class PortfolioStateEngine:
         self._data_dir.mkdir(parents=True, exist_ok=True)
         self._peak_equity: float = 0.0
         self._daily_start_equity: float = 0.0
-        self._last_reset_date: Optional[str] = None
+        self._last_reset_date: str | None = None
 
     def get_state(
         self,
         leverage_target: float = 1.0,
-        active_strategies: Optional[List[str]] = None,
+        active_strategies: List[str] | None = None,
     ) -> PortfolioState:
         """Compute unified portfolio state from all brokers.
 

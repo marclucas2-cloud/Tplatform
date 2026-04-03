@@ -32,7 +32,7 @@ class IBKRCostModel(CostModel):
     # --- Futures micro ---
     FUTURES_PER_CONTRACT: float = 0.62
 
-    def calculate_commission(self, order: "Order", fill_price: float) -> float:
+    def calculate_commission(self, order: Order, fill_price: float) -> float:
         """Calculate IBKR commission based on asset class.
 
         Args:

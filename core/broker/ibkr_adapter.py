@@ -12,7 +12,6 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Any
 
 from core.broker.base import BaseBroker, BrokerError
 
@@ -51,7 +50,7 @@ def _make_contract(symbol: str):
     - FX pairs (EURUSD) -> Forex(pair)
     - Actions US (default) -> Stock(sym, SMART, USD)
     """
-    from ib_insync import Stock, Forex
+    from ib_insync import Forex, Stock
 
     # FX
     if symbol.upper() in _FX_PAIRS:
@@ -285,7 +284,7 @@ class IBKRBroker(BaseBroker):
             logger.info(f"IBKR LIVE order authorized by: {_authorized_by}")
 
         self._ensure_connected()
-        from ib_insync import MarketOrder, StopOrder, LimitOrder
+        from ib_insync import LimitOrder, MarketOrder, StopOrder
 
         contract = _make_contract(symbol)
         self._ib.qualifyContracts(contract)
@@ -359,7 +358,7 @@ class IBKRBroker(BaseBroker):
         if _authorized_by is None:
             raise BrokerError(f"close_position({symbol}) sans _authorized_by.")
         self._ensure_connected()
-        from ib_insync import Stock, MarketOrder
+        from ib_insync import MarketOrder
 
         # Trouver la position
         positions = self._ib.positions()
@@ -409,8 +408,7 @@ class IBKRBroker(BaseBroker):
 
     def get_prices(self, symbol, timeframe="1D", bars=500, start="", end="") -> dict:
         self._ensure_connected()
-        from ib_insync import util
-        import datetime
+
 
         contract = _make_contract(symbol)
         self._ib.qualifyContracts(contract)

@@ -22,10 +22,9 @@ from __future__ import annotations
 
 import argparse
 import logging
-import os
 import sys
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -58,12 +57,12 @@ TIER_CONFIG: dict[str, dict] = {
     "tier1": {
         "symbols": TIER_1_SYMBOLS,
         "intervals": ["1h", "4h", "1d"],
-        "start": datetime(2023, 1, 1, tzinfo=timezone.utc),
+        "start": datetime(2023, 1, 1, tzinfo=UTC),
     },
     "tier2": {
         "symbols": TIER_2_SYMBOLS,
         "intervals": ["4h", "1d"],
-        "start": datetime(2024, 1, 1, tzinfo=timezone.utc),
+        "start": datetime(2024, 1, 1, tzinfo=UTC),
     },
 }
 
@@ -266,7 +265,7 @@ def _build_tier_jobs(source: str) -> list[dict]:
 
     Returns a list of dicts with keys: symbol, interval, start_ms, end_ms.
     """
-    end = datetime.now(timezone.utc)
+    end = datetime.now(UTC)
     end_ms = int(end.timestamp() * 1000)
     jobs: list[dict] = []
 
@@ -330,7 +329,7 @@ def main():
             results.append(result)
     else:
         # ----- Classic single-interval mode -----
-        end = datetime.now(timezone.utc)
+        end = datetime.now(UTC)
         start = end - timedelta(days=args.days)
         start_ms = int(start.timestamp() * 1000)
         end_ms = int(end.timestamp() * 1000)

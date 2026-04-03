@@ -16,7 +16,7 @@ Expected: ~10-15 trades/month across 3 pairs, Sharpe target 1.0-1.8.
 from __future__ import annotations
 
 from datetime import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from zoneinfo import ZoneInfo
 
 from core.backtester_v2.data_feed import DataFeed
@@ -50,7 +50,7 @@ class FXSessionOverlap(StrategyBase):
         self.sl_atr_buffer: float = 0.3  # SL buffer beyond morning extreme
         self.tp_multiplier: float = 1.5  # TP = 1.5x morning move from entry
         self.vix_max: float = 30.0  # Skip if VIX > 30
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -80,7 +80,7 @@ class FXSessionOverlap(StrategyBase):
         t = self._bar_cet_time(bar)
         return _OVERLAP_ENTRY_START <= t <= _OVERLAP_ENTRY_END
 
-    def _get_morning_data(self, symbol: str) -> Optional[Dict[str, float]]:
+    def _get_morning_data(self, symbol: str) -> Dict[str, float] | None:
         """Compute morning session metrics: move, low, high (08:00-13:00 CET).
 
         Returns:
@@ -148,7 +148,7 @@ class FXSessionOverlap(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
 
@@ -168,7 +168,7 @@ class FXSessionOverlap(StrategyBase):
 
         return None
 
-    def _evaluate_symbol(self, sym: str, bar: Bar) -> Optional[Signal]:
+    def _evaluate_symbol(self, sym: str, bar: Bar) -> Signal | None:
         """Evaluate overlap momentum signal for a single symbol."""
         if self.data_feed is None:
             return None

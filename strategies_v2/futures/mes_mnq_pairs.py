@@ -27,7 +27,7 @@ Rules:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -57,7 +57,7 @@ class MESMNQPairs(StrategyBase):
         self.min_correlation: float = 0.80  # minimum rolling correlation
         self.sl_points: float = 30.0       # hard stop in MES points
         self.tp_points: float = 20.0       # target in MES points
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -74,7 +74,7 @@ class MESMNQPairs(StrategyBase):
     def set_data_feed(self, feed: DataFeed) -> None:
         self.data_feed = feed
 
-    def _compute_zscore(self, bars_a, bars_b) -> Optional[float]:
+    def _compute_zscore(self, bars_a, bars_b) -> float | None:
         """Compute Z-score of log-ratio spread between two series."""
         if len(bars_a) < self.lookback or len(bars_b) < self.lookback:
             return None
@@ -107,7 +107,7 @@ class MESMNQPairs(StrategyBase):
         z = (log_ratio[-1] - spread_mean) / spread_std
         return float(z)
 
-    def _compute_correlation(self, bars_a, bars_b) -> Optional[float]:
+    def _compute_correlation(self, bars_a, bars_b) -> float | None:
         """Compute rolling correlation between two price series."""
         if len(bars_a) < self.lookback or len(bars_b) < self.lookback:
             return None
@@ -130,7 +130,7 @@ class MESMNQPairs(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
 

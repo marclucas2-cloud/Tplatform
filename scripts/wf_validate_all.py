@@ -26,9 +26,9 @@ import argparse
 import json
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -46,7 +46,7 @@ logger = logging.getLogger(__name__)
 
 def _run_eu(
     verbose: bool = False,
-    data_dir: Optional[Path] = None,
+    data_dir: Path | None = None,
     run_mc: bool = True,
 ) -> Dict[str, Any]:
     """Run EU walk-forward validation.
@@ -78,7 +78,7 @@ def _run_eu(
 
 def _run_fx(
     verbose: bool = False,
-    data_dir: Optional[Path] = None,
+    data_dir: Path | None = None,
 ) -> Dict[str, Any]:
     """Run FX walk-forward validation.
 
@@ -109,7 +109,7 @@ def _run_fx(
 
 def _run_crypto(
     verbose: bool = False,
-    data_dir: Optional[Path] = None,
+    data_dir: Path | None = None,
 ) -> Dict[str, Any]:
     """Run crypto walk-forward validation.
 
@@ -231,9 +231,7 @@ def compute_cross_correlation(
 
     if verbose and flagged_pairs:
         print()
-        print("  CROSS-STRATEGY HIGH CORRELATION PAIRS (> {:.0%}):".format(
-            correlation_threshold
-        ))
+        print(f"  CROSS-STRATEGY HIGH CORRELATION PAIRS (> {correlation_threshold:.0%}):")
         for fp in flagged_pairs:
             print(
                 f"    {fp['strategy_a']} ({fp['asset_class_a']}) <-> "
@@ -330,7 +328,7 @@ def build_approved_list(
 
 
 def run_all(
-    asset_classes: Optional[List[str]] = None,
+    asset_classes: List[str] | None = None,
     verbose: bool = False,
     run_mc: bool = True,
 ) -> Dict[str, Any]:
@@ -510,7 +508,7 @@ def _save_results(
 
     # Approved strategies file
     validated_output = {
-        "run_timestamp": datetime.now(timezone.utc).isoformat(),
+        "run_timestamp": datetime.now(UTC).isoformat(),
         "n_total_evaluated": len(all_results),
         "n_approved": len(approved),
         "approved_strategies": approved,
@@ -539,7 +537,7 @@ def _save_results(
     with open(full_path, "w") as f:
         json.dump(sanitized, f, indent=2, ensure_ascii=False)
 
-    print(f"\nFinal results saved to:")
+    print("\nFinal results saved to:")
     print(f"  {validated_path}")
     print(f"  {full_path}")
 
@@ -562,7 +560,7 @@ def _group_by_asset_class(
 # =====================================================================
 
 
-def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
+def parse_args(argv: list | None = None) -> argparse.Namespace:
     """Parse CLI arguments."""
     parser = argparse.ArgumentParser(
         description="Master walk-forward validation for all asset classes",
@@ -588,7 +586,7 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: Optional[list] = None) -> Dict[str, Any]:
+def main(argv: list | None = None) -> Dict[str, Any]:
     """Entry point for CLI and test usage."""
     args = parse_args(argv)
 

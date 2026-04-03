@@ -27,7 +27,7 @@ Usage :
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -183,10 +183,10 @@ class ShortInterestFetcher:
         """
         lines = [
             "# Short Interest Report",
-            f"",
+            "",
             f"Date : {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             f"Tickers analyses : {len(si_data)}",
-            f"",
+            "",
             "| Ticker | SI (shares) | SI Ratio | DTC | Change vs prior | Squeeze Risk |",
             "|--------|-------------|----------|-----|-----------------|--------------|",
         ]
@@ -228,7 +228,7 @@ class ShortInterestFetcher:
     # Private helpers
     # ------------------------------------------------------------------
 
-    def _fetch_single(self, ticker: str) -> Optional[dict]:
+    def _fetch_single(self, ticker: str) -> dict | None:
         """Fetch le short interest pour un seul ticker via yfinance."""
         info = yf.Ticker(ticker).info
 

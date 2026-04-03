@@ -15,31 +15,37 @@ Covers:
   - Session hours (ESTX)
 """
 import sys
-import os
 from pathlib import Path
 
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 # Add backtester to path so imports work
-_backtester_dir = str(Path(__file__).resolve().parent.parent / "intraday-backtesterV2")
+_backtester_dir = str(Path(__file__).resolve().parent.parent / "archive" / "intraday-backtesterV2")
 if _backtester_dir not in sys.path:
     sys.path.insert(0, _backtester_dir)
 
-from backtest_engine import BaseStrategy, Signal
-from strategies.fx_cross_momentum import (
-    FXCrossMomentumStrategy, FX_PAIRS, FX_COST_RT_PCT,
+from backtest_engine import BaseStrategy
+from strategies.futures_estx_trend import (
+    ESTX_COMMISSION_RT,
+    ESTX_MARGIN,
+    ESTX_MULTIPLIER,
+    STOXX_TICKER,
+    FuturesESTXTrendStrategy,
 )
 from strategies.futures_mgc_trend import (
-    FuturesMGCTrendStrategy, GOLD_TICKER, DXY_TICKER,
-    FOMC_DATES, MGC_MULTIPLIER, MGC_MARGIN, MGC_COMMISSION_RT,
+    DXY_TICKER,
+    GOLD_TICKER,
+    MGC_COMMISSION_RT,
+    MGC_MARGIN,
+    MGC_MULTIPLIER,
+    FuturesMGCTrendStrategy,
 )
-from strategies.futures_estx_trend import (
-    FuturesESTXTrendStrategy, STOXX_TICKER, ECB_DATES,
-    ESTX_MULTIPLIER, ESTX_MARGIN, ESTX_COMMISSION_RT,
+from strategies.fx_cross_momentum import (
+    FX_COST_RT_PCT,
+    FX_PAIRS,
+    FXCrossMomentumStrategy,
 )
-
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -528,7 +534,6 @@ class TestFuturesESTXTrend:
     def test_session_filter(self):
         """_in_trading_session should correctly identify valid hours."""
         strat = FuturesESTXTrendStrategy()
-        from datetime import time as dt_time
         # 10:00 ET is within US session
         ts_in = pd.Timestamp("2026-02-10 10:00:00", tz="US/Eastern")
         assert strat._in_trading_session(ts_in) is True

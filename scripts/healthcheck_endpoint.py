@@ -20,7 +20,8 @@ import logging
 import os
 import sys
 import time
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from datetime import UTC
+from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 # Setup paths
@@ -56,7 +57,7 @@ def _check_worker_alive() -> dict:
     Returns:
         {"alive": bool, "last_run": str, "age_seconds": float}
     """
-    state_file = ROOT / "paper_portfolio_state.json"
+    state_file = ROOT / "data" / "state" / "paper_portfolio_state.json"
     if not state_file.exists():
         return {
             "alive": False,
@@ -74,13 +75,13 @@ def _check_worker_alive() -> dict:
 
         # Utiliser last_monthly comme proxy du dernier run (contient un timestamp ISO)
         if last_monthly:
-            from datetime import datetime, timezone
+            from datetime import datetime
             try:
                 # Parse ISO timestamp
                 last_ts = datetime.fromisoformat(last_monthly)
                 if last_ts.tzinfo is None:
-                    last_ts = last_ts.replace(tzinfo=timezone.utc)
-                age = (datetime.now(timezone.utc) - last_ts).total_seconds()
+                    last_ts = last_ts.replace(tzinfo=UTC)
+                age = (datetime.now(UTC) - last_ts).total_seconds()
                 return {
                     "alive": age < WORKER_STALE_THRESHOLD_SECONDS,
                     "last_run": last_monthly,
@@ -141,7 +142,7 @@ def _check_kill_switch() -> dict:
     Returns:
         {"active": bool, "disabled_strategies": list}
     """
-    state_file = ROOT / "paper_portfolio_state.json"
+    state_file = ROOT / "data" / "state" / "paper_portfolio_state.json"
     if not state_file.exists():
         return {"active": False, "disabled_strategies": []}
 

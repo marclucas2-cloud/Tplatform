@@ -25,8 +25,6 @@ Base spreads:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -111,8 +109,8 @@ class CryptoEntryTiming:
 
     def __init__(
         self,
-        spread_curve: Optional[dict[int, float]] = None,
-        optimal_windows: Optional[dict[str, dict]] = None,
+        spread_curve: dict[int, float] | None = None,
+        optimal_windows: dict[str, dict] | None = None,
     ):
         """Initialise with optional custom curves.
 

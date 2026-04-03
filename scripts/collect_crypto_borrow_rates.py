@@ -35,7 +35,7 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
@@ -176,7 +176,7 @@ def collect_borrow_rates(
     path = "/sapi/v1/margin/interestRateHistory"
     all_records: list[dict] = []
 
-    end = datetime.now(timezone.utc)
+    end = datetime.now(UTC)
     start = end - timedelta(days=days)
 
     # Paginate in windows of BORROW_PAGE_SIZE_DAYS
@@ -421,7 +421,7 @@ def write_collection_log(
     log_path = metadata_dir / "collection_log.json"
 
     entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "script": "collect_crypto_borrow_rates.py",
         "borrow_rates": borrow_results,
         "btc_dominance": dominance_result,
@@ -431,7 +431,7 @@ def write_collection_log(
     log: list[dict] = []
     if log_path.exists():
         try:
-            with open(log_path, "r") as f:
+            with open(log_path) as f:
                 log = json.load(f)
             if not isinstance(log, list):
                 log = [log]

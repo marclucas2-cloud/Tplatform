@@ -22,8 +22,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -189,7 +188,7 @@ class CryptoConvictionSizer:
         size, score, level = sizer.get_adjusted_size(signal, market_state, 0.12, 15_000)
     """
 
-    def __init__(self, weights: Optional[dict[str, float]] = None):
+    def __init__(self, weights: dict[str, float] | None = None):
         """Initialise with optional custom weights.
 
         Args:
@@ -349,5 +348,5 @@ class CryptoConvictionSizer:
             kelly_multiplier=kelly_mult,
             max_kelly_fraction=max_frac,
             breakdown={k: round(v, 4) for k, v in breakdown.items()},
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
         )

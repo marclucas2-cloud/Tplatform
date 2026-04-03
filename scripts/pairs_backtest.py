@@ -32,10 +32,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.data.loader import OHLCVLoader
-from core.data.pairs import PairDiscovery, SECTOR_MAP
 from core.backtest.pairs_engine import PairsBacktestEngine, PairsBacktestResult
-
+from core.data.loader import OHLCVLoader
+from core.data.pairs import SECTOR_MAP, PairDiscovery
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -113,7 +112,7 @@ def print_backtest_table(results: list[PairsBacktestResult]):
         print(f"  Sharpe moyen (>0)       : {sum(pos)/len(pos):.3f}")
 
     if results_sorted:
-        print(f"\n  TOP 3 :")
+        print("\n  TOP 3 :")
         for i, r in enumerate(results_sorted[:3], 1):
             v = "[VALIDE]" if r.passes_validation else ""
             print(f"  {i}. {r.pair_id:<16}  Sharpe={r.sharpe_ratio:+.3f}  "
@@ -153,7 +152,7 @@ def run_sector(
     print(f"  SECTEUR : {sector.upper()} "
           f"({len(symbols)} actifs, {n_pairs} paires possibles)")
     print(f"{'='*70}")
-    print(f"  Téléchargement données journalières (5 ans)...")
+    print("  Téléchargement données journalières (5 ans)...")
 
     data_dict = fetch_sector_data(sector)
     if len(data_dict) < 2:
@@ -170,7 +169,7 @@ def run_sector(
         return []
 
     # Backtest de toutes les paires candidates
-    print(f"\n  Backtest en cours...")
+    print("\n  Backtest en cours...")
     results = []
     for ps in pairs_stats:
         try:

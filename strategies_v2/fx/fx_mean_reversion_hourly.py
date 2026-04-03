@@ -27,12 +27,11 @@ Expected: ~10-20 trades/month per pair, Sharpe target 1.0-2.0
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
 from core.backtester_v2.types import Bar, PortfolioState, Signal
-
 
 SUPPORTED_PAIRS = ["EURUSD", "GBPUSD"]
 
@@ -88,7 +87,7 @@ class FXMeanReversionHourly(StrategyBase):
         self._entry_bar_count: int = 0
         self._total_bars: int = 0
 
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -111,7 +110,7 @@ class FXMeanReversionHourly(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
 

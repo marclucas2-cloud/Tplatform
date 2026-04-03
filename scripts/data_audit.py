@@ -13,17 +13,15 @@ Checks :
 Rapport sauvegarde dans output/data_audit_report.md
 """
 import sys
-import json
-from pathlib import Path
 from datetime import datetime, timedelta
+from pathlib import Path
 
-import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
-CACHE_DIR = ROOT / "intraday-backtesterV2" / "data_cache"
+CACHE_DIR = ROOT / "archive" / "intraday-backtesterV2" / "data_cache"
 OUTPUT_DIR = ROOT / "output"
 
 # Strategies retenues du walk-forward (4 VALIDATED + 3 BORDERLINE)

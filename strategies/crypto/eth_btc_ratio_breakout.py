@@ -38,7 +38,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-
 STRATEGY_CONFIG = {
     "name": "ETH/BTC Ratio Breakout",
     "id": "STRAT-011",
@@ -187,14 +186,7 @@ def signal_fn(candle: pd.Series, state: dict, **kwargs) -> dict | None:
         trade_direction = kwargs.get("trade_direction", "")
 
         # EMA crossover reversal exit
-        if trade_direction == "LONG_ETH" and ema_fast < ema_slow:
-            return {
-                "action": "CLOSE",
-                "reason": "ratio_ema_crossover_reversal",
-                "ratio": round(ratio, 6),
-                "strategy": "eth_btc_ratio_breakout",
-            }
-        elif trade_direction == "LONG_BTC" and ema_fast > ema_slow:
+        if (trade_direction == "LONG_ETH" and ema_fast < ema_slow) or (trade_direction == "LONG_BTC" and ema_fast > ema_slow):
             return {
                 "action": "CLOSE",
                 "reason": "ratio_ema_crossover_reversal",

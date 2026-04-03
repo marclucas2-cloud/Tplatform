@@ -15,9 +15,9 @@ from __future__ import annotations
 import json
 import logging
 import os
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -25,12 +25,12 @@ _ROOT = Path(__file__).resolve().parent.parent.parent
 _CORRUPTION_LOG = _ROOT / "data" / "state_corruption_log.jsonl"
 
 
-def _log_corruption(path: Path, error: str, recovered_from: Optional[str] = None) -> None:
+def _log_corruption(path: Path, error: str, recovered_from: str | None = None) -> None:
     """Append a corruption event to the JSONL log."""
     try:
         _CORRUPTION_LOG.parent.mkdir(parents=True, exist_ok=True)
         entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "file": str(path),
             "error": error,
             "recovered_from": recovered_from,
@@ -89,7 +89,7 @@ def safe_load_json(
     return default
 
 
-def _try_load(path: Path) -> Optional[Any]:
+def _try_load(path: Path) -> Any | None:
     """Attempt to load and validate a JSON file.
 
     Returns the parsed data if valid (dict or list), otherwise None.

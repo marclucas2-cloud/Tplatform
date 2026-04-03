@@ -1,8 +1,9 @@
 """Tests for CryptoDataPipeline V2 (margin + earn) — 16 tests."""
-import pytest
+from datetime import UTC
+
 import numpy as np
 import pandas as pd
-from datetime import datetime, timezone
+import pytest
 
 from core.crypto.data_pipeline import CryptoDataPipeline
 
@@ -14,7 +15,7 @@ def pipeline():
 
 @pytest.fixture
 def sample_candles():
-    dates = pd.date_range("2024-01-01", periods=500, freq="1h", tz=timezone.utc)
+    dates = pd.date_range("2024-01-01", periods=500, freq="1h", tz=UTC)
     np.random.seed(42)
     close = 40000 + np.cumsum(np.random.randn(500) * 100)
     return pd.DataFrame({
@@ -48,7 +49,7 @@ class TestUniverse:
 class TestCleaning:
     def test_clean_removes_zero_volume(self, pipeline):
         df = pd.DataFrame({
-            "timestamp": pd.date_range("2024-01-01", periods=5, freq="1h", tz=timezone.utc),
+            "timestamp": pd.date_range("2024-01-01", periods=5, freq="1h", tz=UTC),
             "open": [100, 101, 102, 103, 104],
             "high": [105, 106, 107, 108, 109],
             "low": [95, 96, 97, 98, 99],
@@ -71,7 +72,7 @@ class TestCleaning:
 
     def test_clean_validates_ohlc(self, pipeline):
         df = pd.DataFrame({
-            "timestamp": pd.date_range("2024-01-01", periods=5, freq="1h", tz=timezone.utc),
+            "timestamp": pd.date_range("2024-01-01", periods=5, freq="1h", tz=UTC),
             "open": [100, 101, 102, 103, 104],
             "high": [90, 106, 107, 108, 109],
             "low": [95, 96, 97, 98, 99],

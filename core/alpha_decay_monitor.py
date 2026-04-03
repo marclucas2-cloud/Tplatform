@@ -24,8 +24,8 @@ Usage :
 
 import logging
 import math
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Dict, List, Tuple
 
 import numpy as np
 
@@ -55,7 +55,7 @@ class AlphaDecayMonitor:
         self.p_threshold = p_threshold
 
     def calculate_rolling_sharpe(self, returns: List[float],
-                                  window: Optional[int] = None) -> List[float]:
+                                  window: int | None = None) -> List[float]:
         """Calcule le Sharpe ratio rolling sur les N derniers trades.
 
         Args:
@@ -95,7 +95,7 @@ class AlphaDecayMonitor:
         return rolling_sharpes
 
     def detect_decay(self, rolling_sharpes: List[float],
-                     p_threshold: Optional[float] = None) -> dict:
+                     p_threshold: float | None = None) -> dict:
         """Detecte un decay significatif via regression lineaire.
 
         Regression : Sharpe_i = a + b * i + epsilon
@@ -224,10 +224,10 @@ class AlphaDecayMonitor:
         """
         lines = [
             "# Alpha Decay Report",
-            f"",
+            "",
             f"Date : {datetime.now().strftime('%Y-%m-%d %H:%M')}",
             f"Strategies analysees : {len(strategies_data)}",
-            f"",
+            "",
         ]
 
         # Tableau resume
@@ -268,7 +268,7 @@ class AlphaDecayMonitor:
             for name, analysis in alerts:
                 d = analysis["decay"]
                 lines.extend([
-                    f"",
+                    "",
                     f"### {name} — {d['severity'].upper()}",
                     f"- {d['message']}",
                     f"- Sharpe global : {analysis['overall_sharpe']:.2f}",
@@ -277,7 +277,7 @@ class AlphaDecayMonitor:
                 ])
                 if d["days_to_zero"] is not None:
                     lines.append(f"- Crossing zero estime : ~{d['days_to_zero']} jours")
-                lines.append(f"- **Action recommandee** : reduire l'allocation ou desactiver")
+                lines.append("- **Action recommandee** : reduire l'allocation ou desactiver")
         else:
             lines.extend(["", "## Alertes", "", "Aucune alerte — toutes les strategies sont stables."])
 

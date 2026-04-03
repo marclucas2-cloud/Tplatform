@@ -36,9 +36,8 @@ from __future__ import annotations
 import logging
 import math
 import sqlite3
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -133,7 +132,7 @@ class TradeJournal:
     Storage: SQLite database in data/live_journal.db (live) or data/paper_journal.db (paper)
     """
 
-    def __init__(self, mode: str = "LIVE", db_path: Optional[str | Path] = None):
+    def __init__(self, mode: str = "LIVE", db_path: str | Path | None = None):
         """Initialize the trade journal.
 
         Args:
@@ -173,7 +172,7 @@ class TradeJournal:
 
     def _next_trade_id(self) -> str:
         """Generate sequential trade ID: {MODE}-{YYYY}-{NNNN}."""
-        year = datetime.now(timezone.utc).strftime("%Y")
+        year = datetime.now(UTC).strftime("%Y")
         prefix = f"{self.mode}-{year}-"
         with sqlite3.connect(self.db_path) as conn:
             row = conn.execute(
@@ -189,7 +188,7 @@ class TradeJournal:
 
     def record_trade_open(
         self,
-        trade_id: Optional[str],
+        trade_id: str | None,
         strategy: str,
         instrument: str,
         instrument_type: str,
@@ -197,15 +196,15 @@ class TradeJournal:
         quantity: float,
         entry_price_requested: float,
         entry_price_filled: float,
-        stop_loss: Optional[float] = None,
-        take_profit: Optional[float] = None,
-        regime: Optional[str] = None,
-        confluence_score: Optional[float] = None,
-        conviction_level: Optional[str] = None,
-        timestamp_signal: Optional[str] = None,
-        timestamp_order_sent: Optional[str] = None,
-        timestamp_filled: Optional[str] = None,
-        notes: Optional[str] = None,
+        stop_loss: float | None = None,
+        take_profit: float | None = None,
+        regime: str | None = None,
+        confluence_score: float | None = None,
+        conviction_level: str | None = None,
+        timestamp_signal: str | None = None,
+        timestamp_order_sent: str | None = None,
+        timestamp_filled: str | None = None,
+        notes: str | None = None,
     ) -> str:
         """Record a new trade opening.
 
@@ -237,7 +236,7 @@ class TradeJournal:
         if instrument_type not in VALID_INSTRUMENT_TYPES:
             raise ValueError(f"Invalid instrument_type '{instrument_type}'. Must be one of {VALID_INSTRUMENT_TYPES}")
 
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         if trade_id is None:
             trade_id = self._next_trade_id()
         if timestamp_signal is None:
@@ -286,8 +285,8 @@ class TradeJournal:
         exit_price_filled: float,
         exit_reason: str,
         commission: float = 0.0,
-        timestamp_closed: Optional[str] = None,
-        notes: Optional[str] = None,
+        timestamp_closed: str | None = None,
+        notes: str | None = None,
     ) -> dict:
         """Record trade closing. Calculates P&L, slippage, holding time.
 
@@ -309,7 +308,7 @@ class TradeJournal:
         if exit_reason not in VALID_EXIT_REASONS:
             raise ValueError(f"Invalid exit_reason '{exit_reason}'. Must be one of {VALID_EXIT_REASONS}")
 
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
         if timestamp_closed is None:
             timestamp_closed = now_iso
 
@@ -414,14 +413,14 @@ class TradeJournal:
             conn.execute(
                 "UPDATE trades SET status = 'CANCELLED', notes = COALESCE(notes || '\n', '') || ?, "
                 "timestamp_closed = ? WHERE trade_id = ?",
-                (f"CANCELLED: {reason}", datetime.now(timezone.utc).isoformat(), trade_id),
+                (f"CANCELLED: {reason}", datetime.now(UTC).isoformat(), trade_id),
             )
             conn.commit()
         logger.info(f"Trade cancelled: {trade_id} reason={reason}")
 
     # ─── Query operations ───────────────────────────────────────────────
 
-    def get_trade(self, trade_id: str) -> Optional[dict]:
+    def get_trade(self, trade_id: str) -> dict | None:
         """Get a single trade by ID.
 
         Returns:
@@ -433,12 +432,12 @@ class TradeJournal:
 
     def get_trades(
         self,
-        strategy: Optional[str] = None,
-        instrument_type: Optional[str] = None,
-        start_date: Optional[str] = None,
-        end_date: Optional[str] = None,
-        status: Optional[str] = None,
-        direction: Optional[str] = None,
+        strategy: str | None = None,
+        instrument_type: str | None = None,
+        start_date: str | None = None,
+        end_date: str | None = None,
+        status: str | None = None,
+        direction: str | None = None,
         limit: int = 100,
     ) -> list[dict]:
         """Query trades with filters.
@@ -492,7 +491,7 @@ class TradeJournal:
 
     # ─── Summary / reporting ────────────────────────────────────────────
 
-    def get_daily_summary(self, date: Optional[str] = None) -> dict:
+    def get_daily_summary(self, date: str | None = None) -> dict:
         """Summary for a specific day.
 
         Args:
@@ -505,7 +504,7 @@ class TradeJournal:
             strategies_active.
         """
         if date is None:
-            date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            date = datetime.now(UTC).strftime("%Y-%m-%d")
 
         date_start = f"{date}T00:00:00"
         date_end = f"{date}T23:59:59.999999"
@@ -579,7 +578,7 @@ class TradeJournal:
             avg_daily_pnl, total_pnl_net, total_commission, avg_slippage_entry_bps,
             avg_slippage_exit_bps, avg_holding_seconds, strategies_breakdown.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         start = (now - timedelta(days=7)).strftime("%Y-%m-%dT00:00:00")
         end = now.isoformat()
 
@@ -600,7 +599,7 @@ class TradeJournal:
         Returns:
             Same structure as weekly_summary but for 30 days, plus per-strategy breakdown.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         start = (now - timedelta(days=30)).strftime("%Y-%m-%dT00:00:00")
         end = now.isoformat()
 
@@ -624,7 +623,7 @@ class TradeJournal:
             Dict with: period, pnl_gross, pnl_net, total_commission,
             n_trades, win_rate.
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         if period == "today":
             start = now.strftime("%Y-%m-%dT00:00:00")
@@ -854,7 +853,7 @@ class TradeJournal:
         return abs(quantity * price)
 
     @staticmethod
-    def _calculate_latency_ms(ts_signal: str, ts_filled: str) -> Optional[int]:
+    def _calculate_latency_ms(ts_signal: str, ts_filled: str) -> int | None:
         """Calculate latency in milliseconds between signal and fill."""
         try:
             t_signal = datetime.fromisoformat(ts_signal)
@@ -865,7 +864,7 @@ class TradeJournal:
             return None
 
     @staticmethod
-    def _calculate_holding_seconds(ts_open: str, ts_close: str) -> Optional[int]:
+    def _calculate_holding_seconds(ts_open: str, ts_close: str) -> int | None:
         """Calculate holding time in seconds."""
         try:
             t_open = datetime.fromisoformat(ts_open)

@@ -1,7 +1,8 @@
 """Tests for CryptoAllocator V2 (3 wallets, 8 strats, earn) — 14 tests."""
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
+
 from core.crypto.allocator_crypto import CryptoAllocator, CryptoRegime, detect_crypto_regime
 
 

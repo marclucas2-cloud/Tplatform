@@ -10,9 +10,8 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +52,7 @@ class CryptoAlerter:
         full_msg = f"[CRYPTO {prefix}] {message}"
 
         entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "level": level,
             "category": category,
             "message": message,
@@ -483,7 +482,7 @@ class CryptoReconciliation:
                     )
 
         self._divergences.extend(divergences)
-        self._last_check = datetime.now(timezone.utc)
+        self._last_check = datetime.now(UTC)
 
         critical_count = len([d for d in divergences if d["severity"] == "CRITICAL"])
         ok = critical_count == 0
@@ -560,7 +559,7 @@ def create_crypto_router():
                     _get("risk_manager").kill_switch.status()
                     if _get("risk_manager") else {}
                 ),
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
             if capital_mgr:

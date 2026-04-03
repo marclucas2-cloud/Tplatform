@@ -18,7 +18,7 @@ Usage :
 """
 
 import logging
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 logger = logging.getLogger(__name__)
 
@@ -87,7 +87,7 @@ class MarketImpactModel:
     TEMP_EXPONENT = 0.5     # exposant (racine carree)
     PERM_COEFF = 0.002      # coefficient impact permanent
 
-    def __init__(self, adv_overrides: Optional[Dict[str, int]] = None):
+    def __init__(self, adv_overrides: Dict[str, int] | None = None):
         """
         Args:
             adv_overrides: surcharges manuelles des ADV par ticker.
@@ -117,7 +117,7 @@ class MarketImpactModel:
         return order_notional / avg_bar_volume
 
     def estimate_impact(self, ticker: str, order_notional: float,
-                        price: Optional[float] = None) -> float:
+                        price: float | None = None) -> float:
         """Estime l'impact de marche total (temporary + permanent).
 
         Args:
@@ -188,7 +188,7 @@ class MarketImpactModel:
     def simulate_scaling(
         self,
         strategies: Dict[str, dict],
-        capital_levels: Optional[List[int]] = None,
+        capital_levels: List[int] | None = None,
     ) -> Dict[int, Dict[str, dict]]:
         """Simule la performance a differents niveaux de capital.
 

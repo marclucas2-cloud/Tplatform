@@ -23,9 +23,9 @@ import argparse
 import json
 import logging
 import sqlite3
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 
@@ -81,7 +81,7 @@ class WalkForwardResult:
         profitable_windows_pct: float,
         n_windows: int,
         n_trades_oos: int,
-        window_details: Optional[list] = None,
+        window_details: list | None = None,
     ):
         self.strategy = strategy
         self.timestamp = timestamp
@@ -138,8 +138,8 @@ class ContinuousWalkForward:
 
     def __init__(
         self,
-        db_path: Optional[str] = None,
-        output_dir: Optional[str] = None,
+        db_path: str | None = None,
+        output_dir: str | None = None,
         alert_callback=None,
     ):
         self._db_path = Path(db_path or "data/wf_history.db")
@@ -213,7 +213,7 @@ class ContinuousWalkForward:
         Returns:
             WalkForwardResult with aggregated metrics.
         """
-        now_ts = datetime.now(timezone.utc).isoformat()
+        now_ts = datetime.now(UTC).isoformat()
         returns = np.asarray(returns, dtype=float)
 
         # Edge case: insufficient data
@@ -368,8 +368,8 @@ class ContinuousWalkForward:
 
     def run_all(
         self,
-        strategies: Optional[dict] = None,
-        returns_data: Optional[Dict[str, np.ndarray]] = None,
+        strategies: dict | None = None,
+        returns_data: Dict[str, np.ndarray] | None = None,
     ) -> List[WalkForwardResult]:
         """Run WF on all strategies.
 
@@ -526,7 +526,7 @@ class ContinuousWalkForward:
 
     def save_results(self, results: List[WalkForwardResult]):
         """Save WF results to SQLite and output directory."""
-        now_str = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+        now_str = datetime.now(UTC).strftime("%Y%m%d_%H%M%S")
 
         # SQLite
         with sqlite3.connect(str(self._db_path)) as conn:
@@ -565,7 +565,7 @@ class ContinuousWalkForward:
         logger.info("Results saved to %s and %s", self._db_path, report_path)
 
     def get_history(
-        self, strategy: Optional[str] = None, weeks: int = 12
+        self, strategy: str | None = None, weeks: int = 12
     ) -> List[dict]:
         """Get WF history for trending.
 
@@ -646,7 +646,7 @@ class ContinuousWalkForward:
         Returns:
             Markdown-formatted report string.
         """
-        now_str = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        now_str = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
         lines = [
             f"# Weekly Walk-Forward Report -- {now_str}",
             "",
@@ -660,7 +660,7 @@ class ContinuousWalkForward:
         rejected = [r for r in results if r.verdict == "REJECTED"]
 
         lines.append(
-            f"| VALIDATED | BORDERLINE | REJECTED |"
+            "| VALIDATED | BORDERLINE | REJECTED |"
         )
         lines.append("| --- | --- | --- |")
         lines.append(

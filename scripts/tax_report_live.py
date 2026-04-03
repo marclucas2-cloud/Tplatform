@@ -17,14 +17,13 @@ Usage:
 
 import argparse
 import csv
-import json
 import logging
 import sqlite3
 import urllib.request
 import xml.etree.ElementTree as ET
-from datetime import datetime, date, timedelta
+from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -503,8 +502,8 @@ class TaxReportGenerator:
         if not month:
             lines.append("## Resume fiscal annuel")
             lines.append("")
-            lines.append(f"| Poste | Montant (EUR) |")
-            lines.append(f"|-------|---------------|")
+            lines.append("| Poste | Montant (EUR) |")
+            lines.append("|-------|---------------|")
             lines.append(f"| Plus-values brutes | {tax_data['total_gains_eur']:,.2f} |")
             lines.append(f"| Moins-values brutes | -{tax_data['total_losses_eur']:,.2f} |")
             lines.append(f"| **Plus-values nettes** | **{tax_data['net_gains_eur']:,.2f}** |")
@@ -514,8 +513,8 @@ class TaxReportGenerator:
             if tax_data["net_gains_eur"] > 0:
                 lines.append("## Estimation fiscale PFU")
                 lines.append("")
-                lines.append(f"| Impot | Taux | Montant (EUR) |")
-                lines.append(f"|-------|------|---------------|")
+                lines.append("| Impot | Taux | Montant (EUR) |")
+                lines.append("|-------|------|---------------|")
                 lines.append(f"| Impot sur le revenu (IR) | 12.8% | {tax_data['tax_ir_eur']:,.2f} |")
                 lines.append(f"| Prelevements sociaux (PS) | 17.2% | {tax_data['tax_ps_eur']:,.2f} |")
                 lines.append(f"| **PFU total** | **30%** | **{tax_data['tax_pfu_eur']:,.2f}** |")
@@ -525,7 +524,7 @@ class TaxReportGenerator:
                 lines.append("## Moins-value reportable")
                 lines.append("")
                 lines.append(f"Moins-value nette : **{tax_data['reportable_loss_eur']:,.2f} EUR**")
-                lines.append(f"Reportable sur les 10 annees suivantes (CGI art. 150-0 D).")
+                lines.append("Reportable sur les 10 annees suivantes (CGI art. 150-0 D).")
             lines.append("")
 
             # --- By asset class ---
@@ -604,8 +603,8 @@ class TaxReportGenerator:
 
         # --- Footer ---
         lines.append("---")
-        lines.append(f"*Rapport genere automatiquement. Ne constitue pas un conseil fiscal.")
-        lines.append(f"Consultez votre expert-comptable pour la declaration definitive.*")
+        lines.append("*Rapport genere automatiquement. Ne constitue pas un conseil fiscal.")
+        lines.append("Consultez votre expert-comptable pour la declaration definitive.*")
 
         return "\n".join(lines)
 

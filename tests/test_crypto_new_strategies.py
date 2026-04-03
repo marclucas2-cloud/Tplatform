@@ -6,13 +6,12 @@ STRAT-011: ETH/BTC Ratio Breakout
 STRAT-012: Monthly Turn-of-Month
 """
 import importlib.util
-import sys
+from datetime import UTC, datetime
 from pathlib import Path
 
-import pytest
 import numpy as np
 import pandas as pd
-from datetime import datetime, timezone, timedelta
+import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 STRAT_DIR = ROOT / "strategies" / "crypto"
@@ -93,7 +92,7 @@ class TestFundingRateDivergence:
 
     def test_signal_fn_early_none(self):
         """Returns None when not enough bars."""
-        candle = pd.Series({"close": 40000, "timestamp": datetime.now(timezone.utc)})
+        candle = pd.Series({"close": 40000, "timestamp": datetime.now(UTC)})
         df = _make_ohlcv(10)
         result = self.mod.signal_fn(candle, {"positions": [], "i": 5}, df_full=df)
         assert result is None
@@ -101,7 +100,7 @@ class TestFundingRateDivergence:
     def test_signal_fn_no_funding_data(self):
         """Returns None when no funding history provided."""
         df = _make_ohlcv(300)
-        candle = pd.Series({"close": 40000, "timestamp": datetime.now(timezone.utc)})
+        candle = pd.Series({"close": 40000, "timestamp": datetime.now(UTC)})
         result = self.mod.signal_fn(
             candle,
             {"positions": [], "capital": 15000, "i": 200},
@@ -131,7 +130,7 @@ class TestFundingRateDivergence:
 
         candle = pd.Series({
             "close": df["close"].iloc[249],
-            "timestamp": datetime.now(timezone.utc),
+            "timestamp": datetime.now(UTC),
         })
 
         funding = [-0.001, -0.0008, -0.0006]  # extreme negative
@@ -211,7 +210,7 @@ class TestStablecoinSupplyFlow:
 
     def test_signal_fn_no_rebalance_day(self):
         """No signal on non-rebalance day."""
-        candle = pd.Series({"close": 40000, "timestamp": datetime.now(timezone.utc)})
+        candle = pd.Series({"close": 40000, "timestamp": datetime.now(UTC)})
         result = self.mod.signal_fn(
             candle,
             {"positions": [], "capital": 15000, "i": 100},
@@ -225,9 +224,9 @@ class TestStablecoinSupplyFlow:
 
         class FakePos:
             entry_price = 40000
-            entry_time = datetime(2026, 3, 1, tzinfo=timezone.utc)
+            entry_time = datetime(2026, 3, 1, tzinfo=UTC)
 
-        candle = pd.Series({"close": 39000, "timestamp": datetime(2026, 3, 5, tzinfo=timezone.utc)})
+        candle = pd.Series({"close": 39000, "timestamp": datetime(2026, 3, 5, tzinfo=UTC)})
         result = self.mod.signal_fn(
             candle,
             {"positions": [FakePos()], "capital": 15000, "i": 100},
@@ -287,7 +286,7 @@ class TestEthBtcRatioBreakout:
 
     def test_signal_fn_early_none(self):
         """Returns None when not enough bars."""
-        candle = pd.Series({"close": 3000, "timestamp": datetime.now(timezone.utc)})
+        candle = pd.Series({"close": 3000, "timestamp": datetime.now(UTC)})
         np.random.seed(42)
         df_ratio = pd.DataFrame({
             "ratio": [0.05] * 10,
@@ -303,7 +302,7 @@ class TestEthBtcRatioBreakout:
 
     def test_signal_fn_no_ratio_data(self):
         """Returns None when no ratio DataFrame provided."""
-        candle = pd.Series({"close": 3000, "timestamp": datetime.now(timezone.utc)})
+        candle = pd.Series({"close": 3000, "timestamp": datetime.now(UTC)})
         result = self.mod.signal_fn(candle, {"positions": [], "i": 300})
         assert result is None
 
@@ -320,11 +319,11 @@ class TestEthBtcRatioBreakout:
         })
 
         class FakePos:
-            entry_time = datetime(2026, 3, 1, tzinfo=timezone.utc)
+            entry_time = datetime(2026, 3, 1, tzinfo=UTC)
 
         candle = pd.Series({
             "close": 3000,
-            "timestamp": datetime(2026, 3, 5, tzinfo=timezone.utc),
+            "timestamp": datetime(2026, 3, 5, tzinfo=UTC),
         })
         result = self.mod.signal_fn(
             candle,
@@ -348,11 +347,11 @@ class TestEthBtcRatioBreakout:
         })
 
         class FakePos:
-            entry_time = datetime(2026, 3, 1, tzinfo=timezone.utc)
+            entry_time = datetime(2026, 3, 1, tzinfo=UTC)
 
         candle = pd.Series({
             "close": 3000,
-            "timestamp": datetime(2026, 3, 5, tzinfo=timezone.utc),
+            "timestamp": datetime(2026, 3, 5, tzinfo=UTC),
         })
         result = self.mod.signal_fn(
             candle,
@@ -486,7 +485,7 @@ class TestMonthlyTurnOfMonth:
 
         class FakePos:
             entry_price = 39000
-            entry_time = datetime(2026, 3, 30, tzinfo=timezone.utc)
+            entry_time = datetime(2026, 3, 30, tzinfo=UTC)
 
         candle = pd.Series({
             "close": 40000,
@@ -508,7 +507,7 @@ class TestMonthlyTurnOfMonth:
 
         class FakePos:
             entry_price = 42000
-            entry_time = datetime(2026, 4, 1, tzinfo=timezone.utc)
+            entry_time = datetime(2026, 4, 1, tzinfo=UTC)
 
         candle = pd.Series({
             "close": 40000,  # -4.76% below entry
@@ -603,6 +602,6 @@ class TestCrossStrategyIntegration:
             "monthly_turn_of_month",
         ]:
             mod = _load(name)
-            candle = pd.Series({"close": 40000, "timestamp": datetime.now(timezone.utc)})
+            candle = pd.Series({"close": 40000, "timestamp": datetime.now(UTC)})
             result = mod.signal_fn(candle, {"positions": [], "i": 0})
             assert result is None, f"{name} signal_fn should return None for empty state"

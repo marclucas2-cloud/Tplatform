@@ -20,11 +20,8 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import time
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +38,7 @@ class CryptoLiveMonitor:
         self,
         broker,
         risk_manager=None,
-        capital: float = 20_000,
+        capital: float = 10_000,
     ):
         self._broker = broker
         self._risk_manager = risk_manager
@@ -61,7 +58,7 @@ class CryptoLiveMonitor:
         except Exception as e:
             logger.error(f"Snapshot collection failed: {e}")
             snapshot = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "error": str(e),
                 "equity": None,
                 "pnl_total": None,
@@ -109,7 +106,7 @@ class CryptoLiveMonitor:
         if not self._snapshots:
             return None
 
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=period_hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=period_hours)
         cutoff_iso = cutoff.isoformat()
 
         recent = [
@@ -167,7 +164,7 @@ class CryptoLiveMonitor:
 
     def _collect_snapshot(self) -> dict:
         """Gather full portfolio state from broker."""
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # -- Positions --
         raw_positions = []
@@ -360,7 +357,7 @@ class CryptoLiveMonitor:
             # Find snapshot from ~24h ago
             now_str = snapshot.get("timestamp", "")
             try:
-                cutoff = datetime.now(timezone.utc) - timedelta(hours=24)
+                cutoff = datetime.now(UTC) - timedelta(hours=24)
                 cutoff_iso = cutoff.isoformat()
                 old_snapshots = [
                     s for s in self._snapshots

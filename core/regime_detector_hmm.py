@@ -23,9 +23,8 @@ Differences avec RegimeDetector existant :
 
 import logging
 from enum import Enum
-from typing import Dict, List, Optional
+from typing import Dict, List
 
-import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)

@@ -2,15 +2,12 @@
 
 from __future__ import annotations
 
-import math
 import sys
 import types as _types_mod
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Optional
 
 import pytest
-
 
 # -------------------------------------------------------------------------
 # Lightweight stubs — mirror the types API being built concurrently.
@@ -25,7 +22,7 @@ class _StubOrder:
     order_type: str = "MARKET"
     asset_class: str = "EQUITY_US"
     broker: str = "IBKR"
-    limit_price: Optional[float] = None
+    limit_price: float | None = None
 
 
 @dataclass
@@ -140,14 +137,13 @@ for _mod_name in ("event_queue", "data_feed", "engine", "strategy_base"):
         sys.modules[_fqn] = _stub
 
 # Now safe to import the real code (binds stub types into execution_simulator)
-from core.backtester_v2.execution_simulator import (  # noqa: E402
-    ExecutionSimulator,
-    BASE_SPREAD_BPS,
+from core.backtester_v2.cost_models.binance_costs import BinanceCostModel
+from core.backtester_v2.cost_models.funding_model import FundingCostModel
+from core.backtester_v2.cost_models.ibkr_costs import IBKRCostModel
+from core.backtester_v2.execution_simulator import (
     LATENCY,
+    ExecutionSimulator,
 )
-from core.backtester_v2.cost_models.ibkr_costs import IBKRCostModel  # noqa: E402
-from core.backtester_v2.cost_models.binance_costs import BinanceCostModel  # noqa: E402
-from core.backtester_v2.cost_models.funding_model import FundingCostModel  # noqa: E402
 
 # Restore original modules so other test files get the real types
 for _key, _orig in _saved_modules.items():

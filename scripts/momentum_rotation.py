@@ -36,7 +36,6 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.data.loader import OHLCVLoader
 
-
 # ─── Configuration ────────────────────────────────────────────────────────────
 
 # Univers ETFs diversifie (actions, obligations, commodites, international)
@@ -267,7 +266,7 @@ def run_rotation_backtest(
 def print_results(r: dict, config: dict) -> None:
     """Affiche les resultats du backtest."""
     print(f"\n{'='*70}")
-    print(f"  MOMENTUM ROTATION — RESULTATS BACKTEST")
+    print("  MOMENTUM ROTATION — RESULTATS BACKTEST")
     print(f"{'='*70}")
     print(f"  Config    : top {config['top_n']}, lookback {config['lookback']}m, "
           f"{'long-only' if config['long_only'] else 'long-short'}, "
@@ -291,7 +290,7 @@ def print_results(r: dict, config: dict) -> None:
 
     # Derniers holdings
     if r["holdings_log"]:
-        print(f"\n  Derniers rebalancements :")
+        print("\n  Derniers rebalancements :")
         for h in r["holdings_log"][-5:]:
             ret = h.get("return", "")
             print(f"    {h['date'].strftime('%Y-%m')} : {h['holdings']} {ret}")

@@ -6,11 +6,11 @@ and instrument type, and alerts when slippage exceeds thresholds.
 
 Storage: SQLite table 'slippage_log' in data/execution_metrics.db
 """
-import sqlite3
 import logging
-from datetime import datetime, timezone, timedelta
+import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional, Callable, Dict, Any, List
+from typing import Any, Callable, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ ALERT_WARNING_MULTIPLIER = 2.0   # > 2x backtest assumption → WARNING
 ALERT_CRITICAL_MULTIPLIER = 3.0  # > 3x backtest assumption → CRITICAL
 
 
-def _default_alert_callback() -> Optional[Callable]:
+def _default_alert_callback() -> Callable | None:
     """Try to import Telegram send_alert as default callback."""
     try:
         from core.telegram_alert import send_alert
@@ -58,8 +58,8 @@ class SlippageTracker:
     )
     """
 
-    def __init__(self, db_path: Optional[Path] = None,
-                 alert_callback: Optional[Callable] = None):
+    def __init__(self, db_path: Path | None = None,
+                 alert_callback: Callable | None = None):
         self.db_path = db_path or DEFAULT_DB_PATH
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -97,9 +97,9 @@ class SlippageTracker:
         requested_price: float,
         filled_price: float,
         backtest_slippage_bps: float = 2.0,
-        market_spread_bps: Optional[float] = None,
-        volume_at_fill: Optional[float] = None,
-        quantity: Optional[float] = None,
+        market_spread_bps: float | None = None,
+        volume_at_fill: float | None = None,
+        quantity: float | None = None,
     ) -> Dict[str, Any]:
         """Record a fill and calculate slippage.
 
@@ -134,7 +134,7 @@ class SlippageTracker:
         else:
             ratio = 0.0 if slippage_bps == 0 else float("inf")
 
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
 
         with sqlite3.connect(str(self.db_path)) as conn:
             conn.execute(
@@ -204,7 +204,7 @@ class SlippageTracker:
     def get_summary(
         self,
         period: str = "7d",
-        strategy: Optional[str] = None,
+        strategy: str | None = None,
     ) -> Dict[str, Any]:
         """Slippage summary by strategy, instrument_type, order_type.
 
@@ -439,10 +439,10 @@ class SlippageTracker:
         elif period.endswith("h"):
             days = 0
             hours = int(period[:-1])
-            cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+            cutoff = datetime.now(UTC) - timedelta(hours=hours)
             return cutoff.isoformat()
         else:
             days = 7  # Default
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         return cutoff.isoformat()

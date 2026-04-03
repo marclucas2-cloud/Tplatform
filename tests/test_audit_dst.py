@@ -13,7 +13,7 @@ Couvre :
 """
 
 import sys
-from datetime import date, datetime, time, timedelta, timezone
+from datetime import UTC, date, datetime, time, timedelta
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
@@ -24,12 +24,12 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from core.data.audit_dst import (
-    AuditDST,
-    MARKET_DEFINITIONS,
     DST_WARNING_HOURS,
+    MARKET_DEFINITIONS,
+    AuditDST,
 )
 
-_UTC = timezone.utc
+_UTC = UTC
 _PARIS = ZoneInfo("Europe/Paris")
 _NY = ZoneInfo("America/New_York")
 

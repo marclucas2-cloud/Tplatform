@@ -14,8 +14,7 @@ Covers:
 import json
 import sqlite3
 import sys
-import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 import numpy as np
@@ -24,12 +23,9 @@ import pytest
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.weekly_walk_forward import (
-    STRATEGIES,
-    WF_THRESHOLDS,
     ContinuousWalkForward,
     WalkForwardResult,
 )
-
 
 # ---- Helpers ----------------------------------------------------------------
 
@@ -230,7 +226,7 @@ class TestContinuousWalkForward:
         cwf = _make_cwf(tmp_path)
         result = WalkForwardResult(
             strategy="new_strat",
-            timestamp=datetime.now(timezone.utc).isoformat(),
+            timestamp=datetime.now(UTC).isoformat(),
             is_sharpe=2.0,
             oos_sharpe=1.5,
             oos_is_ratio=0.75,

@@ -24,9 +24,9 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -52,7 +52,7 @@ class PartialFillHandler:
 
     def __init__(
         self,
-        alert_callback: Optional[Callable[[str, dict], None]] = None,
+        alert_callback: Callable[[str, dict], None] | None = None,
         timeout_seconds: int = 300,
     ):
         """
@@ -140,7 +140,7 @@ class PartialFillHandler:
                 with self._lock:
                     self._pending[order_id] = fill_event
                     if order_id not in self._first_partial_ts:
-                        self._first_partial_ts[order_id] = datetime.now(timezone.utc)
+                        self._first_partial_ts[order_id] = datetime.now(UTC)
 
                 self._log_event("PARTIAL_FILL", fill_event)
                 return self._build_adjust_action(fill_event)
@@ -163,7 +163,7 @@ class PartialFillHandler:
               {order_id, filled_qty, remaining_qty, elapsed_seconds,
                action: "CANCEL_REMAINING" | "WAIT", broker, ticker}
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         results = []
 
         with self._lock:
@@ -396,7 +396,7 @@ class PartialFillHandler:
             "broker": broker,
         }
 
-    def _validate_fill_event(self, fill_event: dict) -> Optional[dict]:
+    def _validate_fill_event(self, fill_event: dict) -> dict | None:
         """Validate fill event fields. Returns an INVALID action dict or None."""
         if not isinstance(fill_event, dict):
             return {"action": "INVALID", "reason": "fill_event must be a dict"}
@@ -497,7 +497,7 @@ class PartialFillHandler:
         """Append an event to the JSONL log file."""
         try:
             record = {
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
                 "event": event_type,
                 **self._serialize_event_data(data),
             }

@@ -2,12 +2,10 @@
 Tests Sprint 2 — Feature Store + 3 stratégies intraday + Monte Carlo.
 """
 import pytest
-import pandas as pd
-import numpy as np
 
+from core.backtest.engine import BacktestEngine
 from core.data.loader import OHLCVLoader
 from core.features.store import FeatureStore
-from core.backtest.engine import BacktestEngine
 from core.strategy_schema.validator import StrategyValidator
 
 

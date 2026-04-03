@@ -15,7 +15,7 @@ import pandas as pd
 import pytest
 
 from core.backtester_v2.data_feed import DataFeed
-from core.backtester_v2.types import Bar, PortfolioState, Signal
+from core.backtester_v2.types import Bar, PortfolioState
 from strategies_v2.crypto.altcoin_rs import AltcoinRelativeStrength
 from strategies_v2.crypto.borrow_carry import BorrowRateCarry
 from strategies_v2.crypto.btc_dominance import BTCDominance
@@ -24,7 +24,6 @@ from strategies_v2.crypto.btc_mr import BTCMeanReversion
 from strategies_v2.crypto.liquidation_momentum import LiquidationMomentum
 from strategies_v2.crypto.vol_breakout import VolBreakout
 from strategies_v2.crypto.weekend_gap import WeekendGap
-
 
 # ---------------------------------------------------------------------------
 # Helpers

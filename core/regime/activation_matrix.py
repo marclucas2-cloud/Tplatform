@@ -12,13 +12,12 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
-from .multi_asset_regime import Regime, AssetClass
+from .multi_asset_regime import Regime
 
 logger = logging.getLogger(__name__)
 
@@ -123,18 +122,18 @@ class ActivationMatrix:
         # mult = 0.0 → strategy OFF
     """
 
-    def __init__(self, config_path: Optional[Path] = None):
+    def __init__(self, config_path: Path | None = None):
         self._config_path = config_path or CONFIG_PATH
         self._matrix: dict[str, dict[str, float]] = {}
         self._strategy_asset_class: dict[str, str] = dict(STRATEGY_ASSET_CLASS)
-        self._manual_override: Optional[str] = None  # Telegram override
+        self._manual_override: str | None = None  # Telegram override
         self._load()
 
     def _load(self) -> None:
         """Load matrix from YAML config, fallback to defaults."""
         try:
             if self._config_path.exists():
-                with open(self._config_path, "r") as f:
+                with open(self._config_path) as f:
                     cfg = yaml.safe_load(f) or {}
                 self._matrix = cfg.get("activation_matrix", {})
                 # Merge strategy-asset mapping from config
@@ -159,7 +158,7 @@ class ActivationMatrix:
         self,
         strategy_id: str,
         regime: Regime,
-        asset_class: Optional[str] = None,
+        asset_class: str | None = None,
     ) -> float:
         """Get sizing multiplier for a strategy in the given regime.
 
@@ -216,7 +215,7 @@ class ActivationMatrix:
             return "EU_EQUITY"
         return "US_EQUITY"
 
-    def set_manual_override(self, regime_str: Optional[str]) -> None:
+    def set_manual_override(self, regime_str: str | None) -> None:
         """Set manual regime override (from Telegram /regime_override)."""
         if regime_str is None:
             self._manual_override = None
@@ -229,7 +228,7 @@ class ActivationMatrix:
             # Persist override
             OVERRIDE_PATH.parent.mkdir(parents=True, exist_ok=True)
             with open(OVERRIDE_PATH, "w") as f:
-                json.dump({"override": regime_str, "timestamp": datetime.now(timezone.utc).isoformat()}, f)
+                json.dump({"override": regime_str, "timestamp": datetime.now(UTC).isoformat()}, f)
         except ValueError:
             logger.error("Invalid regime override: %s", regime_str)
 

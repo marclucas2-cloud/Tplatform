@@ -18,7 +18,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -112,8 +112,8 @@ class EUFXRiskCalibrator:
 
     def __init__(
         self,
-        eu_vol_multipliers: Optional[Dict[str, float]] = None,
-        fx_vol_tiers: Optional[Dict[str, float]] = None,
+        eu_vol_multipliers: Dict[str, float] | None = None,
+        fx_vol_tiers: Dict[str, float] | None = None,
         eurusd_vol_warn: float = EURUSD_VOL_THRESHOLD_WARNING,
         eurusd_vol_crit: float = EURUSD_VOL_THRESHOLD_CRITICAL,
     ):
@@ -316,7 +316,7 @@ class EUFXRiskCalibrator:
                 # Look up known correlation (try both orderings)
                 known_corr = CROSS_MARKET_CORRELATIONS.get(
                     (sym_a, sym_b),
-                    CROSS_MARKET_CORRELATIONS.get((sym_b, sym_a), None),
+                    CROSS_MARKET_CORRELATIONS.get((sym_b, sym_a)),
                 )
 
                 if known_corr is None:

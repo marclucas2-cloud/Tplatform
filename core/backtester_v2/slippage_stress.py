@@ -21,8 +21,8 @@ from __future__ import annotations
 
 import logging
 import math
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Type
+from dataclasses import dataclass
+from typing import Any, Dict, List, Type
 
 import numpy as np
 import pandas as pd
@@ -53,7 +53,7 @@ class SlippageStressReport:
     strategy_name: str
     base_slippage_bps: float
     levels: Dict[float, SlippageStressResult]
-    break_even_level: Optional[float]   # Level at which strategy breaks even (None if always profitable or always losing)
+    break_even_level: float | None   # Level at which strategy breaks even (None if always profitable or always losing)
     robustness_score: float             # 0-1, fraction of levels that remain profitable
     max_profitable_level: float         # Highest level still profitable
 
@@ -91,7 +91,7 @@ def _evaluate_strategy(
     trades: List[float] = []
     equity = initial_capital
     equity_curve = [equity]
-    position: Optional[Dict[str, Any]] = None
+    position: Dict[str, Any] | None = None
 
     portfolio = PortfolioState(equity=equity, cash=equity)
 
@@ -179,7 +179,7 @@ def run_slippage_stress_test(
     strategy_cls: Type,
     data: Dict[str, pd.DataFrame],
     base_slippage_bps: float = 2.0,
-    stress_levels: Optional[List[float]] = None,
+    stress_levels: List[float] | None = None,
     commission_per_share: float = 0.005,
     initial_capital: float = 100_000.0,
 ) -> SlippageStressReport:
@@ -215,7 +215,7 @@ def run_slippage_stress_test(
     )
 
     levels_results: Dict[float, SlippageStressResult] = {}
-    base_pnl: Optional[float] = None
+    base_pnl: float | None = None
 
     for level in sorted(stress_levels):
         effective_slippage = base_slippage_bps * level
@@ -284,7 +284,7 @@ def run_slippage_stress_test(
 
 def _find_break_even_level(
     levels_results: Dict[float, SlippageStressResult],
-) -> Optional[float]:
+) -> float | None:
     """Find the slippage level at which strategy PnL crosses zero.
 
     Uses linear interpolation between the last profitable and first

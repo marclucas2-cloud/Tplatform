@@ -16,7 +16,7 @@ Contrainte : la micro-position ne doit pas depasser 2% du capital.
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 logger = logging.getLogger(__name__)
@@ -214,7 +214,7 @@ class CarryOptimizer:
         # Mettre a jour le tracking
         if symbol not in self._active_carries:
             self._active_carries[symbol] = {
-                "started_at": datetime.now(timezone.utc).isoformat(),
+                "started_at": datetime.now(UTC).isoformat(),
                 "days_held": 0,
                 "earned": 0.0,
             }

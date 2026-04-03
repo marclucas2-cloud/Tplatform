@@ -23,15 +23,14 @@ build/
 # === Donnees locales (ne pas versionner) ===
 data/raw/
 data/cache/
-intraday-backtesterV2/data_cache/
+archive/intraday-backtesterV2/data_cache/
 *.csv
 *.parquet
 !strategies/*.json
 
 # === State files (contiennent des infos de compte) ===
 *_state.json
-paper_portfolio_state.json
-paper_trading_state.json
+data/state/
 
 # === Runtime data (historique ops, logs structurés) ===
 data/cash_flows.jsonl
@@ -52,6 +51,12 @@ output/
 logs/
 *.log
 
+# === Testing & Coverage ===
+.pytest_cache/
+htmlcov/
+.coverage
+.coverage.*
+
 # === IDE ===
 .idea/
 .vscode/
@@ -64,8 +69,9 @@ backup/
 # === Resultats de backtest (volumineux) ===
 results/
 _bmad-output/
-intraday-backtesterV2/output/
+archive/intraday-backtesterV2/output/
 intraday-backtester/output/
+archive/intraday-backtesterV2/data_cache/*.parquet
 
 # === OS ===
 .DS_Store

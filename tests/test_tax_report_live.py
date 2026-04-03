@@ -22,23 +22,22 @@ Covers:
 
 import csv
 import sqlite3
-from datetime import datetime, timedelta
+
+# Import module under test — adjust path in sys.path if needed
+import sys
 from pathlib import Path
 
 import pytest
 
-# Import module under test — adjust path in sys.path if needed
-import sys
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from scripts.tax_report_live import (
-    TaxReportGenerator,
-    PFU_RATE,
-    IR_RATE,
-    PS_RATE,
     ASSET_TAX_CLASS,
+    IR_RATE,
+    PFU_RATE,
+    PS_RATE,
+    TaxReportGenerator,
 )
-
 
 # ─── Fixtures ───────────────────────────────────────────────────────────────
 
@@ -526,7 +525,7 @@ class TestExportCsv:
         csv_path = str(tmp_path / "test_export.csv")
         gen_with_trades.export_csv(2026, csv_path)
 
-        with open(csv_path, "r", encoding="utf-8") as f:
+        with open(csv_path, encoding="utf-8") as f:
             reader = csv.reader(f, delimiter=";")
             header = next(reader)
 
@@ -542,7 +541,7 @@ class TestExportCsv:
         csv_path = str(tmp_path / "test_export.csv")
         gen_with_trades.export_csv(2026, csv_path)
 
-        with open(csv_path, "r", encoding="utf-8") as f:
+        with open(csv_path, encoding="utf-8") as f:
             reader = csv.reader(f, delimiter=";")
             rows = list(reader)
 
@@ -553,7 +552,7 @@ class TestExportCsv:
         csv_path = str(tmp_path / "test_export.csv")
         gen_with_trades.export_csv(2026, csv_path)
 
-        with open(csv_path, "r", encoding="utf-8") as f:
+        with open(csv_path, encoding="utf-8") as f:
             first_line = f.readline()
 
         # Should have semicolons
@@ -563,7 +562,7 @@ class TestExportCsv:
         csv_path = str(tmp_path / "test_export.csv")
         gen_with_trades.export_csv(2026, csv_path)
 
-        with open(csv_path, "r", encoding="utf-8") as f:
+        with open(csv_path, encoding="utf-8") as f:
             reader = csv.reader(f, delimiter=";")
             header = next(reader)
             eur_idx = header.index("PnL_Net_EUR")
@@ -642,7 +641,7 @@ class TestEmptyTrades:
         csv_path = str(tmp_path / "empty.csv")
         gen.export_csv(2026, csv_path)
 
-        with open(csv_path, "r", encoding="utf-8") as f:
+        with open(csv_path, encoding="utf-8") as f:
             reader = csv.reader(f, delimiter=";")
             rows = list(reader)
         assert len(rows) == 1  # Header only

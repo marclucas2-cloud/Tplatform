@@ -22,7 +22,6 @@ from __future__ import annotations
 import logging
 import os
 import time
-from typing import Any
 
 import requests
 
@@ -70,7 +69,7 @@ class IGClient:
         self._http = requests.Session()
 
     @classmethod
-    def from_env(cls) -> "IGClient":
+    def from_env(cls) -> IGClient:
         """Construit le client depuis les variables d'environnement."""
         required = ["IG_API_KEY", "IG_USERNAME", "IG_PASSWORD"]
         missing = [k for k in required if not os.getenv(k)]

@@ -19,12 +19,12 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(ROOT / "archive" / "intraday-backtesterV2"))
 
 try:
     from dotenv import load_dotenv
@@ -72,7 +72,7 @@ def check_pnl():
             conn.row_factory = sqlite3.Row
 
             # Today's closed trades
-            today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+            today = datetime.now(UTC).strftime("%Y-%m-%d")
             rows = conn.execute("""
                 SELECT strategy, instrument, direction, pnl_net, commission,
                        entry_price_filled, exit_price_filled, quantity,
@@ -132,7 +132,7 @@ def check_logs():
 
     try:
         events = []
-        with open(event_log, "r", encoding="utf-8") as f:
+        with open(event_log, encoding="utf-8") as f:
             for line in f:
                 line = line.strip()
                 if line:
@@ -142,7 +142,7 @@ def check_logs():
                         pass
 
         # Check for today's events
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         today_events = [e for e in events if e.get("timestamp", "").startswith(today)]
 
         if today_events:
@@ -161,7 +161,7 @@ def check_logs():
             if last_ts:
                 try:
                     last_dt = datetime.fromisoformat(last_ts.replace("Z", "+00:00"))
-                    age_min = (datetime.now(timezone.utc) - last_dt).total_seconds() / 60
+                    age_min = (datetime.now(UTC) - last_dt).total_seconds() / 60
                     if age_min > 10:
                         _warn(f"JSONL: last event {age_min:.0f} min ago")
                     else:
@@ -240,7 +240,7 @@ def check_positions():
     ET = zoneinfo.ZoneInfo("America/New_York")
     now_et = datetime.now(ET)
     if now_et.hour >= 16:
-        state_path = ROOT / "paper_portfolio_state.json"
+        state_path = ROOT / "data" / "state" / "paper_portfolio_state.json"
         if state_path.exists():
             try:
                 state = json.loads(state_path.read_text(encoding="utf-8"))
@@ -320,7 +320,7 @@ def run():
 
     logger.info("=" * 60)
     logger.info("  POST-TRADE CHECK")
-    logger.info(f"  {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    logger.info(f"  {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     logger.info("=" * 60)
 
     check_pnl()
@@ -349,7 +349,7 @@ def run():
         "issues": _issues,
         "warnings": _warnings,
         "duration_s": round(elapsed, 1),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 

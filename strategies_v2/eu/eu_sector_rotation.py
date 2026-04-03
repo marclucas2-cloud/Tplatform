@@ -25,12 +25,11 @@ Expected: ~2-4 rebalances/month, Sharpe target 0.8-1.5
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
 from core.backtester_v2.types import Bar, PortfolioState, Signal
-
 
 # Sector definitions
 GERMAN_AUTO = ["CON.DE", "BMW.DE"]
@@ -62,10 +61,10 @@ class EUSectorRotation(StrategyBase):
 
         # State
         self._bars_since_rebalance: int = 0
-        self._current_sector: Optional[str] = None  # "auto" or "luxury"
-        self._last_signal_symbol: Optional[str] = None
+        self._current_sector: str | None = None  # "auto" or "luxury"
+        self._last_signal_symbol: str | None = None
 
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -88,7 +87,7 @@ class EUSectorRotation(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
 
@@ -152,7 +151,7 @@ class EUSectorRotation(StrategyBase):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _sector_momentum(self, symbols: List[str]) -> Optional[float]:
+    def _sector_momentum(self, symbols: List[str]) -> float | None:
         """Compute average 20-day momentum (return) for a list of symbols.
 
         Args:
@@ -178,7 +177,7 @@ class EUSectorRotation(StrategyBase):
 
         return sum(momentums) / len(momentums)
 
-    def _pick_strongest(self, symbols: List[str]) -> Optional[str]:
+    def _pick_strongest(self, symbols: List[str]) -> str | None:
         """Pick the symbol with the highest momentum within a sector.
 
         Args:

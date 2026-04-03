@@ -9,16 +9,13 @@ and concurrent order submission.
 """
 
 import threading
-import time
-from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
-from core.risk_manager_live import LiveRiskManager
-from core.kill_switch_live import LiveKillSwitch
 from core.alpaca_client.client import AlpacaClient
-
+from core.kill_switch_live import LiveKillSwitch
+from core.risk_manager_live import LiveRiskManager
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -361,7 +358,6 @@ class TestPipelineGuard:
 
         It may fail on the API call itself, but the pipeline guard is passed.
         """
-        from core.alpaca_client.client import AlpacaAPIError
 
         client = AlpacaClient.__new__(AlpacaClient)
         client._paper = True

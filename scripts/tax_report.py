@@ -26,7 +26,7 @@ import csv
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Dict, List, Optional
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +211,7 @@ class TaxReportGenerator:
         return wash_sales
 
     def export_csv(self, trades: List[dict], filepath: str,
-                   year: Optional[int] = None) -> str:
+                   year: int | None = None) -> str:
         """Export au format CSV compatible declaration fiscale FR (formulaire 2074).
 
         Colonnes : Date, Ticker, Operation, Quantite, Prix, Montant,
@@ -263,22 +263,22 @@ class TaxReportGenerator:
         """Formate le rapport annuel en texte lisible."""
         lines = [
             f"# Rapport Fiscal {report['year']}",
-            f"",
-            f"## Resume",
+            "",
+            "## Resume",
             f"- Trades total : {report['total_trades']}",
             f"- Ventes : {report['total_sells']}",
             f"- Gains : ${report['total_gains']:,.2f}",
             f"- Pertes : ${report['total_losses']:,.2f}",
             f"- **P&L net : ${report['net_pnl']:,.2f}**",
             f"- Commissions : ${report['total_commissions']:,.2f}",
-            f"",
-            f"## Duree de detention",
+            "",
+            "## Duree de detention",
             f"- Court terme (< 1 an) : gains ${report['short_term_gains']:,.2f}, "
             f"pertes ${report['short_term_losses']:,.2f}",
             f"- Long terme (> 1 an) : gains ${report['long_term_gains']:,.2f}, "
             f"pertes ${report['long_term_losses']:,.2f}",
-            f"",
-            f"## Wash Sales",
+            "",
+            "## Wash Sales",
             f"- Detectes : {len(report['wash_sales'])}",
             f"- Pertes disallowed : ${report['wash_disallowed_total']:,.2f}",
         ]
@@ -293,15 +293,15 @@ class TaxReportGenerator:
                 )
 
         lines.extend([
-            f"",
-            f"## Estimation fiscale",
+            "",
+            "## Estimation fiscale",
             f"- P&L imposable : ${report['taxable_pnl']:,.2f}",
             f"- PFU (30%) : ${report['estimated_tax_pfu']:,.2f}",
             f"- IR+PS (12.8%+17.2%) : ${report['estimated_tax_ir_ps']:,.2f}",
         ])
 
         if report["by_strategy"]:
-            lines.extend([f"", f"## Par strategie"])
+            lines.extend(["", "## Par strategie"])
             for s in report["by_strategy"]:
                 lines.append(
                     f"- {s['strategy']}: ${s['pnl']:,.2f} "
@@ -309,7 +309,7 @@ class TaxReportGenerator:
                 )
 
         if report["by_month"]:
-            lines.extend([f"", f"## Par mois"])
+            lines.extend(["", "## Par mois"])
             for m in report["by_month"]:
                 lines.append(
                     f"- {m['month']}: ${m['pnl']:,.2f} "
@@ -331,7 +331,7 @@ class TaxReportGenerator:
                 result.append(t)
         return result
 
-    def _parse_date(self, timestamp: str) -> Optional[datetime]:
+    def _parse_date(self, timestamp: str) -> datetime | None:
         """Parse un timestamp ISO en datetime."""
         if not timestamp:
             return None

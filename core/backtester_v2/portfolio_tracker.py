@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from dataclasses import dataclass
+from typing import Any, Dict, List
 
 import pandas as pd
 
@@ -39,8 +39,8 @@ class Position:
     entry_price: float
     entry_time: pd.Timestamp
     strategy: str = ""
-    sl: Optional[float] = None
-    tp: Optional[float] = None
+    sl: float | None = None
+    tp: float | None = None
     unrealized_pnl: float = 0.0
 
 

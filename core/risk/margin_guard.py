@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -182,7 +182,7 @@ class MarginGuard:
         self,
         contract: str,
         qty: int,
-        equity: Optional[float] = None,
+        equity: float | None = None,
         current_futures_margin: float = 0.0,
     ) -> Dict[str, Any]:
         """Check margin for a futures contract order.
@@ -259,7 +259,7 @@ class MarginGuard:
     def get_margin_report(
         self,
         positions: List[Dict[str, Any]],
-        equity: Optional[float] = None,
+        equity: float | None = None,
     ) -> Dict[str, Any]:
         """Generate margin utilization report by asset class.
 

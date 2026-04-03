@@ -19,9 +19,9 @@ import json
 import logging
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ LOG_PATH = ROOT / "data" / "risk" / "emergency_close_log.jsonl"
 
 def _generate_confirmation_code() -> str:
     """Generate hourly confirmation code (TOTP-like, changes every hour)."""
-    hour_key = datetime.now(timezone.utc).strftime("%Y%m%d%H")
+    hour_key = datetime.now(UTC).strftime("%Y%m%d%H")
     h = hashlib.sha256(f"emergency_{hour_key}".encode()).hexdigest()[:6].upper()
     return h
 
@@ -55,21 +55,21 @@ class EmergencyCloseAll:
 
     def __init__(
         self,
-        brokers: Optional[dict] = None,
-        alert_callback: Optional[Callable] = None,
-        kill_switch_callback: Optional[Callable] = None,
+        brokers: dict | None = None,
+        alert_callback: Callable | None = None,
+        kill_switch_callback: Callable | None = None,
     ):
         self._brokers = brokers or {}
         self._alert = alert_callback
         self._kill_switch = kill_switch_callback
-        self._last_execution: Optional[dict] = None
+        self._last_execution: dict | None = None
 
     def get_confirmation_code(self) -> str:
         """Get current hourly confirmation code."""
         return _generate_confirmation_code()
 
     def execute(
-        self, confirmation_code: Optional[str] = None, force: bool = False
+        self, confirmation_code: str | None = None, force: bool = False
     ) -> dict:
         """Execute emergency close on all brokers.
 
@@ -123,7 +123,7 @@ class EmergencyCloseAll:
 
         report = {
             "status": "EXECUTED",
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "elapsed_seconds": round(elapsed, 2),
             "brokers": results,
             "total_positions_closed": sum(

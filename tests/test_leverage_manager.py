@@ -18,19 +18,17 @@ Couvre :
 """
 
 import json
-import os
 import sys
-import tempfile
-import pytest
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
+
+import pytest
 
 # Setup paths
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.leverage_manager import LeverageManager, PHASE_ORDER
-
+from core.leverage_manager import LeverageManager
 
 # =============================================================================
 # FIXTURES
@@ -143,7 +141,7 @@ class TestCanAdvancePhase:
         state = {
             "current_phase": "PHASE_1",
             "phase_start_date": (
-                datetime.now(timezone.utc) - timedelta(days=31)
+                datetime.now(UTC) - timedelta(days=31)
             ).isoformat(),
             "history": [],
         }
@@ -162,7 +160,7 @@ class TestCanAdvancePhase:
         state = {
             "current_phase": "PHASE_1",
             "phase_start_date": (
-                datetime.now(timezone.utc) - timedelta(days=31)
+                datetime.now(UTC) - timedelta(days=31)
             ).isoformat(),
             "history": [],
         }
@@ -192,7 +190,7 @@ class TestCanAdvancePhase:
         state = {
             "current_phase": "PHASE_1",
             "phase_start_date": (
-                datetime.now(timezone.utc) - timedelta(days=31)
+                datetime.now(UTC) - timedelta(days=31)
             ).isoformat(),
             "history": [],
         }
@@ -382,7 +380,7 @@ class TestEdgeCases:
         state = {
             "current_phase": "PHASE_1",
             "phase_start_date": (
-                datetime.now(timezone.utc) - timedelta(days=31)
+                datetime.now(UTC) - timedelta(days=31)
             ).isoformat(),
             "history": [],
         }

@@ -10,16 +10,16 @@ Couvre :
 """
 
 import sys
-import pytest
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 # Setup paths
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from core.kill_switch_calibration import KillSwitchCalibrator
-
 
 # =============================================================================
 # FIXTURES

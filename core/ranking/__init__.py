@@ -1,3 +1,3 @@
-from .ranker import StrategyRanker, RankedStrategy
+from .ranker import RankedStrategy, StrategyRanker
 
-__all__ = ["StrategyRanker", "RankedStrategy"]
+__all__ = ["RankedStrategy", "StrategyRanker"]

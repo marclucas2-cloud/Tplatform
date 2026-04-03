@@ -10,9 +10,7 @@ Resultat attendu : amelioration moyenne de 2-5 bps par trade MR.
 """
 
 import logging
-import time
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -49,7 +47,7 @@ class SniperEntry:
 
     def __init__(
         self,
-        offsets: Optional[Dict] = None,
+        offsets: Dict | None = None,
         default_timeout_seconds: int = 300,
     ):
         """

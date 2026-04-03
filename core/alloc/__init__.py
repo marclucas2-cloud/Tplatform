@@ -10,4 +10,4 @@ from core.alloc.hrp_allocator import HRPAllocator
 from core.alloc.kelly_dynamic import DynamicKellyManager
 from core.alloc.pnl_matrix_builder import PnLMatrixBuilder
 
-__all__ = ["HRPAllocator", "DynamicKellyManager", "PnLMatrixBuilder"]
+__all__ = ["DynamicKellyManager", "HRPAllocator", "PnLMatrixBuilder"]

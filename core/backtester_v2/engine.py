@@ -7,7 +7,7 @@ strategy execution with strict anti-lookahead guarantees.
 from __future__ import annotations
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -34,7 +34,6 @@ from core.backtester_v2.types import (
     EventType,
     Fill,
     Order,
-    PortfolioState,
     Signal,
 )
 

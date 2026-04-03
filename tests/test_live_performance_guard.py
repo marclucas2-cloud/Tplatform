@@ -1,12 +1,13 @@
 """Tests for live performance guard — auto-disable underperforming strategies."""
-import pytest
-from pathlib import Path
 import sys
+from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.live_performance_guard import LivePerformanceGuard, CONTINUE, DISABLE, ALERT
+from core.live_performance_guard import ALERT, CONTINUE, DISABLE, LivePerformanceGuard
 
 
 @pytest.fixture

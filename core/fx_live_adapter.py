@@ -24,9 +24,9 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Optional, Callable, Any
+from typing import Any, Callable, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +104,7 @@ class FXLiveAdapter:
         broker: Any = None,
         trade_journal: Any = None,
         slippage_tracker: Any = None,
-        alert_callback: Optional[Callable] = None,
+        alert_callback: Callable | None = None,
         max_spread_ratio: float = DEFAULT_MAX_SPREAD_RATIO,
     ):
         """
@@ -256,7 +256,7 @@ class FXLiveAdapter:
         signal_price: float,
         stop_loss: float,
         take_profit: float,
-        current_spread_bps: Optional[float] = None,
+        current_spread_bps: float | None = None,
     ) -> dict:
         """Prepare a live FX order with all validations.
 
@@ -415,7 +415,7 @@ class FXLiveAdapter:
                 "trade_id": "",
                 "fill_price": 0.0,
                 "slippage_bps": 0.0,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "error": prepared_order.get("reason_if_rejected", "Order not ready"),
             }
 
@@ -425,12 +425,12 @@ class FXLiveAdapter:
                 "trade_id": "",
                 "fill_price": 0.0,
                 "slippage_bps": 0.0,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "error": "No broker configured",
             }
 
-        trade_id = f"FX-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
-        timestamp = datetime.now(timezone.utc).isoformat()
+        trade_id = f"FX-{datetime.now(UTC).strftime('%Y%m%d-%H%M%S')}-{uuid.uuid4().hex[:6]}"
+        timestamp = datetime.now(UTC).isoformat()
 
         try:
             result = self._broker.create_position(
@@ -630,7 +630,7 @@ class FXLiveAdapter:
         Returns True if enough time has passed since last evaluation.
         """
         if now_cet is None:
-            now_cet = datetime.now(timezone.utc)  # Will be compared as UTC
+            now_cet = datetime.now(UTC)  # Will be compared as UTC
 
         # Load schedule
         schedule_path = Path(__file__).parent.parent / "config" / "fx_signal_schedule.yaml"

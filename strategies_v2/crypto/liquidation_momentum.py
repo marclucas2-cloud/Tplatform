@@ -6,7 +6,7 @@ Margin trade on Binance. Falls back to volume proxy if OI missing.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -65,7 +65,7 @@ class LiquidationMomentum(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         sym = bar.symbol
         bars = self.data_feed.get_bars(sym, 25)
         if len(bars) < 25:

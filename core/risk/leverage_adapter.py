@@ -15,7 +15,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -83,8 +83,8 @@ class LeverageAdapter:
         self,
         base_leverage: float = 1.0,
         drawdown_pct: float = 0.0,
-        correlation_score: Optional[float] = None,
-        ere_pct: Optional[float] = None,
+        correlation_score: float | None = None,
+        ere_pct: float | None = None,
         regime: str = "normal",
     ) -> LeverageDecision:
         """Compute leverage multiplier from current conditions.

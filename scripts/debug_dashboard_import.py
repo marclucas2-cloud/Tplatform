@@ -1,9 +1,11 @@
 """Debug script — test strategies.crypto import from dashboard context."""
 import sys
+
 sys.path.insert(0, "/opt/trading-platform")
 sys.path.insert(0, "/opt/trading-platform/dashboard/api")
-sys.path.insert(0, "/opt/trading-platform/intraday-backtesterV2")
+sys.path.insert(0, "/opt/trading-platform/archive/intraday-backtesterV2")
 import main
+
 print("ROOT:", main.ROOT)
 print("sys.path[:5]:", sys.path[:5])
 try:

@@ -14,8 +14,7 @@ Reduit uniquement le sizing des NOUVELLES positions.
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -70,9 +69,9 @@ class VixStressGuard:
         self.spy_dd_halt = spy_dd_halt
 
         # Etat interne cache
-        self._last_check: Optional[datetime] = None
-        self._last_vix: Optional[float] = None
-        self._last_spy_change: Optional[float] = None
+        self._last_check: datetime | None = None
+        self._last_vix: float | None = None
+        self._last_spy_change: float | None = None
         self._cached_result: dict = {
             "sizing_factor": 1.0,
             "level": NORMAL,
@@ -86,8 +85,8 @@ class VixStressGuard:
 
     def check(
         self,
-        vix_level: Optional[float] = None,
-        spy_change_pct: Optional[float] = None,
+        vix_level: float | None = None,
+        spy_change_pct: float | None = None,
     ) -> dict:
         """Evalue le niveau de stress marche et retourne le facteur de sizing.
 
@@ -114,7 +113,7 @@ class VixStressGuard:
         # Mettre a jour le cache des valeurs brutes
         self._last_vix = vix_level
         self._last_spy_change = spy_change_pct
-        self._last_check = datetime.now(timezone.utc)
+        self._last_check = datetime.now(UTC)
 
         # Determiner le niveau de stress le plus severe
         sizing_factor = 1.0
@@ -227,7 +226,7 @@ class VixStressGuard:
             "spy_change_pct": self._last_spy_change,
         }
 
-    def fetch_vix_level(self) -> Optional[float]:
+    def fetch_vix_level(self) -> float | None:
         """Recupere le niveau VIX actuel via yfinance.
 
         Returns:
@@ -250,7 +249,7 @@ class VixStressGuard:
             logger.warning(f"Erreur fetch VIX: {e}")
             return None
 
-    def fetch_spy_change(self) -> Optional[float]:
+    def fetch_spy_change(self) -> float | None:
         """Recupere la variation intraday SPY via yfinance.
 
         Returns:

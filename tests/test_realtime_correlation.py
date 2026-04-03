@@ -15,15 +15,15 @@ Covers:
 """
 
 import sys
-import pytest
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from core.realtime_correlation import RealTimeCorrelationMonitor
-
 
 # =============================================================================
 # FIXTURES

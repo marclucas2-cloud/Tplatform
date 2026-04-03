@@ -6,11 +6,11 @@ when a strategy's costs eat too much of the edge.
 
 Storage: SQLite table 'cost_log' in data/execution_metrics.db
 """
-import sqlite3
 import logging
-from datetime import datetime, timezone, timedelta
+import sqlite3
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional, Callable, Dict, Any, List
+from typing import Any, Callable, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +22,7 @@ COST_RATIO_KILL = 0.50      # 50% — recommend killing the strategy
 MIN_TRADES_FOR_KILL = 30    # Need at least 30 trades for kill recommendation
 
 
-def _default_alert_callback() -> Optional[Callable]:
+def _default_alert_callback() -> Callable | None:
     """Try to import Telegram send_alert as default callback."""
     try:
         from core.telegram_alert import send_alert
@@ -54,8 +54,8 @@ class CostTracker:
     )
     """
 
-    def __init__(self, db_path: Optional[Path] = None,
-                 alert_callback: Optional[Callable] = None):
+    def __init__(self, db_path: Path | None = None,
+                 alert_callback: Callable | None = None):
         self.db_path = db_path or DEFAULT_DB_PATH
         self.db_path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -90,7 +90,7 @@ class CostTracker:
         instrument_type: str,
         commission: float,
         notional_value: float,
-        pnl_gross: Optional[float] = None,
+        pnl_gross: float | None = None,
     ) -> Dict[str, Any]:
         """Record commission for a trade.
 
@@ -108,7 +108,7 @@ class CostTracker:
         if pnl_gross is not None and pnl_gross != 0:
             cost_ratio = commission / abs(pnl_gross)
 
-        timestamp = datetime.now(timezone.utc).isoformat()
+        timestamp = datetime.now(UTC).isoformat()
 
         with sqlite3.connect(str(self.db_path)) as conn:
             conn.execute(
@@ -142,7 +142,7 @@ class CostTracker:
     # -------------------------------------------------------------------------
     def get_cost_report(
         self,
-        strategy: Optional[str] = None,
+        strategy: str | None = None,
         period: str = "30d",
     ) -> Dict[str, Any]:
         """Cost report per strategy.
@@ -382,10 +382,10 @@ class CostTracker:
         elif period.endswith("h"):
             days = 0
             hours = int(period[:-1])
-            cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+            cutoff = datetime.now(UTC) - timedelta(hours=hours)
             return cutoff.isoformat()
         else:
             days = 30  # Default
 
-        cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+        cutoff = datetime.now(UTC) - timedelta(days=days)
         return cutoff.isoformat()

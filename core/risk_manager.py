@@ -20,12 +20,13 @@ Original V2 features preserved:
   - Progressive deleveraging
 """
 
-import numpy as np
-from scipy import stats
-import yaml
 import logging
 from pathlib import Path
-from typing import Tuple, Dict, List, Optional
+from typing import Dict, List, Tuple
+
+import numpy as np
+import yaml
+from scipy import stats
 
 logger = logging.getLogger(__name__)
 

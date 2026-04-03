@@ -10,7 +10,7 @@ represents the current annualized yield as a decimal (e.g. 0.08 = 8%).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -61,7 +61,7 @@ class BorrowRateCarry(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         sym = bar.symbol
         # bar.close represents the current APY as a decimal
         apy = bar.close

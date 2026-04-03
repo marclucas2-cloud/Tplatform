@@ -11,14 +11,13 @@ EUR/NOK Carry, Lead-Lag Cross-Timezone, Live Checklist V2.
 - Live Checklist : file exists, 17 items
 """
 
-import os
-import sys
 import importlib.util
-import pytest
+import sys
+from datetime import time as dt_time
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
-from datetime import datetime, time as dt_time, timedelta
-from pathlib import Path
 
 # ── Add project root to path ──
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
@@ -29,7 +28,7 @@ from core.dynamic_allocator_v2 import DynamicAllocatorV2
 
 def _load_strategy_module(filename: str):
     """Load a strategy module directly from file, bypassing __init__.py."""
-    filepath = PROJECT_ROOT / "intraday-backtesterV2" / "strategies" / filename
+    filepath = PROJECT_ROOT / "archive" / "intraday-backtesterV2" / "strategies" / filename
     spec = importlib.util.spec_from_file_location(
         filepath.stem, str(filepath)
     )

@@ -40,9 +40,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.data.loader import OHLCVLoader
-from core.data.universe import get_asset, UNIVERSE
-from core.strategy_schema.validator import StrategyValidator
 from core.optimization.grid_search import GridSearch
+from core.strategy_schema.validator import StrategyValidator
 
 STRATEGIES_DIR = Path(__file__).parent.parent / "strategies"
 
@@ -125,7 +124,6 @@ def parse_param_grid(param_args: list[list[str]] | None) -> dict[str, list]:
 
 def fetch_data(asset_symbol: str, timeframe: str):
     """Telecharge les donnees pour un actif."""
-    from core.data.loader import OHLCVLoader
     # Mapping timeframe -> periode yfinance
     period_map = {"1M": "7d", "5M": "60d", "1H": "2y", "4H": "2y", "1D": "5y"}
     # Fallback pour les timeframes courts
@@ -206,7 +204,7 @@ def run_optimization(strategy_path: Path, asset_symbol: str,
     # Grid search
     gs = GridSearch(initial_capital=args.capital, wf_windows=3)
     t0 = time.time()
-    print(f"\n  Recherche en cours...")
+    print("\n  Recherche en cours...")
     results = gs.run(strategy, data, param_grid)
     elapsed = time.time() - t0
 

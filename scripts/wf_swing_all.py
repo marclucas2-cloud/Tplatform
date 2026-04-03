@@ -16,17 +16,18 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(ROOT / "archive" / "intraday-backtesterV2"))
 sys.path.insert(0, str(ROOT))
 
 from dotenv import load_dotenv
+
 load_dotenv(ROOT / ".env")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -41,10 +42,10 @@ MIN_OOS_TRADES = 15
 
 def fetch_daily_data(tickers: list[str], days: int = 730) -> dict[str, pd.DataFrame]:
     """Fetch daily bars from Alpaca IEX for all tickers."""
+    from alpaca.data.enums import DataFeed
     from alpaca.data.historical import StockHistoricalDataClient
     from alpaca.data.requests import StockBarsRequest
     from alpaca.data.timeframe import TimeFrame
-    from alpaca.data.enums import DataFeed
 
     client = StockHistoricalDataClient(
         api_key=os.getenv("ALPACA_API_KEY"),
@@ -70,7 +71,7 @@ def fetch_daily_data(tickers: list[str], days: int = 730) -> dict[str, pd.DataFr
             bars = client.get_stock_bars(request)
 
             for ticker in batch:
-                if ticker in bars.data and bars.data[ticker]:
+                if bars.data.get(ticker):
                     rows = []
                     for bar in bars.data[ticker]:
                         rows.append({
@@ -179,7 +180,7 @@ def run_backtest_period(strategy, data: dict[str, pd.DataFrame],
         # Generate new signals
         try:
             signals = strategy.generate_signals(day_data, day)
-        except Exception as e:
+        except Exception:
             continue
 
         for sig in signals:
@@ -351,13 +352,13 @@ def walk_forward(strategy, data: dict[str, pd.DataFrame], name: str) -> dict:
 def main():
     print("=" * 60)
     print("  WALK-FORWARD SWING STRATEGIES")
-    print(f"  {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+    print(f"  {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}")
     print(f"  Capital: ${CAPITAL:,}")
     print("=" * 60)
 
     # Import strategies from intraday-backtesterV2/strategies/ via importlib
     import importlib.util
-    _bt_strats = ROOT / "intraday-backtesterV2" / "strategies"
+    _bt_strats = ROOT / "archive" / "intraday-backtesterV2" / "strategies"
 
     def _load(module_name, class_name):
         spec = importlib.util.spec_from_file_location(
@@ -415,7 +416,7 @@ def main():
     out_path = ROOT / "data" / "monitoring" / "wf_swing_results.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps({
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "capital": CAPITAL,
         "results": all_results,
     }, indent=2, default=str))

@@ -20,12 +20,10 @@ Regles :
 - Filtre : Skip si VIX > 30 (correlations commodity cassent)
 - ~150 trades/an, holding 1-4 heures
 """
-import pandas as pd
-import numpy as np
 from abc import ABC, abstractmethod
 from datetime import time as dt_time
-from typing import Optional
 
+import pandas as pd
 
 # ── Signal & BaseStrategy (local definitions for standalone use) ─────────
 # When running inside the backtester, these are imported from backtest_engine.
@@ -140,7 +138,7 @@ class BrentLagFuturesStrategy(BaseStrategy):
 
         return tr.rolling(period, min_periods=max(1, period // 2)).mean()
 
-    def _get_london_open_price(self, df: pd.DataFrame) -> Optional[float]:
+    def _get_london_open_price(self, df: pd.DataFrame) -> float | None:
         """
         Get the price at London open equivalent.
         London opens at 08:00 GMT = 03:00 ET.

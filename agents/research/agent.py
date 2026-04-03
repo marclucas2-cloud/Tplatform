@@ -26,8 +26,8 @@ import logging
 import os
 from pathlib import Path
 
-from agents.base_agent import BaseAgent, AgentMessage
-from core.strategy_schema.validator import StrategyValidator, StrategyValidationError
+from agents.base_agent import AgentMessage, BaseAgent
+from core.strategy_schema.validator import StrategyValidationError, StrategyValidator
 
 logger = logging.getLogger(__name__)
 

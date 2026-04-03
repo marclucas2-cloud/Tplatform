@@ -11,27 +11,27 @@ Verifie :
   - Edge cases (donnees insuffisantes, marche plat)
   - Contraintes de sizing (max contrats)
 """
-import pytest
-import pandas as pd
-import numpy as np
-from datetime import time as dt_time, date as dt_date, datetime, timedelta
-
-import sys
 import os
+import sys
+from datetime import date as dt_date
+from datetime import time as dt_time
+
+import numpy as np
+import pandas as pd
+import pytest
 
 # Add strategies/ to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "strategies"))
 
-from brent_lag_futures import BrentLagFuturesStrategy, MCL_MULTIPLIER, MCL_MARGIN
-from futures_mes_trend import MESTrendStrategy, MES_MULTIPLIER, MES_MARGIN
+from brent_lag_futures import MCL_MARGIN, MCL_MULTIPLIER, BrentLagFuturesStrategy
+from futures_mes_trend import MES_MARGIN, MES_MULTIPLIER, MESTrendStrategy
 from futures_mnq_mr import (
-    MNQMeanReversionStrategy,
-    MNQ_MULTIPLIER,
-    MNQ_MARGIN,
-    is_near_macro_event,
     MACRO_EVENTS_2026,
+    MNQ_MARGIN,
+    MNQ_MULTIPLIER,
+    MNQMeanReversionStrategy,
+    is_near_macro_event,
 )
-
 
 # ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -670,7 +670,6 @@ class TestCrossStrategy:
 
     def test_all_strategies_extend_base(self):
         """Toutes les strategies doivent heriter de BaseStrategy (ABC)."""
-        from abc import ABC
         # Each strategy defines its own BaseStrategy(ABC) — verify they all
         # inherit from an ABC-based class with the right interface
         for StrategyCls in [BrentLagFuturesStrategy, MESTrendStrategy, MNQMeanReversionStrategy]:

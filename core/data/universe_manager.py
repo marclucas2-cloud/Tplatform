@@ -12,7 +12,7 @@ from __future__ import annotations
 import logging
 from dataclasses import dataclass, field
 from datetime import date
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
@@ -39,9 +39,9 @@ class EarningsEvent:
 
     ticker: str
     earnings_date: date
-    eps_estimate: Optional[float] = None
-    eps_actual: Optional[float] = None
-    surprise_pct: Optional[float] = None
+    eps_estimate: float | None = None
+    eps_actual: float | None = None
+    surprise_pct: float | None = None
 
 
 @dataclass
@@ -68,7 +68,7 @@ class DynamicUniverseManager:
         self,
         min_volume_usd: float = 50_000_000,
         top_n: int = 100,
-        fx_rates: Optional[Dict[str, float]] = None,
+        fx_rates: Dict[str, float] | None = None,
     ) -> None:
         self.min_volume_usd = min_volume_usd
         self.top_n = top_n
@@ -81,7 +81,7 @@ class DynamicUniverseManager:
     def filter_universe(
         self,
         volume_data: pd.DataFrame,
-        price_data: Optional[pd.DataFrame] = None,
+        price_data: pd.DataFrame | None = None,
     ) -> List[str]:
         """Filter tickers to top_n by average daily dollar volume.
 
@@ -235,7 +235,7 @@ class DynamicUniverseManager:
         self,
         tickers: List[str],
         start_date: date,
-        price_data: Optional[pd.DataFrame] = None,
+        price_data: pd.DataFrame | None = None,
     ) -> SurvivorshipResult:
         """Verify that tickers existed at start_date.
 
@@ -387,7 +387,7 @@ class DynamicUniverseManager:
         self._fx_rates.update(rates)
 
 
-def _safe_float(val: Any) -> Optional[float]:
+def _safe_float(val: Any) -> float | None:
     """Convert value to float, returning None on failure."""
     if val is None:
         return None

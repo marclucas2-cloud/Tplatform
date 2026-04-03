@@ -1,11 +1,10 @@
 """Tests for PortfolioTracker — positions, equity, P&L, drawdown."""
 
-import pytest
 import pandas as pd
+import pytest
 
-from core.backtester_v2.types import Bar, Event, EventType, Fill, Order
 from core.backtester_v2.portfolio_tracker import PortfolioTracker
-
+from core.backtester_v2.types import Bar, EventType, Fill, Order
 
 # ---------------------------------------------------------------------------
 # Helpers

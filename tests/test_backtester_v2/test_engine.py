@@ -4,13 +4,11 @@ Verifies event routing, portfolio tracking, risk checks,
 reproducibility, and correct chronological ordering.
 """
 
-from typing import Dict, Any, Optional
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.engine import BacktesterV2
 from core.backtester_v2.strategy_base import StrategyBase
 from core.backtester_v2.types import (
@@ -21,7 +19,6 @@ from core.backtester_v2.types import (
     PortfolioState,
     Signal,
 )
-
 
 # ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -71,7 +68,7 @@ class BuyAndHoldStrategy(StrategyBase):
     def name(self) -> str:
         return "buy_and_hold"
 
-    def on_bar(self, bar: Bar, ps: PortfolioState) -> Optional[Signal]:
+    def on_bar(self, bar: Bar, ps: PortfolioState) -> Signal | None:
         if not self._bought:
             self._bought = True
             return Signal(
@@ -92,7 +89,7 @@ class AlwaysBuyStrategy(StrategyBase):
     def name(self) -> str:
         return "always_buy"
 
-    def on_bar(self, bar: Bar, ps: PortfolioState) -> Optional[Signal]:
+    def on_bar(self, bar: Bar, ps: PortfolioState) -> Signal | None:
         return Signal(
             symbol=bar.symbol,
             side="BUY",
@@ -107,7 +104,7 @@ class ConditionalStrategy(StrategyBase):
     def name(self) -> str:
         return "conditional"
 
-    def on_bar(self, bar: Bar, ps: PortfolioState) -> Optional[Signal]:
+    def on_bar(self, bar: Bar, ps: PortfolioState) -> Signal | None:
         if bar.close > 100.5:
             return Signal(
                 symbol=bar.symbol, side="BUY",
@@ -126,7 +123,7 @@ class SellStrategy(StrategyBase):
     def name(self) -> str:
         return "seller"
 
-    def on_bar(self, bar: Bar, ps: PortfolioState) -> Optional[Signal]:
+    def on_bar(self, bar: Bar, ps: PortfolioState) -> Signal | None:
         self._count += 1
         if self._count == 1:
             return Signal(symbol=bar.symbol, side="BUY", strategy_name=self.name)
@@ -142,7 +139,7 @@ class NullStrategy(StrategyBase):
     def name(self) -> str:
         return "null"
 
-    def on_bar(self, bar: Bar, ps: PortfolioState) -> Optional[Signal]:
+    def on_bar(self, bar: Bar, ps: PortfolioState) -> Signal | None:
         return None
 
 
@@ -156,7 +153,7 @@ class EODTrackingStrategy(StrategyBase):
     def name(self) -> str:
         return "eod_tracker"
 
-    def on_bar(self, bar: Bar, ps: PortfolioState) -> Optional[Signal]:
+    def on_bar(self, bar: Bar, ps: PortfolioState) -> Signal | None:
         return None
 
     def on_eod(self, timestamp) -> None:
@@ -224,7 +221,7 @@ class TestSignalTiming:
             def name(self) -> str:
                 return "recorder"
 
-            def on_bar(self, bar: Bar, ps: PortfolioState) -> Optional[Signal]:
+            def on_bar(self, bar: Bar, ps: PortfolioState) -> Signal | None:
                 bars_received.append(bar)
                 return None
 
@@ -252,7 +249,7 @@ class TestSignalTiming:
             def name(self) -> str:
                 return "ts_recorder"
 
-            def on_bar(self, bar: Bar, ps: PortfolioState) -> Optional[Signal]:
+            def on_bar(self, bar: Bar, ps: PortfolioState) -> Signal | None:
                 timestamps.append(bar.timestamp)
                 return None
 

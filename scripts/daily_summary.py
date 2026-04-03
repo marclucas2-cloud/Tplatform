@@ -19,12 +19,12 @@ import json
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(ROOT / "archive" / "intraday-backtesterV2"))
 
 try:
     from dotenv import load_dotenv
@@ -69,7 +69,7 @@ def _count_log_errors(date_str: str) -> dict:
 
     errors = warnings = criticals = 0
     try:
-        with open(log_file, "r", encoding="utf-8", errors="replace") as f:
+        with open(log_file, encoding="utf-8", errors="replace") as f:
             for line in f:
                 if date_str not in line:
                     continue
@@ -127,7 +127,7 @@ def _get_broker_equity() -> dict:
 def generate_summary(date_str: str = None) -> dict:
     """Generate complete daily summary."""
     if date_str is None:
-        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date_str = datetime.now(UTC).strftime("%Y-%m-%d")
 
     logger.info("=" * 60)
     logger.info(f"  DAILY SUMMARY — {date_str}")
@@ -137,7 +137,7 @@ def generate_summary(date_str: str = None) -> dict:
     live_trades = _get_journal_trades(ROOT / "data" / "live_journal.db", date_str)
     paper_trades = _get_journal_trades(ROOT / "data" / "paper_journal.db", date_str)
 
-    logger.info(f"── TRADES ──")
+    logger.info("── TRADES ──")
     logger.info(f"  Live: {len(live_trades)} | Paper: {len(paper_trades)}")
 
     # PnL by strategy
@@ -225,7 +225,7 @@ def generate_summary(date_str: str = None) -> dict:
             "live": len(open_live),
             "paper": len(open_paper),
         },
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
     # Save to file

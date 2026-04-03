@@ -6,12 +6,10 @@ slippage, and latency models.
 
 from __future__ import annotations
 
-from typing import Any, Dict, Optional
 
 import numpy as np
-import pandas as pd
 
-from core.backtester_v2.types import Bar, BacktestConfig, Fill, Order
+from core.backtester_v2.types import BacktestConfig, Bar, Fill, Order
 
 
 class ExecutionSimulator:

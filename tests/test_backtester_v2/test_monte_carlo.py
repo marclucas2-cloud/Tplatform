@@ -6,10 +6,8 @@ and probability bounds.
 
 from __future__ import annotations
 
-import pytest
 
 from core.backtester_v2.monte_carlo import MCResult, MonteCarloEngine
-
 
 # ─── Helpers ─────────────────────────────────────────────────────────
 

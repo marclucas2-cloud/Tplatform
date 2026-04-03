@@ -10,12 +10,13 @@ Couvre :
   - Verification que paper_portfolio.py utilise le risk manager (validate_order)
 """
 
+import ast
 import os
 import sys
-import ast
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
@@ -45,7 +46,7 @@ class TestAlpacaClientRequiresAuthorizedBy:
 
     def test_create_position_without_authorized_by(self):
         """create_position() sans _authorized_by leve AlpacaAPIError."""
-        from core.alpaca_client.client import AlpacaClient, AlpacaAPIError
+        from core.alpaca_client.client import AlpacaAPIError, AlpacaClient
 
         client = AlpacaClient(
             api_key="test", secret_key="test", paper=True,
@@ -55,7 +56,7 @@ class TestAlpacaClientRequiresAuthorizedBy:
 
     def test_create_position_with_none_authorized_by(self):
         """create_position(_authorized_by=None) leve AlpacaAPIError."""
-        from core.alpaca_client.client import AlpacaClient, AlpacaAPIError
+        from core.alpaca_client.client import AlpacaAPIError, AlpacaClient
 
         client = AlpacaClient(
             api_key="test", secret_key="test", paper=True,
@@ -65,7 +66,7 @@ class TestAlpacaClientRequiresAuthorizedBy:
 
     def test_close_position_without_authorized_by(self):
         """close_position() sans _authorized_by leve AlpacaAPIError."""
-        from core.alpaca_client.client import AlpacaClient, AlpacaAPIError
+        from core.alpaca_client.client import AlpacaAPIError, AlpacaClient
 
         client = AlpacaClient(
             api_key="test", secret_key="test", paper=True,
@@ -75,7 +76,7 @@ class TestAlpacaClientRequiresAuthorizedBy:
 
     def test_close_all_positions_without_authorized_by(self):
         """close_all_positions() sans _authorized_by leve AlpacaAPIError."""
-        from core.alpaca_client.client import AlpacaClient, AlpacaAPIError
+        from core.alpaca_client.client import AlpacaAPIError, AlpacaClient
 
         client = AlpacaClient(
             api_key="test", secret_key="test", paper=True,
@@ -85,7 +86,7 @@ class TestAlpacaClientRequiresAuthorizedBy:
 
     def test_create_position_with_authorized_by_passes_guard(self):
         """create_position(_authorized_by='test') passe le guard (peut echouer apres)."""
-        from core.alpaca_client.client import AlpacaClient, AlpacaAPIError
+        from core.alpaca_client.client import AlpacaClient
 
         client = AlpacaClient(
             api_key="test", secret_key="test", paper=True,
@@ -188,7 +189,7 @@ class TestCannotImportRawAlpacaAndTrade:
     ALLOWED_DIRS = {
         str(ROOT / "core" / "alpaca_client"),
         str(ROOT / "core" / "broker"),
-        str(ROOT / "intraday-backtesterV2"),
+        str(ROOT / "archive" / "intraday-backtesterV2"),
     }
 
     def _scan_file_for_raw_alpaca_import(self, filepath: Path) -> list[str]:
@@ -239,8 +240,8 @@ class TestCannotImportRawAlpacaAndTrade:
                 violations.extend(found)
 
         assert violations == [], (
-            f"Scripts importent alpaca.trading directement "
-            f"(doivent utiliser core/alpaca_client/) :\n"
+            "Scripts importent alpaca.trading directement "
+            "(doivent utiliser core/alpaca_client/) :\n"
             + "\n".join(violations)
         )
 
@@ -251,13 +252,13 @@ class TestCannotImportRawAlpacaAndTrade:
             pytest.skip("worker.py non trouve")
         violations = self._scan_file_for_raw_alpaca_import(worker)
         assert violations == [], (
-            f"worker.py importe alpaca.trading directement :\n"
+            "worker.py importe alpaca.trading directement :\n"
             + "\n".join(violations)
         )
 
     def test_intraday_strategies_do_not_import_raw_alpaca(self):
         """Les strategies intraday n'importent pas alpaca.trading."""
-        strategies_dir = ROOT / "intraday-backtesterV2" / "strategies"
+        strategies_dir = ROOT / "archive" / "intraday-backtesterV2" / "strategies"
         if not strategies_dir.exists():
             pytest.skip("strategies/ non trouve")
 
@@ -270,7 +271,7 @@ class TestCannotImportRawAlpacaAndTrade:
                 violations.extend(found)
 
         assert violations == [], (
-            f"Strategies importent alpaca.trading directement :\n"
+            "Strategies importent alpaca.trading directement :\n"
             + "\n".join(violations)
         )
 
@@ -297,7 +298,7 @@ class TestCannotImportRawAlpacaAndTrade:
                 violations.extend(found)
 
         assert violations == [], (
-            f"Fichiers hors wrapper importent alpaca.trading directement :\n"
+            "Fichiers hors wrapper importent alpaca.trading directement :\n"
             + "\n".join(violations)
         )
 
@@ -340,7 +341,7 @@ class TestPipelineAlwaysCallsRiskCheck:
                 missing_auth.append(f"  L{lineno}: {line}")
 
         assert missing_auth == [], (
-            f"Appels a create_position() sans _authorized_by :\n"
+            "Appels a create_position() sans _authorized_by :\n"
             + "\n".join(missing_auth)
         )
 
@@ -396,6 +397,6 @@ class TestPipelineAlwaysCallsRiskCheck:
                 missing_auth.append(f"  L{lineno}: {line}")
 
         assert missing_auth == [], (
-            f"Appels a close_position() sans _authorized_by :\n"
+            "Appels a close_position() sans _authorized_by :\n"
             + "\n".join(missing_auth)
         )

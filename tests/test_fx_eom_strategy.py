@@ -14,16 +14,14 @@ Covers 7 tests:
 from __future__ import annotations
 
 from datetime import date
-from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
 import pytest
 
 from core.backtester_v2.data_feed import DataFeed
-from core.backtester_v2.types import Bar, PortfolioState, Signal
-from strategies_v2.fx.fx_eom_flow import FXEOMFlow, SUPPORTED_PAIRS
-
+from core.backtester_v2.types import Bar, PortfolioState
+from strategies_v2.fx.fx_eom_flow import SUPPORTED_PAIRS, FXEOMFlow
 
 # ---------------------------------------------------------------------------
 # Helpers

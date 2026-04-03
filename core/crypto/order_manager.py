@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import logging
 import time
-from typing import Optional
 
 from core.broker.base import BrokerError
 
@@ -62,7 +61,7 @@ class CryptoOrderManager:
 
         # Reject futures/perp — not available on Binance France
         if market_type == "futures":
-            logger.warning(f"Order rejected: futures/perp not available on Binance France")
+            logger.warning("Order rejected: futures/perp not available on Binance France")
             return {"error": "futures_perp_not_available_binance_france", "symbol": symbol}
 
         # Pre-trade risk check

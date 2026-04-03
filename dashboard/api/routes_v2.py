@@ -19,9 +19,8 @@ import logging
 import os
 import sqlite3
 from collections import defaultdict
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import requests
@@ -45,7 +44,7 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 DATA_DIR = ROOT / "data"
 LOG_DIR = ROOT / "logs"
 CONFIG_DIR = ROOT / "config"
-OUTPUT_DIR = ROOT / "intraday-backtesterV2" / "output"
+OUTPUT_DIR = ROOT / "archive" / "intraday-backtesterV2" / "output"
 
 router = APIRouter()
 
@@ -54,7 +53,7 @@ router = APIRouter()
 
 def _load_state() -> dict:
     """Charge paper_portfolio_state.json."""
-    state_file = ROOT / "paper_portfolio_state.json"
+    state_file = ROOT / "data" / "state" / "paper_portfolio_state.json"
     if state_file.exists():
         try:
             return json.loads(state_file.read_text(encoding="utf-8"))
@@ -281,20 +280,20 @@ def _pnl_from_trade(t: dict) -> float:
     return 0.0
 
 
-def _date_from_trade(t: dict) -> Optional[str]:
+def _date_from_trade(t: dict) -> str | None:
     """Extrait la date (YYYY-MM-DD) d'un trade."""
     for key in ("date", "entry_time", "entry_date", "exit_time", "exit_date", "timestamp"):
-        if key in t and t[key]:
+        if t.get(key):
             raw = str(t[key])[:10]
             if len(raw) >= 10 and raw[4] == "-":
                 return raw
     return None
 
 
-def _hour_from_trade(t: dict) -> Optional[int]:
+def _hour_from_trade(t: dict) -> int | None:
     """Extrait l'heure d'un trade."""
     for key in ("entry_time", "timestamp", "date"):
-        if key in t and t[key]:
+        if t.get(key):
             raw = str(t[key])
             if len(raw) >= 13 and "T" in raw:
                 try:
@@ -427,7 +426,7 @@ def risk_overview():
                     "activated_at": ks_crypto.get("activated_at"),
                 },
             },
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
         logger.error("risk/overview error: %s", e)
@@ -609,7 +608,7 @@ def risk_drawdown():
         if not history:
             # Donnees fictives pour developpement
             base = 100_000
-            today = datetime.now(timezone.utc)
+            today = datetime.now(UTC)
             dd_history = []
             equity = base
             peak = base
@@ -888,7 +887,7 @@ def trades_calendar():
 
         if not by_date:
             # Donnees fictives pour developpement
-            today = datetime.now(timezone.utc)
+            today = datetime.now(UTC)
             for i in range(60):
                 dt = (today - timedelta(days=60 - i)).strftime("%Y-%m-%d")
                 pnl = round(np.random.normal(15, 80), 2)
@@ -1200,7 +1199,7 @@ def analytics_rolling_sharpe(
 
         if not has_data:
             # Donnees fictives — 120 jours
-            today = datetime.now(timezone.utc)
+            today = datetime.now(UTC)
             by_date = {}
             for i in range(120):
                 dt = (today - timedelta(days=120 - i)).strftime("%Y-%m-%d")
@@ -1251,7 +1250,7 @@ def analytics_streaks():
         has_data = len(by_date) >= 2
 
         if not has_data:
-            today = datetime.now(timezone.utc)
+            today = datetime.now(UTC)
             by_date = {}
             for i in range(60):
                 dt = (today - timedelta(days=60 - i)).strftime("%Y-%m-%d")
@@ -1430,6 +1429,7 @@ def system_status():
         alpaca_latency = None
         try:
             import time as _time
+
             from core.alpaca_client.client import AlpacaClient
             client = AlpacaClient.from_env()
             t0 = _time.monotonic()
@@ -1452,7 +1452,8 @@ def system_status():
         binance_testnet = os.environ.get("BINANCE_TESTNET", "true")
         if binance_key and binance_secret:
             try:
-                import hashlib, hmac
+                import hashlib
+                import hmac
                 import time as _time
                 _base = "https://testnet.binance.vision" if binance_testnet.lower() == "true" else "https://api.binance.com"
                 t0 = _time.monotonic()
@@ -1501,7 +1502,7 @@ def system_status():
                 },
             },
             "worker": uptime_info,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
         logger.error("system/status error: %s", e)
@@ -1521,7 +1522,7 @@ def system_latency(
         if latency_db.exists():
             try:
                 conn = sqlite3.connect(str(latency_db))
-                cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+                cutoff = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
                 rows = conn.execute(
                     "SELECT timestamp, strategy, instrument_type, "
                     "slippage_bps, market_spread_bps "
@@ -1543,7 +1544,7 @@ def system_latency(
 
         if not latency_data:
             # Donnees fictives
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             for i in range(min(hours * 4, 96)):
                 ts = (now - timedelta(minutes=i * 15)).isoformat()
                 latency_data.append({
@@ -1671,7 +1672,7 @@ def system_backups():
                 "file": f.name,
                 "size_kb": round(f.stat().st_size / 1024, 1),
                 "modified": datetime.fromtimestamp(
-                    f.stat().st_mtime, tz=timezone.utc
+                    f.stat().st_mtime, tz=UTC
                 ).isoformat(),
             })
 
@@ -1802,7 +1803,7 @@ def tax_monthly():
 
         if not has_data:
             # Donnees fictives sur 6 mois
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             for i in range(6):
                 dt = now - timedelta(days=30 * (6 - i))
                 month = dt.strftime("%Y-%m")
@@ -2014,7 +2015,7 @@ def cross_correlation():
         # En production : calculer depuis les P&L journaliers des deux portefeuilles
         # Pour dev : correlation simulee
 
-        today = datetime.now(timezone.utc)
+        today = datetime.now(UTC)
         data = []
         for i in range(60):
             dt = (today - timedelta(days=60 - i)).strftime("%Y-%m-%d")
@@ -2282,7 +2283,7 @@ def comparison_signals(limit: int = Query(50, description="Nombre de signaux")):
 
         if not signals:
             # Donnees fictives pour developpement
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             sample_strategies = [
                 "fx_eurusd_trend", "fx_eurgbp_mr", "eu_gap_open",
                 "fx_eurjpy_carry", "fx_gbpusd_trend",
@@ -2424,7 +2425,7 @@ def equity_curve():
             }
 
         # Donnees fictives pour developpement
-        today = datetime.now(timezone.utc)
+        today = datetime.now(UTC)
         capital_ibkr = 10_000.0
         capital_crypto = 15_000.0
         curve = []
@@ -2595,7 +2596,7 @@ def nav_overview():
                 "BINANCE": {"equity": round(binance_eq, 2), "deposited": deposits_by_broker.get("BINANCE", 0)},
                 "ALPACA": {"equity": round(alpaca_eq, 2), "deposited": deposits_by_broker.get("ALPACA", 0), "paper": True},
             },
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
         logger.error("nav error: %s", e)

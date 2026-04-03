@@ -18,9 +18,9 @@ Usage :
     print(timer.elapsed, timer.alert)
 """
 
-import time
 import logging
 import subprocess
+import time
 from collections import deque
 
 logger = logging.getLogger(__name__)

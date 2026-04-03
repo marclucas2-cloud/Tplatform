@@ -12,7 +12,7 @@ BTC-SPY correlation history:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +53,7 @@ def check_combined_exposure(
         "combined_pct": round(combined_pct * 100, 1),
         "ibkr_net_pct": round(ibkr_net / ibkr_capital * 100, 1) if ibkr_capital > 0 else 0,
         "crypto_net_pct": round(crypto_net / crypto_capital * 100, 1) if crypto_capital > 0 else 0,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
     if combined_pct > CRITICAL_THRESHOLD:

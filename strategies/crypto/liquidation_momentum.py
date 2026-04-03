@@ -28,9 +28,7 @@ Leverage: 3x max (margin) — tight stops justify higher lever
 """
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
-
 
 STRATEGY_CONFIG = {
     "name": "Liquidation Momentum",

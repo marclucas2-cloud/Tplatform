@@ -10,7 +10,7 @@ The engine calls lifecycle methods in this order per bar:
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 from core.backtester_v2.types import Bar, Fill, PortfolioState, Signal
 
@@ -38,7 +38,7 @@ class StrategyBase(ABC):
     @abstractmethod
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         """Process a new bar and optionally emit a signal.
 
         IMPORTANT: The bar passed here is the latest CLOSED candle.
@@ -61,7 +61,7 @@ class StrategyBase(ABC):
             fill: The execution report.
         """
 
-    def on_eod(self, timestamp: "pd.Timestamp") -> None:
+    def on_eod(self, timestamp: pd.Timestamp) -> None:
         """Called at end of each trading day.
 
         Args:

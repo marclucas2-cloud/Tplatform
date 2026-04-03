@@ -1,0 +1,211 @@
+# Regime Engine Configuration — V12 D1
+# Seuils deterministes, pas de ML
+
+thresholds:
+  trend_adx_min: 25.0
+  trend_vol_ratio_max: 1.5
+  mr_adx_max: 20.0
+  mr_vol_ratio_max: 1.2
+  highvol_vol_ratio_min: 2.0
+  highvol_corr_rising_min: 0.1
+  panic_vol_ratio_min: 3.0
+  panic_corr_min: 0.8
+  panic_spread_zscore_min: 2.5
+  lowliq_spread_zscore_min: 2.0
+  lowliq_volume_ratio_max: 0.5
+  hysteresis_periods: 2
+
+# Regime cycle interval in worker (seconds)
+cycle_interval: 900  # 15 minutes
+
+# Strategy activation matrix: strategy_id -> {regime -> multiplier 0.0-1.0}
+# 0.0 = OFF, 0.5 = half sizing, 1.0 = nominal
+activation_matrix:
+  # FX strategies — PANIC = 0 (protect carry from crashes)
+  fx_carry_vol_scaled:
+    TREND_STRONG: 1.0
+    MEAN_REVERT: 1.0
+    HIGH_VOL: 0.5
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.5
+  fx_carry_momentum:
+    TREND_STRONG: 1.0
+    MEAN_REVERT: 0.8
+    HIGH_VOL: 0.3
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.5
+
+  # Crypto — vol/liq strats ACTIVE in PANIC
+  crypto_dual_momentum:
+    TREND_STRONG: 1.0
+    MEAN_REVERT: 0.5
+    HIGH_VOL: 0.7
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.5
+  crypto_vol_breakout:
+    TREND_STRONG: 0.5
+    MEAN_REVERT: 0.0
+    HIGH_VOL: 1.0
+    PANIC: 0.5
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.3
+  crypto_btc_dom_rotation:
+    TREND_STRONG: 1.0
+    MEAN_REVERT: 0.5
+    HIGH_VOL: 0.5
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.5
+  crypto_borrow_carry:
+    TREND_STRONG: 1.0
+    MEAN_REVERT: 1.0
+    HIGH_VOL: 0.5
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.5
+    UNKNOWN: 0.7
+  crypto_liq_momentum:
+    TREND_STRONG: 0.3
+    MEAN_REVERT: 0.3
+    HIGH_VOL: 1.0
+    PANIC: 1.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.3
+  crypto_weekend_gap:
+    TREND_STRONG: 0.5
+    MEAN_REVERT: 1.0
+    HIGH_VOL: 0.5
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.5
+  crypto_range_bb:
+    TREND_STRONG: 0.3
+    MEAN_REVERT: 1.0
+    HIGH_VOL: 0.5
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.5
+  crypto_vol_expansion:
+    TREND_STRONG: 0.0
+    MEAN_REVERT: 0.5
+    HIGH_VOL: 1.0
+    PANIC: 1.0
+    LOW_LIQUIDITY: 0.5
+    UNKNOWN: 0.3
+
+  # Futures
+  mes_trend:
+    TREND_STRONG: 1.0
+    MEAN_REVERT: 0.3
+    HIGH_VOL: 0.5
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.0
+    UNKNOWN: 0.3
+  mes_mnq_pairs:
+    TREND_STRONG: 0.3
+    MEAN_REVERT: 1.0
+    HIGH_VOL: 0.5
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.0
+    UNKNOWN: 0.3
+
+  # US equity
+  dow_seasonal:
+    TREND_STRONG: 1.0
+    MEAN_REVERT: 0.5
+    HIGH_VOL: 0.3
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.5
+  corr_hedge:
+    TREND_STRONG: 0.5
+    MEAN_REVERT: 0.5
+    HIGH_VOL: 1.0
+    PANIC: 1.0
+    LOW_LIQUIDITY: 0.5
+    UNKNOWN: 0.5
+  vix_short:
+    TREND_STRONG: 1.0
+    MEAN_REVERT: 0.5
+    HIGH_VOL: 0.0
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.3
+  high_beta_short:
+    TREND_STRONG: 0.0
+    MEAN_REVERT: 0.5
+    HIGH_VOL: 1.0
+    PANIC: 1.0
+    LOW_LIQUIDITY: 0.5
+    UNKNOWN: 0.3
+  late_day_mr:
+    TREND_STRONG: 0.3
+    MEAN_REVERT: 1.0
+    HIGH_VOL: 0.5
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.5
+
+  # EU equity
+  eu_gap_open:
+    TREND_STRONG: 1.0
+    MEAN_REVERT: 0.5
+    HIGH_VOL: 0.3
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.5
+  bce_momentum:
+    TREND_STRONG: 1.0
+    MEAN_REVERT: 0.5
+    HIGH_VOL: 0.5
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.5
+  auto_sector_german:
+    TREND_STRONG: 0.5
+    MEAN_REVERT: 1.0
+    HIGH_VOL: 0.3
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.5
+  brent_lag:
+    TREND_STRONG: 1.0
+    MEAN_REVERT: 0.5
+    HIGH_VOL: 0.5
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.5
+  eu_close_us:
+    TREND_STRONG: 0.5
+    MEAN_REVERT: 0.5
+    HIGH_VOL: 0.5
+    PANIC: 0.0
+    LOW_LIQUIDITY: 0.3
+    UNKNOWN: 0.5
+
+# Strategy -> asset class mapping
+strategy_asset_class:
+  fx_carry_vol_scaled: FX
+  fx_carry_momentum: FX
+  crypto_dual_momentum: CRYPTO
+  crypto_vol_breakout: CRYPTO
+  crypto_btc_dom_rotation: CRYPTO
+  crypto_borrow_carry: CRYPTO
+  crypto_liq_momentum: CRYPTO
+  crypto_weekend_gap: CRYPTO
+  crypto_range_bb: CRYPTO
+  crypto_vol_expansion: CRYPTO
+  mes_trend: FUTURES
+  mes_mnq_pairs: FUTURES
+  dow_seasonal: US_EQUITY
+  corr_hedge: US_EQUITY
+  vix_short: US_EQUITY
+  high_beta_short: US_EQUITY
+  late_day_mr: US_EQUITY
+  eu_gap_open: EU_EQUITY
+  bce_momentum: EU_EQUITY
+  auto_sector_german: EU_EQUITY
+  brent_lag: EU_EQUITY
+  eu_close_us: EU_EQUITY

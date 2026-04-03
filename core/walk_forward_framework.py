@@ -25,7 +25,6 @@ import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Any
 
 import numpy as np
 import pandas as pd
@@ -522,7 +521,7 @@ def load_trades_csv(path: str | Path) -> pd.DataFrame:
 
 def run_full_validation(
     output_dir: str | Path = "output/session_20260326",
-    backtester_output_dir: str | Path = "intraday-backtesterV2/output",
+    backtester_output_dir: str | Path = "archive/intraday-backtesterV2/output",
     save_path: str | Path = "output/walk_forward_results.json",
     initial_capital: float = 100_000.0,
 ) -> dict:

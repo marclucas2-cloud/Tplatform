@@ -6,7 +6,7 @@ bottom N. Rebalances weekly on a configurable day.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -22,7 +22,7 @@ class AltcoinRelativeStrength(StrategyBase):
         self,
         data_feed: DataFeed,
         symbol: str = "ALTBASKET",
-        alt_symbols: Optional[List[str]] = None,
+        alt_symbols: List[str] | None = None,
         btc_symbol: str = "BTCUSDT",
     ) -> None:
         self.data_feed = data_feed
@@ -68,7 +68,7 @@ class AltcoinRelativeStrength(StrategyBase):
             "rebalance_day": [0, 3, 6],
         }
 
-    def _compute_alpha(self, sym: str, lookback: int) -> Optional[float]:
+    def _compute_alpha(self, sym: str, lookback: int) -> float | None:
         """Return BTC-adjusted return over lookback bars."""
         bars = self.data_feed.get_bars(sym, lookback)
         btc_bars = self.data_feed.get_bars(self.btc_symbol, lookback)
@@ -80,7 +80,7 @@ class AltcoinRelativeStrength(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         # Only rebalance on the configured day
         if bar.timestamp.dayofweek != self.rebalance_day:
             return None

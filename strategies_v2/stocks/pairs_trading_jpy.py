@@ -25,10 +25,9 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
-import pandas as pd
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -158,7 +157,7 @@ class JPYPairsTrading(StrategyBase):
         self._pair_states: Dict[str, PairState] = {}
         self._bar_count: int = 0
 
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -179,7 +178,7 @@ class JPYPairsTrading(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         """Process a new bar across all tracked pairs.
 
         Returns a signal for the first pair that triggers, or None.
@@ -208,7 +207,7 @@ class JPYPairsTrading(StrategyBase):
         sym_b: str,
         pair_name: str,
         portfolio_state: PortfolioState,
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         """Evaluate a single pair for entry/exit signals."""
         # Get price data for both legs
         bars_a = self.data_feed.get_bars(sym_a, self.hedge_ratio_window + 10)
@@ -294,7 +293,7 @@ class JPYPairsTrading(StrategyBase):
 
         return None
 
-    def _compute_zscore(self, spread: np.ndarray) -> Optional[float]:
+    def _compute_zscore(self, spread: np.ndarray) -> float | None:
         """Compute Z-score of the latest spread value over rolling window."""
         if len(spread) < self.zscore_window:
             return None
@@ -315,7 +314,7 @@ class JPYPairsTrading(StrategyBase):
         price_a: float,
         price_b: float,
         portfolio_state: PortfolioState,
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         """Check if Z-score warrants a new entry.
 
         Z > +entry: A is rich vs B -> short A, long B
@@ -359,7 +358,7 @@ class JPYPairsTrading(StrategyBase):
         state: PairState,
         price_a: float,
         price_b: float,
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         """Check exit conditions for an open position.
 
         Exits:
@@ -371,9 +370,7 @@ class JPYPairsTrading(StrategyBase):
         reason = None
 
         # Mean reversion achieved
-        if state.position_direction == "short_a_long_b" and zscore <= self.z_exit:
-            reason = "mean_reversion"
-        elif state.position_direction == "long_a_short_b" and zscore >= -self.z_exit:
+        if (state.position_direction == "short_a_long_b" and zscore <= self.z_exit) or (state.position_direction == "long_a_short_b" and zscore >= -self.z_exit):
             reason = "mean_reversion"
 
         # Emergency exit: structural break
@@ -445,7 +442,7 @@ class JPYPairsTrading(StrategyBase):
     # -- PnL conversion -------------------------------------------------------
 
     def convert_pnl_jpy_to_usd(
-        self, pnl_jpy: float, usdjpy_rate: Optional[float] = None
+        self, pnl_jpy: float, usdjpy_rate: float | None = None
     ) -> float:
         """Convert PnL from JPY to USD.
 

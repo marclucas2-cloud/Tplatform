@@ -9,22 +9,21 @@ import json
 import math
 import threading
 import time
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pandas as pd
 import pytest
 
 from core.broker.base import BrokerError
 from core.broker.binance_broker import BinanceBroker
+from core.cross_portfolio_guard import check_combined_exposure
 from core.crypto.risk_manager_crypto import (
     CryptoKillSwitch,
     CryptoRiskLimits,
     CryptoRiskManager,
 )
-from core.cross_portfolio_guard import check_combined_exposure
 from core.kill_switch_live import LiveKillSwitch
 from core.risk_manager_live import LiveRiskManager
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

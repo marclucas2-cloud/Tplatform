@@ -16,16 +16,14 @@ import pytest
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.types import Bar, PortfolioState
-
-from strategies_v2.fx.eurusd_trend import EURUSDTrend
-from strategies_v2.fx.eurgbp_mr import EURGBPMeanReversion
-from strategies_v2.fx.eurjpy_carry import EURJPYCarry
-from strategies_v2.fx.audjpy_carry import AUDJPYCarry
-from strategies_v2.fx.gbpusd_trend import GBPUSDTrend
 from strategies_v2.eu.eu_gap_open import EUGapOpen
 from strategies_v2.futures.mcl_brent_lag import MCLBrentLag
 from strategies_v2.futures.mes_trend import MESTrend
-
+from strategies_v2.fx.audjpy_carry import AUDJPYCarry
+from strategies_v2.fx.eurgbp_mr import EURGBPMeanReversion
+from strategies_v2.fx.eurjpy_carry import EURJPYCarry
+from strategies_v2.fx.eurusd_trend import EURUSDTrend
+from strategies_v2.fx.gbpusd_trend import GBPUSDTrend
 
 # ─── Fixtures ────────────────────────────────────────────────────────
 

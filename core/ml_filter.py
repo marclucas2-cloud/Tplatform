@@ -28,7 +28,7 @@ Usage futur (pas avant J+240 / Live L3) :
 
 import logging
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any
 
 import numpy as np
 
@@ -93,7 +93,7 @@ class MLSignalFilter:
     DEFAULT_THRESHOLD = 0.4
 
     def __init__(self, min_trades_required: int = 200,
-                 model_dir: Optional[str] = None):
+                 model_dir: str | None = None):
         """
         Args:
             min_trades_required: nombre minimum de trades pour l'entrainement.
@@ -262,7 +262,7 @@ class MLSignalFilter:
         return float(proba)
 
     def should_trade(self, features: dict,
-                     threshold: Optional[float] = None) -> bool:
+                     threshold: float | None = None) -> bool:
         """Decide si on doit prendre le trade.
 
         Args:
@@ -291,7 +291,7 @@ class MLSignalFilter:
 
         return decision
 
-    def save_model(self, filepath: Optional[str] = None) -> str:
+    def save_model(self, filepath: str | None = None) -> str:
         """Sauvegarde le modele entraine sur disque.
 
         Args:

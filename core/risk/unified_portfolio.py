@@ -15,10 +15,10 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, asdict
-from datetime import datetime, timezone
+from dataclasses import asdict, dataclass
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -74,9 +74,9 @@ class UnifiedPortfolioView:
 
     def __init__(
         self,
-        alert_callback: Optional[Callable] = None,
-        kelly_callback: Optional[Callable] = None,
-        emergency_close_callback: Optional[Callable] = None,
+        alert_callback: Callable | None = None,
+        kelly_callback: Callable | None = None,
+        emergency_close_callback: Callable | None = None,
     ):
         self._alert = alert_callback
         self._kelly_cb = kelly_callback
@@ -90,9 +90,9 @@ class UnifiedPortfolioView:
 
     def update(
         self,
-        binance_data: Optional[dict] = None,
-        ibkr_data: Optional[dict] = None,
-        alpaca_data: Optional[dict] = None,
+        binance_data: dict | None = None,
+        ibkr_data: dict | None = None,
+        alpaca_data: dict | None = None,
         eur_usd_rate: float = 1.08,
     ) -> UnifiedSnapshot:
         """Collect and aggregate cross-broker data.
@@ -102,7 +102,7 @@ class UnifiedPortfolioView:
           positions: list of {symbol, side, qty, market_val, unrealized_pl}
           cash: float (in USD)
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         today = now.timetuple().tm_yday
         weekday = now.weekday()
 
@@ -281,7 +281,7 @@ class UnifiedPortfolioView:
         except Exception as e:
             logger.error("Failed to save unified portfolio: %s", e)
 
-    def get_snapshot(self) -> Optional[dict]:
+    def get_snapshot(self) -> dict | None:
         """Load latest snapshot from disk."""
         try:
             if SNAPSHOT_PATH.exists():

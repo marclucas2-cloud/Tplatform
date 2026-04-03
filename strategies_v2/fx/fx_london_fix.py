@@ -16,7 +16,7 @@ Expected: ~20 trades/month, Sharpe target 1.0-1.8.
 from __future__ import annotations
 
 from datetime import time
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 from zoneinfo import ZoneInfo
 
 from core.backtester_v2.data_feed import DataFeed
@@ -53,7 +53,7 @@ class FXLondonFix(StrategyBase):
         self.tp_ratio: float = 0.7  # TP = 70% of pre-fix move (partial reversion)
         self.time_exit_minutes: int = 30  # Close after N minutes
         self.max_hold_minutes: int = 45  # Absolute max holding
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -83,7 +83,7 @@ class FXLondonFix(StrategyBase):
         t = self._bar_cet_time(bar)
         return _FIX_ENTRY_START <= t <= _FIX_ENTRY_END
 
-    def _get_pre_fix_move(self, symbol: str) -> Optional[float]:
+    def _get_pre_fix_move(self, symbol: str) -> float | None:
         """Compute the pre-fix move: close at ~16:05 minus close at ~15:45 CET.
 
         Looks at the last ~8 bars (5M) or ~2 bars (15M) to find the price
@@ -119,7 +119,7 @@ class FXLondonFix(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
 
@@ -135,7 +135,7 @@ class FXLondonFix(StrategyBase):
 
         return None
 
-    def _evaluate_symbol(self, sym: str, bar: Bar) -> Optional[Signal]:
+    def _evaluate_symbol(self, sym: str, bar: Bar) -> Signal | None:
         """Evaluate fix reversion signal for a single symbol."""
         if self.data_feed is None:
             return None

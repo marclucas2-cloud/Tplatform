@@ -16,11 +16,11 @@ Storage: SQLite for VaR history (data/var_history.db)
 """
 
 import logging
-import numpy as np
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
-from typing import Dict, List, Optional, Tuple
 import sqlite3
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
+import numpy as np
 
 try:
     from scipy.stats import norm as _norm
@@ -159,7 +159,7 @@ class LiveVaRCalculator:
 
     def record_daily_var(self, var_result: dict):
         """Store daily VaR in SQLite for history/trending."""
-        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        date_str = datetime.now(UTC).strftime("%Y-%m-%d")
         with sqlite3.connect(str(self._db_path)) as conn:
             conn.execute(
                 """
@@ -196,7 +196,7 @@ class LiveVaRCalculator:
         Returns:
             List of dicts with date, portfolio_var_95, var_pct_of_capital, etc.
         """
-        cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+        cutoff = (datetime.now(UTC) - timedelta(days=days)).strftime("%Y-%m-%d")
         with sqlite3.connect(str(self._db_path)) as conn:
             conn.row_factory = sqlite3.Row
             rows = conn.execute(

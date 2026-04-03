@@ -10,18 +10,18 @@ Couvre 20+ tests pour l'expansion multi-asset (22 strategies, 4 asset classes) :
 """
 
 import sys
-import pytest
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 # Setup paths
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.risk_manager import RiskManager, FUTURES_MULTIPLIERS, FUTURES_INITIAL_MARGIN
 from core.allocator import DynamicAllocator
-from core.kelly_calculator import KellyCalculator, FX_SHARPE_WEIGHTS
-
+from core.kelly_calculator import FX_SHARPE_WEIGHTS, KellyCalculator
+from core.risk_manager import FUTURES_INITIAL_MARGIN, FUTURES_MULTIPLIERS, RiskManager
 
 # =============================================================================
 # FIXTURES

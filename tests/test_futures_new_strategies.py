@@ -14,18 +14,16 @@ Verifie pour chaque strategie :
   - Pas de signal avec donnees insuffisantes
   - Parametres et grille de walk-forward complets
 """
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.types import Bar, PortfolioState
-
 from strategies_v2.futures.m2k_orb import M2KORB
+from strategies_v2.futures.mes_mnq_pairs import MESMNQPairs
 from strategies_v2.futures.mes_overnight import MESOvernightMomentum
 from strategies_v2.futures.mgc_vix_hedge import MGCVixHedge
-from strategies_v2.futures.mes_mnq_pairs import MESMNQPairs
-
 
 # ══════════════════════════════════════════════════════════════════════════
 # Helpers

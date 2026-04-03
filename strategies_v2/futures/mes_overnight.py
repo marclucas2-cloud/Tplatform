@@ -27,7 +27,7 @@ Rules:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -52,7 +52,7 @@ class MESOvernightMomentum(StrategyBase):
         self.tp_atr_mult: float = 2.5
         self.adx_threshold: float = 18.0
         self.vix_max: float = 30.0
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -71,7 +71,7 @@ class MESOvernightMomentum(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
         sym = self.SYMBOL

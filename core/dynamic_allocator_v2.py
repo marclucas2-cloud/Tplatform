@@ -5,8 +5,8 @@ Adjusts portfolio allocation based on HMM regime detection.
 Smooth transitions prevent whipsawing.
 """
 
+
 import numpy as np
-from typing import Dict, Optional
 
 
 class DynamicAllocatorV2:

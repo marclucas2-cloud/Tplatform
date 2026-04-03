@@ -20,11 +20,9 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
@@ -45,7 +43,7 @@ logger = logging.getLogger("reconciliation")
 # Import au niveau module pour permettre le mocking dans les tests
 from core.alpaca_client.client import AlpacaClient
 
-STATE_FILE = ROOT / "paper_portfolio_state.json"
+STATE_FILE = ROOT / "data" / "state" / "paper_portfolio_state.json"
 
 # Seuils de divergence
 DIVERGENCE_AMOUNT_THRESHOLD = 10.0   # $10
@@ -58,7 +56,7 @@ class PositionReconciler:
     Alerte si divergence > $10 ou > 1 share.
     """
 
-    def __init__(self, state_path: Optional[Path] = None):
+    def __init__(self, state_path: Path | None = None):
         """
         Args:
             state_path: chemin vers paper_portfolio_state.json
@@ -332,7 +330,7 @@ class PositionReconciler:
             logger.info("RECONCILIATION OK: aucune divergence detectee")
 
         return {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "divergences": all_divergences,
             "status": status,
             "summary": {

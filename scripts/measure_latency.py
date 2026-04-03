@@ -15,7 +15,7 @@ import statistics
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,7 @@ def main():
 
     # Print report
     print("=" * 50)
-    print(f"LATENCY REPORT — {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+    print(f"LATENCY REPORT — {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}")
     print("=" * 50)
     print(f"Host:         {results['host']}")
     print(f"Pings:        {results['successful']}/{results['count']}")
@@ -143,7 +143,7 @@ def main():
 
     if args.output:
         import json
-        report = {**results, **assessment, "timestamp": datetime.now(timezone.utc).isoformat()}
+        report = {**results, **assessment, "timestamp": datetime.now(UTC).isoformat()}
         with open(args.output, "w") as f:
             json.dump(report, f, indent=2)
         print(f"\nReport saved to {args.output}")

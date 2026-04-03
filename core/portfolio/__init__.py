@@ -1,3 +1,3 @@
-from .correlation import PortfolioCorrelation, AllocationResult
+from .correlation import AllocationResult, PortfolioCorrelation
 
-__all__ = ["PortfolioCorrelation", "AllocationResult"]
+__all__ = ["AllocationResult", "PortfolioCorrelation"]

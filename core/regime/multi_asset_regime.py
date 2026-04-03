@@ -20,11 +20,10 @@ from __future__ import annotations
 
 import json
 import logging
-from dataclasses import dataclass, field, asdict
-from datetime import datetime, timezone, timedelta
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Optional
 
 logger = logging.getLogger(__name__)
 
@@ -92,7 +91,7 @@ class RegimeResult:
     confidence: float
     metrics: dict
     timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
 
 
@@ -111,7 +110,7 @@ class MultiAssetRegimeDetector:
 
     TRANSITIONS_FILE = ROOT / "data" / "regime_transitions.jsonl"
 
-    def __init__(self, thresholds: Optional[dict] = None):
+    def __init__(self, thresholds: dict | None = None):
         self._thresholds = {**DEFAULT_THRESHOLDS, **(thresholds or {})}
         self._hysteresis_n = self._thresholds["hysteresis_periods"]
 
@@ -189,7 +188,7 @@ class MultiAssetRegimeDetector:
             "regimes": self.get_all_regimes(),
             "global": self.get_global_regime().value,
             "transitions_24h": self._count_recent_transitions(24),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
     # ------------------------------------------------------------------
@@ -296,7 +295,7 @@ class MultiAssetRegimeDetector:
         self, ac: str, old: Regime, new: Regime, metrics: dict
     ) -> None:
         entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "asset_class": ac,
             "old_regime": old.value,
             "new_regime": new.value,
@@ -316,7 +315,7 @@ class MultiAssetRegimeDetector:
 
     def _count_recent_transitions(self, hours: int = 24) -> int:
         """Count transitions in last N hours from history."""
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+        cutoff = datetime.now(UTC) - timedelta(hours=hours)
         cutoff_str = cutoff.isoformat()
         count = 0
         for entry in reversed(self._history):

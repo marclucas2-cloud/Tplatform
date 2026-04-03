@@ -9,8 +9,7 @@ Rules:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, date, timedelta
-from typing import Optional
+from datetime import date, datetime, timedelta
 
 logger = logging.getLogger(__name__)
 

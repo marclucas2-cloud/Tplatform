@@ -26,12 +26,11 @@ Expected: ~3-5 trades/month per pair, Sharpe target 0.8-1.5
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
 from core.backtester_v2.types import Bar, PortfolioState, Signal
-
 
 SUPPORTED_PAIRS = ["EURUSD", "GBPUSD", "USDJPY", "AUDUSD"]
 
@@ -68,7 +67,7 @@ class FXMomentumBreakout(StrategyBase):
         # State
         self._has_position: bool = False
 
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -91,7 +90,7 @@ class FXMomentumBreakout(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
 

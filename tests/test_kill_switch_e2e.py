@@ -4,14 +4,12 @@ DRILL-003 — Test kill switch end-to-end (paper).
 QUASI-BLOQUANT : doit PASS avant le premier trade live.
 4 tests couvrant les 4 methodes d'activation du kill switch.
 """
-import pytest
-from unittest.mock import MagicMock, patch, call
-from pathlib import Path
-from datetime import datetime, timezone
-import tempfile
-import json
-
 import sys
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
+
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from core.kill_switch_live import LiveKillSwitch

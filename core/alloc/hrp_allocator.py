@@ -25,8 +25,8 @@ Usage:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Dict, List
 
 import numpy as np
 import pandas as pd
@@ -61,7 +61,7 @@ class HRPAllocator:
         self.max_weight = max_weight
         self.rebalance_hours = rebalance_hours
 
-        self._last_rebalance: Optional[datetime] = None
+        self._last_rebalance: datetime | None = None
         self._last_weights: Dict[str, float] = {}
 
     # ------------------------------------------------------------------

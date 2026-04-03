@@ -13,8 +13,8 @@ Ne modifie aucun fichier existant. Tout est en memoire.
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Tuple
+from datetime import UTC, datetime
+from typing import Dict, List
 
 import numpy as np
 
@@ -52,12 +52,12 @@ class RealTimeCorrelationMonitor:
         self.reduction_factor = reduction_factor
 
         # Etat interne
-        self._corr_matrix: Optional[np.ndarray] = None
+        self._corr_matrix: np.ndarray | None = None
         self._symbols: List[str] = []
         self._clusters: List[List[str]] = []
         self._sizing_overrides: Dict[str, float] = {}
         self._alerts: List[dict] = []
-        self._last_update: Optional[datetime] = None
+        self._last_update: datetime | None = None
 
         logger.info(
             f"RealTimeCorrelationMonitor initialise — "
@@ -87,7 +87,7 @@ class RealTimeCorrelationMonitor:
             self._corr_matrix = None
             self._symbols = [p["symbol"] for p in positions] if positions else []
             self._clusters = []
-            self._last_update = datetime.now(timezone.utc)
+            self._last_update = datetime.now(UTC)
             return {
                 "matrix": None,
                 "clusters": [],
@@ -124,7 +124,7 @@ class RealTimeCorrelationMonitor:
                         "cluster": cluster,
                         "pct": round(cluster_pct, 1),
                         "threshold": self.max_cluster_pct,
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                     }
                     self._alerts.append(alert)
                     logger.warning(
@@ -136,7 +136,7 @@ class RealTimeCorrelationMonitor:
                     for sym in cluster:
                         self._sizing_overrides[sym] = self.reduction_factor
 
-        self._last_update = datetime.now(timezone.utc)
+        self._last_update = datetime.now(UTC)
 
         return {
             "matrix": corr_matrix,
@@ -146,7 +146,7 @@ class RealTimeCorrelationMonitor:
         }
 
     def get_effective_positions(
-        self, positions: List[dict], corr_matrix: Optional[np.ndarray] = None
+        self, positions: List[dict], corr_matrix: np.ndarray | None = None
     ) -> float:
         """Calcule le nombre effectif de positions (ajuste pour la correlation).
 

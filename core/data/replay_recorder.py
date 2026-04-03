@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 import math
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 
 class ReplayRecorder:
@@ -158,7 +158,7 @@ class ReplayRecorder:
             FileNotFoundError: If the file does not exist.
         """
         entries: List[Dict[str, Any]] = []
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             for line_num, line in enumerate(f, 1):
                 line = line.strip()
                 if not line:

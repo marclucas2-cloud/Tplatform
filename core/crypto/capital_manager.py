@@ -17,10 +17,8 @@ from __future__ import annotations
 
 import json
 import logging
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -258,7 +256,7 @@ class CapitalManager:
             self._earn_positions[asset] = {
                 "amount": amount,
                 "product_type": product_type,
-                "subscribed_at": datetime.now(timezone.utc).isoformat(),
+                "subscribed_at": datetime.now(UTC).isoformat(),
             }
 
         result = self._log_transfer("spot", "earn", amount, _authorized_by, asset=asset)
@@ -430,7 +428,7 @@ class CapitalManager:
                 except WalletError as e:
                     logger.warning(f"Rebalance transfer {over_wallet}->{under_wallet} failed: {e}")
 
-        self._last_rebalance = datetime.now(timezone.utc)
+        self._last_rebalance = datetime.now(UTC)
         logger.info(f"Rebalance completed: {len(transfers)} transfers [{_authorized_by}]")
         return transfers
 
@@ -544,7 +542,7 @@ class CapitalManager:
                 "synced": True,
                 "balances": dict(self._balances),
                 "divergences": divergences,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             }
 
         except Exception as e:
@@ -565,7 +563,7 @@ class CapitalManager:
             "interest_accrued": dict(self._interest_accrued),
             "earn_positions": dict(self._earn_positions),
             "last_rebalance": self._last_rebalance.isoformat() if self._last_rebalance else None,
-            "saved_at": datetime.now(timezone.utc).isoformat(),
+            "saved_at": datetime.now(UTC).isoformat(),
         }
         self.STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
         tmp = self.STATE_FILE.with_suffix(".tmp")
@@ -631,7 +629,7 @@ class CapitalManager:
             "last_rebalance": self._last_rebalance.isoformat() if self._last_rebalance else None,
             "transfers_today": len([
                 t for t in self._transfer_log
-                if t.get("date") == datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                if t.get("date") == datetime.now(UTC).strftime("%Y-%m-%d")
             ]),
         }
 
@@ -644,8 +642,8 @@ class CapitalManager:
         asset: str = "USDT",
     ) -> dict:
         entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+            "timestamp": datetime.now(UTC).isoformat(),
+            "date": datetime.now(UTC).strftime("%Y-%m-%d"),
             "from": from_wallet,
             "to": to_wallet,
             "amount": round(amount, 2),

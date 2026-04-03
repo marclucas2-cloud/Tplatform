@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import os
 import sys
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from unittest.mock import patch
 
@@ -24,8 +24,7 @@ import pytest
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.data.state_guard import safe_load_json, safe_save_json, _log_corruption
-
+from core.data.state_guard import safe_load_json, safe_save_json
 
 # =============================================================================
 # 1. TestJSONCorruption
@@ -465,7 +464,7 @@ class TestCryptoDrawdownCorruption:
         from core.crypto.risk_manager_crypto import CryptoKillSwitch
 
         state_path = tmp_path / "crypto_kill_switch_state.json"
-        future_time = (datetime.now(timezone.utc) + timedelta(days=365)).isoformat()
+        future_time = (datetime.now(UTC) + timedelta(days=365)).isoformat()
         state_path.write_text(json.dumps({
             "active": False,
             "reason": "",
@@ -625,7 +624,7 @@ class TestBracketStateCorruption:
         If corrupt state falsely shows an OCA group as existing, the manager
         should not create a conflicting order.
         """
-        from core.broker.ibkr_bracket import BracketOrderManager, BracketOrderError
+        from core.broker.ibkr_bracket import BracketOrderError, BracketOrderManager
 
         # Start with a clean manager
         brackets_path.write_text("{}", encoding="utf-8")

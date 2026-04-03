@@ -17,12 +17,11 @@ import json
 import logging
 import os
 import sys
-import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(ROOT / "archive" / "intraday-backtesterV2"))
 sys.path.insert(0, str(ROOT))
 
 try:
@@ -48,11 +47,12 @@ def dry_run_crypto(filter_strat: str | None = None) -> list[dict]:
         logger.error("BINANCE_API_KEY not set — cannot dry-run crypto")
         return results
 
-    import yaml
     import pandas as pd
+    import yaml
     from strategies.crypto import CRYPTO_STRATEGIES
-    from core.crypto.risk_manager_crypto import CryptoRiskManager
+
     from core.broker.binance_broker import BinanceBroker
+    from core.crypto.risk_manager_crypto import CryptoRiskManager
 
     # Config
     alloc_path = ROOT / "config" / "crypto_allocation.yaml"
@@ -93,7 +93,6 @@ def dry_run_crypto(filter_strat: str | None = None) -> list[dict]:
     regime_mult_fn = None
     try:
         from core.regime.regime_scheduler import RegimeScheduler
-        from core.regime.activation_matrix import ActivationMatrix
         rs = RegimeScheduler()
         regime_mult_fn = rs.get_activation_multiplier
     except Exception:
@@ -136,7 +135,7 @@ def dry_run_crypto(filter_strat: str | None = None) -> list[dict]:
         candle = pd.Series({
             "close": price, "open": last_bar["o"], "high": last_bar["h"],
             "low": last_bar["l"], "volume": last_bar["v"],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         })
         alloc_pct = config.get("allocation_pct", 0.10)
         strat_capital = equity * alloc_pct * KELLY_FRACTION
@@ -225,7 +224,7 @@ def dry_run_crypto(filter_strat: str | None = None) -> list[dict]:
             try:
                 mult = regime_mult_fn(strat_id)
                 if mult <= 0:
-                    r["steps"]["regime"] = f"BLOCKED: mult=0 (regime filter)"
+                    r["steps"]["regime"] = "BLOCKED: mult=0 (regime filter)"
                 else:
                     r["steps"]["regime"] = f"OK: mult={mult:.2f}"
             except Exception as e:
@@ -255,6 +254,7 @@ def dry_run_fx() -> list[dict]:
 
     try:
         import pandas as pd
+
         from core.broker.ibkr_adapter import IBKRBroker
 
         ibkr = IBKRBroker(client_id=98)  # Dedicated dry-run clientId
@@ -311,7 +311,7 @@ def main():
 
     print("=" * 60)
     print("  DRY-RUN EXECUTION PIPELINE V12")
-    print(f"  {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+    print(f"  {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}")
     print("=" * 60)
 
     all_results = []
@@ -352,7 +352,7 @@ def main():
     out_path = ROOT / "data" / "monitoring" / "dry_run_result.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps({
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "passed": passed,
         "total": total,
         "failed": failed,

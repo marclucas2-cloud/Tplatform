@@ -17,16 +17,14 @@ Covers:
 """
 
 import json
-import os
 import tempfile
 from pathlib import Path
-from unittest.mock import MagicMock, patch, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from core.trading_engine import TradingEngine, Pipeline, PipelineConfig
 from core.signal_comparator import SignalComparator
-
+from core.trading_engine import Pipeline, PipelineConfig, TradingEngine
 
 # ---------------------------------------------------------------------------
 # Fixtures

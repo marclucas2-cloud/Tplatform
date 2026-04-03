@@ -18,10 +18,9 @@ Verifie :
 import json
 import os
 import sys
-import tempfile
-from datetime import datetime, date, timedelta
+from datetime import datetime
 from pathlib import Path
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock, PropertyMock, patch
 
 import pytest
 import yaml
@@ -336,7 +335,7 @@ class TestComputeEuAllocations:
 
     def test_compute_eu_allocations(self, sample_strategies_yaml):
         """Allocations correctes pour 100K de capital."""
-        from scripts.paper_portfolio_eu import load_strategies_from_yaml, compute_eu_allocations
+        from scripts.paper_portfolio_eu import compute_eu_allocations, load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
         allocs = compute_eu_allocations(strategies, 100_000.0)
@@ -364,7 +363,7 @@ class TestComputeEuAllocations:
 
     def test_allocations_empty_if_all_disabled(self, tmp_path):
         """Aucune allocation si toutes les strategies sont disabled."""
-        from scripts.paper_portfolio_eu import load_strategies_from_yaml, compute_eu_allocations
+        from scripts.paper_portfolio_eu import compute_eu_allocations, load_strategies_from_yaml
 
         data = {
             "strategies": {
@@ -394,7 +393,7 @@ class TestComputeEuAllocations:
 
     def test_max_position_respects_cap(self, sample_strategies_yaml):
         """max_position ne depasse jamais 10% du capital total."""
-        from scripts.paper_portfolio_eu import load_strategies_from_yaml, compute_eu_allocations
+        from scripts.paper_portfolio_eu import compute_eu_allocations, load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
         capital = 100_000.0
@@ -412,7 +411,7 @@ class TestMarketHoursPerStrategy:
 
     def test_market_hours_check_per_strategy(self, sample_strategies_yaml):
         """Chaque strategie a sa propre fenetre horaire."""
-        from scripts.paper_portfolio_eu import load_strategies_from_yaml, is_strategy_active
+        from scripts.paper_portfolio_eu import is_strategy_active, load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
 
@@ -434,7 +433,7 @@ class TestMarketHoursPerStrategy:
 
     def test_market_hours_weekend_blocked(self, sample_strategies_yaml):
         """Aucune strategie ne s'active le weekend."""
-        from scripts.paper_portfolio_eu import load_strategies_from_yaml, is_strategy_active
+        from scripts.paper_portfolio_eu import is_strategy_active, load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
 
@@ -451,7 +450,7 @@ class TestMarketHoursPerStrategy:
 
     def test_market_hours_holiday_blocked(self, sample_strategies_yaml):
         """Aucune strategie ne s'active un jour ferie EU."""
-        from scripts.paper_portfolio_eu import load_strategies_from_yaml, is_strategy_active
+        from scripts.paper_portfolio_eu import is_strategy_active, load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
 
@@ -607,7 +606,7 @@ class TestBrentLagPlay:
 
     def test_brent_lag_market_hours(self, sample_strategies_yaml):
         """brent_lag_play n'est actif que 15:30-20:00 CET."""
-        from scripts.paper_portfolio_eu import load_strategies_from_yaml, is_strategy_active
+        from scripts.paper_portfolio_eu import is_strategy_active, load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
         cfg = strategies["brent_lag_play"]
@@ -913,7 +912,7 @@ class TestForceCloseEuPositions:
 
     def test_force_close_cross_tz_delayed(self, base_state):
         """Positions cross-timezone ne sont pas fermees a 17:35 CET."""
-        from scripts.paper_portfolio_eu import close_eu_positions, EU_STRATEGIES
+        from scripts.paper_portfolio_eu import close_eu_positions
 
         base_state["intraday_positions"] = {
             "SPY": {
@@ -1040,7 +1039,7 @@ class TestStatePersistence:
 
     def test_state_save_load_roundtrip(self, base_state, tmp_path):
         """Le state se sauvegarde et se recharge correctement."""
-        from scripts.paper_portfolio_eu import save_state, STATE_FILE
+        from scripts.paper_portfolio_eu import save_state
 
         state_path = tmp_path / "test_state.json"
         base_state["capital"] = 95_000.0
@@ -1050,7 +1049,7 @@ class TestStatePersistence:
             save_state(base_state)
             assert state_path.exists()
 
-            with open(state_path, "r") as f:
+            with open(state_path) as f:
                 loaded = json.load(f)
 
             assert loaded["capital"] == 95_000.0
@@ -1065,7 +1064,7 @@ class TestSignalDispatch:
 
     def test_all_strategies_have_signal_function(self, sample_strategies_yaml):
         """Chaque strategie du YAML a une fonction signal correspondante."""
-        from scripts.paper_portfolio_eu import load_strategies_from_yaml, SIGNAL_DISPATCH
+        from scripts.paper_portfolio_eu import SIGNAL_DISPATCH, load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
 

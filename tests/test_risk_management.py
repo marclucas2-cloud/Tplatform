@@ -12,10 +12,11 @@ Verifie :
 """
 import os
 import sys
-import pytest
-from unittest.mock import patch, MagicMock
-from datetime import datetime, timezone
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 # Setup paths
 ROOT = Path(__file__).parent.parent
@@ -94,7 +95,7 @@ class TestCircuitBreaker:
 
     def test_circuit_breaker_blocks_orders(self, base_state, mock_alpaca_client):
         """Si equity a baisse de > 5% depuis le debut de journee, aucun ordre ne passe."""
-        from scripts.paper_portfolio import execute_orders, STRATEGIES, compute_allocations
+        from scripts.paper_portfolio import STRATEGIES, compute_allocations, execute_orders
 
         # Simuler un drawdown de 6%
         base_state["daily_capital_start"] = 100_000.0
@@ -121,7 +122,7 @@ class TestCircuitBreaker:
 
     def test_circuit_breaker_allows_normal_operations(self, base_state, mock_alpaca_client):
         """Si le drawdown est < 5%, les ordres passent normalement."""
-        from scripts.paper_portfolio import execute_orders, STRATEGIES, compute_allocations
+        from scripts.paper_portfolio import STRATEGIES, compute_allocations, execute_orders
 
         base_state["daily_capital_start"] = 100_000.0
         mock_alpaca_client.authenticate.return_value["equity"] = 97_000.0  # -3%
@@ -153,7 +154,7 @@ class TestMaxPositions:
 
     def test_max_positions_blocks(self, base_state, mock_alpaca_client):
         """Avec 10 positions, aucun nouvel ordre n'est accepte."""
-        from scripts.paper_portfolio import execute_orders, STRATEGIES, compute_allocations
+        from scripts.paper_portfolio import STRATEGIES, compute_allocations, execute_orders
 
         # Simuler 10 positions existantes
         mock_alpaca_client.get_positions.return_value = [
@@ -190,7 +191,7 @@ class TestExposureCap:
 
     def test_exposure_cap_blocks_long(self, base_state, mock_alpaca_client):
         """Avec > 40% d'exposition long, les nouveaux LONG sont bloques."""
-        from scripts.paper_portfolio import execute_orders, STRATEGIES, compute_allocations
+        from scripts.paper_portfolio import STRATEGIES, compute_allocations, execute_orders
 
         # Simuler une grosse expo long (45K sur 100K equity = 45%)
         mock_alpaca_client.get_positions.return_value = [
@@ -233,7 +234,7 @@ class TestPaperOnlyGuard:
 
     def test_paper_only_guard(self):
         """Avec PAPER_TRADING=false, le client Alpaca doit refuser les ordres."""
-        from core.alpaca_client.client import AlpacaClient, AlpacaAuthError
+        from core.alpaca_client.client import AlpacaAuthError, AlpacaClient
 
         with patch.dict(os.environ, {"PAPER_TRADING": "false"}):
             client = AlpacaClient(
@@ -254,7 +255,7 @@ class TestHolidayDetection:
 
     def test_holiday_detection(self):
         """Le 26 novembre 2026 (Thanksgiving), le marche est ferme."""
-        from scripts.paper_portfolio import NYSE_HOLIDAYS_2026, NYSE_EARLY_CLOSE_2026
+        from scripts.paper_portfolio import NYSE_HOLIDAYS_2026
 
         assert "2026-11-26" in NYSE_HOLIDAYS_2026, "Thanksgiving manquant"
         assert "2026-12-25" in NYSE_HOLIDAYS_2026, "Noel manquant"
@@ -278,9 +279,10 @@ class TestHolidayDetection:
 
     def test_holiday_blocks_trading(self):
         """Le marche ferme un jour ferie empecherait le trading."""
-        from scripts.paper_portfolio import is_us_market_open
         import zoneinfo
         from unittest.mock import patch
+
+        from scripts.paper_portfolio import is_us_market_open
 
         et = zoneinfo.ZoneInfo("America/New_York")
         # Simuler Thanksgiving 2026 a 10:00 ET (jeudi)
@@ -301,7 +303,7 @@ class TestUnauthorizedOrderRejected:
 
     def test_unauthorized_order_rejected(self):
         """Un appel a create_position sans _authorized_by leve AlpacaAPIError."""
-        from core.alpaca_client.client import AlpacaClient, AlpacaAPIError
+        from core.alpaca_client.client import AlpacaAPIError, AlpacaClient
 
         client = AlpacaClient(
             api_key="test",
@@ -313,7 +315,7 @@ class TestUnauthorizedOrderRejected:
 
     def test_unauthorized_close_rejected(self):
         """Un appel a close_position sans _authorized_by leve AlpacaAPIError."""
-        from core.alpaca_client.client import AlpacaClient, AlpacaAPIError
+        from core.alpaca_client.client import AlpacaAPIError, AlpacaClient
 
         client = AlpacaClient(
             api_key="test",
@@ -325,7 +327,7 @@ class TestUnauthorizedOrderRejected:
 
     def test_unauthorized_close_all_rejected(self):
         """Un appel a close_all_positions sans _authorized_by leve AlpacaAPIError."""
-        from core.alpaca_client.client import AlpacaClient, AlpacaAPIError
+        from core.alpaca_client.client import AlpacaAPIError, AlpacaClient
 
         client = AlpacaClient(
             api_key="test",
@@ -345,7 +347,7 @@ class TestPDTGuard:
 
     def test_pdt_guard_blocks_intraday(self, base_state, mock_alpaca_client):
         """Avec equity < $25K, un signal intraday est bloque."""
-        from scripts.paper_portfolio import execute_orders, STRATEGIES, compute_allocations
+        from scripts.paper_portfolio import STRATEGIES, compute_allocations, execute_orders
 
         # Equity sous le seuil PDT
         mock_alpaca_client.authenticate.return_value["equity"] = 20_000.0
@@ -377,7 +379,7 @@ class TestPDTGuard:
 
     def test_pdt_guard_allows_daily(self, base_state, mock_alpaca_client):
         """Avec equity < $25K, les strategies daily doivent toujours fonctionner."""
-        from scripts.paper_portfolio import execute_orders, STRATEGIES, compute_allocations
+        from scripts.paper_portfolio import STRATEGIES, compute_allocations, execute_orders
 
         # Equity sous le seuil PDT
         mock_alpaca_client.authenticate.return_value["equity"] = 20_000.0
@@ -425,7 +427,7 @@ class TestDryRun:
     """En mode dry-run, aucun ordre ne doit etre execute."""
 
     def test_dry_run_returns_empty(self, base_state):
-        from scripts.paper_portfolio import execute_orders, compute_allocations, STRATEGIES
+        from scripts.paper_portfolio import STRATEGIES, compute_allocations, execute_orders
 
         allocations = compute_allocations(STRATEGIES, 100_000.0)
         signals = {

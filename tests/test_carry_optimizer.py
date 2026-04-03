@@ -17,8 +17,7 @@ import pytest
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.carry_optimizer import CarryOptimizer, DEFAULT_CARRY_PAIRS
-
+from core.carry_optimizer import CarryOptimizer
 
 # =============================================================================
 # FIXTURES

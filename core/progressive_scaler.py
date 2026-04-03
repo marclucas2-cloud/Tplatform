@@ -14,8 +14,7 @@ Si le drawdown augmente -> retour au niveau precedent.
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -93,7 +92,7 @@ class ProgressiveScaler:
     Revient au niveau precedent si le drawdown se degrade.
     """
 
-    def __init__(self, progression: Optional[List[Dict]] = None):
+    def __init__(self, progression: List[Dict] | None = None):
         """
         Args:
             progression: liste de niveaux avec conditions (override le defaut)

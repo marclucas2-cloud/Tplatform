@@ -20,11 +20,11 @@ import logging
 import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(ROOT / "archive" / "intraday-backtesterV2"))
 sys.path.insert(0, str(ROOT))
 
 try:
@@ -53,9 +53,10 @@ def smoke_test_crypto(filter_strat: str | None = None) -> list[dict]:
     if os.getenv("BINANCE_TESTNET", "true").lower() == "true":
         logger.warning("BINANCE_TESTNET=true — smoke test runs on testnet")
 
+    from strategies.crypto import CRYPTO_STRATEGIES
+
     from core.broker.binance_broker import BinanceBroker
     from core.crypto.risk_manager_crypto import CryptoRiskManager
-    from strategies.crypto import CRYPTO_STRATEGIES
 
     broker = BinanceBroker()
     acct = broker.get_account_info()
@@ -206,7 +207,7 @@ def main():
 
     print("=" * 60)
     print("  SMOKE TEST V12 — micro-trades $10")
-    print(f"  {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+    print(f"  {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}")
     print("=" * 60)
 
     results = smoke_test_crypto(filter_strat)
@@ -226,7 +227,7 @@ def main():
     out_path = ROOT / "data" / "monitoring" / "smoke_test_result.json"
     out_path.parent.mkdir(parents=True, exist_ok=True)
     out_path.write_text(json.dumps({
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "passed": len(passed),
         "total": len(results),
         "failed": [r["strat_id"] for r in failed],

@@ -18,15 +18,15 @@ No network calls — everything is mocked.
 
 import sys
 import time
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.telegram_commands import TelegramCommandHandler, CONFIRMATION_TTL
-
+from core.telegram_commands import CONFIRMATION_TTL, TelegramCommandHandler
 
 # =============================================================================
 # FIXTURES

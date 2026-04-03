@@ -26,12 +26,11 @@ Expected: ~8-12 trades/month, win rate 55-65%, Sharpe 1.0-2.0
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
 from core.backtester_v2.types import Bar, PortfolioState, Signal
-
 
 # Eurex session in UTC: 08:30-16:00 (= 09:30-17:00 CET)
 _SESSION_START_HOUR_UTC = 8
@@ -68,9 +67,9 @@ class EUMeanReversionSX5E(StrategyBase):
 
         # State tracking
         self._position_open: bool = False
-        self._session_date: Optional[str] = None
+        self._session_date: str | None = None
 
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -93,7 +92,7 @@ class EUMeanReversionSX5E(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
 
@@ -166,7 +165,7 @@ class EUMeanReversionSX5E(StrategyBase):
     # VWAP computation
     # ------------------------------------------------------------------
 
-    def _compute_vwap(self, symbol: str) -> Optional[float]:
+    def _compute_vwap(self, symbol: str) -> float | None:
         """Compute volume-weighted average price from recent session bars.
 
         Uses get_bars() to fetch recent bars and computes cumulative VWAP.

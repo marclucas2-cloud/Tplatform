@@ -13,12 +13,11 @@ Covers:
   - Unresolved critical tracking
 """
 
-import time
-import pytest
 from unittest.mock import MagicMock
 
-from core.alerting_live import LiveAlertManager, INFO, WARNING, CRITICAL
+import pytest
 
+from core.alerting_live import CRITICAL, INFO, WARNING, LiveAlertManager
 
 # ---------------------------------------------------------------------------
 # Fixtures

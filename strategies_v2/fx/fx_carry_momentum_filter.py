@@ -30,9 +30,10 @@ Costs: $2/trade IBKR + 0.8-1.5 bps spread = ~0.05% RT on $20K notional.
 from __future__ import annotations
 
 import logging
+from typing import Any, Dict, List
+
 import numpy as np
 import pandas as pd
-from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -134,7 +135,7 @@ class FXCarryMomentumFilter:
         mom = returns.tail(MOMENTUM_LOOKBACK).sum()
         return bool(mom > 0)
 
-    def signal_fn(self, candle: pd.Series, state: dict, **kwargs) -> Optional[dict]:
+    def signal_fn(self, candle: pd.Series, state: dict, **kwargs) -> dict | None:
         """Generate carry signal with momentum filter for all pairs.
 
         Args:

@@ -1,7 +1,9 @@
 """Tests for CryptoRiskManager V2 + KillSwitch V2 — 25 tests."""
 import pytest
+
 from core.crypto.risk_manager_crypto import (
-    CryptoRiskManager, CryptoRiskLimits, CryptoKillSwitch,
+    CryptoKillSwitch,
+    CryptoRiskManager,
 )
 
 

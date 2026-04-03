@@ -17,13 +17,12 @@ Usage:
 """
 from __future__ import annotations
 
-import json
 import logging
 import sqlite3
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -147,7 +146,7 @@ class ExecutionMonitor:
         side: str,
         order_type: str,
         requested_price: float,
-        filled_price: Optional[float],
+        filled_price: float | None,
         status: str,  # filled | rejected | partial | cancelled
         latency_ms: float = 0.0,
         is_stop_loss: bool = False,

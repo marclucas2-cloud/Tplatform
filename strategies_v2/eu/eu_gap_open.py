@@ -7,7 +7,7 @@ Closes positions at EOD if close_eod is enabled.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -25,9 +25,9 @@ class EUGapOpen(StrategyBase):
         self.sl_pct: float = 0.015
         self.tp_pct: float = 0.02
         self.close_eod: bool = True
-        self._prev_close: Optional[float] = None
+        self._prev_close: float | None = None
         self._has_position_today: bool = False
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -46,7 +46,7 @@ class EUGapOpen(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
         sym = self.SYMBOL

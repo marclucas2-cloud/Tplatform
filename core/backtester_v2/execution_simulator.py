@@ -5,10 +5,10 @@ from __future__ import annotations
 import math
 import random
 from dataclasses import dataclass
-from typing import Dict, Optional
+from typing import Dict
 
-from core.backtester_v2.types import Order, Fill, MarketState
 from core.backtester_v2.cost_models.base import CostModel
+from core.backtester_v2.types import Fill, MarketState, Order
 
 
 @dataclass(frozen=True)
@@ -44,7 +44,7 @@ class ExecutionSimulator:
     market impact (Almgren-Chriss simplified), limit order logic, margin check.
     """
 
-    def __init__(self, seed: Optional[int] = 42) -> None:
+    def __init__(self, seed: int | None = 42) -> None:
         """Args: seed — random seed for reproducibility."""
         self._rng = random.Random(seed)
 
@@ -156,6 +156,6 @@ class ExecutionSimulator:
             return 1.0
 
         if asset_class.startswith("FX"):
-            return 1.4 if (21 <= hour or hour <= 4) else 1.0
+            return 1.4 if (hour >= 21 or hour <= 4) else 1.0
 
         return 1.0

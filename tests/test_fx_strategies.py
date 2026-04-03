@@ -10,22 +10,19 @@ Covers:
   - Metadata correctness (costs, strategy name)
 """
 import sys
-import os
 from pathlib import Path
 
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 # Add backtester to path so imports work
-_backtester_dir = str(Path(__file__).resolve().parent.parent / "intraday-backtesterV2")
+_backtester_dir = str(Path(__file__).resolve().parent.parent / "archive" / "intraday-backtesterV2")
 if _backtester_dir not in sys.path:
     sys.path.insert(0, _backtester_dir)
 
-from strategies.fx_gbpusd_trend import FXGBPUSDTrendStrategy, EVENT_BLACKOUT_DATES
-from strategies.fx_usdchf_mr import FXUSDCHFMeanReversionStrategy
+from strategies.fx_gbpusd_trend import FXGBPUSDTrendStrategy
 from strategies.fx_nzdusd_carry import FXNZDUSDCarryStrategy
-
+from strategies.fx_usdchf_mr import FXUSDCHFMeanReversionStrategy
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 

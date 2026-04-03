@@ -4,12 +4,7 @@ DRILL-002 — Test restauration backup complet.
 QUASI-BLOQUANT : doit PASS avant le premier trade live.
 Tests the backup and restore script logic without destructive operations.
 """
-import pytest
-import os
-import json
 from pathlib import Path
-from unittest.mock import patch, MagicMock
-from datetime import datetime
 
 
 ROOT = Path(__file__).parent.parent

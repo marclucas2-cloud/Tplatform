@@ -4,9 +4,9 @@ Integration test: signal → fill → SL attached → close → SL cancelled.
 Tests the full execution pipeline WITHOUT hitting a real exchange.
 Mocks BinanceBroker at the HTTP level to verify the complete chain.
 """
-import json
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 from core.broker.binance_broker import BinanceBroker, BrokerError
 

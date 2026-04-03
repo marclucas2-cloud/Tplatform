@@ -25,7 +25,7 @@ import signal
 import subprocess
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -44,14 +44,14 @@ logger = logging.getLogger("safe_restart")
 def _save_pre_restart_snapshot():
     """Save state before restart for comparison after."""
     snapshot = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "state": None,
         "kill_switch": None,
         "fx_carry_ks": None,
     }
 
     # Portfolio state
-    state_path = ROOT / "paper_portfolio_state.json"
+    state_path = ROOT / "data" / "state" / "paper_portfolio_state.json"
     if state_path.exists():
         try:
             snapshot["state"] = json.loads(state_path.read_text(encoding="utf-8"))
@@ -196,7 +196,7 @@ def _verify_state_coherence(pre_snapshot: dict):
     issues = []
 
     # Check state file still exists and is valid
-    state_path = ROOT / "paper_portfolio_state.json"
+    state_path = ROOT / "data" / "state" / "paper_portfolio_state.json"
     if not state_path.exists():
         issues.append("State file missing after restart")
     else:
@@ -287,7 +287,7 @@ def full_restart(force: bool = False):
     """Full restart sequence."""
     logger.info("=" * 60)
     logger.info("  SAFE RESTART SEQUENCE")
-    logger.info(f"  {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    logger.info(f"  {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     logger.info("=" * 60)
 
     # 1. Save snapshot
@@ -304,7 +304,7 @@ def full_restart(force: bool = False):
     # 3. Verify state files
     logger.info("── STEP 3: Verify state files ──")
     for name, path in [
-        ("portfolio state", ROOT / "paper_portfolio_state.json"),
+        ("portfolio state", ROOT / "data" / "state" / "paper_portfolio_state.json"),
         ("kill switch", ROOT / "data" / "kill_switch_state.json"),
     ]:
         if path.exists():

@@ -6,7 +6,7 @@ ATR-based stop-loss and take-profit for volatility-adaptive exits.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -26,7 +26,7 @@ class EURUSDTrend(StrategyBase):
         self.rsi_high: float = 75.0
         self.sl_atr: float = 2.5
         self.tp_atr: float = 4.0
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -45,7 +45,7 @@ class EURUSDTrend(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
         sym = self.SYMBOL

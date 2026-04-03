@@ -18,17 +18,15 @@ Usage:
 """
 from __future__ import annotations
 
-import json
 import logging
-import os
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(ROOT / "archive" / "intraday-backtesterV2"))
 
 try:
     from dotenv import load_dotenv
@@ -182,7 +180,7 @@ def step2_sell_btc(broker, qty: float = 0.10, dry_run: bool = True):
 
 def step3_sell_eur(broker, dry_run: bool = True):
     """Sell EURUSDT position → USDT."""
-    logger.info(f"\n--- STEP 3: Sell EUR → USDT ---")
+    logger.info("\n--- STEP 3: Sell EUR → USDT ---")
 
     # Get current EUR position
     positions = broker.get_positions()
@@ -229,9 +227,9 @@ def step3_sell_eur(broker, dry_run: bool = True):
 
 def run(dry_run: bool = True):
     logger.info("=" * 60)
-    logger.info(f"  CRYPTO REBALANCE — DAY 1")
+    logger.info("  CRYPTO REBALANCE — DAY 1")
     logger.info(f"  Mode: {'DRY RUN' if dry_run else 'LIVE EXECUTION'}")
-    logger.info(f"  {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}")
+    logger.info(f"  {datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}")
     logger.info("=" * 60)
 
     if not dry_run:
@@ -278,7 +276,7 @@ def run(dry_run: bool = True):
             level="info"
         )
     else:
-        logger.info(f"\n--- DRY RUN SUMMARY ---")
+        logger.info("\n--- DRY RUN SUMMARY ---")
         logger.info(f"  Would free: ~${total_freed:,.0f} USDT")
         logger.info(f"  BTC after: {before['btc_earn'] - 0.10:.6f} BTC "
                      f"(${(before['btc_earn'] - 0.10) * before['btc_price']:,.0f})")

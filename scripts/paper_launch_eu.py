@@ -11,13 +11,11 @@ import json
 import logging
 import sys
 import time
+import zoneinfo
 from datetime import datetime, timedelta
 from pathlib import Path
 
-import numpy as np
-import pandas as pd
 import yaml
-import zoneinfo
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -57,8 +55,9 @@ def log_event(event: dict) -> None:
 def connect_ibkr_paper():
     """Connect to IBKR paper on port 4003."""
     try:
-        from core.broker.ibkr_adapter import IBKRBroker
         import os
+
+        from core.broker.ibkr_adapter import IBKRBroker
         os.environ["IBKR_PAPER"] = "true"
         os.environ["IBKR_PORT"] = "4003"
         broker = IBKRBroker()
@@ -144,7 +143,7 @@ def generate_report(duration_hours: float) -> None:
         "# EU Paper Launch Report",
         f"\nDate: {datetime.now(PARIS).strftime('%Y-%m-%d %H:%M CET')}",
         f"Duration: {duration_hours:.1f}h",
-        f"\n## Summary",
+        "\n## Summary",
         f"- Signals checked: {len(signals)}",
         f"- Fills: {len(fills)}",
         f"- Errors: {len(errors)}",

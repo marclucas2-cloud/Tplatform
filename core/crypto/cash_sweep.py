@@ -19,8 +19,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Any
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -101,7 +100,7 @@ class CashSweepManager:
         # Mettre a jour les stats
         self._total_swept += excess
         self._sweep_count += 1
-        self._last_sweep_at = datetime.now(timezone.utc).isoformat()
+        self._last_sweep_at = datetime.now(UTC).isoformat()
 
         logger.info(
             f"CashSweep: ${excess:.2f} envoye en Earn Flexible "
@@ -169,7 +168,7 @@ class CashSweepManager:
         # Mettre a jour les stats
         self._total_redeemed += shortfall
         self._redeem_count += 1
-        self._last_redeem_at = datetime.now(timezone.utc).isoformat()
+        self._last_redeem_at = datetime.now(UTC).isoformat()
 
         logger.info(
             f"CashSweep pre-order: ${shortfall:.2f} recupere depuis Earn "

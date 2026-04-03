@@ -1,3 +1,3 @@
-from .client import IGClient, IGAuthError, IGAPIError
+from .client import IGAPIError, IGAuthError, IGClient
 
-__all__ = ["IGClient", "IGAuthError", "IGAPIError"]
+__all__ = ["IGAPIError", "IGAuthError", "IGClient"]

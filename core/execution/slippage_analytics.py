@@ -15,9 +15,9 @@ from __future__ import annotations
 import logging
 import sqlite3
 import statistics
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class SlippageAnalytics:
     Does NOT write to the database -- purely analytical.
     """
 
-    def __init__(self, db_path: Optional[Path] = None):
+    def __init__(self, db_path: Path | None = None):
         self.db_path = Path(db_path) if db_path else DEFAULT_DB_PATH
         if not self.db_path.exists():
             logger.warning("SlippageAnalytics: DB not found at %s", self.db_path)
@@ -76,7 +76,7 @@ class SlippageAnalytics:
         return conn
 
     def _cutoff_iso(self, lookback_days: int) -> str:
-        return (datetime.now(timezone.utc) - timedelta(days=lookback_days)).isoformat()
+        return (datetime.now(UTC) - timedelta(days=lookback_days)).isoformat()
 
     def _fetch_trades(self, lookback_days: int, extra_where: str = "",
                       params: tuple = ()) -> List[sqlite3.Row]:

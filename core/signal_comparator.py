@@ -14,9 +14,9 @@ All comparisons are persisted in a JSONL file for post-trade analysis.
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Dict, List, Optional
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -44,7 +44,7 @@ class SignalComparator:
         )
     """
 
-    def __init__(self, log_dir: Optional[str] = None):
+    def __init__(self, log_dir: str | None = None):
         """Initialize the comparator.
 
         Args:
@@ -66,7 +66,7 @@ class SignalComparator:
         signal_id: str,
         strategy: str,
         signal: dict,
-        live_result: Optional[dict],
+        live_result: dict | None,
         paper_results: List[dict],
     ) -> dict:
         """Compare live vs paper execution results for a single signal.
@@ -161,7 +161,7 @@ class SignalComparator:
             "paper_results": paper_results,
             "divergences": divergences,
             "match": is_match,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         self._comparisons.append(comparison)

@@ -6,7 +6,7 @@ lower Bollinger Band, and ADX confirms a ranging market (no strong trend).
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -65,7 +65,7 @@ class BTCMeanReversion(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         sym = bar.symbol
         rsi = self.data_feed.get_indicator(sym, "rsi", 14)
         bb_lower = self.data_feed.get_indicator(

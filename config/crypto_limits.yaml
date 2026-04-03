@@ -1,7 +1,7 @@
 # Crypto risk limits — Binance France Margin + Spot + Earn (NO futures perp)
 
 mode: LIVE_CRYPTO_MARGIN
-capital: 20000                           # 20K EUR (actual portfolio)
+capital: 10000                           # 10K EUR (post-realloc 31 mars)
 
 position_limits:
   max_position_pct: 15             # Max 15% per position ($2,250)

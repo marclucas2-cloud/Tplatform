@@ -28,14 +28,13 @@ Expected: ~8-12 trades/month across 3 pairs, Sharpe target 1.2-2.0
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
 from core.backtester_v2.types import Bar, PortfolioState, Signal
-
 
 # Supported pairs
 SUPPORTED_PAIRS = ["EURUSD", "GBPUSD", "USDJPY"]
@@ -77,15 +76,15 @@ class FXBollingerSqueeze(StrategyBase):
 
         # State
         self._squeeze_detected: bool = False
-        self._squeeze_direction: Optional[str] = None  # pending breakout direction
+        self._squeeze_direction: str | None = None  # pending breakout direction
         self._awaiting_confirmation: bool = False
-        self._pending_side: Optional[str] = None
-        self._pending_entry_price: Optional[float] = None
-        self._pending_middle_bb: Optional[float] = None
-        self._pending_bb_width: Optional[float] = None
+        self._pending_side: str | None = None
+        self._pending_entry_price: float | None = None
+        self._pending_middle_bb: float | None = None
+        self._pending_bb_width: float | None = None
         self._bars_since_squeeze: int = 0
 
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -108,7 +107,7 @@ class FXBollingerSqueeze(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
 
@@ -168,9 +167,7 @@ class FXBollingerSqueeze(StrategyBase):
             self._awaiting_confirmation = False
             confirmed = False
 
-            if self._pending_side == "BUY" and bar.close > self._pending_entry_price:
-                confirmed = True
-            elif self._pending_side == "SELL" and bar.close < self._pending_entry_price:
+            if (self._pending_side == "BUY" and bar.close > self._pending_entry_price) or (self._pending_side == "SELL" and bar.close < self._pending_entry_price):
                 confirmed = True
 
             if confirmed and self._pending_middle_bb is not None:
@@ -288,7 +285,7 @@ class FXBollingerSqueeze(StrategyBase):
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def on_eod(self, timestamp: "pd.Timestamp") -> None:
+    def on_eod(self, timestamp: pd.Timestamp) -> None:
         """Keep squeeze state across days (multi-day holding allowed)."""
         pass
 
@@ -296,7 +293,7 @@ class FXBollingerSqueeze(StrategyBase):
     # Helpers
     # ------------------------------------------------------------------
 
-    def detect_squeeze(self, bars_df: "pd.DataFrame") -> dict:
+    def detect_squeeze(self, bars_df: pd.DataFrame) -> dict:
         """Public helper for testing: detect squeeze from a DataFrame.
 
         Returns dict with squeeze info for testability.

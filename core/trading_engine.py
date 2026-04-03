@@ -30,9 +30,9 @@ import os
 import tempfile
 import threading
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional, Dict, List
+from typing import Dict, List
 
 import yaml
 
@@ -95,7 +95,7 @@ class Pipeline:
         self._active = False
         self._strategies_enabled: Dict[str, bool] = {s: True for s in config.strategies}
         self._state: dict = {}
-        self._last_execution: Optional[str] = None
+        self._last_execution: str | None = None
         self._broker = None
         self._risk_manager = None
         self._logger = logging.getLogger(f"pipeline.{config.mode.lower()}")
@@ -230,7 +230,7 @@ class Pipeline:
             "orders_submitted": 0,
             "orders_filled": 0,
             "errors": [],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         if not self._active:
@@ -362,7 +362,7 @@ class Pipeline:
 
         return result
 
-    def _generate_signal(self, strategy_name: str, cycle_type: str) -> Optional[dict]:
+    def _generate_signal(self, strategy_name: str, cycle_type: str) -> dict | None:
         """Generate a trading signal from a strategy.
 
         Returns None if the strategy has no signal for this cycle.
@@ -387,7 +387,7 @@ class Pipeline:
             self._logger.error(f"[{self.mode}] Failed to get portfolio snapshot: {exc}")
             return {"equity": self.config.capital, "cash": self.config.capital, "positions": []}
 
-    def _submit_order(self, signal: dict) -> Optional[dict]:
+    def _submit_order(self, signal: dict) -> dict | None:
         """Submit an order to the broker."""
         if self._broker is None:
             return None
@@ -489,7 +489,7 @@ class Pipeline:
             if self.mode == "LIVE":
                 try:
                     closed = self._broker.close_all_positions(
-                        _authorized_by=f"engine_live_shutdown"
+                        _authorized_by="engine_live_shutdown"
                     )
                     result["positions_closed"] = len(closed)
                 except Exception as exc:
@@ -655,7 +655,7 @@ class TradingEngine:
         overall = {
             "pipeline_results": {},
             "errors": [],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         for name, pipeline in self.pipelines.items():
@@ -779,7 +779,7 @@ class TradingEngine:
         Returns:
             Unique signal ID string.
         """
-        ts = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+        ts = datetime.now(UTC).strftime("%Y%m%d%H%M%S")
         short_uuid = uuid.uuid4().hex[:8]
         return f"SIG_{ts}_{strategy_name}_{short_uuid}"
 
@@ -796,7 +796,7 @@ class TradingEngine:
 
     def _generate_signal_from_data(
         self, strategy_name: str, market_data: dict, cycle_type: str
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Generate a trading signal from market data for a strategy.
 
         This is the single point of signal generation -- called ONCE
@@ -820,7 +820,7 @@ class TradingEngine:
         )
         return None
 
-    def get_live_pipeline(self) -> Optional[Pipeline]:
+    def get_live_pipeline(self) -> Pipeline | None:
         """Get the live pipeline (there should be at most one)."""
         for pipeline in self.pipelines.values():
             if pipeline.mode == "LIVE":
@@ -838,7 +838,7 @@ class TradingEngine:
             "total_pipelines": len(self.pipelines),
             "live_pipeline": None,
             "paper_pipelines": [],
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         for name, pipeline in self.pipelines.items():
@@ -864,7 +864,7 @@ class TradingEngine:
             "live_shutdown": None,
             "paper_status": [],
             "reason": reason,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         logger.critical(f"EMERGENCY SHUTDOWN: {reason}")
@@ -895,7 +895,7 @@ class TradingEngine:
         results = {
             "results": {},
             "reason": reason,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         logger.info(f"Shutting down all pipelines (reason: {reason})")
@@ -926,7 +926,7 @@ class TradingEngine:
         state = {
             "initialized": self._initialized,
             "pipelines": {},
-            "last_saved": datetime.now(timezone.utc).isoformat(),
+            "last_saved": datetime.now(UTC).isoformat(),
         }
 
         for name, pipeline in self.pipelines.items():

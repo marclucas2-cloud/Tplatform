@@ -12,13 +12,13 @@ Aucun appel reseau reel — tout est mocke.
 """
 
 import sys
-import pytest
-from datetime import date, timedelta
+from datetime import date
 from pathlib import Path
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import numpy as np
 import pandas as pd
+import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
@@ -350,8 +350,8 @@ class TestSmartRouterFutures:
     @patch.dict("os.environ", {"ALPACA_API_KEY": "test"}, clear=True)
     def test_futures_without_ibkr_raises(self):
         """Futures sans IBKR leve BrokerError."""
-        from core.broker.factory import SmartRouter
         from core.broker.base import BrokerError
+        from core.broker.factory import SmartRouter
 
         router = SmartRouter()
         with pytest.raises(BrokerError, match="requiert IBKR"):
@@ -602,8 +602,8 @@ class TestAuthorizedByGuard:
 
     def test_create_position_without_auth_raises(self):
         """Ordre futures sans _authorized_by leve BrokerError."""
-        from core.broker.ibkr_futures import IBKRFuturesClient
         from core.broker.base import BrokerError
+        from core.broker.ibkr_futures import IBKRFuturesClient
 
         mock_broker = MagicMock()
         mock_broker.is_paper = True
@@ -619,8 +619,8 @@ class TestAuthorizedByGuard:
 
     def test_close_position_without_auth_raises(self):
         """Fermeture sans _authorized_by leve BrokerError."""
-        from core.broker.ibkr_futures import IBKRFuturesClient
         from core.broker.base import BrokerError
+        from core.broker.ibkr_futures import IBKRFuturesClient
 
         mock_broker = MagicMock()
         client = IBKRFuturesClient(mock_broker)
@@ -630,8 +630,8 @@ class TestAuthorizedByGuard:
 
     def test_live_trading_blocked(self):
         """Trading LIVE bloque pour les futures."""
-        from core.broker.ibkr_futures import IBKRFuturesClient
         from core.broker.base import BrokerError
+        from core.broker.ibkr_futures import IBKRFuturesClient
 
         mock_broker = MagicMock()
         mock_broker.is_paper = False
@@ -647,8 +647,8 @@ class TestAuthorizedByGuard:
 
     def test_fractional_qty_blocked(self):
         """Quantite fractionnaire bloquee pour les futures."""
-        from core.broker.ibkr_futures import IBKRFuturesClient
         from core.broker.base import BrokerError
+        from core.broker.ibkr_futures import IBKRFuturesClient
 
         mock_broker = MagicMock()
         mock_broker.is_paper = True

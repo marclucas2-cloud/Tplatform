@@ -22,10 +22,8 @@ Wallet transfer logic:
 from __future__ import annotations
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
-import numpy as np
 import pandas as pd
 
 logger = logging.getLogger(__name__)
@@ -156,7 +154,7 @@ class WalletManager:
             "from": from_wallet,
             "to": to_wallet,
             "amount": amount,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         })
 
         logger.info(
@@ -265,7 +263,7 @@ class CryptoAllocator:
         self.wallet_manager = WalletManager(total_capital, wallet_config)
         self._current_allocations: dict[str, float] = {}
         self._current_regime = CryptoRegime.CHOP
-        self._last_update: Optional[datetime] = None
+        self._last_update: datetime | None = None
         self._regime_history: list[dict] = []
 
     @property
@@ -313,7 +311,7 @@ class CryptoAllocator:
             self._regime_history.append({
                 "from": old_regime,
                 "to": regime,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
             })
             logger.info(
                 f"Regime change: {old_regime} -> {regime}"
@@ -355,7 +353,7 @@ class CryptoAllocator:
                 for s, pct in self._current_allocations.items()
             }
 
-        self._last_update = datetime.now(timezone.utc)
+        self._last_update = datetime.now(UTC)
         return self._format_result()
 
     # ------------------------------------------------------------------

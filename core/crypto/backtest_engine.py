@@ -13,9 +13,8 @@ NO futures/perp. Key differences from V1:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
-from datetime import datetime, timezone, timedelta
-from typing import Optional
+from dataclasses import dataclass
+from datetime import datetime, timedelta
 
 import numpy as np
 import pandas as pd
@@ -82,7 +81,7 @@ class CryptoPosition:
     borrowed_asset: str = ""     # e.g. "BTC" for short, "USDT" for leveraged long
     borrowed_amount: float = 0.0
     total_borrow_cost: float = 0.0
-    last_interest_ts: Optional[datetime] = None
+    last_interest_ts: datetime | None = None
 
     # Earn tracking
     is_earn: bool = False

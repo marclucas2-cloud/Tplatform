@@ -138,7 +138,7 @@ class StrategyRanker:
     def print_leaderboard(self, ranked: list[RankedStrategy]):
         """Affiche le classement en tableau lisible."""
         print(f"\n{'='*75}")
-        print(f"  STRATEGY LEADERBOARD")
+        print("  STRATEGY LEADERBOARD")
         print(f"{'='*75}")
         print(f"  {'#':<3} {'Strategy':<35} {'Score':>6} {'Sharpe':>7} {'DD%':>6} {'WR%':>6} {'Trades':>7}")
         print(f"  {'-'*70}")

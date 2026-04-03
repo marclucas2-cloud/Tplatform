@@ -1,7 +1,10 @@
 """Debug script — show all Binance wallet balances."""
-import os, sys
+import os
+import sys
+
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from dotenv import load_dotenv
+
 load_dotenv()
 from core.broker.binance_broker import BinanceBroker
 

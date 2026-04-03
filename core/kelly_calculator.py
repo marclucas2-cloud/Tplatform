@@ -22,7 +22,7 @@ Usage :
   fx_kelly = kc.calculate_fx_kelly(0.52, 35.0, 25.0, pip_value=10.0)
 """
 import logging
-from typing import Dict, Optional
+from typing import Dict
 
 logger = logging.getLogger(__name__)
 
@@ -196,7 +196,7 @@ class KellyCalculator:
     def distribute_fx_allocation(
         self,
         total_fx_pct: float = 0.18,
-        sharpe_weights: Optional[Dict[str, float]] = None,
+        sharpe_weights: Dict[str, float] | None = None,
         total_capital: float = 25_000,
     ) -> Dict[str, dict]:
         """

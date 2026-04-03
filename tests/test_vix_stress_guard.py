@@ -1,11 +1,10 @@
 """Tests pour VixStressGuard -- reduction de sizing en cas de stress marche."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
-from datetime import datetime, timezone
 
-from core.vix_stress_guard import VixStressGuard, NORMAL, WARN, CRITICAL, HALT
-
+from core.vix_stress_guard import CRITICAL, HALT, NORMAL, WARN, VixStressGuard
 
 # --- Fixtures ---
 

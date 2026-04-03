@@ -13,9 +13,8 @@ import asyncio
 import logging
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
-
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ class AgentMessage:
     sender: str                  # Nom de l'agent émetteur
     payload: dict[str, Any]      # Données du message
     timestamp: str = field(
-        default_factory=lambda: datetime.now(timezone.utc).isoformat()
+        default_factory=lambda: datetime.now(UTC).isoformat()
     )
     correlation_id: str = ""     # Pour lier requête / réponse
 
@@ -84,7 +83,7 @@ class BaseAgent(ABC):
                 self.logger.debug(f"[{self.name}] reçoit {msg}")
                 await self.process(msg)
                 self.inbox.task_done()
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 continue  # Pas de message — vérifie _running et continue
             except asyncio.CancelledError:
                 break

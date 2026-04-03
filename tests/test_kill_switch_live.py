@@ -23,15 +23,15 @@ Covers:
 
 import json
 import sys
-import pytest
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock
+
+import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.kill_switch_live import LiveKillSwitch, DEFAULT_THRESHOLDS
-
+from core.kill_switch_live import LiveKillSwitch
 
 # =============================================================================
 # FIXTURES

@@ -3,14 +3,14 @@
 
 crypto_allocation:
   version: 2
-  total_capital: 20000             # 20K EUR (actual portfolio)
+  total_capital: 10000             # 10K EUR (post-realloc 31 mars)
 
   # --- Wallet Distribution ---
   wallets:
-    spot: 4000                     # Spot trading wallet (EUR + USDT)
-    margin: 2000                   # Margin (isolated) wallet
-    earn: 11500                    # Earn flexible (BTC 0.27 + USDC 1978)
-    cash: 2500                     # Reserve EUR
+    spot: 2500                     # Spot trading wallet (USDC)
+    margin: 1500                   # Margin (isolated) wallet
+    earn: 5000                     # Earn flexible (BTC ~3K + USDC ~2K)
+    cash: 1000                     # Reserve USDC
 
   # --- 8 Strategies with Regime Allocations ---
   # Weights are % of DEPLOYED capital (excludes cash reserve)
@@ -64,7 +64,7 @@ crypto_allocation:
   # --- Soft Launch Phases ---
   phases:
     week_1:
-      capital: 14000               # 14K EUR deployed
+      capital: 8000                # 8K EUR deployed (80% of 10K)
       strategies: "all"            # Toutes les 8 strategies actives des la semaine 1
       kelly_fraction: 0.25         # 1/4 Kelly — ROC optim (was 1/8)
       max_leverage: 1.5            # Leverage leger autorise
@@ -72,7 +72,7 @@ crypto_allocation:
       margin_enabled: true         # Margin active pour les strategies qui en ont besoin
 
     week_2:
-      capital: 17000               # 17K EUR deployed
+      capital: 9000                # 9K EUR deployed (90% of 10K)
       strategies:
         - "btc_eth_trend"
         - "earn_yield"
@@ -85,7 +85,7 @@ crypto_allocation:
       margin_enabled: true         # Margin enabled with 1.5x max
 
     week_3_plus:
-      capital: 20000               # Full 20K EUR
+      capital: 10000               # Full 10K EUR
       strategies: "all_validated"
       kelly_fraction: 0.25         # 1/4 Kelly
       max_leverage: 2.5            # Full leverage per limits

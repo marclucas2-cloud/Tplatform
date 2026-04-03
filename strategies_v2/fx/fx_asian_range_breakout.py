@@ -24,12 +24,11 @@ Expected: ~15-20 trades/month across 4 pairs, Sharpe target 1.0-2.0
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
 from core.backtester_v2.types import Bar, PortfolioState, Signal
-
 
 # Asian session: 00:00-07:00 UTC (bars closing at 01:00 through 07:00)
 _ASIAN_START_HOUR = 0
@@ -66,13 +65,13 @@ class FXAsianRangeBreakout(StrategyBase):
         self.tp_risk_mult: float = 2.0
 
         # State tracking
-        self._asian_high: Optional[float] = None
-        self._asian_low: Optional[float] = None
-        self._asian_computed_date: Optional[str] = None
+        self._asian_high: float | None = None
+        self._asian_low: float | None = None
+        self._asian_computed_date: str | None = None
         self._position_open: bool = False
-        self._entry_hour: Optional[int] = None
+        self._entry_hour: int | None = None
 
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -95,7 +94,7 @@ class FXAsianRangeBreakout(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
 
@@ -182,7 +181,7 @@ class FXAsianRangeBreakout(StrategyBase):
     # ------------------------------------------------------------------
 
     def _compute_asian_range(
-        self, symbol: str, current_ts: "pd.Timestamp"
+        self, symbol: str, current_ts: pd.Timestamp
     ) -> None:
         """Compute high/low of the Asian session (00:00-07:00 UTC) for today.
 
@@ -248,7 +247,7 @@ class FXAsianRangeBreakout(StrategyBase):
     # Lifecycle
     # ------------------------------------------------------------------
 
-    def on_eod(self, timestamp: "pd.Timestamp") -> None:
+    def on_eod(self, timestamp: pd.Timestamp) -> None:
         """Reset daily state at end of day."""
         self._position_open = False
         self._asian_high = None

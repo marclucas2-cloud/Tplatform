@@ -74,7 +74,7 @@ class AlpacaBroker(BaseBroker):
             raise BrokerError("cancel_all_orders() sans _authorized_by.")
         client = self._client._get_trading_client()
         responses = client.cancel_orders()
-        logger.warning(f"Alpaca: tous les ordres annules")
+        logger.warning("Alpaca: tous les ordres annules")
         return len(responses) if responses else 0
 
     def get_prices(self, symbol, timeframe="1D", bars=500, start="", end="") -> dict:

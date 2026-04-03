@@ -8,9 +8,9 @@ Utilise par le pipeline pour ajuster le sizing et le risk management.
 
 import json
 import logging
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 logger = logging.getLogger(__name__)
 
@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 class EventCalendar:
     """Calendrier d'events macro et corporate."""
 
-    def __init__(self, path: Optional[str] = None):
+    def __init__(self, path: str | None = None):
         if path is None:
             path = str(Path(__file__).parent.parent / "config" / "events_calendar.json")
         with open(path, encoding="utf-8") as f:

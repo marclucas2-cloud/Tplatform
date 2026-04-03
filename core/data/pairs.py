@@ -25,7 +25,6 @@ from itertools import combinations
 import numpy as np
 import pandas as pd
 
-
 # ─── Mapping secteurs → symboles ─────────────────────────────────────────────
 
 SECTOR_MAP: dict[str, list[str]] = {

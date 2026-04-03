@@ -16,7 +16,7 @@ from __future__ import annotations
 import logging
 import os
 
-from agents.base_agent import BaseAgent, AgentMessage
+from agents.base_agent import AgentMessage, BaseAgent
 
 logger = logging.getLogger(__name__)
 

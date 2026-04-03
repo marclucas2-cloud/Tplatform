@@ -4,15 +4,15 @@ Chat endpoint — Haiku 4.5 assistant for trading dashboard.
 Injects live portfolio context into the system prompt so Haiku
 can answer questions about positions, signals, risk, and brokers.
 """
-import os
-import sys
 import json
 import logging
+import os
+import sys
 import time
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Request
 from pydantic import BaseModel
 
 logger = logging.getLogger("dashboard-chat")
@@ -74,7 +74,7 @@ def _get_live_context() -> str:
         except Exception:
             pass
 
-        parts.append(f"""ETAT LIVE ({datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')}):
+        parts.append(f"""ETAT LIVE ({datetime.now(UTC).strftime('%Y-%m-%d %H:%M UTC')}):
 - Binance: equity=${binance_info.get('equity', 'N/A')}, spot=${binance_info.get('spot_total_usd', 'N/A')}, earn=${binance_info.get('earn_total_usd', 'N/A')}
 - IBKR: {'connecte' if ibkr_ok else 'deconnecte (weekend)'}, port {ibkr_port}
 - Alpaca: equity=${alpaca_info.get('equity', 'N/A')} ({'PAPER' if alpaca_info.get('paper', True) else 'LIVE'})
@@ -98,7 +98,7 @@ def _get_live_context() -> str:
 
     # Portfolio state
     try:
-        state_file = ROOT / "paper_portfolio_state.json"
+        state_file = ROOT / "data" / "state" / "paper_portfolio_state.json"
         if state_file.exists():
             state = json.loads(state_file.read_text())
             positions = state.get("intraday_positions", {})

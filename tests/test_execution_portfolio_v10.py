@@ -15,22 +15,17 @@ from datetime import datetime, timedelta
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
 from core.execution.execution_monitor import (
-    ExecutionAlert,
-    ExecutionMetrics,
     ExecutionMonitor,
 )
 from core.portfolio.live_logger import LiveSnapshotLogger
 from core.portfolio.portfolio_state import (
-    BrokerState,
-    PortfolioState,
     PortfolioStateEngine,
 )
-
 
 # ──────────────────────────────────────────────────────────────────────
 # Helpers

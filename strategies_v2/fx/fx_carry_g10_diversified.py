@@ -28,7 +28,7 @@ Costs: $2/trade IBKR + 0.8-1.5 bps spread = ~0.05% RT per pair.
 from __future__ import annotations
 
 import logging
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -109,10 +109,10 @@ class FXCarryG10Diversified(StrategyBase):
 
         # State
         self._bars_since_rebalance: int = 0
-        self._last_sizing: Optional[float] = None
+        self._last_sizing: float | None = None
         self._equity_high: float = 0.0
 
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -135,7 +135,7 @@ class FXCarryG10Diversified(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
 

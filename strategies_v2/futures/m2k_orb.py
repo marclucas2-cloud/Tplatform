@@ -23,7 +23,7 @@ Rules:
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -48,7 +48,7 @@ class M2KORB(StrategyBase):
         self.max_range_pct: float = 2.0    # maximum OR width as % of price
         self.adx_threshold: float = 15.0   # minimum ADX for trend presence
         self.tp_range_mult: float = 2.0    # TP = 2x OR width from entry
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -67,7 +67,7 @@ class M2KORB(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
         sym = self.SYMBOL

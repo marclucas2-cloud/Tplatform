@@ -20,12 +20,12 @@ import os
 import socket
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(ROOT / "archive" / "intraday-backtesterV2"))
 
 try:
     from dotenv import load_dotenv
@@ -54,7 +54,7 @@ def run():
 
     logger.info("=" * 60)
     logger.info("  DAY 1 BOOT CHECK")
-    logger.info(f"  {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    logger.info(f"  {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     logger.info("=" * 60)
 
     # ── 1. IBKR ──
@@ -147,7 +147,7 @@ def run():
         ok = send_alert(
             f"DAY 1 BOOT CHECK\n"
             f"IBKR: ${ibkr_equity:,.0f} | Binance: ${binance_equity:,.0f}\n"
-            f"Time: {datetime.now(timezone.utc).strftime('%H:%M UTC')}",
+            f"Time: {datetime.now(UTC).strftime('%H:%M UTC')}",
             level="info"
         )
         _check("Telegram", ok, "test message sent" if ok else "send failed", critical=False)
@@ -208,8 +208,8 @@ def run():
             )
         else:
             send_alert(
-                f"DAY 1 BOOT: NO_GO ✗\n"
-                f"Failures:\n" + "\n".join(f"• {f}" for f in _critical_failures[:5]),
+                "DAY 1 BOOT: NO_GO ✗\n"
+                "Failures:\n" + "\n".join(f"• {f}" for f in _critical_failures[:5]),
                 level="critical"
             )
     except Exception:

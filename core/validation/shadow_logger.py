@@ -21,9 +21,8 @@ import json
 import logging
 import time
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 
@@ -98,7 +97,7 @@ class ShadowTradeLogger:
             "signal_price": signal_price,
             "spread_at_signal": spread,
             "signal_time": time.time(),
-            "signal_timestamp": datetime.now(timezone.utc).isoformat(),
+            "signal_timestamp": datetime.now(UTC).isoformat(),
         }
 
     def log_fill(
@@ -110,7 +109,7 @@ class ShadowTradeLogger:
         side: str = "",
         spread: float = 0.0,
         broker: str = "",
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Log a fill and compute slippage.
 
         Returns trade record if matching signal found, None otherwise.
@@ -132,7 +131,7 @@ class ShadowTradeLogger:
         if not matching_key:
             # Fill without signal — log anyway
             record = {
-                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "timestamp": datetime.now(UTC).isoformat(),
                 "strategy": strategy,
                 "ticker": ticker,
                 "fill_price": fill_price,
@@ -163,7 +162,7 @@ class ShadowTradeLogger:
         latency_ms = (now - signal["signal_time"]) * 1000
 
         record = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "strategy": strategy,
             "ticker": ticker,
             "side": signal["side"],
@@ -212,7 +211,7 @@ class ShadowTradeLogger:
             if self._alert:
                 self._alert(msg, level="warning")
 
-    def get_stats(self, strategy: Optional[str] = None) -> dict:
+    def get_stats(self, strategy: str | None = None) -> dict:
         """Get slippage stats per strategy."""
         if strategy:
             h = self._slippage_history.get(strategy, [])
@@ -225,7 +224,7 @@ class ShadowTradeLogger:
                 "mean_bps": round(float(np.mean(arr)), 2),
                 "median_bps": round(float(np.median(arr)), 2),
                 "p95_bps": round(float(np.percentile(arr, 95)), 2),
-                "expected_bps": BACKTEST_SLIPPAGE_BPS.get(strategy, None),
+                "expected_bps": BACKTEST_SLIPPAGE_BPS.get(strategy),
             }
 
         # All strategies

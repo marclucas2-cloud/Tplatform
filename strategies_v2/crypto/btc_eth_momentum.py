@@ -7,7 +7,7 @@ acceptable zone to avoid overbought/oversold entries.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -72,7 +72,7 @@ class BTCETHDualMomentum(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         sym = bar.symbol
         ema_f = self.data_feed.get_indicator(sym, "ema", self.ema_fast)
         ema_s = self.data_feed.get_indicator(sym, "ema", self.ema_slow)

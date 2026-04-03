@@ -20,7 +20,7 @@ import logging
 import sqlite3
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List
 
 import pandas as pd
 
@@ -83,7 +83,7 @@ class PnLMatrixBuilder:
 
     def from_live_trades(
         self,
-        trades_db_path: Union[str, Path],
+        trades_db_path: str | Path,
         table_name: str = "trades",
         strategy_col: str = "strategy",
         pnl_col: str = "realized_pnl",
@@ -146,7 +146,7 @@ class PnLMatrixBuilder:
 
     def from_jsonl_events(
         self,
-        events_path: Union[str, Path],
+        events_path: str | Path,
         strategy_key: str = "strategy",
         pnl_key: str = "pnl",
         timestamp_key: str = "timestamp",
@@ -173,7 +173,7 @@ class PnLMatrixBuilder:
         records: List[dict] = []
 
         try:
-            with open(events_path, "r", encoding="utf-8") as f:
+            with open(events_path, encoding="utf-8") as f:
                 for line_num, line in enumerate(f, 1):
                     line = line.strip()
                     if not line:
@@ -233,7 +233,7 @@ class PnLMatrixBuilder:
         result: Any,
         pnl_column: str,
         date_column: str,
-    ) -> Optional[pd.Series]:
+    ) -> pd.Series | None:
         """Extract a PnL Series from various result formats."""
 
         # Already a Series

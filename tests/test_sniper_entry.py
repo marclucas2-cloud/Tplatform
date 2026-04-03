@@ -13,14 +13,14 @@ Covers:
 """
 
 import sys
-import pytest
 from pathlib import Path
+
+import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.sniper_entry import SniperEntry, OFFSETS, MR_STRATEGIES
-
+from core.sniper_entry import SniperEntry
 
 # =============================================================================
 # FIXTURES

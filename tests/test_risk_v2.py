@@ -12,17 +12,17 @@ Couvre :
 """
 
 import sys
-import pytest
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 # Setup paths
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.risk_manager import RiskManager
 from core.allocator import DynamicAllocator
-
+from core.risk_manager import RiskManager
 
 # =============================================================================
 # FIXTURES
@@ -527,7 +527,7 @@ class TestVaRBootstrap:
         from scipy import stats as sp_stats
         returns_fat = list(sp_stats.t.rvs(df=3, loc=0, scale=0.02, size=500))
         var_boot = rm.calculate_var_bootstrap(returns_fat, confidence=0.99, n_simulations=5000)
-        assert var_boot > 0, f"VaR bootstrap fat tails devrait etre > 0"
+        assert var_boot > 0, "VaR bootstrap fat tails devrait etre > 0"
 
     def test_var_bootstrap_increases_with_vol(self, rm):
         """VaR bootstrap augmente avec la volatilite."""
@@ -680,5 +680,5 @@ class TestSectorLimitEnforced:
         # Tech deja a 24K. Ajouter 2K -> 26K = 26% > 25%
         order = {"symbol": "AMD", "direction": "BUY", "notional": 2000, "strategy": "test"}
         passed, msg = rm.validate_order(order, portfolio)
-        assert not passed, f"Sector limit devrait rejeter: tech serait a 26%"
+        assert not passed, "Sector limit devrait rejeter: tech serait a 26%"
         assert "Sector limit" in msg

@@ -10,13 +10,12 @@ Env vars:
   DASHBOARD_PASSWORD   (required, plain text — hashed at startup)
   DASHBOARD_JWT_SECRET (required, random string for HS256 signing)
 """
-import os
 import logging
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+import os
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from pydantic import BaseModel
 
 logger = logging.getLogger("dashboard-auth")
@@ -38,9 +37,9 @@ security = HTTPBearer(auto_error=False)
 # ── Lightweight JWT (no external deps) ───────────────────────────────────────
 # Uses stdlib hmac + base64 to avoid python-jose dependency on the VPS.
 
-import hmac
-import hashlib
 import base64
+import hashlib
+import hmac
 import json
 
 
@@ -66,7 +65,7 @@ def _create_token(payload: dict) -> str:
     return f"{h}.{p}.{s}"
 
 
-def _verify_token(token: str) -> Optional[dict]:
+def _verify_token(token: str) -> dict | None:
     try:
         parts = token.split(".")
         if len(parts) != 3:
@@ -81,7 +80,7 @@ def _verify_token(token: str) -> Optional[dict]:
         payload = json.loads(_b64url_decode(p))
         # Check expiry
         exp = payload.get("exp")
-        if exp and datetime.fromisoformat(exp) < datetime.now(timezone.utc):
+        if exp and datetime.fromisoformat(exp) < datetime.now(UTC):
             return None
         return payload
     except Exception:
@@ -104,7 +103,7 @@ class TokenResponse(BaseModel):
 # ── Dependency ───────────────────────────────────────────────────────────────
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    credentials: HTTPAuthorizationCredentials | None = Depends(security),
 ) -> str:
     """FastAPI dependency — validates JWT and returns username."""
     if credentials is None:
@@ -144,7 +143,7 @@ def login(req: LoginRequest):
             detail="Invalid credentials",
         )
 
-    exp = datetime.now(timezone.utc) + timedelta(hours=JWT_EXPIRY_HOURS)
+    exp = datetime.now(UTC) + timedelta(hours=JWT_EXPIRY_HOURS)
     token = _create_token({"sub": req.username, "exp": exp.isoformat()})
     logger.info(f"Login successful for user: {req.username}")
     return TokenResponse(access_token=token)

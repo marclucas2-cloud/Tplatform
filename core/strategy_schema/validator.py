@@ -2,13 +2,11 @@
 Validation du JSON stratégie contre le schéma canonique.
 Toute stratégie doit passer cette validation avant d'entrer dans le pipeline.
 """
-import json
 import hashlib
+import json
 from pathlib import Path
-from typing import Any
 
 import jsonschema
-
 
 SCHEMA_PATH = Path(__file__).parent / "schema.json"
 
@@ -29,7 +27,7 @@ class StrategyValidator:
     """
 
     def __init__(self):
-        with open(SCHEMA_PATH, "r", encoding="utf-8") as f:
+        with open(SCHEMA_PATH, encoding="utf-8") as f:
             self._schema = json.load(f)
         self._validator = jsonschema.Draft7Validator(self._schema)
 
@@ -54,7 +52,7 @@ class StrategyValidator:
         path = Path(path)
         if not path.exists():
             raise FileNotFoundError(f"Fichier stratégie introuvable : {path}")
-        with open(path, "r", encoding="utf-8") as f:
+        with open(path, encoding="utf-8") as f:
             raw = json.load(f)
         return self.validate(raw)
 

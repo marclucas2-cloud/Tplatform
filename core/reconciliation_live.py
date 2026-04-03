@@ -20,9 +20,9 @@ Checks per portfolio:
 
 import json
 import logging
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -41,12 +41,12 @@ class LiveReconciliation:
     def __init__(
         self,
         broker=None,
-        alert_callback: Optional[Callable] = None,
+        alert_callback: Callable | None = None,
         tolerance_qty: int = 1,
         tolerance_price_pct: float = 0.001,
         tolerance_cash: float = 50.0,
         tolerance_margin: float = 50.0,
-        history_path: Optional[Path] = None,
+        history_path: Path | None = None,
     ):
         """
         Args:
@@ -104,7 +104,7 @@ class LiveReconciliation:
                 actions_taken: [str],
             }
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         # Fetch broker positions
         broker_positions = []
@@ -326,7 +326,7 @@ class LiveReconciliation:
                         )
                     ) else "warning"
                     self.alert_callback(
-                        f"RECONCILIATION DIVERGENCE\n"
+                        "RECONCILIATION DIVERGENCE\n"
                         + "\n".join(divergences),
                         level,
                     )
@@ -453,7 +453,7 @@ class LiveReconciliation:
         if unresolved and self.alert_callback:
             try:
                 self.alert_callback(
-                    f"RECONCILIATION — UNRESOLVED ISSUES\n"
+                    "RECONCILIATION — UNRESOLVED ISSUES\n"
                     + "\n".join(unresolved),
                     "critical",
                 )
@@ -568,7 +568,7 @@ class LiveReconciliation:
             return
 
         try:
-            with open(self.history_path, "r") as f:
+            with open(self.history_path) as f:
                 self._history = json.load(f)
         except Exception as e:
             logger.error("Failed to load reconciliation history: %s", e)

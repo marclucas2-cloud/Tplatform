@@ -18,8 +18,7 @@ Endpoints:
 """
 
 import logging
-from datetime import datetime, timezone
-from typing import Optional
+from datetime import UTC, datetime
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +56,7 @@ def create_live_router(
         paper_journal: TradeJournal instance (mode=PAPER) for comparison
     """
     try:
-        from fastapi import APIRouter, Query, HTTPException
+        from fastapi import APIRouter, HTTPException, Query
     except ImportError:
         # Return a dummy router if FastAPI not installed
         logger.warning("FastAPI not installed -- live endpoints not available")
@@ -82,7 +81,7 @@ def create_live_router(
         }
         """
         result = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "mode": "LIVE",
         }
 
@@ -369,8 +368,8 @@ def create_live_router(
     @router.get("/trades")
     def get_trades(
         limit: int = Query(50, ge=1, le=500),
-        strategy: Optional[str] = None,
-        status: Optional[str] = None,
+        strategy: str | None = None,
+        status: str | None = None,
     ):
         """Recent trade history."""
         if not trade_journal:
@@ -389,7 +388,7 @@ def create_live_router(
     @router.get("/alerts")
     def get_alerts(
         limit: int = Query(50, ge=1, le=200),
-        level: Optional[str] = None,
+        level: str | None = None,
     ):
         """Recent alerts from kill switch and slippage tracker."""
         alerts = []
@@ -421,7 +420,7 @@ def create_live_router(
                             f"{sa['strategy']}: avg slippage {sa['avg_slippage_bps']:.1f} bps "
                             f"({sa['avg_ratio']:.1f}x backtest)"
                         ),
-                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                        "timestamp": datetime.now(UTC).isoformat(),
                         "strategy": sa.get("strategy"),
                     })
             except Exception:
@@ -476,7 +475,7 @@ def create_live_router(
     def get_health():
         """System health check for all live components."""
         health = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "components": {},
         }
 
@@ -764,7 +763,7 @@ def create_live_router(
         Returns: portfolio, correlation, ere, leverage, execution, safety.
         """
         result = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
 
         # Collect all V2 sections, swallowing individual errors

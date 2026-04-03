@@ -6,24 +6,21 @@ and external systems (broker, kill switch, Telegram).
 
 8 scenarios covering conflict resolution, cascade failures, and recovery.
 """
-import pytest
-from unittest.mock import MagicMock, patch, call
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
 import sys
-import json
-import tempfile
+from pathlib import Path
+from unittest.mock import MagicMock
+
+import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from core.autonomous_mode import (
+    AnomalyDetector,
     AutonomousController,
     AutoReducer,
-    AnomalyDetector,
     SafetyChecker,
 )
-
 
 # -- Fixtures ---------------------------------------------------------------
 
@@ -339,7 +336,7 @@ class TestMultipleStrategiesDisableDuringAutonomous:
 
     def test_remaining_strategies_continue(self):
         """Disabling some strategies should not cascade to others."""
-        from core.live_performance_guard import LivePerformanceGuard, DISABLE, CONTINUE
+        from core.live_performance_guard import DISABLE, LivePerformanceGuard
 
         guard = LivePerformanceGuard()
 

@@ -19,8 +19,8 @@ if TYPE_CHECKING:
 
 
 def load_market_events(
-    queue: "EventQueue",
-    config: "BacktestConfig",
+    queue: EventQueue,
+    config: BacktestConfig,
     start: pd.Timestamp,
     end: pd.Timestamp,
 ) -> None:
@@ -50,7 +50,7 @@ def load_market_events(
 
 
 def schedule_periodic_events(
-    queue: "EventQueue",
+    queue: EventQueue,
     start: pd.Timestamp,
     end: pd.Timestamp,
 ) -> None:
@@ -69,7 +69,7 @@ def schedule_periodic_events(
                 queue.push(Event(timestamp=eod_ts, type=etype, data=None))
 
 
-def get_equity(engine: "BacktesterV2") -> float:
+def get_equity(engine: BacktesterV2) -> float:
     """Compute current equity = cash + market value of positions.
 
     Args:
@@ -86,7 +86,7 @@ def get_equity(engine: "BacktesterV2") -> float:
     return equity
 
 
-def get_drawdown(engine: "BacktesterV2") -> float:
+def get_drawdown(engine: BacktesterV2) -> float:
     """Compute current drawdown from peak equity.
 
     Args:
@@ -102,7 +102,7 @@ def get_drawdown(engine: "BacktesterV2") -> float:
     return (engine._peak_equity - equity) / engine._peak_equity
 
 
-def get_exposure(engine: "BacktesterV2") -> float:
+def get_exposure(engine: BacktesterV2) -> float:
     """Compute total gross exposure.
 
     Args:
@@ -119,7 +119,7 @@ def get_exposure(engine: "BacktesterV2") -> float:
     return exposure
 
 
-def get_portfolio_state(engine: "BacktesterV2") -> PortfolioState:
+def get_portfolio_state(engine: BacktesterV2) -> PortfolioState:
     """Build current portfolio state snapshot.
 
     Args:
@@ -150,7 +150,7 @@ def get_portfolio_state(engine: "BacktesterV2") -> PortfolioState:
     )
 
 
-def record_equity(engine: "BacktesterV2", timestamp: pd.Timestamp) -> None:
+def record_equity(engine: BacktesterV2, timestamp: pd.Timestamp) -> None:
     """Record equity curve point.
 
     Args:
@@ -163,7 +163,7 @@ def record_equity(engine: "BacktesterV2", timestamp: pd.Timestamp) -> None:
     })
 
 
-def close_all_positions(engine: "BacktesterV2") -> None:
+def close_all_positions(engine: BacktesterV2) -> None:
     """Close remaining positions at last known price.
 
     Args:

@@ -18,15 +18,15 @@ Chaque scenario inclut :
 """
 
 import sys
-import pytest
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from core.risk_manager import RiskManager
-
 
 # =============================================================================
 # PORTFOLIO V5 : allocation multi-asset

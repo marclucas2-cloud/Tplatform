@@ -16,11 +16,10 @@ Does NOT modify any existing files or behavior.
 import json
 import logging
 import threading
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Tuple, Dict, List, Optional
+from typing import Dict, Tuple
 
-import yaml
 
 from core.risk_manager import RiskManager
 
@@ -80,12 +79,12 @@ class LiveRiskManager(RiskManager):
     def _audit_log(self, check_name: str, passed: bool, details: dict):
         """Append a risk check result to the daily audit log file."""
         entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "check": check_name,
             "passed": passed,
             "details": details,
         }
-        log_file = AUDIT_LOG_DIR / f"audit_{datetime.now(timezone.utc).strftime('%Y%m%d')}.jsonl"
+        log_file = AUDIT_LOG_DIR / f"audit_{datetime.now(UTC).strftime('%Y%m%d')}.jsonl"
         try:
             with open(log_file, "a") as f:
                 f.write(json.dumps(entry) + "\n")
@@ -932,8 +931,9 @@ class LiveRiskManager(RiskManager):
             return {"at_risk": False, "day_trades_5d": 0, "remaining": 999,
                     "message": "Equity >= $25K — PDT not applicable"}
 
-        from datetime import datetime as _dt, timedelta, timezone as _tz
-        cutoff = _dt.now(_tz.utc) - timedelta(days=7)  # ~5 business days
+        from datetime import datetime as _dt
+        from datetime import timedelta
+        cutoff = _dt.now(UTC) - timedelta(days=7)  # ~5 business days
 
         day_trades = 0
         for trade in recent_trades:

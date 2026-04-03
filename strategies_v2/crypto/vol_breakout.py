@@ -6,7 +6,7 @@ elevated volume. BTC margin, long or short per breakout direction.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -65,7 +65,7 @@ class VolBreakout(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         sym = bar.symbol
         bars_30 = self.data_feed.get_bars(sym, 30)
         if len(bars_30) < 30:

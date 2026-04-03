@@ -9,18 +9,18 @@
   - Bollinger squeeze
 """
 
-from strategies_v2.fx.fx_carry_vol_scaled import FXCarryVolScaled
-from strategies_v2.fx.fx_carry_momentum_filter import FXCarryMomentumFilter
-from strategies_v2.fx.fx_carry_g10_diversified import FXCarryG10Diversified
 from strategies_v2.fx.fx_asian_range_breakout import FXAsianRangeBreakout
-from strategies_v2.fx.fx_momentum_breakout import FXMomentumBreakout
+from strategies_v2.fx.fx_carry_g10_diversified import FXCarryG10Diversified
+from strategies_v2.fx.fx_carry_momentum_filter import FXCarryMomentumFilter
+from strategies_v2.fx.fx_carry_vol_scaled import FXCarryVolScaled
 from strategies_v2.fx.fx_mean_reversion_hourly import FXMeanReversionHourly
+from strategies_v2.fx.fx_momentum_breakout import FXMomentumBreakout
 
 __all__ = [
-    "FXCarryVolScaled",
-    "FXCarryMomentumFilter",
-    "FXCarryG10Diversified",
     "FXAsianRangeBreakout",
-    "FXMomentumBreakout",
+    "FXCarryG10Diversified",
+    "FXCarryMomentumFilter",
+    "FXCarryVolScaled",
     "FXMeanReversionHourly",
+    "FXMomentumBreakout",
 ]

@@ -4,9 +4,7 @@ Resilience tests — state persistence, kill switch independence, thread safety.
 5 tests verifying the system degrades gracefully under failures and concurrency.
 """
 import importlib
-import json
 import threading
-import time
 
 import pytest
 
@@ -16,7 +14,6 @@ from core.crypto.risk_manager_crypto import (
     CryptoRiskManager,
 )
 from core.kill_switch_live import LiveKillSwitch
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

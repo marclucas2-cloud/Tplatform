@@ -1,6 +1,6 @@
 """Tests for SessionManager — market hours, gap detection, bar filtering."""
 import zoneinfo
-from datetime import datetime, date, time, timezone
+from datetime import UTC, date, datetime
 
 import numpy as np
 import pandas as pd
@@ -41,11 +41,11 @@ class TestEUSession:
 class TestUSSession:
     def test_us_is_open_midday(self, sm):
         """US market should be open at 11:00 ET on a Monday."""
-        ts = datetime(2026, 3, 16, 16, 0, tzinfo=timezone.utc)  # Monday 11:00 ET
+        ts = datetime(2026, 3, 16, 16, 0, tzinfo=UTC)  # Monday 11:00 ET
         assert sm.is_market_open("US", ts)
 
     def test_us_is_open_at_1430_utc(self, sm):
-        ts = datetime(2026, 3, 31, 14, 30, tzinfo=timezone.utc)
+        ts = datetime(2026, 3, 31, 14, 30, tzinfo=UTC)
         assert sm.is_market_open("US", ts)
 
 

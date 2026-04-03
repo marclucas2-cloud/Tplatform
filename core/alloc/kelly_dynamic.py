@@ -27,8 +27,8 @@ from __future__ import annotations
 
 import logging
 from collections import deque
-from datetime import datetime, timezone
-from typing import Deque, Dict, List, Optional, Tuple
+from datetime import datetime
+from typing import Deque, Tuple
 
 import numpy as np
 
@@ -289,7 +289,7 @@ class DynamicKellyManager:
             "n_snapshots": len(self._equity_history),
         }
 
-    def reset_stopped(self, new_peak: Optional[float] = None) -> None:
+    def reset_stopped(self, new_peak: float | None = None) -> None:
         """Manual reset from STOPPED mode.
 
         Must be called explicitly by the operator after reviewing the situation.

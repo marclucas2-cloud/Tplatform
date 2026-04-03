@@ -18,12 +18,12 @@ Regles :
 - Filtre : pas de trade si VIX > 35 (chaos, pas de mean reversion)
 - Filtre : pas de trade dans l'heure precedant FOMC/CPI/NFP
 """
-import pandas as pd
-import numpy as np
 from abc import ABC, abstractmethod
-from datetime import time as dt_time, date as dt_date, datetime, timedelta
-from typing import Optional
+from datetime import date as dt_date
+from datetime import datetime
+from datetime import time as dt_time
 
+import pandas as pd
 
 # ── Signal & BaseStrategy (local definitions for standalone use) ─────────
 
@@ -140,9 +140,7 @@ def is_near_macro_event(trade_date, trade_time: dt_time, buffer_minutes: int = 6
     Returns:
         True if within exclusion zone, False otherwise
     """
-    if isinstance(trade_date, pd.Timestamp):
-        check_date = trade_date.date()
-    elif isinstance(trade_date, datetime):
+    if isinstance(trade_date, pd.Timestamp) or isinstance(trade_date, datetime):
         check_date = trade_date.date()
     elif isinstance(trade_date, dt_date):
         check_date = trade_date
@@ -222,7 +220,7 @@ class MNQMeanReversionStrategy(BaseStrategy):
 
         return tr.rolling(period, min_periods=max(1, period // 2)).mean()
 
-    def _get_signal_data(self, data: dict[str, pd.DataFrame]) -> Optional[pd.DataFrame]:
+    def _get_signal_data(self, data: dict[str, pd.DataFrame]) -> pd.DataFrame | None:
         """
         Get the best available price data for signal generation.
         Priority: MNQ > NQ > QQQ.

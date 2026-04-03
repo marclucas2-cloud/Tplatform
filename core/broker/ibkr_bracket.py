@@ -19,7 +19,7 @@ import json as _json
 import logging
 import os as _os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path as _Path
 
 # Fix Python 3.14: eventkit requires an event loop before ib_insync import
@@ -125,7 +125,7 @@ class BracketOrderManager:
         """Load persisted brackets on startup."""
         try:
             if _BRACKETS_STATE_PATH.exists():
-                with open(_BRACKETS_STATE_PATH, "r") as f:
+                with open(_BRACKETS_STATE_PATH) as f:
                     self._active_brackets = _json.load(f)
                 logger.info(f"Loaded {len(self._active_brackets)} persisted brackets")
         except Exception as e:
@@ -469,7 +469,6 @@ class BracketOrderManager:
         if self._ib is None:
             raise BracketOrderError("No IB connection for modify_stop_loss.")
 
-        from ib_insync import StopOrder
 
         # Find the SL order among open orders
         sl_order_id = bracket["sl_order_id"]
@@ -521,7 +520,6 @@ class BracketOrderManager:
         if self._ib is None:
             raise BracketOrderError("No IB connection for modify_take_profit.")
 
-        from ib_insync import LimitOrder
 
         # Find the TP order among open orders
         tp_order_id = bracket["tp_order_id"]
@@ -1046,7 +1044,7 @@ class FXBracketHandler:
         Returns:
             {all_protected: bool, unprotected_pairs: list, checked_at: str}
         """
-        checked_at = datetime.now(timezone.utc).isoformat()
+        checked_at = datetime.now(UTC).isoformat()
 
         # Build set of FX symbols with active brackets
         protected_fx: set[str] = set()

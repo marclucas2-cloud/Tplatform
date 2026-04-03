@@ -2,13 +2,12 @@
 Tests Sprint 5 — Grid Search IS/OOS, Asset Universe, yfinance loader.
 """
 import pytest
-import pandas as pd
 
+from core.backtest.engine import BacktestEngine
 from core.data.loader import OHLCVLoader
 from core.data.universe import UNIVERSE, get_all_assets, get_asset, get_ticker
-from core.backtest.engine import BacktestEngine
+from core.optimization.grid_search import GridSearch
 from core.strategy_schema.validator import StrategyValidator
-from core.optimization.grid_search import GridSearch, GridResult
 
 
 @pytest.fixture

@@ -10,10 +10,11 @@ Calcule les poids de chaque strategie en combinant :
   6. Multiplicateurs de regime (bull/bear x vol)
 """
 
-import yaml
 import logging
 from pathlib import Path
 from typing import Dict
+
+import yaml
 
 logger = logging.getLogger(__name__)
 

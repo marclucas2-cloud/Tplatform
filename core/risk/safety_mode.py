@@ -20,7 +20,7 @@ import logging
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -40,7 +40,7 @@ class SafetyMode:
 
     def __init__(
         self,
-        limits: Optional[SafetyLimits] = None,
+        limits: SafetyLimits | None = None,
         data_dir: str = "data",
     ):
         self.limits = limits or SafetyLimits()
@@ -49,8 +49,8 @@ class SafetyMode:
         self._state_path = self._data_dir / "safety_mode_state.json"
 
         self._active: bool = True  # Active by default in Phase 1
-        self._disabled_reason: Optional[str] = None
-        self._disabled_at: Optional[datetime] = None
+        self._disabled_reason: str | None = None
+        self._disabled_at: datetime | None = None
         self._anomaly_count: int = 0
         self._load_state()
 

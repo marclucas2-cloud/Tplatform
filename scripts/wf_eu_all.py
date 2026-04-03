@@ -25,12 +25,11 @@ from __future__ import annotations
 import argparse
 import json
 import logging
-import math
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -114,8 +113,8 @@ class WFStrategyResult:
     commission_burn_rate: float
     avg_oos_max_dd: float
     windows: List[WFWindowResult] = field(default_factory=list)
-    monte_carlo: Optional[MCResultSummary] = None
-    bootstrap: Optional[dict] = None
+    monte_carlo: MCResultSummary | None = None
+    bootstrap: dict | None = None
     rejection_reasons: List[str] = field(default_factory=list)
     error: str = ""
     timestamp: str = ""
@@ -369,7 +368,7 @@ def build_wf_configs() -> Dict[str, WFConfig]:
 DATA_DIR = ROOT / "data" / "eu"
 
 
-def load_eu_data(symbol: str, data_dir: Optional[Path] = None) -> Optional[Any]:
+def load_eu_data(symbol: str, data_dir: Path | None = None) -> Any | None:
     """Load Parquet data for an EU instrument.
 
     Searches for common naming patterns:
@@ -577,7 +576,7 @@ def _run_monte_carlo(
 
 def run_walk_forward_single(
     config: WFConfig,
-    data_dir: Optional[Path] = None,
+    data_dir: Path | None = None,
     verbose: bool = False,
     run_mc: bool = True,
 ) -> WFStrategyResult:
@@ -599,7 +598,7 @@ def run_walk_forward_single(
     Returns:
         WFStrategyResult with verdict and details.
     """
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
 
     # Skip if configured
     if config.skip:
@@ -930,8 +929,8 @@ def _determine_verdict(
     commission_burn: float,
     avg_max_dd: float,
     tier: str,
-    bootstrap_result: Optional[dict] = None,
-    mc_summary: Optional[MCResultSummary] = None,
+    bootstrap_result: dict | None = None,
+    mc_summary: MCResultSummary | None = None,
 ) -> tuple:
     """Determine WF verdict with explicit rejection reasons.
 
@@ -1031,7 +1030,7 @@ def _determine_verdict(
 
 def compute_correlation_matrix(
     results: Dict[str, WFStrategyResult],
-    data_dir: Optional[Path] = None,
+    data_dir: Path | None = None,
     correlation_threshold: float = 0.60,
     verbose: bool = False,
 ) -> Dict[str, Any]:
@@ -1102,7 +1101,7 @@ def compute_correlation_matrix(
 
     if verbose and flagged_pairs:
         print()
-        print("  HIGH CORRELATION PAIRS (> {:.0%}):".format(correlation_threshold))
+        print(f"  HIGH CORRELATION PAIRS (> {correlation_threshold:.0%}):")
         for fp in flagged_pairs:
             print(
                 f"    {fp['pair'][0]} <-> {fp['pair'][1]}: "
@@ -1122,9 +1121,9 @@ def compute_correlation_matrix(
 
 
 def run_all(
-    strategy_filter: Optional[str] = None,
-    output_dir: Optional[Path] = None,
-    data_dir: Optional[Path] = None,
+    strategy_filter: str | None = None,
+    output_dir: Path | None = None,
+    data_dir: Path | None = None,
     verbose: bool = False,
     run_mc: bool = True,
 ) -> Dict[str, WFStrategyResult]:
@@ -1249,7 +1248,7 @@ def _print_summary_table(results: Dict[str, WFStrategyResult]) -> None:
 def _save_results(
     results: Dict[str, WFStrategyResult],
     output_dir: Path,
-    correlation_info: Optional[Dict[str, Any]] = None,
+    correlation_info: Dict[str, Any] | None = None,
 ) -> None:
     """Save results to JSON files (summary + per-strategy detail)."""
     output_dir = Path(output_dir)
@@ -1314,7 +1313,7 @@ def _save_results(
 
     # Summary file
     summary = {
-        "run_timestamp": datetime.now(timezone.utc).isoformat(),
+        "run_timestamp": datetime.now(UTC).isoformat(),
         "n_strategies": len(results),
         "verdicts": {
             "VALIDATED": [n for n, r in results.items() if r.verdict == "VALIDATED"],
@@ -1363,7 +1362,7 @@ def _save_results(
 # =====================================================================
 
 
-def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
+def parse_args(argv: list | None = None) -> argparse.Namespace:
     """Parse CLI arguments."""
     parser = argparse.ArgumentParser(
         description="Walk-forward validation for 10 EU equity strategies (IBKR)",
@@ -1399,7 +1398,7 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: Optional[list] = None) -> Dict[str, WFStrategyResult]:
+def main(argv: list | None = None) -> Dict[str, WFStrategyResult]:
     """Entry point for CLI and test usage."""
     args = parse_args(argv)
 

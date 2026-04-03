@@ -7,7 +7,7 @@ by insertion order to guarantee deterministic replay.
 from __future__ import annotations
 
 import heapq
-from typing import List, Optional
+from typing import List
 
 from core.backtester_v2.types import Event
 
@@ -48,7 +48,7 @@ class EventQueue:
         _, _, event = heapq.heappop(self._heap)
         return event
 
-    def peek(self) -> Optional[Event]:
+    def peek(self) -> Event | None:
         """Return the earliest event without removing it.
 
         Returns:

@@ -25,9 +25,7 @@ import os
 import time
 import urllib.parse
 import urllib.request
-from collections import defaultdict
-from datetime import datetime, timezone
-from pathlib import Path
+from datetime import UTC, datetime
 from threading import Lock
 
 logger = logging.getLogger("telegram_v2")
@@ -146,7 +144,7 @@ class TelegramV2:
                 msg += f"Source: <code>{source}</code>\n"
             if details:
                 msg += f"{details}\n"
-            msg += f"\n<i>{datetime.now(timezone.utc).strftime('%H:%M UTC')}</i>"
+            msg += f"\n<i>{datetime.now(UTC).strftime('%H:%M UTC')}</i>"
             _raw_send(msg)
             self._record_send(f"critical_{title}")
 
@@ -220,7 +218,7 @@ class TelegramV2:
         """
         with self._lock:
             self._digest_buffer.append({
-                "time": datetime.now(timezone.utc).strftime("%H:%M"),
+                "time": datetime.now(UTC).strftime("%H:%M"),
                 "event": event,
                 **kwargs,
             })
@@ -238,7 +236,7 @@ class TelegramV2:
         Replaces heartbeat spam with 1 structured message.
         """
         with self._lock:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
             total = equity_binance + equity_ibkr + equity_alpaca
             n_info = len(self._digest_buffer)

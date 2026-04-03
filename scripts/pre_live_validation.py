@@ -23,12 +23,12 @@ import os
 import socket
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(ROOT / "archive" / "intraday-backtesterV2"))
 
 try:
     from dotenv import load_dotenv
@@ -262,7 +262,7 @@ def check_reconciliation():
         _warn("Reconciliation", "no history file (first run?)")
 
     # State file check
-    state_path = ROOT / "paper_portfolio_state.json"
+    state_path = ROOT / "data" / "state" / "paper_portfolio_state.json"
     if state_path.exists():
         try:
             state = json.loads(state_path.read_text(encoding="utf-8"))
@@ -401,7 +401,7 @@ def check_telegram():
         from core.telegram_alert import send_alert
         result = send_alert(
             f"PRE-LIVE VALIDATION TEST\n"
-            f"Time: {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
+            f"Time: {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}\n"
             f"Status: checking systems...",
             level="info"
         )
@@ -499,7 +499,7 @@ def run_all_checks():
 
     logger.info("=" * 60)
     logger.info("  PRE-LIVE VALIDATION")
-    logger.info(f"  {datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')}")
+    logger.info(f"  {datetime.now(UTC).strftime('%Y-%m-%d %H:%M:%S UTC')}")
     logger.info("=" * 60)
 
     check_env()
@@ -594,7 +594,7 @@ def run_all_checks():
         "fail": n_fail,
         "warn": n_warn,
         "duration_s": round(elapsed, 1),
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 

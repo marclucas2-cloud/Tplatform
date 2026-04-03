@@ -11,9 +11,8 @@ Usage:
 import argparse
 import logging
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -32,9 +31,9 @@ ABORT_CONDITIONS = {"max_critical_bugs", "max_reconciliation_errors"}
 class ScalingDecisionReport:
     """Evaluates KPI gates and generates scaling decision reports."""
 
-    def __init__(self, gate_config_path: Optional[Path] = None):
+    def __init__(self, gate_config_path: Path | None = None):
         config_path = Path(gate_config_path) if gate_config_path else DEFAULT_GATE_CONFIG
-        with open(config_path, "r") as f:
+        with open(config_path) as f:
             self._config = yaml.safe_load(f)
         self._gates = self._config["gates"]
 
@@ -251,19 +250,19 @@ class ScalingDecisionReport:
         """
         result = self.evaluate_gate(gate_name, kpi)
         gate_cfg = self._gates[gate_name]
-        now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M UTC")
+        now = datetime.now(UTC).strftime("%Y-%m-%d %H:%M UTC")
 
         lines = [
             f"# Scaling Decision Report — {gate_name.upper()}",
-            f"",
+            "",
             f"**Date:** {now}",
             f"**Gate:** {result['description']}",
             f"**Decision: {result['decision']}**",
-            f"",
-            f"## Capital",
+            "",
+            "## Capital",
             f"- Current: {f'${current_cap:,}' if isinstance((current_cap := gate_cfg.get('current_capital', 'N/A')), (int, float)) else str(current_cap)}",
             f"- Target: {f'${target_cap:,}' if isinstance((target_cap := gate_cfg.get('target_capital', 'N/A')), (int, float)) else str(target_cap)}",
-            f"",
+            "",
         ]
 
         if "primary_results" in result:
@@ -285,22 +284,22 @@ class ScalingDecisionReport:
             # Legacy flat report layout
             lines.extend([
                 f"## KPI Conditions ({result['passed_count']}/{result['total_count']} passed)",
-                f"",
+                "",
             ])
             lines.extend(self._format_conditions_table(result["conditions"]))
 
         lines.extend([
-            f"",
-            f"## Recommendation",
-            f"",
+            "",
+            "## Recommendation",
+            "",
             f"{result['recommendation']}",
-            f"",
+            "",
         ])
 
         if result["next_steps"]:
             lines.extend([
-                f"## Next Steps",
-                f"",
+                "## Next Steps",
+                "",
             ])
             for step in result["next_steps"]:
                 lines.append(f"- {step}")

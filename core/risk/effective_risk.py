@@ -13,9 +13,9 @@ Usage:
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -198,7 +198,7 @@ class EffectiveRiskExposure:
 
     def _position_max_loss(
         self, pos: Dict[str, Any], capital: float
-    ) -> Optional[PositionRisk]:
+    ) -> PositionRisk | None:
         """Compute max loss for a single position (to SL)."""
         symbol = pos.get("symbol", "UNKNOWN")
         strategy = pos.get("strategy", "unknown")

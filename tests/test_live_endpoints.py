@@ -6,18 +6,16 @@ Uses the create_live_router() factory with mock objects, then calls
 endpoint functions directly via FastAPI TestClient.
 """
 
-import pytest
-from datetime import datetime, timezone
 from unittest.mock import MagicMock, patch
+
+import pytest
 
 # We test the create_live_router factory and its endpoints
 # FastAPI is needed for TestClient -- skip all tests if not installed
 fastapi = pytest.importorskip("fastapi")
+from api.live_endpoints import create_live_router
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
-
-from api.live_endpoints import create_live_router
-
 
 # =========================================================================
 # Fixtures
@@ -638,6 +636,7 @@ class TestRouterCreation:
         with patch.dict("sys.modules", {"fastapi": None}):
             # Reimport to test the ImportError path
             import importlib
+
             import api.live_endpoints as mod
             importlib.reload(mod)
 

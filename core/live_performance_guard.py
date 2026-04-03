@@ -11,8 +11,6 @@ Disabled strategies move to paper-only automatically.
 Marc can reactivate manually after diagnosis.
 """
 import logging
-from datetime import datetime, timezone
-from typing import Optional
 import math
 
 logger = logging.getLogger(__name__)

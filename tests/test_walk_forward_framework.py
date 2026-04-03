@@ -16,8 +16,7 @@ import pandas as pd
 import pytest
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
-from core.walk_forward_framework import WalkForwardValidator, ValidationResult
-
+from core.walk_forward_framework import ValidationResult, WalkForwardValidator
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 

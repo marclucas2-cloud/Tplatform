@@ -17,17 +17,17 @@ Couvre :
 """
 
 import sys
-import pytest
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock
+
+import pytest
 
 # Setup paths
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.implementation_shortfall import ImplementationShortfall, TRADING_DAYS_PER_YEAR
-
+from core.implementation_shortfall import TRADING_DAYS_PER_YEAR, ImplementationShortfall
 
 # =============================================================================
 # FIXTURES
@@ -57,12 +57,12 @@ def tracker_with_alert(mock_alerter):
 @pytest.fixture
 def now_iso():
     """Timestamp ISO actuel."""
-    return datetime.now(timezone.utc).isoformat()
+    return datetime.now(UTC).isoformat()
 
 
 def _make_recent_timestamp(hours_ago=0):
     """Genere un timestamp recent pour que les records soient dans la fenetre du rapport."""
-    dt = datetime.now(timezone.utc) - timedelta(hours=hours_ago)
+    dt = datetime.now(UTC) - timedelta(hours=hours_ago)
     return dt.isoformat()
 
 

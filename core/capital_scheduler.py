@@ -12,7 +12,7 @@ Contrainte : gross exposure < 90% a tout moment.
 """
 
 import logging
-from typing import Dict, List, Optional
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +31,7 @@ class Position:
         margin_required: float,
         horizon: str,
         entry_hour_cet: int,
-        expected_exit_hour_cet: Optional[int] = None,
+        expected_exit_hour_cet: int | None = None,
         is_leveraged: bool = False,
         leverage: float = 1.0,
     ):

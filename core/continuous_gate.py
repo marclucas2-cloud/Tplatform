@@ -12,7 +12,7 @@ Quand les conditions sont PROCHES (5/7 primary + 2/5 secondary) -> notification.
 """
 
 import logging
-from typing import Optional, Callable, Dict, Any, List
+from typing import Any, Callable, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -58,7 +58,7 @@ class ContinuousGateEvaluator:
     def __init__(
         self,
         leverage_manager=None,
-        alerter: Optional[Callable] = None,
+        alerter: Callable | None = None,
     ):
         """Initialise l'evaluateur.
 
@@ -68,7 +68,7 @@ class ContinuousGateEvaluator:
         """
         self._leverage_manager = leverage_manager
         self._alerter = alerter
-        self._last_result: Optional[str] = None
+        self._last_result: str | None = None
         logger.info(
             "ContinuousGateEvaluator initialized — primary=%d criteria, secondary=%d criteria",
             len(PRIMARY_CRITERIA),

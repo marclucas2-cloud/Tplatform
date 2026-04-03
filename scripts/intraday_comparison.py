@@ -56,7 +56,7 @@ STRATEGIES = [
 def load_strategy(filename: str) -> dict:
     """Charge un JSON de strategie."""
     path = Path(__file__).parent.parent / "strategies" / filename
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         return json.load(f)
 
 
@@ -152,7 +152,7 @@ def main():
     args = parser.parse_args()
 
     print(f"\n  Backtest comparatif sur {args.asset} — capital ${args.capital:,.0f}")
-    print(f"  Couts : spread_pct + slippage_pct (% du prix, realiste)\n")
+    print("  Couts : spread_pct + slippage_pct (% du prix, realiste)\n")
 
     results = []
 

@@ -13,7 +13,7 @@ import json
 import logging
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Any, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -40,8 +40,8 @@ class LiveSnapshotLogger:
 
     def record(
         self,
-        extra: Optional[Dict[str, Any]] = None,
-    ) -> Optional[Dict[str, Any]]:
+        extra: Dict[str, Any] | None = None,
+    ) -> Dict[str, Any] | None:
         """Record a full snapshot to JSONL.
 
         Args:

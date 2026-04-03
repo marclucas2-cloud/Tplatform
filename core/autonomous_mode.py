@@ -18,13 +18,13 @@ Components:
 This module does NOT replace human judgment — it acts as a safety net.
 """
 
-import logging
 import json
+import logging
 import os
 import tempfile
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional, Dict, List, Callable
+from typing import Callable, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -118,7 +118,7 @@ class AutoReducer:
                     details = f"Unknown action: {action}"
 
                 self._highest_level_triggered = idx
-                timestamp = datetime.now(timezone.utc).isoformat()
+                timestamp = datetime.now(UTC).isoformat()
 
                 event = {
                     "timestamp": timestamp,
@@ -174,7 +174,7 @@ class AnomalyDetector:
         self._strategy_state: Dict[str, dict] = {}
         self._alert = alert_callback
         self._close_all_func = close_all_func
-        self._connection_lost_since: Optional[datetime] = None
+        self._connection_lost_since: datetime | None = None
         self._anomaly_log: List[dict] = []
 
     def _get_or_create_state(self, strategy: str) -> dict:
@@ -216,7 +216,7 @@ class AnomalyDetector:
 
         # Check slippage anomaly
         if avg_slippage_bps > 0 and slippage_bps > self.SLIPPAGE_MULTIPLIER * avg_slippage_bps:
-            pause_until = datetime.now(timezone.utc) + timedelta(
+            pause_until = datetime.now(UTC) + timedelta(
                 hours=self.PAUSE_DURATION_HOURS
             )
             state["paused_until"] = pause_until.isoformat()
@@ -228,7 +228,7 @@ class AnomalyDetector:
 
         # Check consecutive losses
         if state["consecutive_losses"] >= self.CONSECUTIVE_LOSS_LIMIT:
-            pause_until = datetime.now(timezone.utc) + timedelta(
+            pause_until = datetime.now(UTC) + timedelta(
                 hours=self.PAUSE_DURATION_HOURS
             )
             state["paused_until"] = pause_until.isoformat()
@@ -251,7 +251,7 @@ class AnomalyDetector:
         else:
             if self._connection_lost_since is None:
                 self._connection_lost_since = (
-                    disconnected_since or datetime.now(timezone.utc)
+                    disconnected_since or datetime.now(UTC)
                 )
 
     def check_anomalies(self) -> dict:
@@ -261,7 +261,7 @@ class AnomalyDetector:
             {anomalies_found: int, actions: [{strategy, reason, action}]}
         """
         actions = []
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
 
         # Check connection timeout
         if self._connection_lost_since is not None:
@@ -303,7 +303,7 @@ class AnomalyDetector:
             return False
 
         paused_until = datetime.fromisoformat(state["paused_until"])
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         if now >= paused_until:
             # Pause expired — clear it
             state["paused_until"] = None
@@ -316,7 +316,7 @@ class AnomalyDetector:
     def get_paused_strategies(self) -> list:
         """List all auto-paused strategies with reasons."""
         paused = []
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         for strategy, state in self._strategy_state.items():
             if state.get("paused_until"):
                 paused_until = datetime.fromisoformat(state["paused_until"])
@@ -332,7 +332,7 @@ class AnomalyDetector:
     def _log_anomaly(self, strategy: str, anomaly_type: str, reason: str):
         """Log an anomaly event."""
         event = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "strategy": strategy,
             "type": anomaly_type,
             "reason": reason,
@@ -596,10 +596,10 @@ class AutonomousController:
         self._alert = alert_callback
         self._kill = kill_func
         self._active = False
-        self._entered_at: Optional[str] = None
-        self._exit_at: Optional[str] = None
+        self._entered_at: str | None = None
+        self._exit_at: str | None = None
         self._max_duration_hours = 72
-        self._requested_duration_hours: Optional[int] = None
+        self._requested_duration_hours: int | None = None
         self._events_log: List[dict] = []
         self._periodic_checks_count = 0
         self._trades_during_autonomous: int = 0
@@ -623,7 +623,7 @@ class AutonomousController:
         Returns:
             {success, safety_check, duration, timestamp}
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         timestamp = now.isoformat()
 
         # Already active guard
@@ -649,7 +649,7 @@ class AutonomousController:
             if self._alert:
                 try:
                     self._alert(
-                        f"Autonomous mode REJECTED — safety issues:\n"
+                        "Autonomous mode REJECTED — safety issues:\n"
                         + "\n".join(f"- {issue}" for issue in safety["blocking_issues"]),
                         "critical",
                     )
@@ -715,7 +715,7 @@ class AutonomousController:
         Returns:
             {success, duration_hours, events, trades, pnl, anomalies, reason}
         """
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         timestamp = now.isoformat()
 
         if not self._active:
@@ -815,7 +815,7 @@ class AutonomousController:
             }
 
         self._periodic_checks_count += 1
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         actions_taken = []
 
         # 1. Duration check
@@ -891,7 +891,7 @@ class AutonomousController:
 
     def get_status(self) -> dict:
         """Current autonomous mode status."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         remaining_hours = 0.0
         elapsed_hours = 0.0
 
@@ -996,7 +996,7 @@ class AutonomousController:
     def _log_event(self, event_type: str, details: str):
         """Append to events log."""
         self._events_log.append({
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "type": event_type,
             "details": details,
         })
@@ -1012,7 +1012,7 @@ class AutonomousController:
             "trades_during_autonomous": self._trades_during_autonomous,
             "pnl_during_autonomous": self._pnl_during_autonomous,
             "events_log": self._events_log,
-            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "last_updated": datetime.now(UTC).isoformat(),
         }
         try:
             self._state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -1036,7 +1036,7 @@ class AutonomousController:
             return
 
         try:
-            with open(self._state_path, "r") as f:
+            with open(self._state_path) as f:
                 state = json.load(f)
 
             self._active = state.get("active", False)

@@ -11,9 +11,9 @@ from __future__ import annotations
 
 import logging
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from agents.base_agent import BaseAgent, AgentMessage
+from agents.base_agent import AgentMessage, BaseAgent
 
 logger = logging.getLogger(__name__)
 
@@ -37,7 +37,7 @@ class MonitoringAgent(BaseAgent):
                 "losses": 0,
             }),
             "events": [],
-            "started_at": datetime.now(timezone.utc).isoformat(),
+            "started_at": datetime.now(UTC).isoformat(),
             "last_update": None,
         }
 
@@ -64,7 +64,7 @@ class MonitoringAgent(BaseAgent):
 
         self._metrics["total_trades"] += 1
         self._metrics["total_pnl"] += pnl
-        self._metrics["last_update"] = datetime.now(timezone.utc).isoformat()
+        self._metrics["last_update"] = datetime.now(UTC).isoformat()
 
         if pnl > 0:
             self._metrics["winning_trades"] += 1
@@ -85,7 +85,7 @@ class MonitoringAgent(BaseAgent):
 
     def _log_event(self, event_type: str, ref: str = "", extra: str = ""):
         entry = {
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "type": event_type,
             "ref": ref,
             "extra": extra,
@@ -102,7 +102,7 @@ class MonitoringAgent(BaseAgent):
         win_rate = (wins / total * 100) if total > 0 else 0
         return (
             f"\n{'─'*50}\n"
-            f"  MONITORING — {datetime.now(timezone.utc).strftime('%H:%M:%S UTC')}\n"
+            f"  MONITORING — {datetime.now(UTC).strftime('%H:%M:%S UTC')}\n"
             f"{'─'*50}\n"
             f"  Trades total  : {total}\n"
             f"  PnL total     : {m['total_pnl']:+.4f}\n"

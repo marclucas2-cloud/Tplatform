@@ -16,10 +16,10 @@ import json
 import logging
 import time
 from collections import defaultdict
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
+from dataclasses import dataclass
+from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Tuple
 
 import numpy as np
 
@@ -36,7 +36,7 @@ class CorrelationAlert:
     strategies: Tuple[str, str]
     correlation: float
     timestamp: datetime
-    cluster_id: Optional[int] = None
+    cluster_id: int | None = None
 
 
 @dataclass
@@ -80,8 +80,8 @@ class LiveCorrelationEngine:
         self._pnl_history: Dict[str, List[Tuple[datetime, float]]] = defaultdict(list)
 
         # Cache for correlation matrix
-        self._cache_matrix: Optional[np.ndarray] = None
-        self._cache_strategies: Optional[List[str]] = None
+        self._cache_matrix: np.ndarray | None = None
+        self._cache_strategies: List[str] | None = None
         self._cache_time: float = 0
         self._cache_ttl: float = 60.0  # Recompute max every 60s
 
@@ -90,7 +90,7 @@ class LiveCorrelationEngine:
     # ─── Public API ──────────────────────────────────────────────────────
 
     def record_pnl(
-        self, strategy: str, pnl: float, timestamp: Optional[datetime] = None
+        self, strategy: str, pnl: float, timestamp: datetime | None = None
     ) -> None:
         """Record a trade PnL for a strategy."""
         ts = timestamp or datetime.utcnow()
@@ -112,7 +112,7 @@ class LiveCorrelationEngine:
         )
 
     def get_correlation_matrix(
-        self, window: Optional[int] = None
+        self, window: int | None = None
     ) -> Dict[str, Any]:
         """Compute correlation matrix from recent PnL.
 
@@ -168,7 +168,7 @@ class LiveCorrelationEngine:
         }
 
     def detect_clusters(
-        self, threshold: Optional[float] = None
+        self, threshold: float | None = None
     ) -> List[ClusterInfo]:
         """Detect clusters of correlated strategies using simple threshold.
 

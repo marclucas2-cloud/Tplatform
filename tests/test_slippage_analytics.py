@@ -11,19 +11,18 @@ Covers:
   - Telegram report formatting
   - Empty database handling
 """
-import os
-import sys
-import pytest
 import sqlite3
+import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
+
+import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.slippage_tracker import SlippageTracker
 from core.execution.slippage_analytics import SlippageAnalytics
-
+from core.slippage_tracker import SlippageTracker
 
 # ============================================================================
 # FIXTURES
@@ -56,7 +55,7 @@ def _insert_trade(db_path, trade_id, strategy, instrument, instrument_type,
                   market_spread_bps=None, volume_at_fill=None,
                   hours_ago=0, days_ago=0):
     """Insert a trade with explicit control over all fields and timestamp."""
-    ts = (datetime.now(timezone.utc)
+    ts = (datetime.now(UTC)
           - timedelta(days=days_ago, hours=hours_ago)).isoformat()
     ratio = slippage_bps / backtest_slippage_bps if backtest_slippage_bps > 0 else 0.0
     with sqlite3.connect(str(db_path)) as conn:
@@ -78,7 +77,7 @@ def _insert_trade(db_path, trade_id, strategy, instrument, instrument_type,
 def _insert_trade_at_hour(db_path, trade_id, hour_utc, slippage_bps,
                           strategy="test_strat", days_ago=1):
     """Insert a trade at a specific hour of day for time-of-day testing."""
-    dt = (datetime.now(timezone.utc) - timedelta(days=days_ago)).replace(
+    dt = (datetime.now(UTC) - timedelta(days=days_ago)).replace(
         hour=hour_utc, minute=30, second=0, microsecond=0)
     ts = dt.isoformat()
     with sqlite3.connect(str(db_path)) as conn:

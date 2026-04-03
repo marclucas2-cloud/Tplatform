@@ -26,8 +26,8 @@ Throttling: max 1 alert per type per 5 minutes (prevent spam).
 
 import logging
 import time
-from datetime import datetime, timezone
-from typing import Optional, Callable, List, Dict
+from datetime import UTC, datetime
+from typing import Callable, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +60,8 @@ class LiveAlertManager:
         self,
         mode: str = "LIVE",
         throttle_seconds: int = 300,
-        send_func: Optional[Callable[[str], bool]] = None,
-        backup_send_func: Optional[Callable[[str], bool]] = None,
+        send_func: Callable[[str], bool] | None = None,
+        backup_send_func: Callable[[str], bool] | None = None,
     ):
         """
         Args:
@@ -102,7 +102,7 @@ class LiveAlertManager:
 
     def _record_alert(self, level: str, alert_type: str, message: str) -> None:
         """Record alert in history and update throttle timestamp."""
-        now = datetime.now(timezone.utc)
+        now = datetime.now(UTC)
         entry = {
             "timestamp": now.isoformat(),
             "level": level,

@@ -6,7 +6,7 @@ Micro Crude Oil (MCL) on NYMEX, $600 margin, tick size $0.01 = $1.00/tick.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -23,7 +23,7 @@ class MCLBrentLag(StrategyBase):
         self.lag_threshold: float = 0.005
         self.sl_ticks: int = 25
         self.tp_ticks: int = 50
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -42,7 +42,7 @@ class MCLBrentLag(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
         sym = self.SYMBOL

@@ -25,7 +25,7 @@ import argparse
 import json
 import logging
 import sys
-from datetime import date, datetime, timezone
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import numpy as np
@@ -33,12 +33,13 @@ import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from dotenv import load_dotenv
+
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
 logger = logging.getLogger("portfolio")
 
-STATE_FILE = Path(__file__).parent.parent / "paper_portfolio_state.json"
+STATE_FILE = Path(__file__).parent.parent / "data" / "state" / "paper_portfolio_state.json"
 
 # =============================================================================
 # CONFIGURATION
@@ -206,9 +207,9 @@ MOMENTUM_CRASH_SMA = 200
 def load_state() -> dict:
     if STATE_FILE.exists():
         try:
-            with open(STATE_FILE, "r") as f:
+            with open(STATE_FILE) as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             logger.warning("State file corrompu, reconstruction depuis Alpaca")
 
     # Pas de state file (premier run ou redeploy Railway)
@@ -242,7 +243,7 @@ def load_state() -> dict:
                 "strategy": "unknown",
                 "direction": "LONG" if float(p.get("qty", 0)) > 0 else "SHORT",
                 "entry_price": float(p.get("avg_entry_price", 0)),
-                "opened_at": datetime.now(timezone.utc).isoformat(),
+                "opened_at": datetime.now(UTC).isoformat(),
             }
         logger.info(f"  Equity: ${account['equity']:,.2f}, {len(positions)} positions")
     except Exception as e:
@@ -254,8 +255,8 @@ def load_state() -> dict:
 
 def save_state(state: dict, path=None):
     """Save state atomically (tmpfile + os.replace)."""
-    import tempfile
     import os as _os
+    import tempfile
     target = str(path or STATE_FILE)
     try:
         parent = str(Path(target).parent) or "."
@@ -420,7 +421,7 @@ def signal_momentum(allocated_capital: float, state: dict, force_monthly: bool) 
     from core.data.loader import OHLCVLoader
 
     # Verifier si c'est un jour de rebalancement mensuel
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     last = state.get("last_monthly")
     if last and not force_monthly:
         last_dt = datetime.fromisoformat(last)
@@ -516,7 +517,7 @@ def signal_vrp(allocated_capital: float, state: dict, force_monthly: bool) -> di
     """Genere le signal pour la strategie VRP."""
     from core.data.loader import OHLCVLoader
 
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     last = state.get("last_monthly")
     if last and not force_monthly:
         last_dt = datetime.fromisoformat(last)
@@ -570,11 +571,12 @@ def _signal_rsi2_daily(allocated_capital: float, state: dict) -> dict:
         return {"action": "hold", "reason": "RSI2: deja scanne aujourd'hui"}
 
     try:
+        import os
+
+        from alpaca.data.enums import DataFeed
         from alpaca.data.historical import StockHistoricalDataClient
         from alpaca.data.requests import StockBarsRequest
         from alpaca.data.timeframe import TimeFrame
-        from alpaca.data.enums import DataFeed
-        import os
 
         client = StockHistoricalDataClient(
             api_key=os.getenv("ALPACA_API_KEY"),
@@ -691,7 +693,6 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
     et en executant la strategie correspondante.
     """
     import zoneinfo
-    from datetime import date as dt_date
 
     et = zoneinfo.ZoneInfo("America/New_York")
     now_et = datetime.now(et)
@@ -706,7 +707,7 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
     # Importer les strategies depuis intraday-backtesterV2
     # IMPORTANT: on utilise importlib pour eviter le conflit avec trading-platform/strategies/ (crypto)
     import importlib.util
-    backtester_path = Path(__file__).parent.parent / "intraday-backtesterV2"
+    backtester_path = Path(__file__).parent.parent / "archive" / "intraday-backtesterV2"
     _bt_strats = backtester_path / "strategies"
 
     def _load_bt_strategy(module_name, class_name):
@@ -754,10 +755,11 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
 
     # Fetch les barres 5M du jour depuis Alpaca
     try:
+        import os
+
         from alpaca.data.historical import StockHistoricalDataClient
         from alpaca.data.requests import StockBarsRequest
         from alpaca.data.timeframe import TimeFrame
-        import os
 
         client = StockHistoricalDataClient(
             api_key=os.getenv("ALPACA_API_KEY"),
@@ -781,7 +783,7 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
         data = {}
         if bars:
             for ticker in required_tickers:
-                if ticker in bars.data and bars.data[ticker]:
+                if bars.data.get(ticker):
                     rows = []
                     for bar in bars.data[ticker]:
                         rows.append({
@@ -1175,8 +1177,9 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
                         # Fetch prix actuel pour convertir notional -> qty (bracket exige qty)
                         positions_data = client.get_positions()
                         # Utiliser le dernier prix connu via Alpaca
-                        from alpaca.data.historical import StockHistoricalDataClient
                         import os
+
+                        from alpaca.data.historical import StockHistoricalDataClient
                         data_client = StockHistoricalDataClient(
                             api_key=os.getenv("ALPACA_API_KEY"),
                             secret_key=os.getenv("ALPACA_SECRET_KEY"),
@@ -1347,7 +1350,7 @@ def execute_orders(signals: dict, allocations: dict, state: dict,
                     "entry_price": entry_price,
                     "stop_loss": signal.get("stop_loss"),
                     "take_profit": signal.get("take_profit"),
-                    "opened_at": datetime.now(timezone.utc).isoformat(),
+                    "opened_at": datetime.now(UTC).isoformat(),
                 }
             except Exception as e:
                 logger.error(f"  [{sid}] Erreur intraday {ticker}: {e}")
@@ -1370,7 +1373,7 @@ def get_benchmark_price() -> float:
 # =============================================================================
 
 def run(dry_run: bool = False, force: bool = False):
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     state = load_state()
 
     # Init benchmark tracking
@@ -1396,7 +1399,7 @@ def run(dry_run: bool = False, force: bool = False):
         total_capital = state.get("capital", INITIAL_CAPITAL)
 
     print(f"\n{'='*70}")
-    print(f"  PAPER PORTFOLIO — EXECUTION UNIFIEE")
+    print("  PAPER PORTFOLIO — EXECUTION UNIFIEE")
     print(f"{'='*70}")
     print(f"  Date     : {now.strftime('%Y-%m-%d %H:%M UTC')}")
     print(f"  Capital  : ${total_capital:,.2f} (equity Alpaca)")
@@ -1406,13 +1409,13 @@ def run(dry_run: bool = False, force: bool = False):
     allocations = compute_allocations(STRATEGIES, total_capital)
     state["allocations"] = allocations
 
-    print(f"\n  ALLOCATIONS (risk-parity, cap 40%):")
+    print("\n  ALLOCATIONS (risk-parity, cap 40%):")
     for sid, alloc in allocations.items():
         name = STRATEGIES[sid]["name"]
         print(f"    {name:<25} {alloc['pct']*100:>5.1f}%  ${alloc['capital']:>10,.2f}")
 
     # 2. Generer les signaux
-    print(f"\n  SIGNAUX:")
+    print("\n  SIGNAUX:")
     signals = {}
 
     sig_mom = signal_momentum(allocations["momentum_25etf"]["capital"], state, force)
@@ -1428,11 +1431,11 @@ def run(dry_run: bool = False, force: bool = False):
     print(f"    VRP      : {sig_vrp['action']} — {sig_vrp.get('reason', sig_vrp.get('targets', ''))}")
 
     # 3. Executer avec circuit-breaker
-    print(f"\n  EXECUTION:")
+    print("\n  EXECUTION:")
     orders = execute_orders(signals, allocations, state, dry_run, total_capital)
 
     if not orders:
-        print(f"    Aucun ordre")
+        print("    Aucun ordre")
 
     # 4. Marquer le rebalancement mensuel
     if force or sig_mom["action"] != "hold":
@@ -1444,7 +1447,7 @@ def run(dry_run: bool = False, force: bool = False):
     spy_return = (spy_now / spy_start - 1) * 100 if spy_start > 0 else 0
     port_return = (total_capital / INITIAL_CAPITAL - 1) * 100
 
-    print(f"\n  PERFORMANCE:")
+    print("\n  PERFORMANCE:")
     print(f"    Portfolio : {port_return:+.2f}%")
     print(f"    SPY B&H   : {spy_return:+.2f}%")
     print(f"    Alpha     : {port_return - spy_return:+.2f}%")
@@ -1465,7 +1468,7 @@ def show_status():
     state = load_state()
 
     print(f"\n{'='*70}")
-    print(f"  PAPER PORTFOLIO — DASHBOARD")
+    print("  PAPER PORTFOLIO — DASHBOARD")
     print(f"{'='*70}")
 
     total_capital = state.get("capital", INITIAL_CAPITAL)
@@ -1487,7 +1490,7 @@ def show_status():
     # Allocations
     allocs = state.get("allocations", {})
     if allocs:
-        print(f"\n  Allocations:")
+        print("\n  Allocations:")
         for sid, a in allocs.items():
             name = STRATEGIES.get(sid, {}).get("name", sid)
             print(f"    {name:<25} {a['pct']*100:>5.1f}%  ${a['capital']:>10,.2f}")
@@ -1495,7 +1498,7 @@ def show_status():
     # Positions
     positions = state.get("positions", {})
     if positions:
-        print(f"\n  Positions actives:")
+        print("\n  Positions actives:")
         for sid, pos in positions.items():
             name = STRATEGIES.get(sid, {}).get("name", sid)
             syms = pos.get("symbols", [])
@@ -1538,7 +1541,7 @@ def show_status():
 
 def run_intraday(dry_run: bool = False):
     """Execute les strategies intraday pendant les heures de marche."""
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     state = load_state()
 
     # FIX CRO: check circuit-breaker pause flag
@@ -1566,7 +1569,7 @@ def run_intraday(dry_run: bool = False):
         total_capital = state.get("capital", INITIAL_CAPITAL)
 
     print(f"\n{'='*70}")
-    print(f"  PAPER PORTFOLIO — INTRADAY EXECUTION")
+    print("  PAPER PORTFOLIO — INTRADAY EXECUTION")
     print(f"{'='*70}")
     print(f"  Date     : {now.strftime('%Y-%m-%d %H:%M UTC')}")
     print(f"  Capital  : ${total_capital:,.2f}")
@@ -1598,14 +1601,14 @@ def run_intraday(dry_run: bool = False):
     # Allocations sur l'ensemble du portefeuille (daily + intraday)
     allocations = compute_allocations(STRATEGIES, total_capital)
 
-    print(f"\n  ALLOCATIONS INTRADAY:")
+    print("\n  ALLOCATIONS INTRADAY:")
     for sid in intraday_strats:
         alloc = allocations.get(sid, {})
         name = STRATEGIES[sid]["name"]
         print(f"    {name:<25} {alloc.get('pct', 0)*100:>5.1f}%  ${alloc.get('capital', 0):>10,.2f}")
 
     # Generer les signaux intraday (avec kill switch check)
-    print(f"\n  SIGNAUX INTRADAY:")
+    print("\n  SIGNAUX INTRADAY:")
     signals = {}
     for sid in intraday_strats:
         alloc_capital = allocations.get(sid, {}).get("capital", 0)
@@ -1637,11 +1640,11 @@ def run_intraday(dry_run: bool = False):
             print(f"    {name:<25} -- {sig.get('reason', 'hold')}")
 
     # Executer
-    print(f"\n  EXECUTION:")
+    print("\n  EXECUTION:")
     orders = execute_orders(signals, allocations, state, dry_run, total_capital)
 
     if not orders:
-        print(f"    Aucun ordre intraday")
+        print("    Aucun ordre intraday")
 
     # Sauvegarder
     save_state(state)

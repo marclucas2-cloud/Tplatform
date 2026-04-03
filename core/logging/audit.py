@@ -5,9 +5,8 @@ Chaque ligne est un JSON loggable, reproductible et indexable.
 import json
 import logging
 import logging.handlers
-import os
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 
@@ -72,7 +71,7 @@ class AuditLogger:
 
     def log(self, event_type: str, data: dict):
         entry = {
-            "ts": datetime.now(timezone.utc).isoformat(),
+            "ts": datetime.now(UTC).isoformat(),
             "type": event_type,
             **data,
         }

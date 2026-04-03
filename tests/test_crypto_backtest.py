@@ -1,19 +1,23 @@
 """Tests for CryptoBacktester V2 (margin-aware) — 22 tests."""
-import pytest
+from datetime import UTC, datetime
+
 import numpy as np
 import pandas as pd
-from datetime import datetime, timezone, timedelta
+import pytest
 
 from core.crypto.backtest_engine import (
-    CryptoBacktester, CryptoPosition, SlippageModel,
-    CommissionModel, CryptoWalkForward,
+    CommissionModel,
+    CryptoBacktester,
+    CryptoPosition,
+    CryptoWalkForward,
+    SlippageModel,
 )
 
 
 @pytest.fixture
 def sample_data():
     np.random.seed(42)
-    dates = pd.date_range("2024-01-01", periods=1000, freq="1h", tz=timezone.utc)
+    dates = pd.date_range("2024-01-01", periods=1000, freq="1h", tz=UTC)
     close = 40000 + np.cumsum(np.random.randn(1000) * 100)
     return pd.DataFrame({
         "timestamp": dates,
@@ -76,17 +80,17 @@ class TestCommissionModelV2:
 
 class TestCryptoPositionV2:
     def test_long_spot(self):
-        pos = CryptoPosition("BTCUSDT", 1, 0.1, 40000, datetime.now(timezone.utc))
+        pos = CryptoPosition("BTCUSDT", 1, 0.1, 40000, datetime.now(UTC))
         assert pos.is_long is True
         assert pos.notional == 4000
 
     def test_short_margin(self):
-        pos = CryptoPosition("BTCUSDT", -1, 0.1, 40000, datetime.now(timezone.utc), market_type="margin", is_margin_borrow=True, borrowed_amount=0.1)
+        pos = CryptoPosition("BTCUSDT", -1, 0.1, 40000, datetime.now(UTC), market_type="margin", is_margin_borrow=True, borrowed_amount=0.1)
         assert pos.is_long is False
         assert pos.is_margin_borrow is True
 
     def test_borrow_cost_tracking(self):
-        pos = CryptoPosition("BTCUSDT", -1, 0.1, 40000, datetime.now(timezone.utc), is_margin_borrow=True)
+        pos = CryptoPosition("BTCUSDT", -1, 0.1, 40000, datetime.now(UTC), is_margin_borrow=True)
         assert pos.total_borrow_cost == 0  # Initially zero
 
 
@@ -141,7 +145,7 @@ class TestBacktesterV2:
 class TestWalkForwardV2:
     def test_insufficient_data(self):
         wf = CryptoWalkForward()
-        df = pd.DataFrame({"timestamp": pd.date_range("2024-01-01", periods=10, freq="1h", tz=timezone.utc), "open": range(10), "high": range(1, 11), "low": range(10), "close": range(10), "volume": [100]*10})
+        df = pd.DataFrame({"timestamp": pd.date_range("2024-01-01", periods=10, freq="1h", tz=UTC), "open": range(10), "high": range(1, 11), "low": range(10), "close": range(10), "volume": [100]*10})
         assert wf.validate(df, simple_strategy)["verdict"] == "REJECTED"
 
     def test_empty(self):

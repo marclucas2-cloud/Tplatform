@@ -13,7 +13,7 @@ Covers:
 """
 import sys
 from pathlib import Path
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -21,13 +21,11 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from core.fx_live_adapter import (
-    FXLiveAdapter,
-    FX_PAIR_MAP,
     AVERAGE_SPREADS_BPS,
-    STRATEGY_SHARPES,
     IBKR_MIN_LOT,
+    STRATEGY_SHARPES,
+    FXLiveAdapter,
 )
-
 
 # =============================================================================
 # FIXTURES

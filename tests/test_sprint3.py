@@ -2,13 +2,12 @@
 Tests Sprint 3 — Paper Trading Loop + Régime de marché + Strategy Ranker.
 """
 import pytest
-import pandas as pd
 
+from core.backtest.engine import BacktestEngine
 from core.data.loader import OHLCVLoader
 from core.paper_trading.loop import PaperTradingLoop
-from core.regime.detector import RegimeDetector, MarketRegime
 from core.ranking.ranker import StrategyRanker
-from core.backtest.engine import BacktestEngine
+from core.regime.detector import MarketRegime, RegimeDetector
 from core.strategy_schema.validator import StrategyValidator
 
 

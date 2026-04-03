@@ -15,15 +15,15 @@ Couvre :
 """
 
 import sys
-import pytest
 from pathlib import Path
+
+import pytest
 
 # Setup paths
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from scripts.scaling_decision import ScalingDecisionReport, ABORT_CONDITIONS
-
+from scripts.scaling_decision import ScalingDecisionReport
 
 # =============================================================================
 # FIXTURES

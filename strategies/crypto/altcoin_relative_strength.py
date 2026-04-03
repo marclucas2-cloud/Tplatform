@@ -27,9 +27,7 @@ Cost: ~$13.5/week in commissions + borrow interest
 """
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
-
 
 STRATEGY_CONFIG = {
     "name": "Altcoin Relative Strength",
@@ -190,14 +188,7 @@ def generate_rotation_signals(
 
     # Close positions not in new targets
     for sym, direction in current_positions.items():
-        if direction == "LONG" and sym not in long_targets:
-            signals.append({
-                "action": "CLOSE",
-                "symbol": sym,
-                "reason": "rotation_out",
-                "strategy": "altcoin_relative_strength",
-            })
-        elif direction == "SHORT" and sym not in short_targets:
+        if (direction == "LONG" and sym not in long_targets) or (direction == "SHORT" and sym not in short_targets):
             signals.append({
                 "action": "CLOSE",
                 "symbol": sym,

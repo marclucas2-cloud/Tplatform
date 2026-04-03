@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import logging
 
-from agents.base_agent import BaseAgent, AgentMessage
+from agents.base_agent import AgentMessage, BaseAgent
 from core.backtest.engine import BacktestEngine
 from core.data.loader import OHLCVLoader
 

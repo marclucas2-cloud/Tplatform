@@ -16,12 +16,10 @@ Regles :
 - ~60-80 trades/an
 - Filtre : Pas de nouvelle position vendredi apres 16:00 ET (risque gap weekend)
 """
-import pandas as pd
-import numpy as np
 from abc import ABC, abstractmethod
 from datetime import time as dt_time
-from typing import Optional
 
+import pandas as pd
 
 # ── Signal & BaseStrategy (local definitions for standalone use) ─────────
 
@@ -161,7 +159,7 @@ class MESTrendStrategy(BaseStrategy):
 
         return ts_time >= FRIDAY_CUTOFF
 
-    def _get_vix_level(self, data: dict[str, pd.DataFrame]) -> Optional[float]:
+    def _get_vix_level(self, data: dict[str, pd.DataFrame]) -> float | None:
         """Extract latest VIX level from data."""
         if "VIX" not in data:
             return None
@@ -172,7 +170,7 @@ class MESTrendStrategy(BaseStrategy):
 
         return float(df_vix["close"].iloc[-1])
 
-    def _get_signal_data(self, data: dict[str, pd.DataFrame]) -> Optional[pd.DataFrame]:
+    def _get_signal_data(self, data: dict[str, pd.DataFrame]) -> pd.DataFrame | None:
         """
         Get the best available price data for signal generation.
         Priority: MES > ES > SPY (all track the same index).

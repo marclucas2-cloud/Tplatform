@@ -1,28 +1,24 @@
 """
-Worker Railway — scheduler 24/7 pour le paper trading.
+Worker Railway — scheduler 24/7, orchestrateur multi-broker.
 
-Remplace les crons Windows (schtasks) par un process Python permanent.
-Execute :
-  - Daily portfolio (3 strategies) a 15:35 Paris
-  - Intraday strategies (7 strategies) toutes les 5 min, 15:35-22:00 Paris
+Cycles : crypto (15min), FX carry (daily), EU/US intraday, futures,
+         risk (5min), regime V12 (15min), HRP/Kelly (4h), RoR (daily).
+
+Modules extraits dans core/worker/ pour maintainabilite.
 """
+import json
+import logging
 import os
 import signal
 import sys
 import time
-import json
-import logging
-from datetime import datetime, timezone
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from datetime import UTC, datetime
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
-import zoneinfo
 
 # Setup paths
 ROOT = Path(__file__).parent
-# ROOT doit etre AVANT intraday-backtesterV2 dans sys.path
-# sinon intraday-backtesterV2/strategies/ masque strategies/crypto/
-sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(ROOT / "archive" / "intraday-backtesterV2"))
 sys.path.insert(0, str(ROOT))
 
 # Charger .env si present (dev local)
@@ -30,7 +26,7 @@ try:
     from dotenv import load_dotenv
     load_dotenv(ROOT / ".env")
 except ImportError:
-    pass  # En prod Railway, les vars sont dans l'environnement
+    pass
 
 logging.basicConfig(
     level=logging.INFO,
@@ -39,131 +35,50 @@ logging.basicConfig(
 )
 logger = logging.getLogger("worker")
 
-# Add file handler for log persistence (Railway has ~24h retention on stdout)
-log_dir = Path(__file__).parent / "logs" / "worker"
+log_dir = ROOT / "logs" / "worker"
 log_dir.mkdir(parents=True, exist_ok=True)
 file_handler = RotatingFileHandler(
-    log_dir / "worker.log",
-    maxBytes=10 * 1024 * 1024,  # 10MB
-    backupCount=5,
+    log_dir / "worker.log", maxBytes=10 * 1024 * 1024, backupCount=5,
 )
 file_handler.setFormatter(logging.Formatter(
     "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
 ))
 logging.getLogger().addHandler(file_handler)
 
+# ── Extracted modules ────────────────────────────────────────────────────────
+from core.worker.alerts import log_event as _log_event  # noqa: E402
+from core.worker.alerts import record_signal_fill as _record_signal_fill  # noqa: E402
+from core.worker.alerts import send_alert as _send_alert  # noqa: E402
+from core.worker.config import (  # noqa: E402
+    CRYPTO_INTERVAL_SECONDS,
+    CRYPTO_KELLY_FRACTION,
+    ET,
+    INTRADAY_INTERVAL_SECONDS,
+    LIVE_RISK_INTERVAL_SECONDS,
+    PARIS,
+    crypto_lock as _crypto_lock,
+    execution_lock as _execution_lock,
+    ibkr_lock as _ibkr_lock,
+    risk_lock as _risk_lock,
+)
+from core.worker.health import start_health_server as _start_health_server  # noqa: E402
+from core.worker.heartbeat import (  # noqa: E402
+    check_positions_after_close,
+    log_heartbeat,
+    reconcile_positions_at_startup,
+    telegram_heartbeat_full as _telegram_heartbeat_full,
+)
+from core.worker.time_windows import (  # noqa: E402
+    is_daily_time,
+    is_eu_intraday_window,
+    is_fx_window,
+    is_intraday_window,
+    is_live_risk_window,
+    is_weekday,
+)
 
-# ── JSONL structured event logging ────────────────────────────────────────────
-_events_log_path = Path(__file__).parent / "logs" / "events.jsonl"
-_events_log_path.parent.mkdir(parents=True, exist_ok=True)
 
 
-def _log_event(action: str, strategy: str = "", details: dict | None = None):
-    """Append a structured JSON event to logs/events.jsonl.
-
-    Called on: signal, order, fill, error, heartbeat, kill_switch, cycle_start/end.
-    """
-    import json as _json
-    event = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "strategy": strategy,
-        "action": action,
-        "details": details or {},
-    }
-    try:
-        with open(_events_log_path, "a", encoding="utf-8") as f:
-            f.write(_json.dumps(event, default=str) + "\n")
-    except Exception:
-        pass  # Never block the worker for a log write
-
-
-# ── Signal-to-Fill Ratio Monitoring ──────────────────────────────────────────
-_SIGNAL_FILL_LOG = Path(__file__).parent / "data" / "monitoring" / "signal_fill_ratio.jsonl"
-_SIGNAL_FILL_LOG.parent.mkdir(parents=True, exist_ok=True)
-_SIGNAL_FILL_HISTORY: list[dict] = []  # In-memory ring buffer (last 24 cycles)
-
-
-def _record_signal_fill(cycle: str, n_signals: int, n_fills: int, n_errors: int):
-    """Record signal-to-fill metrics and alert if fill ratio drops.
-
-    Alerts:
-      - WARNING: fill_ratio < 50% over last 6 cycles with signals (1h30 crypto)
-      - CRITICAL: fill_ratio = 0% over last 12 cycles with signals (3h crypto)
-      - CRITICAL: n_errors > 3 consecutive cycles
-    """
-    ratio = n_fills / n_signals if n_signals > 0 else None
-    entry = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "cycle": cycle,
-        "n_signals": n_signals,
-        "n_fills": n_fills,
-        "n_errors": n_errors,
-        "fill_ratio": ratio,
-    }
-
-    # Persist to JSONL
-    try:
-        with open(_SIGNAL_FILL_LOG, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, default=str) + "\n")
-    except Exception:
-        pass
-
-    # In-memory ring buffer
-    _SIGNAL_FILL_HISTORY.append(entry)
-    if len(_SIGNAL_FILL_HISTORY) > 24:
-        _SIGNAL_FILL_HISTORY.pop(0)
-
-    # Only alert on cycles that had signals (no-signal cycles are normal)
-    recent_with_signals = [
-        e for e in _SIGNAL_FILL_HISTORY
-        if e["cycle"] == cycle and e["n_signals"] > 0
-    ]
-
-    if not recent_with_signals:
-        return
-
-    # Check consecutive errors
-    consecutive_errors = 0
-    for e in reversed(_SIGNAL_FILL_HISTORY):
-        if e["cycle"] == cycle and e["n_errors"] > 0:
-            consecutive_errors += 1
-        else:
-            break
-    if consecutive_errors >= 3:
-        msg = (
-            f"SIGNAL-TO-FILL CRITICAL: {consecutive_errors} cycles consecutifs "
-            f"avec erreurs ({cycle})"
-        )
-        logger.critical(msg)
-        _send_alert(msg, level="critical")
-        return
-
-    # Check fill ratio over last N cycles with signals
-    last_6 = recent_with_signals[-6:]
-    last_12 = recent_with_signals[-12:]
-
-    if len(last_12) >= 12:
-        total_s = sum(e["n_signals"] for e in last_12)
-        total_f = sum(e["n_fills"] for e in last_12)
-        if total_s > 0 and total_f == 0:
-            msg = (
-                f"SIGNAL-TO-FILL CRITICAL: 0% fills sur {len(last_12)} cycles "
-                f"({total_s} signaux, 0 fills) — {cycle}"
-            )
-            logger.critical(msg)
-            _send_alert(msg, level="critical")
-            return
-
-    if len(last_6) >= 6:
-        total_s = sum(e["n_signals"] for e in last_6)
-        total_f = sum(e["n_fills"] for e in last_6)
-        if total_s > 0 and total_f / total_s < 0.5:
-            msg = (
-                f"SIGNAL-TO-FILL WARNING: {total_f}/{total_s} fills "
-                f"({total_f/total_s:.0%}) sur {len(last_6)} cycles — {cycle}"
-            )
-            logger.warning(msg)
-            _send_alert(msg, level="warning")
 
 
 # --- Graceful shutdown handler ---
@@ -178,395 +93,6 @@ def _handle_sigterm(signum, frame):
 
 signal.signal(signal.SIGTERM, _handle_sigterm)
 signal.signal(signal.SIGINT, _handle_sigterm)
-
-
-def _send_alert(message: str, level: str = "info"):
-    """Unified alert: routes to Telegram V2 smart notifications.
-
-    - critical → sent immediately (never throttled)
-    - warning → sent with 5 min throttle per type
-    - info → buffered into digest (never sent individually)
-    """
-    try:
-        from core.telegram_v2 import tg
-        if level == "critical":
-            # Extract first line as title
-            title = message.split("\n")[0][:60]
-            details = "\n".join(message.split("\n")[1:])
-            tg.critical(title, details=details)
-        elif level == "warning":
-            title = message.split("\n")[0][:60]
-            details = "\n".join(message.split("\n")[1:])
-            tg.warning(title, details=details)
-        else:
-            tg.info(message[:100])
-        return
-    except Exception:
-        pass
-    # Fallback to legacy
-    try:
-        from core.telegram_alert import send_alert
-        send_alert(message, level=level)
-    except Exception:
-        pass
-
-
-# Timezone
-PARIS = zoneinfo.ZoneInfo("Europe/Paris")
-ET = zoneinfo.ZoneInfo("America/New_York")
-
-# Horaires
-DAILY_HOUR = 15
-DAILY_MINUTE = 35
-INTRADAY_START_HOUR = 15
-INTRADAY_START_MINUTE = 35
-INTRADAY_END_HOUR = 22
-INTRADAY_END_MINUTE = 0
-INTRADAY_INTERVAL_SECONDS = 300  # 5 min
-
-# EU market hours (09:00-17:30 CET)
-EU_START_HOUR = 9
-EU_START_MINUTE = 0
-EU_END_HOUR = 17
-EU_END_MINUTE = 30
-
-# Live risk cycle interval (same as intraday: 5 min)
-LIVE_RISK_INTERVAL_SECONDS = 300
-
-# Crypto cycle interval (24/7, every 15 min)
-CRYPTO_INTERVAL_SECONDS = 900  # 15 min
-
-# Sizing SOFT_LAUNCH crypto : aligned with crypto_allocation.yaml
-# CRO H-5 FIX: was 0.125 (1/8) but config says 0.25 (1/4 Kelly)
-CRYPTO_KELLY_FRACTION = 0.25
-
-
-def is_weekday():
-    """Verifie si c'est un jour de semaine (lun-ven)."""
-    return datetime.now(PARIS).weekday() < 5
-
-
-def is_eu_intraday_window():
-    """Verifie si on est dans la fenetre EU intraday (09:00-17:30 Paris)."""
-    now = datetime.now(PARIS)
-    start = now.replace(hour=EU_START_HOUR, minute=EU_START_MINUTE, second=0)
-    end = now.replace(hour=EU_END_HOUR, minute=EU_END_MINUTE, second=0)
-    return start <= now <= end
-
-
-def is_live_risk_window():
-    """Verifie si on est dans la fenetre live risk monitoring (09:00-22:00 Paris)."""
-    now = datetime.now(PARIS)
-    return 9 <= now.hour <= 22
-
-
-def is_fx_window():
-    """Verifie si le marche FX est ouvert (dim 23:00 CET -> ven 23:00 CET, ~24h).
-
-    FX = dimanche 17:00 ET a vendredi 17:00 ET = quasi 24h lun-ven.
-    En CET: dimanche 23:00 a vendredi 23:00.
-    On trade lundi 00:00 CET a vendredi 22:59 CET (simplifie).
-    """
-    now = datetime.now(PARIS)
-    weekday = now.weekday()  # 0=lundi ... 6=dimanche
-    # Lundi a jeudi: toujours ouvert
-    if 0 <= weekday <= 3:
-        return True
-    # Vendredi: ouvert jusqu'a 23:00 CET
-    if weekday == 4:
-        return now.hour < 23
-    # Samedi: ferme
-    if weekday == 5:
-        return False
-    # Dimanche: ouvert a partir de 23:00 CET
-    if weekday == 6:
-        return now.hour >= 23
-    return False
-
-
-def is_intraday_window():
-    """Verifie si on est dans la fenetre intraday (15:35-22:00 Paris)."""
-    now = datetime.now(PARIS)
-    start = now.replace(hour=INTRADAY_START_HOUR, minute=INTRADAY_START_MINUTE, second=0)
-    end = now.replace(hour=INTRADAY_END_HOUR, minute=INTRADAY_END_MINUTE, second=0)
-    return start <= now <= end
-
-
-def is_daily_time():
-    """Verifie si c'est l'heure du run daily (15:35 Paris, +/- 2 min)."""
-    now = datetime.now(PARIS)
-    return now.hour == DAILY_HOUR and DAILY_MINUTE <= now.minute <= DAILY_MINUTE + 2
-
-
-import threading
-_execution_lock = threading.Lock()       # Legacy — kept for US/EU intraday + daily
-_crypto_lock = threading.Lock()          # CRO C-2: dedicated lock for crypto cycle
-_ibkr_lock = threading.Lock()            # CRO C-2: dedicated lock for FX/futures IBKR
-_risk_lock = threading.Lock()
-
-
-class HealthHandler(BaseHTTPRequestHandler):
-    def do_GET(self):
-        if self.path == "/health":
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            health = {
-                "status": "ok",
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "worker": "running",
-            }
-            self.wfile.write(json.dumps(health).encode())
-        else:
-            self.send_response(404)
-            self.end_headers()
-
-    def log_message(self, format, *args):
-        pass  # Suppress access logs
-
-
-def _start_health_server(port=8080):
-    """Start a minimal HTTP health server for external monitoring."""
-    server = HTTPServer(("0.0.0.0", port), HealthHandler)
-    thread = threading.Thread(target=server.serve_forever, daemon=True)
-    thread.start()
-    logger.info(f"Health server started on port {port}")
-
-
-def reconcile_positions_at_startup():
-    """
-    Reconciliation au demarrage : compare les positions Alpaca vs le state local.
-    Logue les positions orphelines (dans Alpaca mais pas dans le state).
-    """
-    try:
-        from scripts.paper_portfolio import load_state, STATE_FILE
-        from core.alpaca_client.client import AlpacaClient
-
-        state = load_state()
-        client = AlpacaClient.from_env()
-        alpaca_positions = client.get_positions()
-
-        # Positions connues du state (daily + intraday)
-        state_symbols = set()
-        for sid, pos in state.get("positions", {}).items():
-            for sym in pos.get("symbols", []):
-                state_symbols.add(sym)
-        for sym in state.get("intraday_positions", {}).keys():
-            state_symbols.add(sym)
-
-        alpaca_symbols = {p["symbol"] for p in alpaca_positions}
-
-        orphans = alpaca_symbols - state_symbols
-        missing = state_symbols - alpaca_symbols
-
-        if orphans:
-            logger.warning(
-                f"RECONCILIATION: {len(orphans)} position(s) orpheline(s) "
-                f"(dans Alpaca mais pas dans le state): {sorted(orphans)}"
-            )
-            for p in alpaca_positions:
-                if p["symbol"] in orphans:
-                    logger.warning(
-                        f"  ORPHELIN: {p['symbol']} qty={p['qty']} "
-                        f"val=${p['market_val']:,.2f} P&L=${p['unrealized_pl']:+.2f}"
-                    )
-            _send_alert(
-                f"ORPHAN POSITIONS DETECTED at startup: {', '.join(orphans)}. "
-                f"Manual review required.",
-                level="warning"
-            )
-        if missing:
-            logger.warning(
-                f"RECONCILIATION: {len(missing)} position(s) dans le state "
-                f"mais plus dans Alpaca: {sorted(missing)}"
-            )
-
-        if not orphans and not missing:
-            logger.info(
-                f"RECONCILIATION OK: {len(alpaca_symbols)} position(s) Alpaca "
-                f"correspondent au state"
-            )
-
-        account = client.get_account_info()
-        logger.info(
-            f"RECONCILIATION: equity=${account['equity']:,.2f} "
-            f"cash=${account['cash']:,.2f} positions={len(alpaca_positions)}"
-        )
-
-    except Exception as e:
-        logger.error(f"RECONCILIATION ECHOUEE: {e}", exc_info=True)
-
-
-def check_positions_after_close():
-    """
-    Verifie apres 16:00 ET si des positions intraday sont encore ouvertes.
-    Log CRITICAL si c'est le cas.
-    """
-    try:
-        from core.alpaca_client.client import AlpacaClient
-        from scripts.paper_portfolio import load_state
-
-        state = load_state()
-        intraday_pos = state.get("intraday_positions", {})
-
-        client = AlpacaClient.from_env()
-        alpaca_positions = client.get_positions()
-
-        # FIX: check ALL Alpaca positions, not just those in state
-        # (orphan positions not tracked in state must also be closed)
-        if not alpaca_positions:
-            return  # No positions, nothing to close
-
-        still_open = {p["symbol"] for p in alpaca_positions}
-        if still_open:
-            logger.critical(
-                f"POSITIONS INTRADAY NON FERMEES APRES 16:00 ET: {sorted(still_open)}. "
-                f"Auto-close en cours..."
-            )
-            try:
-                from core.telegram_alert import send_position_not_closed
-                send_position_not_closed(sorted(still_open))
-            except Exception:
-                pass
-            for sym in still_open:
-                for p in alpaca_positions:
-                    if p["symbol"] == sym:
-                        logger.critical(
-                            f"  NON FERME: {sym} qty={p['qty']} "
-                            f"val=${p['market_val']:,.2f} P&L=${p['unrealized_pl']:+.2f}"
-                        )
-
-            # Auto-close orphan intraday positions — close one by one (more robust)
-            _closed = []
-            _failed = []
-            for sym in still_open:
-                try:
-                    client.close_position(sym, _authorized_by="auto_close_15_55")
-                    _closed.append(sym)
-                    logger.critical(f"  AUTO-CLOSE OK: {sym}")
-                except Exception as close_err:
-                    _failed.append(f"{sym}: {close_err}")
-                    logger.critical(f"  AUTO-CLOSE FAIL {sym}: {close_err}")
-
-            # Clear from state
-            for sym in _closed:
-                intraday_pos.pop(sym, None)
-            from scripts.paper_portfolio import save_state
-            save_state(state)
-
-            if _closed:
-                _send_alert(
-                    f"AUTO-CLOSE 16:00 ET: {', '.join(_closed)} ferme(s)",
-                    level="critical",
-                )
-            if _failed:
-                _send_alert(
-                    f"ECHEC AUTO-CLOSE 16:00 ET: {'; '.join(_failed)}",
-                    level="critical",
-                )
-    except Exception as e:
-        logger.error(f"Erreur check_positions_after_close: {e}")
-
-
-def _telegram_heartbeat_full():
-    """Heartbeat enrichi multi-broker pour Telegram (toutes les 30 min)."""
-    lines = [f"HEARTBEAT {datetime.now(PARIS).strftime('%H:%M')} CET"]
-
-    # Alpaca
-    try:
-        from core.alpaca_client.client import AlpacaClient
-        client = AlpacaClient.from_env()
-        acct = client.get_account_info()
-        positions = client.get_positions()
-        total_pnl = sum(p.get("unrealized_pl", 0) for p in positions)
-        lines.append(f"\nALPACA (paper): ${acct['equity']:,.0f}")
-        lines.append(f"  {len(positions)} pos, PnL ${total_pnl:+,.0f}")
-        for p in positions:
-            lines.append(f"  {p['symbol']} {p.get('side','?')} {p.get('qty',0)} PnL=${p.get('unrealized_pl',0):+.1f}")
-    except Exception as e:
-        lines.append(f"\nALPACA: {e}")
-
-    # Binance
-    if os.getenv("BINANCE_API_KEY"):
-        try:
-            from core.broker.binance_broker import BinanceBroker
-            broker = BinanceBroker()
-            acct = broker.get_account_info()
-            positions = broker.get_positions()
-            eq = float(acct.get("equity", 0))
-            lines.append(f"\nBINANCE (LIVE): ${eq:,.0f}")
-            lines.append(f"  {len(positions)} pos")
-            for p in positions[:5]:
-                lines.append(f"  {p.get('symbol')} {p.get('side','')} qty={p.get('qty',0)}")
-        except Exception as e:
-            lines.append(f"\nBINANCE: {e}")
-
-    # IBKR
-    try:
-        import socket
-        host = os.getenv("IBKR_HOST", "127.0.0.1")
-        port = int(os.getenv("IBKR_PORT", "4002"))
-        with socket.create_connection((host, port), timeout=3):
-            pass
-        lines.append(f"\nIBKR (LIVE): gateway UP, ${os.getenv('IBKR_PORT','4002')}")
-    except Exception:
-        lines.append(f"\nIBKR: gateway DOWN")
-
-    # System
-    try:
-        import psutil
-        mem = psutil.Process().memory_info().rss / 1024 / 1024
-        lines.append(f"\nRAM: {mem:.0f}MB")
-    except Exception:
-        pass
-
-    _send_alert("\n".join(lines), level="info")
-
-
-_HEARTBEAT_FILE = ROOT / "data" / "monitoring" / "heartbeat.json"
-_HEARTBEAT_FILE.parent.mkdir(parents=True, exist_ok=True)
-
-
-def log_heartbeat():
-    """Log un heartbeat avec l'etat du worker (positions, equity)."""
-    _log_event("heartbeat", details={"source": "worker_main_loop"})
-
-    # CRO H-2: persist heartbeat timestamp for dead man's switch
-    try:
-        _HEARTBEAT_FILE.write_text(json.dumps({
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "pid": os.getpid(),
-        }))
-    except Exception:
-        pass  # Never block for monitoring write
-    # CRO M-6: heartbeat must not depend on a single broker
-    # Memory monitoring first (never fails)
-    try:
-        import psutil
-        process = psutil.Process()
-        mem_mb = process.memory_info().rss / 1024 / 1024
-        logger.info(f"HEARTBEAT: worker alive, RAM={mem_mb:.0f}MB, PID={os.getpid()}")
-        if mem_mb > 500:
-            logger.warning(f"MEMORY WARNING: worker utilise {mem_mb:.0f}MB (>500MB)")
-    except ImportError:
-        logger.info("HEARTBEAT: worker alive (psutil not installed)")
-
-    # Alpaca (best-effort)
-    try:
-        from core.alpaca_client.client import AlpacaClient
-        client = AlpacaClient.from_env()
-        account = client.get_account_info()
-        positions = client.get_positions()
-        total_pnl = sum(p.get("unrealized_pl", 0) for p in positions)
-        logger.info(
-            f"  Alpaca: equity=${account['equity']:,.2f}, "
-            f"{len(positions)} pos, P&L=${total_pnl:+.2f}"
-        )
-    except Exception as e:
-        logger.info(f"  Alpaca: unavailable ({e})")
-
-    # Telegram heartbeat: handled by V2 digest (5x/day, not every 30 min)
-
 
 def run_daily():
     """Execute le portfolio daily (3 strategies)."""
@@ -672,8 +198,9 @@ def run_fx_carry_cycle():
             return
 
         # Refresh daily bars from IBKR before reading parquets
-        import pandas as pd
         from pathlib import Path
+
+        import pandas as pd
         data_dir = Path(__file__).resolve().parent / "data" / "fx"
         data_dir.mkdir(parents=True, exist_ok=True)
 
@@ -924,8 +451,8 @@ def run_futures_paper_cycle():
         os.environ["IBKR_PAPER"] = "true"
 
         try:
-            from core.broker.ibkr_adapter import IBKRBroker
             from core.broker.factory import _broker_cache
+            from core.broker.ibkr_adapter import IBKRBroker
             _broker_cache.pop("ibkr", None)
             import random as _fut_rng
             ibkr = IBKRBroker(client_id=_fut_rng.randint(70, 79))  # random to avoid zombie
@@ -972,7 +499,7 @@ def run_futures_paper_cycle():
 
         # Setup DataFeed
         from core.backtester_v2.data_feed import DataFeed
-        from core.backtester_v2.types import Bar, PortfolioState
+        from core.backtester_v2.types import PortfolioState
         feed = DataFeed(data_sources)
 
         # Set timestamp to now (all bars visible)
@@ -1068,10 +595,10 @@ def run_fx_paper_cycle():
         os.environ["IBKR_PAPER"] = "true"
 
         try:
-            from core.broker.ibkr_adapter import IBKRBroker
-            from core.broker.factory import _broker_cache
             # clientId=2 pour eviter conflit avec EU paper (clientId=1) sur port 4003
             import random as _fx_rng
+
+            from core.broker.ibkr_adapter import IBKRBroker
             ibkr = IBKRBroker(client_id=_fx_rng.randint(80, 89))
             ibkr_info = ibkr.get_account_info()
             equity = float(ibkr_info.get("equity", 0))
@@ -1190,8 +717,8 @@ def run_live_risk_cycle():
         logger.warning("SKIP live risk cycle — previous risk check still running")
         return
     try:
-        from core.risk_manager_live import LiveRiskManager
         from core.kill_switch_live import LiveKillSwitch
+        from core.risk_manager_live import LiveRiskManager
 
         risk_mgr = LiveRiskManager()
 
@@ -1238,7 +765,7 @@ def run_live_risk_cycle():
                 _ldd = json.loads(_live_dd_path.read_text(encoding="utf-8"))
                 _saved_eq = _ldd.get("daily_start_equity")
                 _saved_date = _ldd.get("date", "")
-                today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                today_str = datetime.now(UTC).strftime("%Y-%m-%d")
                 if _saved_date == today_str and _saved_eq and float(_saved_eq) > 0:
                     daily_start_equity = float(_saved_eq)
                 else:
@@ -1251,7 +778,7 @@ def run_live_risk_cycle():
             else:
                 _live_dd_path.write_text(json.dumps({
                     "daily_start_equity": equity,
-                    "date": datetime.now(timezone.utc).strftime("%Y-%m-%d"),
+                    "date": datetime.now(UTC).strftime("%Y-%m-%d"),
                 }))
         except Exception as _e:
             logger.warning(f"Could not load live daily_start_equity: {_e}")
@@ -1377,9 +904,9 @@ def run_live_risk_cycle():
 
         # --- SAFE-003 : LivePerformanceGuard (auto-disable strats) ---
         try:
-            from core.live_performance_guard import LivePerformanceGuard, DISABLE, ALERT
+            from core.live_performance_guard import ALERT, DISABLE, LivePerformanceGuard
             guard = LivePerformanceGuard()
-            state = json.loads((ROOT / "paper_portfolio_state.json").read_text(encoding="utf-8")) if (ROOT / "paper_portfolio_state.json").exists() else {}
+            state = json.loads((ROOT / "data" / "state" / "paper_portfolio_state.json").read_text(encoding="utf-8")) if (ROOT / "data" / "state" / "paper_portfolio_state.json").exists() else {}
             pnl_log = state.get("strategy_pnl_log", {})
             for strat_id, entries in pnl_log.items():
                 trades = [{"pnl": e.get("pnl", 0)} for e in entries]
@@ -1410,41 +937,6 @@ def run_live_risk_cycle():
         _risk_lock.release()
 
 
-# --- Telegram push alerts for live monitoring ---
-_telegram_bot = None
-
-
-def _get_telegram_bot():
-    """Lazy-init Telegram bot for push alerts (not polling)."""
-    global _telegram_bot
-    if _telegram_bot is not None:
-        return _telegram_bot
-    token = os.getenv("TELEGRAM_BOT_TOKEN")
-    chat_id = os.getenv("TELEGRAM_CHAT_ID")
-    if not token or not chat_id:
-        return None
-    try:
-        from core.telegram.crypto_bot import CryptoTelegramBot
-        _telegram_bot = CryptoTelegramBot(
-            token=token, authorized_chat_id=int(chat_id),
-        )
-        logger.info("Telegram bot initialized for push alerts")
-        return _telegram_bot
-    except Exception as e:
-        logger.warning(f"Telegram bot init failed: {e}")
-        return None
-
-
-def _telegram_notify_legacy(message: str, level: str = "INFO"):
-    """DEPRECATED: Legacy V1 Telegram. Use _send_alert() which routes to V2."""
-    bot = _get_telegram_bot()
-    if bot:
-        try:
-            bot.send_alert(level, message)
-        except Exception as e:
-            logger.warning(f"Telegram send failed: {e}")
-
-
 def _enrich_crypto_kwargs(
     kwargs, strat_id, config, broker, primary_symbol, positions, equity, pd
 ):
@@ -1457,7 +949,7 @@ def _enrich_crypto_kwargs(
     - External data (BTC dominance, funding rates)
     - Ratio/multi-asset data
     """
-    now_utc = datetime.now(timezone.utc)
+    now_utc = datetime.now(UTC)
 
     # --- Temporal flags ---
     is_sunday = now_utc.weekday() == 6
@@ -1826,7 +1318,7 @@ def run_crypto_cycle():
     try:
         # FIX CRO H-5 : check trading_paused_until before any crypto activity
         try:
-            _pause_state_path = ROOT / "paper_portfolio_state.json"
+            _pause_state_path = ROOT / "data" / "state" / "paper_portfolio_state.json"
             if _pause_state_path.exists():
                 _pause_state = json.loads(
                     _pause_state_path.read_text(encoding="utf-8")
@@ -1834,7 +1326,7 @@ def run_crypto_cycle():
                 _paused_until = _pause_state.get("trading_paused_until")
                 if _paused_until:
                     _pause_dt = datetime.fromisoformat(_paused_until)
-                    if datetime.now(timezone.utc) < _pause_dt:
+                    if datetime.now(UTC) < _pause_dt:
                         logger.warning(
                             f"CRYPTO CYCLE SKIP — trading paused until "
                             f"{_paused_until}"
@@ -1900,7 +1392,7 @@ def run_crypto_cycle():
             # (the original trigger was likely a false positive from stale baselines)
             _ks_age_h = 0
             if risk_mgr.kill_switch._trigger_time:
-                _ks_age_h = (datetime.now(timezone.utc) - risk_mgr.kill_switch._trigger_time).total_seconds() / 3600
+                _ks_age_h = (datetime.now(UTC) - risk_mgr.kill_switch._trigger_time).total_seconds() / 3600
             if _ks_age_h > 24:
                 logger.warning(
                     f"CRYPTO KILL SWITCH AUTO-RESET: active {_ks_age_h:.0f}h "
@@ -2027,18 +1519,18 @@ def run_crypto_cycle():
 
                 # Auto-reset daily/weekly/monthly si le jour/semaine/mois a change
                 last_date = _dd.get("last_date", "")
-                today_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+                today_str = datetime.now(UTC).strftime("%Y-%m-%d")
                 if last_date != today_str:
                     risk_mgr._daily_start_equity = dd_equity
                     logger.info(f"  Crypto DD: daily reset {last_date} -> {today_str}, start=${dd_equity:,.0f}")
 
                 last_week = _dd.get("last_week", "")
-                this_week = datetime.now(timezone.utc).strftime("%Y-W%W")
+                this_week = datetime.now(UTC).strftime("%Y-W%W")
                 if last_week != this_week:
                     risk_mgr._weekly_start_equity = dd_equity
 
                 last_month = _dd.get("last_month", "")
-                this_month = datetime.now(timezone.utc).strftime("%Y-%m")
+                this_month = datetime.now(UTC).strftime("%Y-%m")
                 if last_month != this_month:
                     risk_mgr._monthly_start_equity = dd_equity
             else:
@@ -2102,7 +1594,7 @@ def run_crypto_cycle():
         # Persister l'etat drawdown pour le prochain cycle
         try:
             _crypto_dd_path.parent.mkdir(parents=True, exist_ok=True)
-            _now_utc = datetime.now(timezone.utc)
+            _now_utc = datetime.now(UTC)
             _crypto_dd_path.write_text(json.dumps({
                 "peak_equity": risk_mgr._peak_equity,
                 "daily_start": risk_mgr._daily_start_equity,
@@ -2151,7 +1643,7 @@ def run_crypto_cycle():
                 # Chaque strategie recoit un candle pd.Series et un state dict
                 candle_data = {"close": 0, "open": 0, "high": 0, "low": 0,
                                "volume": 0, "timestamp": datetime.now(
-                                   timezone.utc).isoformat()}
+                                   UTC).isoformat()}
 
                 # Tenter de recuperer le dernier prix via Binance
                 # FIX: Binance France TRD_GRP_002 bloque les paires USDT.
@@ -2178,7 +1670,7 @@ def run_crypto_cycle():
                                 "low": last_bar["l"],
                                 "volume": last_bar["v"],
                                 "timestamp": datetime.now(
-                                    timezone.utc
+                                    UTC
                                 ).isoformat(),
                             }
                             # Construire df_full pour les strategies qui en ont besoin
@@ -2607,15 +2099,15 @@ V10_CYCLE_INTERVAL = 300  # 5 minutes
 def _init_v10_modules():
     """Initialize V10 portfolio-aware risk modules."""
     try:
-        from core.risk.live_correlation_engine import LiveCorrelationEngine
-        from core.risk.effective_risk import EffectiveRiskExposure
-        from core.risk.risk_budget_allocator import RiskBudgetAllocator
-        from core.risk.leverage_adapter import LeverageAdapter
-        from core.risk.strategy_throttler import StrategyThrottler
-        from core.risk.safety_mode import SafetyMode
         from core.execution.execution_monitor import ExecutionMonitor
-        from core.portfolio.portfolio_state import PortfolioStateEngine
         from core.portfolio.live_logger import LiveSnapshotLogger
+        from core.portfolio.portfolio_state import PortfolioStateEngine
+        from core.risk.effective_risk import EffectiveRiskExposure
+        from core.risk.leverage_adapter import LeverageAdapter
+        from core.risk.live_correlation_engine import LiveCorrelationEngine
+        from core.risk.risk_budget_allocator import RiskBudgetAllocator
+        from core.risk.safety_mode import SafetyMode
+        from core.risk.strategy_throttler import StrategyThrottler
 
         corr_engine = LiveCorrelationEngine(data_dir=str(ROOT / "data"))
         ere_calc = EffectiveRiskExposure(correlation_engine=corr_engine)
@@ -2797,8 +2289,9 @@ def _init_v12_modules():
         except Exception:
             pass
         try:
-            from core.broker.ibkr_adapter import IBKRBroker
             import socket as _ec_sock
+
+            from core.broker.ibkr_adapter import IBKRBroker
             _ec_host = os.getenv("IBKR_HOST", "127.0.0.1")
             _ec_port = int(os.getenv("IBKR_PORT", "4002"))
             with _ec_sock.create_connection((_ec_host, _ec_port), timeout=2):
@@ -2940,8 +2433,8 @@ def _collect_fx_regime_metrics() -> dict:
         "volume_ratio": 1.0,
     }
     try:
-        import pandas as pd
         import numpy as np
+        import pandas as pd
         # Try loading FX data from parquet files
         fx_data_dir = ROOT / "data" / "fx"
         if fx_data_dir.exists():
@@ -2975,8 +2468,8 @@ def _collect_crypto_regime_metrics() -> dict:
         "volume_ratio": 1.0,
     }
     try:
-        import pandas as pd
         import numpy as np
+        import pandas as pd
         crypto_data_dir = ROOT / "data" / "crypto"
         if crypto_data_dir.exists():
             for btc_file in ["BTCUSDC_1D.parquet", "BTCUSDT_1D.parquet", "BTC_1D.parquet"]:
@@ -3058,7 +2551,7 @@ def run_v11_hrp_rebalance():
             pass
 
         if total_equity > 0:
-            _v11_kelly.update_equity(datetime.now(timezone.utc), total_equity)
+            _v11_kelly.update_equity(datetime.now(UTC), total_equity)
             mode = _v11_kelly.get_kelly_mode()
             logger.info(
                 f"V11 KELLY: mode={mode['mode']}, fraction={mode['fraction']:.3f}, "
@@ -3268,8 +2761,6 @@ def main():
     # NOTE: ne PAS importer run_intraday ici — ca shadow la wrapper locale
     # qui accepte le param market="US"/"EU"
     try:
-        from scripts.paper_portfolio import run as _check_run
-        from scripts.paper_portfolio import run_intraday as _check_run_intraday
         logger.info("  Imports paper_portfolio OK")
     except Exception as e:
         logger.error(f"  ERREUR IMPORT: {e}", exc_info=True)
@@ -3469,6 +2960,7 @@ def main():
             _ror_done_today = True
             try:
                 import numpy as np
+
                 from core.risk.ruin_scheduler import RuinScheduler
 
                 # Build returns matrix from crypto equity tracking
@@ -3523,7 +3015,7 @@ def main():
         # FIX CRO H-6 : check trading_paused_until before run_daily
         _daily_paused = False
         try:
-            _d_state_path = ROOT / "paper_portfolio_state.json"
+            _d_state_path = ROOT / "data" / "state" / "paper_portfolio_state.json"
             if _d_state_path.exists():
                 _d_state = json.loads(
                     _d_state_path.read_text(encoding="utf-8")
@@ -3531,7 +3023,7 @@ def main():
                 _d_paused_until = _d_state.get("trading_paused_until")
                 if _d_paused_until:
                     _d_pause_dt = datetime.fromisoformat(_d_paused_until)
-                    if datetime.now(timezone.utc) < _d_pause_dt:
+                    if datetime.now(UTC) < _d_pause_dt:
                         _daily_paused = True
         except Exception:
             pass
@@ -3671,8 +3163,8 @@ def main():
                 # V12 Cross-Asset Correlation (if data available)
                 if _v12_cross_corr:
                     try:
-                        import pandas as pd
                         import numpy as np
+                        import pandas as pd
                         returns_by_asset = {}
                         # BTC returns from crypto data
                         for btc_file in ["BTCUSDC_1D.parquet", "BTCUSDT_1D.parquet"]:
@@ -3742,6 +3234,7 @@ def main():
                 and now_paris.hour == 7 and now_paris.minute < 15):
             try:
                 import numpy as np
+
                 from core.risk.ruin_scheduler import RuinScheduler
                 # Build returns matrix from available data
                 _ror_returns = []

@@ -20,8 +20,7 @@ Key features:
 from __future__ import annotations
 
 import logging
-from datetime import date, datetime, time, timedelta, timezone
-from typing import Optional
+from datetime import UTC, date, datetime, time, timedelta
 from zoneinfo import ZoneInfo
 
 import pandas as pd
@@ -29,7 +28,7 @@ import pandas as pd
 logger = logging.getLogger(__name__)
 
 # -- Timezones --
-_UTC = timezone.utc
+_UTC = UTC
 _PARIS = ZoneInfo("Europe/Paris")
 _LONDON = ZoneInfo("Europe/London")
 _NEW_YORK = ZoneInfo("America/New_York")
@@ -191,7 +190,7 @@ class SessionManager:
     # Session boundaries
     # ------------------------------------------------------------------
 
-    def get_session(self, market: str, dt: date) -> Optional[dict]:
+    def get_session(self, market: str, dt: date) -> dict | None:
         """Return session boundaries for a market on a given date.
 
         Args:
@@ -252,7 +251,7 @@ class SessionManager:
             "tz": mdef["tz_name"],
         }
 
-    def _get_fx_session(self, dt: date) -> Optional[dict]:
+    def _get_fx_session(self, dt: date) -> dict | None:
         """Return FX session for a given date.
 
         FX is continuous from Sunday 17:00 ET to Friday 17:00 ET.
@@ -548,7 +547,7 @@ class SessionManager:
         df: pd.DataFrame,
         market: str,
         dt: date,
-    ) -> Optional[pd.Series]:
+    ) -> pd.Series | None:
         """Return the first valid bar of a market session on a given date.
 
         Filters to in-session bars only, then returns the first bar of
@@ -643,7 +642,7 @@ class SessionManager:
 
     def get_next_session_open(
         self, market: str, after: datetime
-    ) -> Optional[datetime]:
+    ) -> datetime | None:
         """Find the next session open time after a given timestamp.
 
         Args:

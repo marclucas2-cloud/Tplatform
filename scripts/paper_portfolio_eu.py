@@ -18,6 +18,7 @@ Usage :
 from __future__ import annotations
 
 import asyncio
+
 try:
     asyncio.get_event_loop()
 except RuntimeError:
@@ -26,18 +27,17 @@ except RuntimeError:
 import argparse
 import json
 import logging
-import os
 import sys
-from datetime import datetime, date as dt_date, timedelta, timezone
+from datetime import UTC, datetime, timedelta
+from datetime import date as dt_date
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
-import pandas as pd
 import yaml
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 from dotenv import load_dotenv
+
 load_dotenv(Path(__file__).parent.parent / ".env")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(name)s] %(message)s")
@@ -93,7 +93,7 @@ def load_strategies_from_yaml(path: Path = STRATEGIES_YAML) -> dict:
     Returns:
         dict {strategy_id: {name, enabled, sharpe, ...}}
     """
-    with open(path, "r", encoding="utf-8") as f:
+    with open(path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     strategies = data.get("strategies", {})
@@ -142,9 +142,9 @@ def load_state() -> dict:
     """Charge le state depuis le fichier JSON (ou reconstruit depuis IBKR)."""
     if STATE_FILE.exists():
         try:
-            with open(STATE_FILE, "r") as f:
+            with open(STATE_FILE) as f:
                 return json.load(f)
-        except (json.JSONDecodeError, IOError):
+        except (OSError, json.JSONDecodeError):
             logger.warning("State file corrompu, reconstruction")
 
     logger.info("Reconstruction du state EU...")
@@ -173,7 +173,7 @@ def load_state() -> dict:
                 "strategy": "unknown",
                 "direction": "LONG" if float(p.get("qty", 0)) > 0 else "SHORT",
                 "entry_price": float(p.get("avg_entry", 0)),
-                "opened_at": datetime.now(timezone.utc).isoformat(),
+                "opened_at": datetime.now(UTC).isoformat(),
             }
         logger.info("  Equity IBKR: $%.2f, %d positions", info["equity"], len(positions))
     except Exception as e:
@@ -188,7 +188,7 @@ def save_state(state: dict):
     try:
         with open(STATE_FILE, "w") as f:
             json.dump(state, f, indent=2, default=str)
-    except IOError as e:
+    except OSError as e:
         logger.warning("Impossible de sauvegarder le state EU: %s", e)
 
 
@@ -897,7 +897,7 @@ def execute_eu_signals(
                     "entry_price": sig.get("entry_price", 0),
                     "stop_loss": sl,
                     "take_profit": tp,
-                    "opened_at": datetime.now(timezone.utc).isoformat(),
+                    "opened_at": datetime.now(UTC).isoformat(),
                     "broker": getattr(exec_broker, 'name', 'unknown'),
                 }
 
@@ -1151,7 +1151,7 @@ def show_status():
     state = load_state()
 
     print(f"\n{'='*60}")
-    print(f"  PAPER PORTFOLIO EU — MULTI-STRATEGY DASHBOARD")
+    print("  PAPER PORTFOLIO EU — MULTI-STRATEGY DASHBOARD")
     print(f"{'='*60}")
 
     total_capital = state.get("capital", _FALLBACK_CAPITAL_EU)
@@ -1194,7 +1194,7 @@ def show_status():
     # Kill switch status
     pnl_log = state.get("strategy_pnl_log", {})
     if pnl_log:
-        print(f"\n  Kill Switch Status:")
+        print("\n  Kill Switch Status:")
         for sid, logs in pnl_log.items():
             recent = logs[-STRATEGY_KILL_SWITCH_DAYS:] if len(logs) >= STRATEGY_KILL_SWITCH_DAYS else logs
             rolling_pnl = sum(e.get("pnl", 0) for e in recent)

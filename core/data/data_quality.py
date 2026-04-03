@@ -21,9 +21,8 @@ from __future__ import annotations
 import json
 import logging
 import threading
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -354,13 +353,13 @@ class DataQualityGuard:
             (is_stale, seconds_since_last)
         """
         if now is None:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
 
         # S'assurer que les deux timestamps sont comparables
         if last_timestamp.tzinfo is None:
-            last_timestamp = last_timestamp.replace(tzinfo=timezone.utc)
+            last_timestamp = last_timestamp.replace(tzinfo=UTC)
         if now.tzinfo is None:
-            now = now.replace(tzinfo=timezone.utc)
+            now = now.replace(tzinfo=UTC)
 
         delta = (now - last_timestamp).total_seconds()
         threshold = self.thresholds.get(market, {}).get(
@@ -385,7 +384,7 @@ class DataQualityGuard:
             ticker: symbole du ticker a geler
             duration_minutes: duree du gel en minutes
         """
-        expiration = datetime.now(timezone.utc) + timedelta(minutes=duration_minutes)
+        expiration = datetime.now(UTC) + timedelta(minutes=duration_minutes)
         with self._lock:
             self._frozen_tickers[ticker] = expiration
 
@@ -410,7 +409,7 @@ class DataQualityGuard:
                 return False
 
             expiration = self._frozen_tickers[ticker]
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             if now >= expiration:
                 del self._frozen_tickers[ticker]
                 return False
@@ -431,7 +430,7 @@ class DataQualityGuard:
     def get_frozen_tickers(self) -> dict[str, datetime]:
         """Retourne la liste des tickers geles avec leur expiration."""
         with self._lock:
-            now = datetime.now(timezone.utc)
+            now = datetime.now(UTC)
             # Nettoyer les expires
             self._frozen_tickers = {
                 t: exp for t, exp in self._frozen_tickers.items()
@@ -579,7 +578,7 @@ class DataQualityGuard:
         Fichier: data/data_quality_log.jsonl
         """
         entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "event": "bad_tick",
             "market": market,
             "ticker": candle.get("ticker", candle.get("symbol", "")),
@@ -603,7 +602,7 @@ class DataQualityGuard:
     @staticmethod
     def read_quality_log(
         limit: int = 100,
-        ticker: Optional[str] = None,
+        ticker: str | None = None,
     ) -> list[dict]:
         """Lit les dernieres entrees du log de qualite.
 
@@ -619,7 +618,7 @@ class DataQualityGuard:
 
         entries = []
         try:
-            with open(_LOG_FILE, "r", encoding="utf-8") as f:
+            with open(_LOG_FILE, encoding="utf-8") as f:
                 for line in f:
                     line = line.strip()
                     if not line:

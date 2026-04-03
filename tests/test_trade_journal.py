@@ -12,16 +12,12 @@ Covers:
   - P&L period reports
   - Edge cases (cancel, partial fills, double close)
 """
-import os
-import math
-import tempfile
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pytest
 
-from core.trade_journal import TradeJournal, FUTURES_MULTIPLIERS
-
+from core.trade_journal import TradeJournal
 
 # ─── Fixtures ───────────────────────────────────────────────────────────────
 
@@ -47,7 +43,7 @@ def live_journal(tmp_path):
 
 def _ts(offset_seconds=0):
     """UTC ISO timestamp with optional offset."""
-    return (datetime.now(timezone.utc) + timedelta(seconds=offset_seconds)).isoformat()
+    return (datetime.now(UTC) + timedelta(seconds=offset_seconds)).isoformat()
 
 
 def _open_and_close_equity(journal, strategy="TEST_STRAT", instrument="AAPL",
@@ -305,7 +301,7 @@ class TestTradeIDGeneration:
             )
             ids.append(tid)
 
-        year = datetime.now(timezone.utc).strftime("%Y")
+        year = datetime.now(UTC).strftime("%Y")
         assert ids[0] == f"PAPER-{year}-0001"
         assert ids[1] == f"PAPER-{year}-0002"
         assert ids[4] == f"PAPER-{year}-0005"
@@ -450,7 +446,7 @@ class TestQueryFilters:
         assert len(shorts) == 1
 
     def test_filter_by_date_range(self, journal):
-        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+        today = datetime.now(UTC).strftime("%Y-%m-%d")
         _open_and_close_equity(journal)
         results = journal.get_trades(start_date=today, end_date=today)
         assert len(results) >= 1

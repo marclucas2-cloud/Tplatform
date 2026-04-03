@@ -28,7 +28,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-
 STRATEGY_CONFIG = {
     "name": "BTC/ETH Dual Momentum",
     "id": "STRAT-001",

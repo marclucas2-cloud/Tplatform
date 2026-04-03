@@ -11,8 +11,7 @@ Covers:
 from __future__ import annotations
 
 import json
-import tempfile
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
@@ -23,7 +22,6 @@ from core.data.resync_guard import (
     FREQ_SECONDS,
     ResyncGuard,
 )
-
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -53,7 +51,7 @@ def _make_ohlcv(
 def _ts(minutes_offset: int = 0, base: datetime = None) -> datetime:
     """UTC datetime shifted by *minutes_offset* from *base*."""
     if base is None:
-        base = datetime(2025, 6, 1, 12, 0, tzinfo=timezone.utc)
+        base = datetime(2025, 6, 1, 12, 0, tzinfo=UTC)
     return base + timedelta(minutes=minutes_offset)
 
 

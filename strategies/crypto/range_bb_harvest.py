@@ -17,6 +17,7 @@ Signal:
 Allocation: 10%
 """
 from __future__ import annotations
+
 import numpy as np
 import pandas as pd
 

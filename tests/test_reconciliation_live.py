@@ -21,17 +21,16 @@ Covers:
   - Broker API error handling
 """
 
-import json
 import sys
-import pytest
 from pathlib import Path
 from unittest.mock import MagicMock
+
+import pytest
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from core.reconciliation_live import LiveReconciliation
-
 
 # =============================================================================
 # FIXTURES

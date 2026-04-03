@@ -1,3 +1,3 @@
-from .validator import StrategyValidator, StrategyValidationError
+from .validator import StrategyValidationError, StrategyValidator
 
-__all__ = ["StrategyValidator", "StrategyValidationError"]
+__all__ = ["StrategyValidationError", "StrategyValidator"]

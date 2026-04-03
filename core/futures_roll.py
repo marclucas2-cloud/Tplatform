@@ -16,7 +16,6 @@ import json
 import logging
 from datetime import date, datetime, timedelta
 from pathlib import Path
-from typing import Any
 
 from core.broker.ibkr_futures import FuturesContractManager
 

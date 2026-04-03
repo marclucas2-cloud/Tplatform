@@ -45,8 +45,8 @@ class CostModelFactory:
             Mapping of broker_name -> CostModel instance.
         """
         # Late import to avoid circular deps
-        from core.backtester_v2.cost_models.ibkr_costs import IBKRCostModel
         from core.backtester_v2.cost_models.binance_costs import BinanceCostModel
+        from core.backtester_v2.cost_models.ibkr_costs import IBKRCostModel
 
         cls._registry.setdefault("ibkr", IBKRCostModel)
         cls._registry.setdefault("binance", BinanceCostModel)

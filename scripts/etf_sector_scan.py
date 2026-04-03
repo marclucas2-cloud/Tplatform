@@ -30,7 +30,6 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.backtest.engine import BacktestEngine
 from core.data.loader import OHLCVLoader
 from core.optimization.grid_search import GridSearch
 
@@ -197,7 +196,7 @@ def save_winner(ticker: str, base_strategy: dict, best) -> None:
     s["strategy_id"] = f"rsi_{ticker.lower()}_1d_opt_v1"
     s["asset"] = ticker
     s["created_at"] = datetime.datetime.now(
-        datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        datetime.UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     s["description"] = (
         f"RSI Mean Reversion sur {ticker} daily — optimise par grid search. "
         f"IS Sharpe {best.is_sharpe:+.3f}, OOS Sharpe {best.oos_sharpe:+.3f}."
@@ -255,7 +254,7 @@ def print_results(results: list[dict]) -> None:
           f"{len(positifs)} OOS positifs, {len(robustes)} ROBUSTES")
 
     if robustes:
-        print(f"\n  *** ETFs ROBUSTES (OOS Sharpe > 0.8) ***")
+        print("\n  *** ETFs ROBUSTES (OOS Sharpe > 0.8) ***")
         for r in robustes:
             p = r["best_params"]
             print(f"  {r['ticker']:<6} Sharpe OOS {r['oos_sharpe']:+.3f} | "
@@ -267,7 +266,7 @@ def print_results(results: list[dict]) -> None:
     prometteurs = [r for r in results
                    if 0.5 < r["oos_sharpe"] <= 0.8 and r["oos_trades"] >= 10]
     if prometteurs:
-        print(f"\n  * ETFs PROMETTEURS (OOS Sharpe 0.5-0.8) *")
+        print("\n  * ETFs PROMETTEURS (OOS Sharpe 0.5-0.8) *")
         for r in prometteurs:
             p = r["best_params"]
             print(f"  {r['ticker']:<6} Sharpe OOS {r['oos_sharpe']:+.3f} | "
@@ -292,14 +291,14 @@ def main():
         n_combos *= len(v)
 
     print(f"\n{'='*80}")
-    print(f"  SCAN RSI MEAN REVERSION — ETFs SECTORIELS")
+    print("  SCAN RSI MEAN REVERSION — ETFs SECTORIELS")
     print(f"{'='*80}")
     print(f"  Capital     : ${args.capital:,.0f}")
-    print(f"  Position    : 5% du capital par trade")
-    print(f"  Couts       : spread 0.01% + slippage 0.02% du prix")
-    print(f"  Donnees     : yfinance 1D, 5 ans")
+    print("  Position    : 5% du capital par trade")
+    print("  Couts       : spread 0.01% + slippage 0.02% du prix")
+    print("  Donnees     : yfinance 1D, 5 ans")
     print(f"  Grid        : {n_combos} combinaisons x {len(ETF_UNIVERSE)} ETFs")
-    print(f"  WF          : 3 fenetres sur IS (70/30)")
+    print("  WF          : 3 fenetres sur IS (70/30)")
     print(f"  Sauvegarde  : {'OUI' if args.save else 'NON'}")
     print(f"{'='*80}")
 

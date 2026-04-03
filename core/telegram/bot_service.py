@@ -15,18 +15,19 @@ Commandes:
   /kill CONFIRM — KILL SWITCH (ferme tout)
   /help       — Commandes
 """
-import os
-import sys
 import json
 import logging
+import os
 import subprocess
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
 
 ROOT = Path(__file__).resolve().parent.parent.parent
 sys.path.insert(0, str(ROOT))
 
 from dotenv import load_dotenv
+
 load_dotenv(ROOT / ".env")
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
@@ -35,8 +36,9 @@ logger = logging.getLogger("telegram-bot")
 TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN", "")
 CHAT_ID = int(os.environ.get("TELEGRAM_CHAT_ID", "0"))
 
-from telegram import Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+
+from telegram import Update
 
 
 def _auth(update: Update) -> bool:
@@ -184,7 +186,7 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     pnl = nav_live - total_deposited
     pnl_pct = (pnl / total_deposited * 100) if total_deposited > 0 else 0
 
-    now = datetime.now(timezone.utc).strftime("%H:%M UTC")
+    now = datetime.now(UTC).strftime("%H:%M UTC")
     sign = "+" if pnl >= 0 else ""
 
     text = (
@@ -278,7 +280,7 @@ async def cmd_crypto(update: Update, context: ContextTypes.DEFAULT_TYPE):
     bnb = _binance_info()
     equity = float(bnb.get("equity", 0))
 
-    lines = [f"🪙 *Crypto Binance* — LIVE\n", f"Equity: `${equity:,.0f}`\n"]
+    lines = ["🪙 *Crypto Binance* — LIVE\n", f"Equity: `${equity:,.0f}`\n"]
 
     try:
         from strategies.crypto import CRYPTO_STRATEGIES

@@ -10,16 +10,17 @@ Covers:
 """
 
 import sys
-import tempfile
+from pathlib import Path
+
 import numpy as np
 import pytest
-from pathlib import Path
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.var_live import LiveVaRCalculator, FUTURES_MULTIPLIERS, FX_LOT_SIZE
+from datetime import UTC
 
+from core.var_live import FUTURES_MULTIPLIERS, FX_LOT_SIZE, LiveVaRCalculator
 
 # ============================================================================
 # Fixtures
@@ -366,14 +367,14 @@ class TestHistory:
     def test_var_trend_analysis(self, tmp_db):
         """Trend analysis with enough data points."""
         import sqlite3
-        from datetime import datetime, timezone, timedelta
+        from datetime import datetime, timedelta
 
         # Insert synthetic history: increasing VaR
         calc = LiveVaRCalculator(capital=10_000, db_path=tmp_db)
         with sqlite3.connect(tmp_db) as conn:
             for i in range(10):
                 date_str = (
-                    datetime.now(timezone.utc) - timedelta(days=10 - i)
+                    datetime.now(UTC) - timedelta(days=10 - i)
                 ).strftime("%Y-%m-%d")
                 conn.execute(
                     """INSERT OR REPLACE INTO var_history

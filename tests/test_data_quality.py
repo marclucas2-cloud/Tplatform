@@ -1,12 +1,11 @@
 """Tests pour le module DataQualityGuard — 42 tests."""
-import pytest
+from datetime import UTC, datetime, timedelta
+
 import numpy as np
 import pandas as pd
-from datetime import datetime, timedelta, timezone
-from unittest.mock import patch
+import pytest
 
-from core.data.data_quality import DataQualityGuard, DEFAULT_THRESHOLDS
-
+from core.data.data_quality import DataQualityGuard
 
 # ── Fixtures ──────────────────────────────────────────────────────────────────
 
@@ -267,7 +266,7 @@ class TestMissingCandles:
 class TestStaleData:
     def test_fresh_data_not_stale(self, guard):
         """Donnees recentes : pas stale."""
-        now = datetime(2025, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 3, 1, 12, 0, 0, tzinfo=UTC)
         last = now - timedelta(seconds=30)
         is_stale, seconds = guard.detect_stale_data(last, market="equities", now=now)
         assert not is_stale
@@ -275,7 +274,7 @@ class TestStaleData:
 
     def test_old_data_is_stale(self, guard):
         """Donnees de 5 min : stale pour equities (seuil 60s)."""
-        now = datetime(2025, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 3, 1, 12, 0, 0, tzinfo=UTC)
         last = now - timedelta(minutes=5)
         is_stale, seconds = guard.detect_stale_data(last, market="equities", now=now)
         assert is_stale
@@ -283,21 +282,21 @@ class TestStaleData:
 
     def test_crypto_more_tolerant(self, guard):
         """Crypto tolere 2 min avant stale."""
-        now = datetime(2025, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 3, 1, 12, 0, 0, tzinfo=UTC)
         last = now - timedelta(seconds=90)  # 1.5 min
         is_stale, _ = guard.detect_stale_data(last, market="crypto", now=now)
         assert not is_stale
 
     def test_crypto_stale_after_threshold(self, guard):
         """Crypto stale apres 2 min."""
-        now = datetime(2025, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 3, 1, 12, 0, 0, tzinfo=UTC)
         last = now - timedelta(seconds=150)  # 2.5 min
         is_stale, _ = guard.detect_stale_data(last, market="crypto", now=now)
         assert is_stale
 
     def test_naive_timestamp_handled(self, guard):
         """Timestamp sans timezone : traite comme UTC."""
-        now = datetime(2025, 3, 1, 12, 0, 0, tzinfo=timezone.utc)
+        now = datetime(2025, 3, 1, 12, 0, 0, tzinfo=UTC)
         last = datetime(2025, 3, 1, 11, 55, 0)  # Naive, 5 min avant
         is_stale, seconds = guard.detect_stale_data(last, market="equities", now=now)
         assert is_stale
@@ -321,7 +320,7 @@ class TestFreezeMechanism:
         guard.freeze_signal("BTCUSDC", duration_minutes=1)
         # Simuler le temps qui passe en modifiant directement l'expiration
         guard._frozen_tickers["BTCUSDC"] = (
-            datetime.now(timezone.utc) - timedelta(minutes=1)
+            datetime.now(UTC) - timedelta(minutes=1)
         )
         assert not guard.is_frozen("BTCUSDC")
 

@@ -18,9 +18,9 @@ from __future__ import annotations
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional
+from typing import Any, Callable, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +41,7 @@ class OrphanDetector:
       c) Its OCA group references a non-existent parent order
     """
 
-    def __init__(self, alert_callback: Optional[Callable[[str], None]] = None):
+    def __init__(self, alert_callback: Callable[[str], None] | None = None):
         """
         Args:
             alert_callback: Optional function called with a message string
@@ -199,7 +199,7 @@ class OrphanDetector:
                 logger.debug("No brackets file found at %s", brackets_file)
                 return []
 
-            with open(brackets_file, "r", encoding="utf-8") as f:
+            with open(brackets_file, encoding="utf-8") as f:
                 brackets = json.load(f)
         except (json.JSONDecodeError, OSError) as e:
             logger.warning("Failed to read brackets file %s: %s", brackets_file, e)
@@ -482,11 +482,11 @@ class OrphanDetector:
         self,
         orphan: Dict[str, Any],
         success: bool,
-        error: Optional[str] = None,
+        error: str | None = None,
     ) -> None:
         """Append a cleanup event to the JSONL log file."""
         entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "order_id": orphan.get("order_id"),
             "ticker": orphan.get("ticker"),
             "side": orphan.get("side"),

@@ -25,9 +25,6 @@ from __future__ import annotations
 
 import logging
 import time as _time
-from datetime import datetime, timezone
-from typing import Optional
-from zoneinfo import ZoneInfo
 
 import pandas as pd
 
@@ -165,7 +162,7 @@ class IBKRDataLoader:
     # Contract creation
     # ------------------------------------------------------------------
 
-    def _make_contract(self, symbol: str, exchange: Optional[str] = None):
+    def _make_contract(self, symbol: str, exchange: str | None = None):
         """Create an ib_insync contract for the given symbol.
 
         If the symbol matches a known EU index, uses predefined specs.
@@ -244,7 +241,7 @@ class IBKRDataLoader:
         symbol: str,
         duration: str = "30 D",
         bar_size: str = "5 mins",
-        exchange: Optional[str] = None,
+        exchange: str | None = None,
         what_to_show: str = "TRADES",
         use_rth: bool = True,
         end_datetime: str = "",

@@ -25,7 +25,7 @@ import shutil
 import socket
 import sys
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -151,6 +151,7 @@ def _check_ibkr_live(result: PreflightResult):
 
     try:
         import random
+
         from core.broker.ibkr_adapter import IBKRBroker
         ibkr = IBKRBroker(client_id=random.randint(90, 99))  # Random clientId to avoid conflicts
         try:
@@ -313,7 +314,7 @@ def _persist_result(result: PreflightResult):
     out_path.parent.mkdir(parents=True, exist_ok=True)
     try:
         out_path.write_text(json.dumps({
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "all_passed": result.all_passed,
             "checks": result.checks,
             "blockers": result.blockers,

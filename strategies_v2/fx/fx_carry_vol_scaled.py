@@ -23,9 +23,10 @@ Costs: $2/trade IBKR + 0.8-1.5 bps spread = ~0.05% RT on $20K notional.
 from __future__ import annotations
 
 import logging
+from typing import Any, Dict, List
+
 import numpy as np
 import pandas as pd
-from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +126,7 @@ class FXCarryVolScaled:
         sizing = target_daily / vol
         return float(np.clip(sizing, SIZING_MIN, SIZING_MAX))
 
-    def signal_fn(self, candle: pd.Series, state: dict, **kwargs) -> Optional[dict]:
+    def signal_fn(self, candle: pd.Series, state: dict, **kwargs) -> dict | None:
         """Generate carry signal for all pairs.
 
         Args:

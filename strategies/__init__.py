@@ -6,7 +6,7 @@ import os
 import sys
 
 _root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-_ibt_root = os.path.join(_root, "intraday-backtesterV2")
+_ibt_root = os.path.join(_root, "archive", "intraday-backtesterV2")
 _ibt_dir = os.path.join(_ibt_root, "strategies")
 
 # Ensure intraday-backtesterV2 is in sys.path for backtest_engine imports

@@ -20,11 +20,11 @@ ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from core.broker.ibkr_bracket import (
-    BracketOrderError,
-    BracketOrderManager,
     FUTURES_MAINTENANCE_MARGIN,
     FUTURES_SL_BUFFERS,
     FUTURES_TICK_SIZES,
+    BracketOrderError,
+    BracketOrderManager,
     FuturesBracketHandler,
 )
 

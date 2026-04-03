@@ -13,8 +13,8 @@ Creneaux (CET) :
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Dict, List, Optional
+from datetime import UTC, datetime, timedelta
+from typing import Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -71,7 +71,7 @@ class TimezoneCapitalAllocator:
         self,
         total_capital: float,
         reserve_pct: float = 0.20,
-        schedule: Optional[Dict] = None,
+        schedule: Dict | None = None,
     ):
         """
         Args:
@@ -137,7 +137,7 @@ class TimezoneCapitalAllocator:
 
         # Enregistrer l'utilisation
         self._utilization_history.append({
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "slot": slot_name,
             "hour_cet": hour_cet,
             "max_for_slot": round(max_for_slot, 2),
@@ -154,7 +154,7 @@ class TimezoneCapitalAllocator:
             "deployable": round(self.deployable_capital, 2),
         }
 
-    def get_current_slot(self, hour_cet: Optional[int] = None) -> dict:
+    def get_current_slot(self, hour_cet: int | None = None) -> dict:
         """Retourne les informations du creneau horaire actuel.
 
         Args:
@@ -167,7 +167,7 @@ class TimezoneCapitalAllocator:
             if _PARIS_TZ:
                 now_cet = datetime.now(_PARIS_TZ)
             else:
-                now_cet = datetime.now(timezone.utc) + timedelta(hours=1)
+                now_cet = datetime.now(UTC) + timedelta(hours=1)
             hour_cet = now_cet.hour
 
         for slot_name, config in self.schedule.items():
@@ -236,7 +236,7 @@ class TimezoneCapitalAllocator:
         }
 
     def is_market_active(
-        self, market: str, hour_cet: Optional[int] = None
+        self, market: str, hour_cet: int | None = None
     ) -> bool:
         """Verifie si un marche est actif dans le creneau horaire.
 

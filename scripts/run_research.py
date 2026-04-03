@@ -25,7 +25,6 @@ os.environ["RESEARCH_MODE"] = "api"  # Force le mode API Claude
 
 from orchestrator.main import Orchestrator
 
-
 # ─── Logging ──────────────────────────────────────────────────────────────────
 
 logging.basicConfig(
@@ -51,8 +50,8 @@ async def run(asset: str, timeframe: str, style: str, timeout: int = 120):
     result_data: dict = {}
 
     # ── Sous-classe MonitoringAgent pour capturer le résultat final ──────────
-    from agents.monitoring.agent import MonitoringAgent
     from agents.base_agent import AgentMessage
+    from agents.monitoring.agent import MonitoringAgent
 
     class ResultCapture(MonitoringAgent):
         async def process(self, message: AgentMessage):
@@ -85,12 +84,12 @@ async def run(asset: str, timeframe: str, style: str, timeout: int = 120):
     mon_module.MonitoringAgent = original_cls
 
     print(f"\n{'='*65}")
-    print(f"  RESEARCH AGENT — Generation de strategie")
+    print("  RESEARCH AGENT — Generation de strategie")
     print(f"{'='*65}")
     print(f"  Asset      : {asset}")
     print(f"  Timeframe  : {timeframe}")
     print(f"  Style      : {style}")
-    print(f"  Pipeline   : Research -> Backtest -> Validation")
+    print("  Pipeline   : Research -> Backtest -> Validation")
     print(f"{'='*65}\n")
 
     await orch.start()
@@ -105,7 +104,7 @@ async def run(asset: str, timeframe: str, style: str, timeout: int = 120):
     # Attendre le résultat (avec timeout)
     try:
         await asyncio.wait_for(result_event.wait(), timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         log.error(f"Timeout ({timeout}s) — aucun résultat reçu")
         await orch.stop()
         return None

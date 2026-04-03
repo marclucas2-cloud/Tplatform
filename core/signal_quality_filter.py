@@ -25,10 +25,8 @@ Filtres appliques (tous doivent passer) :
 from __future__ import annotations
 
 import logging
-from datetime import datetime, time as dtime
-from typing import Optional
-
 import zoneinfo
+from datetime import time as dtime
 
 logger = logging.getLogger(__name__)
 

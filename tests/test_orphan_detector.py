@@ -13,14 +13,12 @@ from __future__ import annotations
 
 import json
 import time
-from datetime import datetime, timezone
-from pathlib import Path
-from unittest.mock import MagicMock, call
+from datetime import UTC, datetime
+from unittest.mock import MagicMock
 
 import pytest
 
 from core.execution.orphan_detector import OrphanDetector
-
 
 # ======================================================================
 # Fixtures
@@ -386,7 +384,7 @@ class TestEODCleanup:
         mock_broker.get_open_orders.return_value = []
         mock_broker.get_positions.return_value = []
 
-        close_time = datetime(2025, 3, 28, 16, 0, tzinfo=timezone.utc)
+        close_time = datetime(2025, 3, 28, 16, 0, tzinfo=UTC)
         result = detector.run_eod_cleanup(mock_broker, close_time)
 
         assert result["orphans_found"] == 0
@@ -401,7 +399,7 @@ class TestEODCleanup:
         ]
         mock_broker.get_positions.return_value = []  # Position closed
 
-        close_time = datetime(2025, 3, 28, 16, 0, tzinfo=timezone.utc)
+        close_time = datetime(2025, 3, 28, 16, 0, tzinfo=UTC)
         result = detector.run_eod_cleanup(mock_broker, close_time)
 
         assert result["orphans_found"] == 2
@@ -420,7 +418,7 @@ class TestEODCleanup:
             _position("AAPL", 10, "LONG"),
         ]
 
-        close_time = datetime(2025, 3, 28, 16, 0, tzinfo=timezone.utc)
+        close_time = datetime(2025, 3, 28, 16, 0, tzinfo=UTC)
         result = detector.run_eod_cleanup(mock_broker, close_time)
 
         assert result["orphans_found"] == 0
@@ -435,7 +433,7 @@ class TestEODCleanup:
             _position("MSFT", 5, "LONG"),
         ]
 
-        close_time = datetime(2025, 3, 28, 16, 0, tzinfo=timezone.utc)
+        close_time = datetime(2025, 3, 28, 16, 0, tzinfo=UTC)
         result = detector.run_eod_cleanup(mock_broker, close_time)
 
         assert result["positions_open"] == 2
@@ -444,7 +442,7 @@ class TestEODCleanup:
         """EOD gracefully handles broker error on get_open_orders."""
         mock_broker.get_open_orders.side_effect = Exception("Connection lost")
 
-        close_time = datetime(2025, 3, 28, 16, 0, tzinfo=timezone.utc)
+        close_time = datetime(2025, 3, 28, 16, 0, tzinfo=UTC)
         result = detector.run_eod_cleanup(mock_broker, close_time)
 
         assert result["orphans_found"] == 0
@@ -456,7 +454,7 @@ class TestEODCleanup:
         mock_broker.get_open_orders.return_value = []
         mock_broker.get_positions.side_effect = Exception("Timeout")
 
-        close_time = datetime(2025, 3, 28, 16, 0, tzinfo=timezone.utc)
+        close_time = datetime(2025, 3, 28, 16, 0, tzinfo=UTC)
         result = detector.run_eod_cleanup(mock_broker, close_time)
 
         assert result["orphans_found"] == 0
@@ -812,7 +810,7 @@ class TestOrderAge:
         assert result[0]["age_seconds"] >= 119  # Allow 1s tolerance
 
     def test_age_from_iso_string(self, detector):
-        ts = datetime.now(timezone.utc).isoformat()
+        ts = datetime.now(UTC).isoformat()
         orders = [_order("O-1", "AAPL", "SELL", "STP", 10, 145.0, timestamp=ts)]
         positions = []
         result = detector.scan_orphans(orders, positions)
@@ -821,7 +819,7 @@ class TestOrderAge:
         assert result[0]["age_seconds"] < 5  # Just created
 
     def test_age_from_datetime_object(self, detector):
-        ts = datetime.now(timezone.utc)
+        ts = datetime.now(UTC)
         orders = [_order("O-1", "AAPL", "SELL", "STP", 10, 145.0, timestamp=ts)]
         positions = []
         result = detector.scan_orphans(orders, positions)

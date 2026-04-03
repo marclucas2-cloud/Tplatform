@@ -34,11 +34,11 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
-from core.data.loader import OHLCVLoader
-from core.data.universe import UNIVERSE, get_all_assets, Asset
-from core.strategy_schema.validator import StrategyValidator
 from core.backtest.engine import BacktestEngine
+from core.data.loader import OHLCVLoader
+from core.data.universe import UNIVERSE, Asset, get_all_assets
 from core.ranking.ranker import StrategyRanker
+from core.strategy_schema.validator import StrategyValidator
 
 STRATEGIES_DIR = Path(__file__).parent.parent / "strategies"
 
@@ -113,7 +113,7 @@ def scan_asset(asset: Asset, strategy: dict, engine: BacktestEngine,
         d["period_end"]    = str(data.df.index[-1].date())
         d["equity_curve"]  = result.equity_curve
         return d
-    except Exception as e:
+    except Exception:
         return None
 
 
@@ -178,7 +178,7 @@ def print_scan_results(results: list[dict], strategy_id: str):
               f"Sharpe={r['sharpe_ratio']:+.3f}  DD={r['max_drawdown_pct']:.1f}%  "
               f"Trades={r['total_trades']}  {v}")
 
-    print(f"\n  TOP 5 — Actifs a EVITER")
+    print("\n  TOP 5 — Actifs a EVITER")
     for i, r in enumerate(worst5, 1):
         print(f"  {i}. {r['asset_symbol']:<12} ({r['asset_class']:<12}) "
               f"Sharpe={r['sharpe_ratio']:+.3f}  Trades={r['total_trades']}")
@@ -257,7 +257,7 @@ def main():
 
     print(f"\nAsset Scan : {sid} sur {len(assets_to_test)} actifs (TF={timeframe})")
     print(f"Classes    : {set(a.asset_class for a in assets_to_test)}")
-    print(f"Telechargement et backtest en cours...\n")
+    print("Telechargement et backtest en cours...\n")
 
     engine = BacktestEngine(initial_capital=args.capital)
     results = []

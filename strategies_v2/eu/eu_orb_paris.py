@@ -24,12 +24,11 @@ Expected: ~8-12 trades/month, win rate 45-55%, Sharpe 0.8-1.5
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
 from core.backtester_v2.types import Bar, PortfolioState, Signal
-
 
 # Opening range: 08:00-08:30 UTC (= 09:00-09:30 CET)
 _OR_START_HOUR_UTC = 8
@@ -66,12 +65,12 @@ class EUORBParis(StrategyBase):
         self.tp_risk_mult: float = 2.0  # TP = entry +/- risk * tp_risk_mult
 
         # State tracking
-        self._or_high: Optional[float] = None
-        self._or_low: Optional[float] = None
-        self._or_computed_date: Optional[str] = None
+        self._or_high: float | None = None
+        self._or_low: float | None = None
+        self._or_computed_date: str | None = None
         self._position_open: bool = False
 
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -94,7 +93,7 @@ class EUORBParis(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
 
@@ -213,7 +212,7 @@ class EUORBParis(StrategyBase):
         self._or_high = float(or_bars["high"].max())
         self._or_low = float(or_bars["low"].min())
 
-    def _get_avg_volume(self, symbol: str) -> Optional[float]:
+    def _get_avg_volume(self, symbol: str) -> float | None:
         """Compute average volume over recent bars for volume confirmation."""
         if self.data_feed is None:
             return None

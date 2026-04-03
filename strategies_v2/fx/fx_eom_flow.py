@@ -28,11 +28,9 @@ Expected: ~4 trades/month (3 pairs x ~1.3 signals), Sharpe target 0.8-1.5.
 from __future__ import annotations
 
 import calendar
-from datetime import date, time, timedelta
-from typing import Any, Dict, List, Optional
+from datetime import date, timedelta
+from typing import Any, Dict, List
 
-import numpy as np
-import pandas as pd
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -66,7 +64,7 @@ class FXEOMFlow(StrategyBase):
         self.min_monthly_return: float = _MIN_MONTHLY_RETURN_PCT  # % threshold
         self.eom_window_days: int = _EOM_WINDOW_DAYS
         self.exit_trading_day: int = _EXIT_TRADING_DAY
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -157,7 +155,7 @@ class FXEOMFlow(StrategyBase):
     # Monthly SPY return computation
     # ------------------------------------------------------------------
 
-    def _get_monthly_spy_return(self) -> Optional[float]:
+    def _get_monthly_spy_return(self) -> float | None:
         """Compute SPY's return for the current (or most recent) month.
 
         Uses daily close data from the data feed. Returns the percentage
@@ -186,7 +184,7 @@ class FXEOMFlow(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
 
@@ -226,7 +224,7 @@ class FXEOMFlow(StrategyBase):
 
     def _evaluate_pair(
         self, sym: str, bar: Bar, usd_selling: bool
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         """Generate a signal for a single FX pair based on USD flow direction."""
         if self.data_feed is None:
             return None

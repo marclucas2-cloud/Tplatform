@@ -23,7 +23,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-
 STRATEGY_CONFIG = {
     "name": "MR Scalp BTC",
     "id": "STRAT-010",

@@ -1,7 +1,5 @@
 """Tests for EarningsDrift (PEAD) strategy."""
-import numpy as np
 import pandas as pd
-import pytest
 
 from core.backtester_v2.types import Bar, PortfolioState
 

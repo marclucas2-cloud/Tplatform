@@ -19,9 +19,9 @@ import logging
 import time
 from collections import deque
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -60,8 +60,8 @@ class DoubleFillDetector:
 
     def __init__(
         self,
-        alert_callback: Optional[Callable] = None,
-        close_callback: Optional[Callable] = None,
+        alert_callback: Callable | None = None,
+        close_callback: Callable | None = None,
         window_seconds: float = 60.0,
     ):
         self._alert = alert_callback
@@ -171,7 +171,7 @@ class DoubleFillDetector:
     def _log_detection(self, new: Fill, existing: Fill) -> None:
         """Log double fill detection to JSONL."""
         entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "ticker": new.ticker,
             "side": new.side,
             "quantity": new.quantity,

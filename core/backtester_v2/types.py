@@ -9,9 +9,8 @@ from __future__ import annotations
 import enum
 import math
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-import numpy as np
 import pandas as pd
 
 
@@ -62,8 +61,8 @@ class Signal:
     side: str  # "BUY" or "SELL"
     strategy_name: str
     order_type: str = "MARKET"  # MARKET, LIMIT
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
     strength: float = 1.0
 
 
@@ -77,10 +76,10 @@ class Order:
     order_type: str  # MARKET, LIMIT
     timestamp: pd.Timestamp = field(default_factory=pd.Timestamp.now)
     strategy: str = ""
-    stop_loss: Optional[float] = None
-    take_profit: Optional[float] = None
+    stop_loss: float | None = None
+    take_profit: float | None = None
     broker: str = "default"
-    limit_price: Optional[float] = None
+    limit_price: float | None = None
 
 
 @dataclass(frozen=True)
@@ -168,7 +167,7 @@ class BacktestResults:
     total_return: float = 0.0
     num_trades: int = 0
 
-    def finalize(self) -> "BacktestResults":
+    def finalize(self) -> BacktestResults:
         """Compute all summary metrics from trades and equity curve.
 
         Returns:

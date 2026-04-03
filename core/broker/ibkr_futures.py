@@ -9,10 +9,8 @@ Utilise ib_insync pour la resolution des contrats et les ordres futures.
 from __future__ import annotations
 
 import logging
-import math
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from pathlib import Path
-from typing import Any
 
 import yaml
 
@@ -418,7 +416,7 @@ class IBKRFuturesClient:
                 f"Futures: qty doit etre un entier positif, recu: {qty}"
             )
 
-        from ib_insync import MarketOrder, StopOrder, LimitOrder
+        from ib_insync import LimitOrder, MarketOrder, StopOrder
 
         contract = self._resolve_ibkr_contract(symbol)
         action = "BUY" if direction.upper() == "BUY" else "SELL"

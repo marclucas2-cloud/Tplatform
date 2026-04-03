@@ -1,3 +1,3 @@
-from .grid_search import GridSearch, GridResult
+from .grid_search import GridResult, GridSearch
 
-__all__ = ["GridSearch", "GridResult"]
+__all__ = ["GridResult", "GridSearch"]

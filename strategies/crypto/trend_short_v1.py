@@ -25,7 +25,6 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-
 STRATEGY_CONFIG = {
     "name": "Trend Short BTC",
     "id": "STRAT-009",

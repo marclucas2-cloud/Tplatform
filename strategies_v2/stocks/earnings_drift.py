@@ -23,11 +23,10 @@ Priority tickers: ASML, LVMH, SAP (EU), NVDA, AAPL, MSFT (US)
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date, timedelta
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
-import pandas as pd
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
@@ -92,7 +91,7 @@ class EarningsDrift(StrategyBase):
         self.min_gap_pct: float = 0.5  # minimum gap to confirm direction
 
         # -- Internal state --
-        self._data_feed: Optional[DataFeed] = None
+        self._data_feed: DataFeed | None = None
         self._active_positions: Dict[str, ActivePosition] = {}
         self._earnings_data: Dict[str, Dict[str, Any]] = {}
         self._universe: List[str] = list(DEFAULT_TICKERS)
@@ -120,7 +119,7 @@ class EarningsDrift(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         """Process a bar and generate PEAD signals.
 
         Logic:
@@ -326,7 +325,7 @@ class EarningsDrift(StrategyBase):
 
     def _get_earnings_for_ticker(
         self, ticker: str, bar_date: date
-    ) -> Optional[Dict[str, Any]]:
+    ) -> Dict[str, Any] | None:
         """Check if ticker has an earnings event on or 1 day before bar_date.
 
         The drift starts on the report day and the day after. We allow
@@ -354,7 +353,7 @@ class EarningsDrift(StrategyBase):
 
         return None
 
-    def _compute_gap_pct(self, bar: Bar) -> Optional[float]:
+    def _compute_gap_pct(self, bar: Bar) -> float | None:
         """Compute the open-to-previous-close gap percentage.
 
         Args:

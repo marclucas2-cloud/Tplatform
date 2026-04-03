@@ -11,9 +11,8 @@ import json
 import logging
 import os
 import tempfile
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Optional
 
 import yaml
 
@@ -62,14 +61,14 @@ class LeverageManager:
 
     def __init__(
         self,
-        config_path: Optional[Path] = None,
-        state_path: Optional[Path] = None,
+        config_path: Path | None = None,
+        state_path: Path | None = None,
     ):
         self._config_path = Path(config_path) if config_path else DEFAULT_CONFIG_PATH
         self._state_path = Path(state_path) if state_path else DEFAULT_STATE_PATH
 
         # Load YAML config
-        with open(self._config_path, "r") as f:
+        with open(self._config_path) as f:
             self._config = yaml.safe_load(f)
 
         self._phases = self._config["phases"]
@@ -173,7 +172,7 @@ class LeverageManager:
             "met_conditions": met,
         }
 
-    def advance_phase(self, kpi: Optional[dict] = None) -> str:
+    def advance_phase(self, kpi: dict | None = None) -> str:
         """Advance to next phase. Persists state.
 
         Args:
@@ -201,7 +200,7 @@ class LeverageManager:
 
         old_phase = self.current_phase
         new_phase = PHASE_ORDER[phase_idx + 1]
-        now_iso = datetime.now(timezone.utc).isoformat()
+        now_iso = datetime.now(UTC).isoformat()
 
         # Record history
         self._state.setdefault("history", []).append({
@@ -276,7 +275,7 @@ class LeverageManager:
         """Load state from JSON file, or create default state."""
         if self._state_path.exists():
             try:
-                with open(self._state_path, "r") as f:
+                with open(self._state_path) as f:
                     state = json.load(f)
                 # Validate loaded state
                 if state.get("current_phase") in PHASE_ORDER:
@@ -291,7 +290,7 @@ class LeverageManager:
         # Default state: SOFT_LAUNCH
         default = {
             "current_phase": "SOFT_LAUNCH",
-            "phase_start_date": datetime.now(timezone.utc).isoformat(),
+            "phase_start_date": datetime.now(UTC).isoformat(),
             "history": [],
         }
         return default
@@ -329,8 +328,8 @@ class LeverageManager:
         """Number of days since current phase started."""
         start = datetime.fromisoformat(self._state["phase_start_date"])
         if start.tzinfo is None:
-            start = start.replace(tzinfo=timezone.utc)
-        now = datetime.now(timezone.utc)
+            start = start.replace(tzinfo=UTC)
+        now = datetime.now(UTC)
         return (now - start).days
 
     def _get_kpi_value(self, cond_name: str, kpi: dict):

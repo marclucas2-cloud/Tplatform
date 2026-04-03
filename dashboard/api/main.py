@@ -3,16 +3,15 @@ Trading Dashboard API — FastAPI backend.
 
 Multi-broker (Alpaca + IBKR + Binance), JWT auth, static SPA serving.
 """
-import os
-import sys
 import json
 import logging
+import os
+import sys
+from datetime import UTC, datetime
 from pathlib import Path
-from datetime import datetime, timezone
-from typing import Optional
 
 import numpy as np
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Depends, Request
+from fastapi import FastAPI, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
@@ -20,7 +19,7 @@ from fastapi.responses import JSONResponse
 ROOT = Path(__file__).resolve().parent.parent.parent
 API_DIR = Path(__file__).resolve().parent
 sys.path.insert(0, str(ROOT))  # Project root FIRST (strategies.crypto lives here)
-sys.path.append(str(ROOT / "intraday-backtesterV2"))  # append, not insert — avoid shadowing strategies/
+sys.path.append(str(ROOT / "archive" / "intraday-backtesterV2"))  # append, not insert — avoid shadowing strategies/
 sys.path.insert(1, str(API_DIR))  # Pour strategy_registry
 
 # Load .env
@@ -51,8 +50,8 @@ app.add_middleware(
 )
 
 # ── Auth ─────────────────────────────────────────────────────────────────────
-from auth import router as auth_router, get_current_user  # noqa: E402
-from chat import router as chat_router  # noqa: E402
+from auth import router as auth_router
+from chat import router as chat_router
 
 app.include_router(auth_router)
 app.include_router(chat_router)
@@ -100,7 +99,7 @@ def _get_ibkr_equity_from_snapshot() -> float:
     files = sorted(glob.glob(str(log_dir / "*.jsonl")), reverse=True)
     for fpath in files[:2]:  # Check today + yesterday
         try:
-            with open(fpath, "r") as f:
+            with open(fpath) as f:
                 lines = f.readlines()
             for line in reversed(lines[-10:]):  # Last 10 entries
                 snap = json.loads(line.strip())
@@ -121,7 +120,7 @@ def _get_alpaca_client():
 
 
 def _load_state() -> dict:
-    state_file = ROOT / "paper_portfolio_state.json"
+    state_file = ROOT / "data" / "state" / "paper_portfolio_state.json"
     if state_file.exists():
         try:
             return json.loads(state_file.read_text())
@@ -224,7 +223,7 @@ def get_portfolio():
             "regime": regime.get("regime", "UNKNOWN"),
             "regime_detail": regime,
             "market_open": _is_market_open(),
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
         logger.error(f"Portfolio error: {e}")
@@ -443,7 +442,7 @@ def get_strategy_detail(strategy_id: str):
 
         # Load trades CSV if exists
         trades = []
-        output_dir = ROOT / "intraday-backtesterV2" / "output"
+        output_dir = ROOT / "archive" / "intraday-backtesterV2" / "output"
         csv_candidates = list(output_dir.glob(f"trades_*{s['name'].lower().replace(' ', '_')}*.csv"))
         if not csv_candidates:
             csv_candidates = list(output_dir.glob(f"trades_*{strategy_id}*.csv"))
@@ -493,10 +492,9 @@ def get_strategy_detail(strategy_id: str):
 def get_crypto_strategies():
     """Liste des 8 strategies crypto Binance avec config, wallet et statut."""
     try:
-        from strategies.crypto import CRYPTO_STRATEGIES
-
         # Charger la config allocation pour obtenir le capital total
         import yaml
+        from strategies.crypto import CRYPTO_STRATEGIES
         alloc_path = ROOT / "config" / "crypto_allocation.yaml"
         crypto_config = {}
         if alloc_path.exists():
@@ -568,7 +566,7 @@ def get_crypto_strategies():
             "binance_balance": balance_info,
             "phase": "SOFT_LAUNCH",
             "kelly_fraction": 0.125,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
         }
     except Exception as e:
         logger.error(f"Crypto strategies error: {e}")
@@ -581,7 +579,7 @@ def get_crypto_strategies():
 def get_allocation():
     """Allocation actuelle avec regime."""
     try:
-        from scripts.paper_portfolio import compute_allocations, STRATEGIES, get_market_regime
+        from scripts.paper_portfolio import STRATEGIES, compute_allocations, get_market_regime
         regime = get_market_regime()
         client = _get_alpaca_client()
         account = client.get_account_info()
@@ -637,10 +635,10 @@ def get_regime():
 
 @app.get("/api/trades")
 def get_trades(
-    strategy: Optional[str] = None,
+    strategy: str | None = None,
     limit: int = 50,
     source: str = "real",
-    mode: Optional[str] = None,
+    mode: str | None = None,
 ):
     """Historique des trades.
 
@@ -712,7 +710,7 @@ def get_system_health():
     except Exception:
         pass
 
-    cache_dir = ROOT / "intraday-backtesterV2" / "data_cache"
+    cache_dir = ROOT / "archive" / "intraday-backtesterV2" / "data_cache"
     cache_files = list(cache_dir.glob("*.parquet")) if cache_dir.exists() else []
     cache_size_mb = sum(f.stat().st_size for f in cache_files) / (1024 * 1024)
 
@@ -729,7 +727,7 @@ def get_system_health():
         "cache_size_mb": round(cache_size_mb, 1),
         "strategies_count": 46,
         "cro_score": 9.5,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -932,6 +930,7 @@ def _load_eu_strategies() -> dict:
 def get_markets_overview():
     """Vue multi-marche : P&L par marche, allocation, heures actives."""
     from datetime import datetime
+
     import pytz
 
     now_cet = datetime.now(pytz.timezone("Europe/Paris"))
@@ -1007,7 +1006,7 @@ def get_markets_overview():
         "total_pnl_today": round(total_pnl, 2),
         "active_markets": active_count,
         "current_hour_cet": hour_cet,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
     }
 
 
@@ -1142,7 +1141,7 @@ except Exception as e:
 
 @app.get("/api/health")
 def health_check():
-    return {"status": "ok", "timestamp": datetime.now(timezone.utc).isoformat()}
+    return {"status": "ok", "timestamp": datetime.now(UTC).isoformat()}
 
 
 # ── Static SPA serving ───────────────────────────────────────────────────────
@@ -1150,7 +1149,6 @@ def health_check():
 
 DIST_DIR = ROOT / "dashboard" / "frontend" / "dist"
 if DIST_DIR.exists():
-    from fastapi.staticfiles import StaticFiles
     from fastapi.responses import FileResponse
 
     @app.get("/{full_path:path}")

@@ -15,20 +15,19 @@ Verifie :
   - Worst trades dans le summary
   - Ratio real vs backtest global
 """
-import os
-import sys
-import pytest
 import sqlite3
+import sys
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from datetime import datetime, timezone, timedelta
 from unittest.mock import MagicMock
+
+import pytest
 
 # Setup paths
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
 from core.slippage_tracker import SlippageTracker
-
 
 # =============================================================================
 # FIXTURES
@@ -60,7 +59,7 @@ def tracker_with_alert(tmp_db, mock_alert):
 
 def _insert_old_trade(db_path, trade_id, strategy, days_ago, slippage_bps=1.0):
     """Insert a trade with a timestamp in the past for period filtering tests."""
-    ts = (datetime.now(timezone.utc) - timedelta(days=days_ago)).isoformat()
+    ts = (datetime.now(UTC) - timedelta(days=days_ago)).isoformat()
     with sqlite3.connect(str(db_path)) as conn:
         conn.execute(
             """INSERT INTO slippage_log

@@ -10,7 +10,7 @@ import itertools
 import logging
 import math
 from dataclasses import dataclass, field
-from typing import Any, Dict, List, Optional, Tuple, Type
+from typing import Any, Dict, List, Tuple, Type
 
 import numpy as np
 import pandas as pd
@@ -18,10 +18,8 @@ import pandas as pd
 from core.backtester_v2.strategy_base import StrategyBase
 from core.backtester_v2.types import (
     BacktestConfig,
-    BacktestResults,
     Bar,
     PortfolioState,
-    Signal,
 )
 
 logger = logging.getLogger(__name__)
@@ -340,7 +338,7 @@ class WalkForwardEngine:
         trades: List[float] = []
         equity = config.backtest_config.initial_capital or 100_000.0
         equity_curve = [equity]
-        position: Optional[Dict[str, Any]] = None
+        position: Dict[str, Any] | None = None
         commission_per_share = 0.005
         slippage_bps = 2.0
 

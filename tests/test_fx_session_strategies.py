@@ -11,12 +11,11 @@ Covers:
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import MagicMock
 from zoneinfo import ZoneInfo
 
-import pandas as pd
 import numpy as np
-import pytest
+import pandas as pd
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.types import Bar, PortfolioState

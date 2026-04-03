@@ -10,21 +10,15 @@ Covers:
   - Edge cases (overfill, zero fill, negative prices, missing fields)
 """
 import json
-import os
 import threading
-import time
-from datetime import datetime, timedelta, timezone
-from pathlib import Path
+from datetime import UTC, datetime, timedelta
 from unittest.mock import MagicMock, patch
 
 import pytest
 
 from core.execution.partial_fill_handler import (
-    FX_MIN_LOT,
-    UNCOVERED_ALERT_SECONDS,
     PartialFillHandler,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -68,7 +62,7 @@ def _make_fill(
         "avg_fill_price": avg_fill_price,
         "remaining_qty": remaining_qty,
         "status": status,
-        "timestamp": timestamp or datetime.now(timezone.utc),
+        "timestamp": timestamp or datetime.now(UTC),
         "broker": broker,
         "sl_order_id": sl_order_id,
         "tp_order_id": tp_order_id,
@@ -232,7 +226,7 @@ class TestTimeout:
         # Backdate the first partial timestamp so elapsed > 60s
         with handler._lock:
             for oid in handler._first_partial_ts:
-                handler._first_partial_ts[oid] = datetime.now(timezone.utc) - timedelta(seconds=90)
+                handler._first_partial_ts[oid] = datetime.now(UTC) - timedelta(seconds=90)
         handler.check_pending_fills()
         assert cb.called
         msg = cb.call_args[0][0]

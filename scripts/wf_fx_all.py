@@ -26,9 +26,9 @@ import json
 import logging
 import sys
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 
@@ -94,7 +94,7 @@ class WFStrategyResult:
     profitable_ratio: float
     total_oos_trades: int
     windows: List[WFWindowResult] = field(default_factory=list)
-    bootstrap: Optional[dict] = None
+    bootstrap: dict | None = None
     error: str = ""
     timestamp: str = ""
 
@@ -318,7 +318,7 @@ def build_wf_configs() -> Dict[str, WFConfig]:
 DATA_DIR = ROOT / "data" / "fx"
 
 
-def load_fx_data(symbol: str, data_dir: Optional[Path] = None) -> Optional[Any]:
+def load_fx_data(symbol: str, data_dir: Path | None = None) -> Any | None:
     """Load Parquet data for an FX pair.
 
     Searches for common naming patterns:
@@ -441,7 +441,7 @@ def _estimate_trade_frequency(strategy_name: str) -> float:
 
 def run_walk_forward_single(
     config: WFConfig,
-    data_dir: Optional[Path] = None,
+    data_dir: Path | None = None,
     verbose: bool = False,
 ) -> WFStrategyResult:
     """Run walk-forward validation for a single FX strategy.
@@ -454,7 +454,7 @@ def run_walk_forward_single(
     Returns:
         WFStrategyResult with verdict.
     """
-    now_iso = datetime.now(timezone.utc).isoformat()
+    now_iso = datetime.now(UTC).isoformat()
 
     # Skip if configured
     if config.skip:
@@ -669,7 +669,7 @@ def _determine_verdict(
     profitable_ratio: float,
     oos_is_ratio: float,
     tier: str,
-    bootstrap_result: Optional[dict] = None,
+    bootstrap_result: dict | None = None,
 ) -> str:
     """Determine WF verdict: VALIDATED / BORDERLINE / REJECTED.
 
@@ -720,9 +720,9 @@ def _determine_verdict(
 
 
 def run_all(
-    strategy_filter: Optional[str] = None,
-    output_dir: Optional[Path] = None,
-    data_dir: Optional[Path] = None,
+    strategy_filter: str | None = None,
+    output_dir: Path | None = None,
+    data_dir: Path | None = None,
     verbose: bool = False,
 ) -> Dict[str, WFStrategyResult]:
     """Run walk-forward validation for all (or one) FX strategies.
@@ -875,7 +875,7 @@ def _save_results(
 # =====================================================================
 
 
-def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
+def parse_args(argv: list | None = None) -> argparse.Namespace:
     """Parse CLI arguments."""
     parser = argparse.ArgumentParser(
         description="Walk-forward validation for 12 FX strategies (IBKR)",
@@ -906,7 +906,7 @@ def parse_args(argv: Optional[list] = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def main(argv: Optional[list] = None) -> Dict[str, WFStrategyResult]:
+def main(argv: list | None = None) -> Dict[str, WFStrategyResult]:
     """Entry point for CLI and test usage."""
     args = parse_args(argv)
 

@@ -16,16 +16,10 @@ Tests every bug found during Phase 1-3 audit to prevent recurrence:
   12. Kill switch check() doesn't re-trigger when already active
   13. Hourly baseline guard prevents stale state file triggers
 """
-import json
-import os
 import re
 import sys
-import textwrap
-from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
-import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
@@ -34,6 +28,15 @@ sys.path.insert(0, str(ROOT))
 # ── Helper: read worker.py source ──────────────────────────────────
 
 WORKER_SOURCE = (ROOT / "worker.py").read_text(encoding="utf-8")
+
+# Also read extracted modules (refactored from worker.py)
+_HEARTBEAT_SOURCE = ""
+_heartbeat_path = ROOT / "core" / "worker" / "heartbeat.py"
+if _heartbeat_path.exists():
+    _HEARTBEAT_SOURCE = _heartbeat_path.read_text(encoding="utf-8")
+
+# Combined source for tests that search across worker + extracted modules
+WORKER_COMBINED_SOURCE = WORKER_SOURCE + "\n" + _HEARTBEAT_SOURCE
 
 
 class TestIBKRConnectedRemoved:
@@ -70,10 +73,11 @@ class TestCheckPositionsAfterClose:
     def test_no_close_err_reference(self):
         """check_positions_after_close should track failures in _failed list,
         not reference close_err outside its except block."""
-        # Find the function
-        func_start = WORKER_SOURCE.find("def check_positions_after_close")
-        func_end = WORKER_SOURCE.find("\ndef ", func_start + 10)
-        func_source = WORKER_SOURCE[func_start:func_end]
+        # Find the function (may be in worker.py or extracted to heartbeat.py)
+        source = WORKER_COMBINED_SOURCE
+        func_start = source.find("def check_positions_after_close")
+        func_end = source.find("\ndef ", func_start + 10)
+        func_source = source[func_start:func_end]
 
         # Should have _failed list
         assert "_failed" in func_source, (
@@ -362,6 +366,7 @@ class TestHourlyBaselineGuard:
     def test_stale_hourly_baseline_ignored(self):
         """Hourly PnL should be 0 if baseline is stale (>2h old)."""
         import time
+
         from core.crypto.risk_manager_crypto import CryptoRiskManager
         rm = CryptoRiskManager(capital=10_000)
         # Skip warmup and ensure kill switch is fresh (not active from other tests)

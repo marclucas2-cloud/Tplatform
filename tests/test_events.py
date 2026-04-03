@@ -13,19 +13,19 @@ Couvre :
 """
 
 import sys
-import pytest
 from datetime import date
 from pathlib import Path
+
+import pytest
 
 # Setup paths
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.event_calendar import EventCalendar
 from core.adaptive_stops import AdaptiveStopCalculator
-from core.confluence_detector import ConfluenceDetector
 from core.allocator import DynamicAllocator
-
+from core.confluence_detector import ConfluenceDetector
+from core.event_calendar import EventCalendar
 
 # =============================================================================
 # FIXTURES

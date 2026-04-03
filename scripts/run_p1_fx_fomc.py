@@ -2,14 +2,14 @@
 P1 — Backtest FX strategies (GBP/USD Trend + USD/CHF MR) + FOMC Reaction.
 Sauvegarde les resultats dans output/p1_fx_results.json.
 """
-import sys
 import json
-from pathlib import Path
+import sys
 from datetime import datetime
+from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
-sys.path.insert(0, str(ROOT / "intraday-backtesterV2"))
+sys.path.insert(0, str(ROOT / "archive" / "intraday-backtesterV2"))
 
 import numpy as np
 import pandas as pd
@@ -173,7 +173,7 @@ def main():
     if m:
         results["gbpusd_trend"] = m
         if not t.empty:
-            out = ROOT / "intraday-backtesterV2" / "output"
+            out = ROOT / "archive" / "intraday-backtesterV2" / "output"
             out.mkdir(parents=True, exist_ok=True)
             t.to_csv(out / "trades_gbpusd_trend.csv", index=False)
 
@@ -182,7 +182,7 @@ def main():
     if m:
         results["usdchf_mean_reversion"] = m
         if not t.empty:
-            out = ROOT / "intraday-backtesterV2" / "output"
+            out = ROOT / "archive" / "intraday-backtesterV2" / "output"
             t.to_csv(out / "trades_usdchf_mr.csv", index=False)
 
     # ── FOMC ──
@@ -190,7 +190,7 @@ def main():
     if m:
         results["fomc_reaction"] = m
         if not t.empty:
-            out = ROOT / "intraday-backtesterV2" / "output"
+            out = ROOT / "archive" / "intraday-backtesterV2" / "output"
             t.to_csv(out / "trades_fomc_reaction.csv", index=False)
 
     # ── Sauvegarde ──

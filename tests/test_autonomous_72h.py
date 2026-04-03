@@ -4,9 +4,7 @@ DRILL-001 — Fire drill mode autonome 72h (paper).
 NON-BLOQUANT : tourne en parallele du soft launch live.
 Ce fichier valide la preparation et les checks post-drill.
 """
-import pytest
-from unittest.mock import MagicMock, patch
-from datetime import datetime, timezone, timedelta
+
 
 
 class TestAutonomousMode72h:

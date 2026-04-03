@@ -26,12 +26,11 @@ Expected: ~10-15 trades/month, Sharpe target 1.0-1.8
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 from core.backtester_v2.data_feed import DataFeed
 from core.backtester_v2.strategy_base import StrategyBase
 from core.backtester_v2.types import Bar, PortfolioState, Signal
-
 
 # UK session hours (GMT/UTC)
 _SESSION_START_HOUR = 8
@@ -67,11 +66,11 @@ class EUFTSEMeanReversion(StrategyBase):
         self.close_eod: bool = True
 
         # State
-        self._session_open_price: Optional[float] = None
-        self._session_open_date: Optional[str] = None
+        self._session_open_price: float | None = None
+        self._session_open_date: str | None = None
         self._traded_today: bool = False
 
-        self.data_feed: Optional[DataFeed] = None
+        self.data_feed: DataFeed | None = None
 
     @property
     def name(self) -> str:
@@ -94,7 +93,7 @@ class EUFTSEMeanReversion(StrategyBase):
 
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
-    ) -> Optional[Signal]:
+    ) -> Signal | None:
         if self.data_feed is None:
             return None
 

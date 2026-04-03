@@ -23,9 +23,7 @@ Leverage: none
 """
 from __future__ import annotations
 
-import numpy as np
 import pandas as pd
-
 
 STRATEGY_CONFIG = {
     "name": "Borrow Rate Carry",
@@ -222,8 +220,8 @@ def signal_fn(candle: pd.Series, state: dict, **kwargs) -> dict | None:
     eth_apy = kwargs.get("eth_apy", 0.01)
 
     current_allocations = kwargs.get("current_earn_allocations", {})
-    previous_scenario = kwargs.get("previous_scenario", None)
-    last_rebalance_ts = kwargs.get("last_rebalance_ts", None)
+    previous_scenario = kwargs.get("previous_scenario")
+    last_rebalance_ts = kwargs.get("last_rebalance_ts")
     capital = state.get("capital", 10_000) * STRATEGY_CONFIG["allocation_pct"]
 
     # ── Detect scenario ─────────────────────────────────────────────────

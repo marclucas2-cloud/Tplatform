@@ -7,14 +7,13 @@ Vérifie :
   - Reproductibilité (même seed → même résultat)
   - Métriques correctement calculées
 """
-import pytest
-import pandas as pd
 import numpy as np
+import pandas as pd
+import pytest
 
-from core.data.loader import OHLCVLoader, OHLCVData
 from core.backtest.engine import BacktestEngine, compute_rsi
+from core.data.loader import OHLCVLoader
 from core.strategy_schema.validator import StrategyValidator
-
 
 # ─── Fixture stratégie RSI ──────────────────────────────────────────────────
 

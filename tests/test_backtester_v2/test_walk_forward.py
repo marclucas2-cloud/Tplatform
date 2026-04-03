@@ -6,11 +6,10 @@ and reproducibility of walk-forward analysis.
 
 from __future__ import annotations
 
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import numpy as np
 import pandas as pd
-import pytest
 
 from core.backtester_v2.strategy_base import StrategyBase
 from core.backtester_v2.types import BacktestConfig, Bar, PortfolioState, Signal
@@ -20,7 +19,6 @@ from core.backtester_v2.walk_forward import (
     WFResult,
     WFWindowResult,
 )
-
 
 # ─── Helpers ─────────────────────────────────────────────────────────
 
@@ -90,7 +88,7 @@ class EMAStrategy(StrategyBase):
     def name(self) -> str:
         return "ema_test"
 
-    def on_bar(self, bar: Bar, portfolio_state: PortfolioState) -> Optional[Signal]:
+    def on_bar(self, bar: Bar, portfolio_state: PortfolioState) -> Signal | None:
         self._prices.append(bar.close)
         if len(self._prices) < self.ema_period:
             return None
@@ -135,7 +133,7 @@ class AlwaysBuyStrategy(StrategyBase):
     def name(self) -> str:
         return "always_buy"
 
-    def on_bar(self, bar: Bar, portfolio_state: PortfolioState) -> Optional[Signal]:
+    def on_bar(self, bar: Bar, portfolio_state: PortfolioState) -> Signal | None:
         self._bar_count += 1
         if self._bar_count % 5 == 0 and not self._in_position:
             self._in_position = True

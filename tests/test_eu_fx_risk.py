@@ -1,8 +1,7 @@
 """Tests for EU/FX Risk Calibrator, Margin Guard, and Throttler."""
-import pytest
-from datetime import datetime, date, timedelta
-
 import zoneinfo
+from datetime import datetime, timedelta
+
 
 
 class TestEUFXRiskCalibrator:
@@ -110,7 +109,7 @@ class TestV10ThrottlerEU:
         assert "DAILY_LIMIT" in reason
 
     def test_bce_day_blocks_non_bce(self):
-        from core.risk.v10_throttler_eu import V10ThrottlerEU, BCE_MEETING_DATES_2026
+        from core.risk.v10_throttler_eu import BCE_MEETING_DATES_2026, V10ThrottlerEU
         th = V10ThrottlerEU()
         paris = zoneinfo.ZoneInfo("Europe/Paris")
         bce_date = BCE_MEETING_DATES_2026[0]
@@ -120,7 +119,7 @@ class TestV10ThrottlerEU:
         assert "BCE_MEETING" in reason
 
     def test_bce_day_allows_bce_strategy(self):
-        from core.risk.v10_throttler_eu import V10ThrottlerEU, BCE_MEETING_DATES_2026
+        from core.risk.v10_throttler_eu import BCE_MEETING_DATES_2026, V10ThrottlerEU
         th = V10ThrottlerEU()
         paris = zoneinfo.ZoneInfo("Europe/Paris")
         bce_date = BCE_MEETING_DATES_2026[0]
@@ -129,7 +128,7 @@ class TestV10ThrottlerEU:
         assert ok
 
     def test_post_holiday_reduced_size(self):
-        from core.risk.v10_throttler_eu import V10ThrottlerEU, EU_HOLIDAYS_2026
+        from core.risk.v10_throttler_eu import EU_HOLIDAYS_2026, V10ThrottlerEU
         th = V10ThrottlerEU()
         paris = zoneinfo.ZoneInfo("Europe/Paris")
         holiday = EU_HOLIDAYS_2026[0]

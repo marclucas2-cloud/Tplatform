@@ -18,9 +18,9 @@ from __future__ import annotations
 import json
 import logging
 from collections import deque
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List
 
 import pandas as pd
 
@@ -60,7 +60,7 @@ class ResyncGuard:
 
     def __init__(
         self,
-        max_gap_seconds: Optional[Dict[str, int]] = None,
+        max_gap_seconds: Dict[str, int] | None = None,
         max_drift_ms: float = 500.0,
         gap_tolerance: float = DEFAULT_GAP_TOLERANCE,
         price_disc_threshold: float = DEFAULT_PRICE_DISC_THRESHOLD,
@@ -364,7 +364,7 @@ class ResyncGuard:
         return all(abs_values[i] < abs_values[i + 1] for i in range(len(abs_values) - 1))
 
     @staticmethod
-    def _parse_ts(ts: Any) -> Optional[datetime]:
+    def _parse_ts(ts: Any) -> datetime | None:
         """Coerce *ts* to a datetime, returning None on failure."""
         if ts is None:
             return None
@@ -383,14 +383,14 @@ class ResyncGuard:
     def _ensure_utc(ts: datetime) -> datetime:
         """Attach UTC if tz-naive, else convert to UTC."""
         if ts.tzinfo is None:
-            return ts.replace(tzinfo=timezone.utc)
-        return ts.astimezone(timezone.utc)
+            return ts.replace(tzinfo=UTC)
+        return ts.astimezone(UTC)
 
     def _log(self, event_type: str, payload: Dict[str, Any]) -> None:
         """Append one JSON line to the resync log."""
         try:
             record = {
-                "ts": datetime.now(timezone.utc).isoformat(),
+                "ts": datetime.now(UTC).isoformat(),
                 "event": event_type,
                 **payload,
             }

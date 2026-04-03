@@ -24,8 +24,7 @@ from dataclasses import dataclass, field
 import numpy as np
 import pandas as pd
 
-from core.data.pairs import PairStats, compute_spread, adf_test
-
+from core.data.pairs import PairStats, compute_spread
 
 # ─── Dataclasses ─────────────────────────────────────────────────────────────
 

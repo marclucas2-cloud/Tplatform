@@ -17,8 +17,8 @@ Stockage en memoire (liste de dicts) — pas de dependance DB.
 """
 
 import logging
-from datetime import datetime, timezone, timedelta
-from typing import Optional, Callable, Dict, Any, List
+from datetime import UTC, datetime, timedelta
+from typing import Any, Callable, Dict, List
 
 logger = logging.getLogger(__name__)
 
@@ -45,7 +45,7 @@ class ImplementationShortfall:
     def __init__(
         self,
         alert_threshold_bps: float = DEFAULT_ALERT_THRESHOLD_BPS,
-        alerter: Optional[Callable] = None,
+        alerter: Callable | None = None,
     ):
         """Initialise le tracker Implementation Shortfall.
 
@@ -77,7 +77,7 @@ class ImplementationShortfall:
         mid_price: float,
         spread: float,
         strategy: str,
-        timestamp: Optional[str] = None,
+        timestamp: str | None = None,
     ):
         """Record signal price at the time of signal generation.
 
@@ -91,7 +91,7 @@ class ImplementationShortfall:
             timestamp: ISO timestamp (auto-genere si absent)
         """
         if timestamp is None:
-            timestamp = datetime.now(timezone.utc).isoformat()
+            timestamp = datetime.now(UTC).isoformat()
 
         self._signals[signal_id] = {
             "signal_id": signal_id,
@@ -118,9 +118,9 @@ class ImplementationShortfall:
         fill_price: float,
         fill_qty: float,
         commission: float,
-        timestamp: Optional[str] = None,
+        timestamp: str | None = None,
         side: str = "BUY",
-    ) -> Optional[dict]:
+    ) -> dict | None:
         """Compute and store Implementation Shortfall for a fill.
 
         Args:
@@ -141,7 +141,7 @@ class ImplementationShortfall:
         signal = self._signals[signal_id]
 
         if timestamp is None:
-            timestamp = datetime.now(timezone.utc).isoformat()
+            timestamp = datetime.now(UTC).isoformat()
 
         mid_price = signal["mid_price"]
         signal_price = signal["signal_price"]
@@ -244,7 +244,7 @@ class ImplementationShortfall:
     # Consultation d'un trade
     # ------------------------------------------------------------------
 
-    def get_record(self, signal_id: str) -> Optional[dict]:
+    def get_record(self, signal_id: str) -> dict | None:
         """Get IS breakdown for a single trade.
 
         Args:
@@ -273,7 +273,7 @@ class ImplementationShortfall:
             pires trades, cout annuel estime, recommandations.
         """
         # Filtrer par periode
-        cutoff = datetime.now(timezone.utc) - timedelta(days=period_days)
+        cutoff = datetime.now(UTC) - timedelta(days=period_days)
         cutoff_iso = cutoff.isoformat()
 
         records = [

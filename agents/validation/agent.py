@@ -19,7 +19,7 @@ import statistics
 
 import numpy as np
 
-from agents.base_agent import BaseAgent, AgentMessage
+from agents.base_agent import AgentMessage, BaseAgent
 from core.backtest.engine import BacktestEngine
 from core.data.loader import OHLCVLoader
 from core.strategy_schema.validator import StrategyValidator

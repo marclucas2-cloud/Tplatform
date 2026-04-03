@@ -310,7 +310,7 @@ def generate_report(compare_v1: bool = True) -> str:
     lines.append(f"  Capital total:   {total_alloc:.0%} (+ 7% cash reserve)")
     lines.append(f"  Coverage V1:     {active_hours_v1:.0f}h/24h (US intraday only)")
     lines.append(f"  Coverage V5:     {active_hours_v5:.0f}h/24h (multi-asset)")
-    lines.append(f"  Target:          18h/24h")
+    lines.append("  Target:          18h/24h")
     lines.append("")
 
     # Hour-by-hour heatmap

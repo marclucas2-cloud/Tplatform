@@ -9,24 +9,24 @@ Couvre :
   - ShortInterestFetcher : covering signal, squeeze risk, rapport
 """
 
-import sys
-import math
 import os
+import sys
 import tempfile
-import pytest
-import numpy as np
 from pathlib import Path
+
+import numpy as np
+import pytest
 
 # Setup paths
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
 
-from core.market_impact import MarketImpactModel, BASE_SLIPPAGE, IMPACT_ALERT_THRESHOLD
-from scripts.tax_report import TaxReportGenerator
-from core.alpha_decay_monitor import AlphaDecayMonitor
-from core.ml_filter import MLSignalFilter
 from scripts.fetch_short_interest import ShortInterestFetcher
+from scripts.tax_report import TaxReportGenerator
 
+from core.alpha_decay_monitor import AlphaDecayMonitor
+from core.market_impact import BASE_SLIPPAGE, MarketImpactModel
+from core.ml_filter import MLSignalFilter
 
 # =============================================================================
 # FIXTURES
@@ -295,7 +295,7 @@ class TestTaxReport:
             result = tax_gen.export_csv(sample_trades, filepath, year=2026)
             assert os.path.exists(result)
 
-            with open(result, 'r', encoding='utf-8') as f:
+            with open(result, encoding='utf-8') as f:
                 content = f.read()
             assert "Date" in content
             assert "Ticker" in content
@@ -496,8 +496,8 @@ class TestMLFilter:
     def test_train_not_enough_trades_raises(self, ml_filter):
         """train avec < 200 trades leve une ValueError."""
         try:
+            import lightgbm
             import pandas as pd
-            import lightgbm  # noqa: F401
         except ImportError:
             pytest.skip("pandas ou lightgbm non installe")
 

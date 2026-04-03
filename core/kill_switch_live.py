@@ -21,9 +21,9 @@ CRITICAL: This module handles REAL MONEY. Every path must be tested.
 import json
 import logging
 import threading
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
-from typing import Optional, Callable
+from typing import Callable
 
 logger = logging.getLogger(__name__)
 
@@ -49,10 +49,10 @@ class LiveKillSwitch:
     def __init__(
         self,
         broker=None,
-        alert_callback: Optional[Callable] = None,
-        state_path: Optional[Path] = None,
-        thresholds: Optional[dict] = None,
-        mc_overrides: Optional[dict] = None,
+        alert_callback: Callable | None = None,
+        state_path: Path | None = None,
+        thresholds: dict | None = None,
+        mc_overrides: dict | None = None,
     ):
         """
         Args:
@@ -74,10 +74,10 @@ class LiveKillSwitch:
         # Internal state
         self._active = False
         self._armed = True
-        self._activated_at: Optional[str] = None
-        self._activation_reason: Optional[str] = None
-        self._activation_trigger: Optional[str] = None
-        self._deactivated_at: Optional[datetime] = None
+        self._activated_at: str | None = None
+        self._activation_reason: str | None = None
+        self._activation_trigger: str | None = None
+        self._deactivated_at: datetime | None = None
         self._history: list = []
         self._disabled_strategies: set = set()
 
@@ -131,7 +131,7 @@ class LiveKillSwitch:
         """
         # FIX M-12: Cooldown after deactivation — prevent immediate re-triggering
         if self._deactivated_at is not None:
-            elapsed = datetime.now(timezone.utc) - self._deactivated_at
+            elapsed = datetime.now(UTC) - self._deactivated_at
             cooldown = timedelta(minutes=30)
             if elapsed < cooldown:
                 remaining = (cooldown - elapsed).total_seconds() / 60.0
@@ -354,7 +354,7 @@ class LiveKillSwitch:
              pnl_at_close: float, timestamp: str, reason: str}
         """
         with self._activate_lock:
-            now = datetime.now(timezone.utc).isoformat()
+            now = datetime.now(UTC).isoformat()
 
             # Idempotent — already active
             if self._active:
@@ -473,7 +473,7 @@ class LiveKillSwitch:
         Returns:
             {success: bool, downtime_minutes: float, timestamp: str}
         """
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
 
         if not self._active:
             logger.info("Kill switch is not active — nothing to deactivate.")
@@ -512,7 +512,7 @@ class LiveKillSwitch:
         self._activated_at = None
         self._activation_reason = None
         self._activation_trigger = None
-        self._deactivated_at = datetime.now(timezone.utc)
+        self._deactivated_at = datetime.now(UTC)
         self._disabled_strategies.clear()
 
         # Persist
@@ -622,7 +622,7 @@ class LiveKillSwitch:
             "history": self._history,
             "thresholds": self.thresholds,
             "mc_overrides": self.mc_overrides,
-            "last_updated": datetime.now(timezone.utc).isoformat(),
+            "last_updated": datetime.now(UTC).isoformat(),
         }
         try:
             self.state_path.parent.mkdir(parents=True, exist_ok=True)
@@ -637,7 +637,7 @@ class LiveKillSwitch:
             return
 
         try:
-            with open(self.state_path, "r") as f:
+            with open(self.state_path) as f:
                 state = json.load(f)
 
             self._active = state.get("active", False)

@@ -15,9 +15,8 @@ from __future__ import annotations
 import logging
 import sqlite3
 import time
-from datetime import datetime, timezone, timedelta
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Optional
 
 import numpy as np
 import pandas as pd
@@ -76,7 +75,7 @@ class CryptoDataPipeline:
         current_start = int(start.timestamp() * 1000)
         end_ms = int(end.timestamp() * 1000)
         while current_start < end_ms:
-            data = self._broker.get_prices(symbol, timeframe=interval, bars=MAX_KLINES_PER_REQUEST, start=datetime.fromtimestamp(current_start / 1000, tz=timezone.utc).isoformat(), end=end.isoformat())
+            data = self._broker.get_prices(symbol, timeframe=interval, bars=MAX_KLINES_PER_REQUEST, start=datetime.fromtimestamp(current_start / 1000, tz=UTC).isoformat(), end=end.isoformat())
             bars = data.get("bars", [])
             if not bars:
                 break
@@ -120,7 +119,7 @@ class CryptoDataPipeline:
     def save_borrow_rate(self, asset: str, rate_data: dict):
         """Save borrow rate to SQLite."""
         db_path = DATA_DIR / "borrow_rates" / "borrow_rates.sqlite"
-        df = pd.DataFrame([{"asset": asset, "timestamp": datetime.now(timezone.utc).isoformat(), **rate_data}])
+        df = pd.DataFrame([{"asset": asset, "timestamp": datetime.now(UTC).isoformat(), **rate_data}])
         with sqlite3.connect(db_path) as conn:
             df.to_sql("borrow_rates", conn, if_exists="append", index=False)
 
@@ -146,7 +145,7 @@ class CryptoDataPipeline:
     def save_earn_rates(self, rates: list[dict]):
         db_path = DATA_DIR / "earn_rates" / "earn_rates.sqlite"
         df = pd.DataFrame(rates)
-        df["timestamp"] = datetime.now(timezone.utc).isoformat()
+        df["timestamp"] = datetime.now(UTC).isoformat()
         with sqlite3.connect(db_path) as conn:
             df.to_sql("earn_rates", conn, if_exists="append", index=False)
 

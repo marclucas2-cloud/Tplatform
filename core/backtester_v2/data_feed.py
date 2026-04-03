@@ -11,10 +11,8 @@ visible bar is the 13:00-14:00 candle (close=14:00 < 14:30). The
 
 from __future__ import annotations
 
-from functools import lru_cache
-from typing import Dict, Optional
+from typing import Dict
 
-import numpy as np
 import pandas as pd
 
 from core.backtester_v2.types import Bar
@@ -36,7 +34,7 @@ class DataFeed:
 
     def __init__(self, data_sources: Dict[str, pd.DataFrame]) -> None:
         self._data: Dict[str, pd.DataFrame] = {}
-        self._timestamp: Optional[pd.Timestamp] = None
+        self._timestamp: pd.Timestamp | None = None
         self._cache: Dict[str, object] = {}
 
         for symbol, df in data_sources.items():
@@ -107,7 +105,7 @@ class DataFeed:
         self._cache[cache_key] = visible
         return visible
 
-    def get_latest_bar(self, symbol: str) -> Optional[Bar]:
+    def get_latest_bar(self, symbol: str) -> Bar | None:
         """Return the last fully closed bar.
 
         Args:
@@ -146,7 +144,7 @@ class DataFeed:
 
     def get_indicator(
         self, symbol: str, indicator: str, period: int
-    ) -> Optional[float]:
+    ) -> float | None:
         """Compute a technical indicator on closed bars only.
 
         Args:
@@ -173,7 +171,7 @@ class DataFeed:
     @staticmethod
     def _calculate_indicator(
         df: pd.DataFrame, indicator: str, period: int
-    ) -> Optional[float]:
+    ) -> float | None:
         """Compute indicator value from a DataFrame of closed bars.
 
         Args:
@@ -234,14 +232,14 @@ class DataFeed:
         return list(self._data.keys())
 
     @property
-    def timestamp(self) -> Optional[pd.Timestamp]:
+    def timestamp(self) -> pd.Timestamp | None:
         """Current simulation timestamp."""
         return self._timestamp
 
 
 def _compute_adx(
     high: pd.Series, low: pd.Series, close: pd.Series, period: int
-) -> Optional[float]:
+) -> float | None:
     """Compute Average Directional Index.
 
     Args:

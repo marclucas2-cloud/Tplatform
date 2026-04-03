@@ -25,14 +25,14 @@ Security:
 Uses polling (not webhook) to avoid exposing an endpoint.
 """
 
-import logging
-import time
 import json
+import logging
 import os
-import urllib.request
+import time
 import urllib.parse
-from datetime import datetime, timezone
-from typing import Optional, Callable, Dict
+import urllib.request
+from datetime import UTC, datetime
+from typing import Callable, Dict
 
 logger = logging.getLogger(__name__)
 
@@ -52,11 +52,14 @@ HELP_TEXT = (
     "/margin — Margin utilization detailed\n"
     "/leverage — Current leverage by asset class\n"
     "/health — Infrastructure status\n"
+    "/regime — Current market regime per asset class (V12)\n"
+    "/portfolio — Cross-broker NAV, DD, exposure (V12)\n"
     "/pause [strat] — Pause a strategy\n"
     "/resume [strat] — Resume a strategy\n"
     "/close [ticker] — Close a specific position (requires CONFIRM)\n"
     "/reduce [pct%] — Reduce ALL positions by % (requires CONFIRM)\n"
     "/kill — KILL SWITCH: close ALL positions (requires CONFIRM)\n"
+    "/emergency [code] — EMERGENCY: close ALL on ALL brokers (V12)\n"
     "/help — This message"
 )
 
@@ -90,6 +93,9 @@ class TelegramCommandHandler:
         close_position_func: Callable = None,
         get_leverage_func: Callable = None,
         get_health_func: Callable = None,
+        get_regime_func: Callable = None,
+        get_portfolio_func: Callable = None,
+        emergency_close_func: Callable = None,
     ):
         """All callbacks are optional — returns 'not configured' if missing."""
         self._token = bot_token or os.getenv("TELEGRAM_BOT_TOKEN", "")
@@ -97,7 +103,7 @@ class TelegramCommandHandler:
             str(cid) for cid in (authorized_chat_ids or [os.getenv("TELEGRAM_CHAT_ID", "")])
         )
         self._authorized = {cid for cid in authorized if cid}  # filter empty strings
-        self._callbacks: Dict[str, Optional[Callable]] = {
+        self._callbacks: Dict[str, Callable | None] = {
             "status": get_status_func,
             "positions": get_positions_func,
             "pnl": get_pnl_func,
@@ -110,6 +116,9 @@ class TelegramCommandHandler:
             "close": close_position_func,
             "leverage": get_leverage_func,
             "health": get_health_func,
+            "regime": get_regime_func,
+            "portfolio": get_portfolio_func,
+            "emergency": emergency_close_func,
         }
         # {chat_id: {"command": str, "args": str, "timestamp": float}}
         self._pending_confirmations: Dict[str, dict] = {}
@@ -166,7 +175,7 @@ class TelegramCommandHandler:
     def _log_command(self, chat_id: str, text: str, response_preview: str):
         """Record every command in the audit trail."""
         entry = {
-            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "timestamp": datetime.now(UTC).isoformat(),
             "chat_id": str(chat_id),
             "text": text,
             "response_preview": response_preview[:120],
@@ -217,6 +226,9 @@ class TelegramCommandHandler:
             "resume": lambda: self._handle_resume(args),
             "reduce": lambda: self._handle_reduce(chat_id, args),
             "close": lambda: self._handle_close(chat_id, args),
+            "regime": lambda: self._handle_regime(),
+            "portfolio": lambda: self._handle_portfolio(),
+            "emergency": lambda: self._handle_emergency(chat_id, args),
             "help": lambda: self._handle_help(),
         }
 
@@ -426,6 +438,94 @@ class TelegramCommandHandler:
                 f"Close position <b>{ticker}</b> requested.\n\n"
                 f"Send <b>/close {ticker} CONFIRM</b> within 60s to execute."
             )
+
+    # ------------------------------------------------------------------
+    # V12 command handlers
+    # ------------------------------------------------------------------
+
+    def _handle_regime(self) -> str:
+        """Show current market regime per asset class."""
+        cb = self._callbacks.get("regime")
+        if cb is None:
+            return "/regime is not configured."
+        try:
+            result = cb()
+            if isinstance(result, str):
+                return result
+            if isinstance(result, dict):
+                regimes = result.get("regimes", {})
+                global_r = result.get("global", "UNKNOWN")
+                lines = ["<b>Market Regime (V12)</b>", f"Global: <b>{global_r}</b>", ""]
+                for ac, r in regimes.items():
+                    lines.append(f"  {ac}: {r}")
+                return "\n".join(lines)
+            return str(result)
+        except Exception as exc:
+            return f"Error: {exc}"
+
+    def _handle_portfolio(self) -> str:
+        """Show unified cross-broker portfolio."""
+        cb = self._callbacks.get("portfolio")
+        if cb is None:
+            return "/portfolio is not configured."
+        try:
+            result = cb()
+            if isinstance(result, str):
+                return result
+            if isinstance(result, dict):
+                lines = [
+                    "<b>Unified Portfolio (V12)</b>",
+                    f"NAV: ${result.get('nav_total', 0):,.0f}",
+                    f"  Binance: ${result.get('binance_equity', 0):,.0f}",
+                    f"  IBKR: ${result.get('ibkr_equity', 0):,.0f}",
+                    f"  Alpaca: ${result.get('alpaca_equity', 0):,.0f}",
+                    f"DD peak: {result.get('dd_from_peak_pct', 0):.1f}%",
+                    f"DD daily: {result.get('dd_daily_pct', 0):.1f}%",
+                    f"Gross exp: {result.get('gross_exposure_pct', 0):.0f}%",
+                    f"Alert: {result.get('alert_level', '?')}",
+                ]
+                return "\n".join(lines)
+            return str(result)
+        except Exception as exc:
+            return f"Error: {exc}"
+
+    def _handle_emergency(self, chat_id: str, args: str) -> str:
+        """Emergency close all brokers. Requires hourly code."""
+        cb = self._callbacks.get("emergency")
+        if cb is None:
+            return "/emergency is not configured."
+
+        if not args.strip():
+            try:
+                from core.risk.emergency_close_all import _generate_confirmation_code
+                code = _generate_confirmation_code()
+                return (
+                    f"<b>EMERGENCY CLOSE ALL</b>\n\n"
+                    f"This will close ALL positions on ALL brokers.\n"
+                    f"Current code: <b>{code}</b>\n\n"
+                    f"Send <b>/emergency {code}</b> to execute."
+                )
+            except Exception:
+                return "Send /emergency <code> to execute."
+
+        # Execute with code
+        code = args.strip().upper()
+        try:
+            result = cb(code)
+            if isinstance(result, dict):
+                status = result.get("status", "?")
+                if status == "REJECTED":
+                    return f"REJECTED: {result.get('reason', 'invalid code')}"
+                return (
+                    f"<b>EMERGENCY CLOSE EXECUTED</b>\n"
+                    f"Positions closed: {result.get('total_positions_closed', 0)}\n"
+                    f"Orders cancelled: {result.get('total_orders_cancelled', 0)}\n"
+                    f"PnL: ${result.get('total_pnl', 0):,.2f}\n"
+                    f"Time: {result.get('elapsed_seconds', 0):.1f}s"
+                )
+            return str(result)
+        except Exception as exc:
+            return f"EMERGENCY ERROR: {exc}"
 
     # ------------------------------------------------------------------
     # Telegram API (polling)

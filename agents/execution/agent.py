@@ -20,9 +20,9 @@ from __future__ import annotations
 import logging
 import os
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
-from agents.base_agent import BaseAgent, AgentMessage
+from agents.base_agent import AgentMessage, BaseAgent
 
 logger = logging.getLogger(__name__)
 
@@ -143,7 +143,7 @@ class ExecutionAgent(BaseAgent):
             "direction": direction,
             "entry_price": price,
             "size": size,
-            "entry_time": datetime.now(timezone.utc).isoformat(),
+            "entry_time": datetime.now(UTC).isoformat(),
         }
 
         await self.emit("EXECUTION_REPORT", {

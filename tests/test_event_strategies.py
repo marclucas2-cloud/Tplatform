@@ -17,23 +17,24 @@ Couvre :
 """
 
 import sys
-import pytest
-import pandas as pd
-import numpy as np
-from datetime import date, time as dt_time, datetime, timedelta
+from datetime import date
+from datetime import time as dt_time
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import numpy as np
+import pandas as pd
+import pytest
+
 # Setup paths
 ROOT = Path(__file__).parent.parent
-BACKTESTER = ROOT / "intraday-backtesterV2"
+BACKTESTER = ROOT / "archive" / "intraday-backtesterV2"
 sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(BACKTESTER))
 
-from strategies.fomc_reaction import FOMCReactionStrategy
-from strategies.bce_press_conference import BCEPressConferenceStrategy
 from backtest_engine import Signal
-
+from strategies.bce_press_conference import BCEPressConferenceStrategy
+from strategies.fomc_reaction import FOMCReactionStrategy
 
 # =============================================================================
 # HELPERS — fabrication de DataFrames intraday

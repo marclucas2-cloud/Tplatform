@@ -1,9 +1,8 @@
 """Tests for FX signal scheduling — peak vs off-peak frequency."""
-import pytest
-from datetime import datetime, timezone, timedelta
-from pathlib import Path
-from unittest.mock import patch, MagicMock
 import sys
+from datetime import UTC, datetime, timedelta
+from pathlib import Path
+
 
 ROOT = Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT))
@@ -34,12 +33,12 @@ class TestFXSignalSchedule:
 
     def test_first_eval_always_true(self):
         adapter = self._make_adapter()
-        now = datetime(2026, 3, 27, 10, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 3, 27, 10, 0, tzinfo=UTC)
         assert adapter.should_evaluate_signal("EUR.USD", now) is True
 
     def test_peak_hours_60min_interval(self):
         adapter = self._make_adapter()
-        t1 = datetime(2026, 3, 27, 10, 0, tzinfo=timezone.utc)
+        t1 = datetime(2026, 3, 27, 10, 0, tzinfo=UTC)
         adapter.should_evaluate_signal("EUR.USD", t1)
 
         t2 = t1 + timedelta(minutes=30)
@@ -50,7 +49,7 @@ class TestFXSignalSchedule:
 
     def test_off_peak_240min_interval(self):
         adapter = self._make_adapter()
-        t1 = datetime(2026, 3, 27, 20, 0, tzinfo=timezone.utc)  # 20:00 = off-peak
+        t1 = datetime(2026, 3, 27, 20, 0, tzinfo=UTC)  # 20:00 = off-peak
         adapter.should_evaluate_signal("EUR.USD", t1)
 
         t2 = t1 + timedelta(minutes=120)
@@ -61,12 +60,12 @@ class TestFXSignalSchedule:
 
     def test_unknown_pair_always_evaluate(self):
         adapter = self._make_adapter()
-        now = datetime(2026, 3, 27, 10, 0, tzinfo=timezone.utc)
+        now = datetime(2026, 3, 27, 10, 0, tzinfo=UTC)
         assert adapter.should_evaluate_signal("NZD.USD", now) is True
 
     def test_audjpy_asian_session_peak(self):
         adapter = self._make_adapter()
-        t1 = datetime(2026, 3, 27, 3, 0, tzinfo=timezone.utc)  # 03:00 = Asia peak
+        t1 = datetime(2026, 3, 27, 3, 0, tzinfo=UTC)  # 03:00 = Asia peak
         adapter.should_evaluate_signal("AUD.JPY", t1)
 
         t2 = t1 + timedelta(minutes=61)
