@@ -143,6 +143,9 @@ class BacktestConfig:
     })
     brokers: Dict[str, Any] = field(default_factory=lambda: {
         "default": {"commission_per_share": 0.005, "slippage_bps": 2.0},
+        "alpaca": {"commission_per_share": 0.0, "slippage_bps": 2.0},
+        "ibkr": {"commission_per_share": 0.0, "slippage_bps": 2.0},
+        "binance": {"commission_per_share": 0.0, "slippage_bps": 10.0},  # CRO H-1
     })
     asset_classes: List[str] = field(default_factory=lambda: ["equity"])
     execution: Dict[str, Any] = field(default_factory=lambda: {

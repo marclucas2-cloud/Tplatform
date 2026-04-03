@@ -21,7 +21,7 @@
 | Sizing | per-broker | **Global $45K NAV** (cap per-broker 80%) |
 | Research pipeline | ad-hoc | **6 gates** (thesis→backtest→WF→cost→corr→paper) |
 | New alpha | -- | **Cross-Asset Momentum** (Moskowitz 2012, paper mode) |
-| CRO score | 9.5/10 | **9.5/10** |
+| CRO score | 9.5/10 | **9.5/10** (audit V14.0 : H-1 slippage Binance corrige) |
 
 **V13.0->V14.0 : 4 chantiers majeurs.**
 
