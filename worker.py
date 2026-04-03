@@ -472,6 +472,124 @@ def run_fx_carry_cycle():
         _ibkr_lock.release()
 
 
+def run_cross_asset_momentum_cycle():
+    """Cross-Asset Time-Series Momentum — PAPER MODE.
+
+    Moskowitz (2012): 12M momentum, inverse-vol risk parity, weekly rebalance.
+    5 assets: SPY, TLT, GLD (Alpaca), EURUSD (IBKR), BTC (Binance).
+    BORDERLINE WF: Sharpe 0.81 backtest, 60% windows profitable, -5.21% max DD.
+    """
+    logger.info("=== CROSS-ASSET MOMENTUM CYCLE ===")
+
+    try:
+        from pathlib import Path
+        import pandas as pd
+        from strategies_v2.us.cross_asset_momentum import (
+            CrossAssetMomentumStrategy,
+            CrossAssetMomentumConfig,
+            MomentumSignal,
+        )
+
+        # Refresh daily data from Alpaca
+        data_dir = Path(__file__).resolve().parent / "data" / "cross_asset"
+        data_dir.mkdir(parents=True, exist_ok=True)
+
+        api_key = os.getenv("ALPACA_API_KEY")
+        api_secret = os.getenv("ALPACA_SECRET_KEY")
+
+        if api_key and api_secret:
+            try:
+                from scripts.fetch_midcap_data import _fetch_alpaca_rest
+                from datetime import timedelta
+                headers = {"APCA-API-KEY-ID": api_key, "APCA-API-SECRET-KEY": api_secret}
+                end = datetime.now()
+                start = end - timedelta(days=400)  # 13+ months for 12M momentum
+
+                for ticker, api_ticker, atype in [
+                    ("SPY", "SPY", "stocks"), ("TLT", "TLT", "stocks"),
+                    ("GLD", "GLD", "stocks"), ("EURUSD", "FXE", "stocks"),
+                ]:
+                    parquet = data_dir / f"{ticker}.parquet"
+                    import time as _time
+                    if not parquet.exists() or (_time.time() - parquet.stat().st_mtime) / 3600 > 20:
+                        df = _fetch_alpaca_rest(api_ticker, start, end, headers, f"https://data.alpaca.markets/v2/{atype}")
+                        if df is not None and len(df) > 100:
+                            df.to_parquet(parquet)
+                            logger.info("  XMOMENTUM: refreshed %s (%d bars)", ticker, len(df))
+            except Exception as e:
+                logger.warning("  XMOMENTUM: data refresh failed: %s", e)
+
+        # Load cached data
+        prices = {}
+        for symbol in ["SPY", "TLT", "GLD", "BTC", "EURUSD"]:
+            parquet = data_dir / f"{symbol}.parquet"
+            if parquet.exists():
+                prices[symbol] = pd.read_parquet(parquet)
+
+        if len(prices) < 3:
+            logger.warning("  XMOMENTUM SKIP — only %d assets cached (need 3+)", len(prices))
+            return
+
+        # Get current regime
+        current_regime = "UNKNOWN"
+        try:
+            import json
+            regime_path = Path(__file__).resolve().parent / "data" / "regime_state.json"
+            if regime_path.exists():
+                with open(regime_path) as f:
+                    regime_state = json.load(f)
+                # Use US equity regime or global
+                current_regime = regime_state.get("US_EQUITY", regime_state.get("global", "UNKNOWN"))
+        except Exception:
+            pass
+
+        # Generate signals
+        config = CrossAssetMomentumConfig()
+        strategy = CrossAssetMomentumStrategy(config)
+        signals = strategy.generate_signals(prices, capital=30000, current_regime=current_regime)
+
+        summary = strategy.get_portfolio_summary(signals)
+        logger.info(
+            "  XMOMENTUM: regime=%s | long=%d cash=%d | invested=%.0f%%",
+            current_regime, summary["n_long"], summary["n_cash"], summary["long_pct"],
+        )
+
+        # Log each asset signal
+        for sig in signals:
+            if sig.signal != MomentumSignal.CASH:
+                logger.info(
+                    "  XMOMENTUM SIGNAL: %s %s ret12m=%.1f%% weight=%.1f%% $%.0f",
+                    sig.symbol, sig.signal.value,
+                    sig.return_12m * 100, sig.final_weight * 100, sig.target_notional,
+                )
+
+        # PAPER MODE: log signals only, no execution
+        # TODO: when validated after 30+ paper signals, wire to Alpaca paper execution
+        _log_event("cross_asset_momentum", details={
+            "regime": current_regime,
+            "n_long": summary["n_long"],
+            "n_cash": summary["n_cash"],
+            "long_pct": summary["long_pct"],
+            "assets": summary["assets"],
+        })
+
+        # Save state for dashboard
+        import json
+        state_path = Path(__file__).resolve().parent / "data" / "state" / "xmomentum_state.json"
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(state_path, "w") as f:
+            json.dump({
+                "timestamp": datetime.now(PARIS).isoformat(),
+                "regime": current_regime,
+                "summary": summary,
+            }, f, indent=2)
+
+        logger.info("  XMOMENTUM cycle complete")
+
+    except Exception as e:
+        logger.error(f"  XMOMENTUM ERROR: {e}", exc_info=True)
+
+
 def run_futures_paper_cycle():
     """Futures Paper Trading — MES Trend + MES/MNQ Pairs on IBKR paper (port 4003).
 
@@ -2931,6 +3049,9 @@ def main():
         "v11_eod": CycleRunner("v11_eod", run_v11_eod_cleanup,
                                alert_callback=_cycle_alert,
                                metrics_callback=_cycle_metrics_cb),
+        "xmomentum": CycleRunner("xmomentum", run_cross_asset_momentum_cycle,
+                                  alert_callback=_cycle_alert,
+                                  metrics_callback=_cycle_metrics_cb),
     }
     logger.info(f"  CycleRunners initialized: {list(_runners.keys())}")
 
@@ -2962,6 +3083,13 @@ def main():
             run_futures_paper_cycle._done_today = True
         if is_weekday() and now_paris.hour < 16:
             run_futures_paper_cycle._done_today = False
+
+        # === CROSS-ASSET MOMENTUM PAPER DAILY (lun-ven, 16h15 Paris) ===
+        if is_weekday() and now_paris.hour == 16 and now_paris.minute >= 15 and not getattr(run_cross_asset_momentum_cycle, '_done_today', False):
+            _runners["xmomentum"].run()
+            run_cross_asset_momentum_cycle._done_today = True
+        if is_weekday() and now_paris.hour < 16:
+            run_cross_asset_momentum_cycle._done_today = False
 
         # === HEARTBEAT toutes les 30 min (local log only, y compris weekends) ===
         if time.time() - last_heartbeat >= HEARTBEAT_INTERVAL:
