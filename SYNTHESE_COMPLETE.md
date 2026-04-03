@@ -1,28 +1,37 @@
-# SYNTHESE COMPLETE — TRADING PLATFORM V13.0 (ROBUSTESSE STRUCTURELLE)
-## Portefeuille Quantitatif — 5 classes d'actifs, 46 strategies, ~24h/24h
-### Date : 3 avril 2026 | 3,320 tests | ~131 fichiers test | CRO 9.5/10 APPROUVE
+# SYNTHESE COMPLETE — TRADING PLATFORM V14.0 (PERFORMANCE + CAPITAL DEPLOYMENT)
+## Portefeuille Quantitatif — 5 classes d'actifs, 47 strategies, ~24h/24h
+### Date : 3 avril 2026 | 3,509 tests | ~145 fichiers test | CRO 9.5/10 APPROUVE
 
 ---
 
 ## 1. RESUME EXECUTIF
 
-| Indicateur | V12.5 | **V13.0 (Robustesse)** |
+| Indicateur | V13.0 | **V14.0 (Perf+Capital)** |
 |-----------|:---:|:---:|
 | Classes d'actifs | 5 | **5** |
-| Strategies total | 46 | **46** (11 crypto + 15 FX/EU + 7 US + 8 futures + 5 P2/P3) |
-| Tests | 2,998 | **3,320** (+322, dont 181 robustesse + 118 cleanup + 23 CRO) |
-| Modules core | ~130 | **~155** (+22 modules robustesse, 3 packages) |
-| Dashboard | 14 pages + 51 endpoints | **14 pages + 52 endpoints** (+/api/cycles) |
-| Brokers LIVE | 2 (Binance+IBKR) | **2** (Binance $10K + IBKR $10K) |
-| Capital deploye | ~$20K | **~$20K** (cible $50K) |
-| Worker architecture | sequentiel | **CycleRunners** (error boundaries, metriques, health tracking) |
-| Observabilite | JSONL snapshots | **Metrics SQLite + Anomaly Detector + Event Logger** |
-| Broker resilience | crash = tout down | **BrokerHealth + PartialData + ContractTesting** |
-| Order lifecycle | ad-hoc | **State Machine formelle** (9 etats, invariants SL) |
-| Deploys | git pull + restart | **Canary (shadow + rollback + checklist)** |
-| CRO score | 9.5/10 | **9.5/10** (reserves corrigees, SM cable, SL mandatory) |
+| Strategies total | 46 | **47** (+1 Cross-Asset Momentum paper) |
+| Tests | 3,320 | **3,509** (+189 : 89 perf + 21 funnel + 33 capital + 46 stat arb) |
+| Modules core | ~155 | **~210** (+23 perf + 15 capital + 3 funnel + 8 stat arb + 5 scripts) |
+| Brokers LIVE | 2 | **2** (Binance $10K + IBKR $10K) + Alpaca paper |
+| Capital deploye | ~$20K | **~$20K** (cible $45K) |
+| Signal funnel | pas de diagnostic | **14-layer funnel logger + diagnostic scripts** |
+| Capital utilization | non mesure | **UtilizationRate + CashDrag + DeploymentMonitor** |
+| Guards | fixes | **Adaptatives** (thermostat par utilization) |
+| Always-on | aucune | **FX Carry (3 paires) + Earn crypto** |
+| Sizing | per-broker | **Global $45K NAV** (cap per-broker 80%) |
+| Research pipeline | ad-hoc | **6 gates** (thesis→backtest→WF→cost→corr→paper) |
+| New alpha | -- | **Cross-Asset Momentum** (Moskowitz 2012, paper mode) |
+| CRO score | 9.5/10 | **9.5/10** |
 
-**V12.5->V13.0 : Robustesse structurelle XXXL (22 taches, 7 chantiers). Worker event-driven avec CycleRunners (error boundaries, health tracking HEALTHY/DEGRADED/FAILED). Observabilite : MetricsPipeline SQLite 90j + AnomalyDetector (18 regles threshold/trend/absence) + EventLogger JSONL deterministe + IncidentReportGenerator. Order StateMachine formelle (9 etats, invariants SL, transitions illegales bloquees). Position SM (7 etats, ORPHAN detection). BrokerHealthTracker (HEALTHY/DEGRADED/DOWN/MAINTENANCE) + PartialDataHandler (frozen NAV, regime UNKNOWN). ContractTesting Binance/IBKR/Alpaca (validation structure API, 3 violations = CRITICAL). Canary deploys (shadow worker + deploy.sh rollback + pre-deploy checklist 6 checks). CRO 8.5/10 : modules crees et testes mais non cables dans le live path (architecture prete, integration Phase 2).**
+**V13.0->V14.0 : 4 chantiers majeurs.**
+
+**1. Performance & Alpha (23 modules)** : Signal Quality Filter v2 (5 dimensions, score 0-1). Adaptive Stops v2 (noise floor + regime). Entry Timing (LIMIT patience, intraday timing, fade-in). Exit Optimizer (trailing stop adaptatif + time stops + partial profits). Smart Router v2 (spread monitoring, maker/taker). Cost Model Audit + Commission Burn Analysis. HRP Diagnostic + Kelly Recalibration + MDC Sizing. Research Pipeline (6 gates) + Auto Backtest + Parameter Sweep. On-Chain Pipeline (MVRV, netflow, hashrate, fear&greed). Sentiment Pipeline. Calibration NEED_LIVE (slippage, win rate drift, regime effectiveness, meta-activation).
+
+**2. Signal Funnel Unblock (7 fixes)** : Diagnostic scripts (signal_funnel + crypto). Min Position Size filter ($50-200 par asset class). Funnel Logger structure (FUNNEL|strat|layer|action). UNKNOWN regime multipliers 0.3-0.5 → 0.7-0.8. Guards adaptes $10K (position 20%, cash 5%, 12 max positions).
+
+**3. Capital Deployment (15 modules)** : Utilization Rate Calculator (regime targets). Cash Drag ($idle × 10% / 365). Deployment Monitor (blocked strategies diagnostic). Guard Pass Rate Tracker (biggest killers). Adaptive Guards (thermostat). Always-On FX Carry (3 paires, vol scaling, PANIC=0.2 pas 0). Always-On Earn crypto (USDC/BTC/ETH flexible). Allocation Gap Tracker (ALIGNED/DRIFTING/MISALIGNED/BLOCKED). Active Rebalancer (turnover-controlled). Global Portfolio Sizer ($45K NAV). Cross-Broker Capital Optimizer. Signal Aggregator.
+
+**4. Stat Arb Research** : MidCap stat arb teste (REJECTED, Sharpe -1.28). Cross-Asset Momentum code + backtest (Sharpe 0.81, DD -5.21%) → deploye en paper dans le worker (cycle daily 16h15 CET).
 
 ---
 

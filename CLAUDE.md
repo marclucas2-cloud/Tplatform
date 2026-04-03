@@ -4,7 +4,7 @@
 ```bash
 python worker.py                                 # Worker 24/7
 python scripts/paper_portfolio.py --status       # Dashboard
-python -m pytest tests/ -v --tb=short            # Tests (3320)
+python -m pytest tests/ -v --tb=short            # Tests (3509)
 ssh -i ~/.ssh/id_hetzner root@178.104.125.74     # VPS Hetzner
 ```
 
@@ -36,11 +36,12 @@ config/{allocation,crypto_allocation,limits_live,crypto_limits}.yaml
 ```
 
 ## Etat actuel (voir SYNTHESE_COMPLETE.md pour details)
-- **46 strats** : 11 crypto (Binance 10K EUR) + 15 FX/EU (IBKR $10K) + 7 US (Alpaca) + 8 futures + 4 P2/P3
-- **14 LIVE** : 11 crypto + 1 FX carry
-- **3,320 tests**, CRO 9.5/10 post-robustesse V13
+- **47 strats** : 11 crypto + 15 FX/EU + 7 US + 8 futures + 5 P2/P3 + 1 Cross-Asset Momentum (paper)
+- **14 LIVE** : 11 crypto + 1 FX carry + Cross-Asset Momentum en paper
+- **3,509 tests**, CRO 9.5/10 post V14.0
 - **Hetzner** : IB Gateway 10.45, port 4002, VNC :5900
-- **Data** : 265K candles (FX IBKR + crypto Binance)
+- **Data** : 265K candles + 175 midcap tickers (3 ans daily via Alpaca)
+- **Capital** : $45K cross-broker (Binance 10K + IBKR 10K + Alpaca 30K paper)
 
 ## Variables env
 `ALPACA_API_KEY` `ALPACA_SECRET_KEY` `PAPER_TRADING=true`
