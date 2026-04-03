@@ -242,6 +242,7 @@ class MidCapStatArbStrategy:
         self,
         prices: Dict[str, pd.DataFrame],
         current_regime: str = "UNKNOWN",
+        as_of: datetime = None,
     ) -> List[Dict]:
         """
         Daily signal generation.
@@ -267,7 +268,7 @@ class MidCapStatArbStrategy:
                 logger.warning(f"Signal generation error for {pair.pair_id}: {e}")
 
         # Check existing positions for exits
-        exit_signals = self._check_exits(prices)
+        exit_signals = self._check_exits(prices, as_of=as_of)
         signals.extend(exit_signals)
 
         logger.info(f"Generated {len(signals)} signals "
@@ -391,9 +392,10 @@ class MidCapStatArbStrategy:
             "timestamp": datetime.now().isoformat(),
         }
 
-    def _check_exits(self, prices: Dict[str, pd.DataFrame]) -> List[Dict]:
+    def _check_exits(self, prices: Dict[str, pd.DataFrame], as_of: datetime = None) -> List[Dict]:
         """Check all open positions for exit conditions."""
         exit_signals = []
+        now = as_of or datetime.now()
 
         for pair_id, pos in list(self.open_positions.items()):
             if not pos.is_open:
@@ -434,7 +436,7 @@ class MidCapStatArbStrategy:
 
             # Update holding days
             if pos.entry_time:
-                pos.holding_days = (datetime.now() - pos.entry_time).days
+                pos.holding_days = (now - pos.entry_time).days
 
             exit_reason = None
 
@@ -481,6 +483,7 @@ class MidCapStatArbStrategy:
         signal: Dict,
         fill_price_a: float,
         fill_price_b: float,
+        as_of: datetime = None,
     ) -> PairPosition:
         """Record a new pair position after fills."""
         pos = PairPosition(
@@ -490,7 +493,7 @@ class MidCapStatArbStrategy:
             direction=signal["direction"],
             gamma=signal["gamma"],
             entry_z=signal["z_score"],
-            entry_time=datetime.now(),
+            entry_time=as_of or datetime.now(),
             entry_price_a=fill_price_a,
             entry_price_b=fill_price_b,
             quantity_a=signal["quantity_a"],
@@ -507,13 +510,14 @@ class MidCapStatArbStrategy:
         fill_price_a: float,
         fill_price_b: float,
         reason: str,
+        as_of: datetime = None,
     ) -> Optional[PairPosition]:
         """Record a pair position closure."""
         if pair_id not in self.open_positions:
             return None
 
         pos = self.open_positions[pair_id]
-        pos.exit_time = datetime.now()
+        pos.exit_time = as_of or datetime.now()
         pos.exit_price_a = fill_price_a
         pos.exit_price_b = fill_price_b
         pos.update_pnl(fill_price_a, fill_price_b)

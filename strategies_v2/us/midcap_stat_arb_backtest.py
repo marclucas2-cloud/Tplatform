@@ -218,7 +218,7 @@ def backtest_stat_arb(
             if mask.sum() > 0:
                 prices_current[ticker] = df[mask]
 
-        signals = strategy.generate_signals(prices_current, current_regime="MEAN_REVERT")
+        signals = strategy.generate_signals(prices_current, current_regime="MEAN_REVERT", as_of=date.to_pydatetime())
 
         # ---- Process signals ----
         day_pnl = 0.0
@@ -245,7 +245,7 @@ def backtest_stat_arb(
                 total_costs += entry_cost
 
                 # Record position
-                strategy.on_entry_filled(signal, price_a, price_b)
+                strategy.on_entry_filled(signal, price_a, price_b, as_of=date.to_pydatetime())
                 pairs_traded_set.add(signal["pair_id"])
 
             elif signal["type"] == "EXIT":
@@ -269,7 +269,8 @@ def backtest_stat_arb(
 
                 # Close position
                 closed_pos = strategy.on_exit_filled(
-                    pair_id, price_a, price_b, signal["reason"]
+                    pair_id, price_a, price_b, signal["reason"],
+                    as_of=date.to_pydatetime(),
                 )
 
                 if closed_pos:
