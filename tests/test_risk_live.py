@@ -82,24 +82,24 @@ def portfolio_with_positions():
 
 
 # =============================================================================
-# TEST 1: POSITION LIMIT (max 15% per position)
+# TEST 1: POSITION LIMIT (max 20% per position)
 # =============================================================================
 
 class TestPositionLimit:
-    """max_position_pct = 0.15 -> $1,500 max per position on $10K."""
+    """max_position_pct = 0.20 -> $2,000 max per position on $10K."""
 
     def test_position_under_limit_passes(self, live_rm, base_portfolio):
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1400, "strategy": "test", "stop_loss": 145.0}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1900, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is True
 
     def test_position_at_limit_passes(self, live_rm, base_portfolio):
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "test", "stop_loss": 145.0}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 2000, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is True
 
     def test_position_over_limit_rejected(self, live_rm, base_portfolio):
-        order = {"symbol": "AAPL", "direction": "LONG", "notional": 1600, "strategy": "test", "stop_loss": 145.0}
+        order = {"symbol": "AAPL", "direction": "LONG", "notional": 2100, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is False
         assert "Position limit" in msg
@@ -107,9 +107,9 @@ class TestPositionLimit:
     def test_position_cumulative_over_limit(self, live_rm, base_portfolio):
         """Adding to existing position pushes over limit."""
         base_portfolio["positions"] = [
-            {"symbol": "AAPL", "notional": 1000, "side": "LONG", "strategy": "test"},
+            {"symbol": "AAPL", "notional": 1500, "side": "LONG", "strategy": "test"},
         ]
-        base_portfolio["cash"] = 9000
+        base_portfolio["cash"] = 8500
         order = {"symbol": "AAPL", "direction": "LONG", "notional": 600, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is False
@@ -117,11 +117,11 @@ class TestPositionLimit:
 
 
 # =============================================================================
-# TEST 2: STRATEGY LIMIT (max 20% per strategy)
+# TEST 2: STRATEGY LIMIT (max 30% per strategy)
 # =============================================================================
 
 class TestStrategyLimit:
-    """max_strategy_pct = 0.25 -> $2,500 max per strategy on $10K."""
+    """max_strategy_pct = 0.30 -> $3,000 max per strategy on $10K."""
 
     def test_strategy_under_limit_passes(self, live_rm, base_portfolio):
         order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "momentum", "stop_loss": 145.0}
@@ -133,18 +133,18 @@ class TestStrategyLimit:
             {"symbol": "AAPL", "notional": 2000, "side": "LONG", "strategy": "momentum"},
         ]
         base_portfolio["cash"] = 8000
-        order = {"symbol": "MSFT", "direction": "LONG", "notional": 600, "strategy": "momentum", "stop_loss": 145.0}
+        order = {"symbol": "MSFT", "direction": "LONG", "notional": 1100, "strategy": "momentum", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is False
         assert "Strategy limit" in msg
 
 
 # =============================================================================
-# TEST 3: LONG EXPOSURE (max 60%)
+# TEST 3: LONG EXPOSURE (max 70%)
 # =============================================================================
 
 class TestLongExposure:
-    """max_long_pct = 0.60 -> $6,000 max long."""
+    """max_long_pct = 0.70 -> $7,000 max long."""
 
     def test_long_under_limit_passes(self, live_rm, base_portfolio):
         order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "test", "stop_loss": 145.0}
@@ -154,16 +154,19 @@ class TestLongExposure:
     def test_long_over_limit_rejected(self, live_rm):
         portfolio = {
             "equity": 10_000.0,
-            "cash": 4_000.0,
+            "cash": 3_000.0,
             "positions": [
-                {"symbol": "MSFT", "notional": 1500, "side": "LONG", "strategy": "a"},
-                {"symbol": "JPM", "notional": 1500, "side": "LONG", "strategy": "b"},
-                {"symbol": "XOM", "notional": 1500, "side": "LONG", "strategy": "c"},
-                {"symbol": "AMD", "notional": 1500, "side": "LONG", "strategy": "d"},
+                {"symbol": "MSFT", "notional": 1800, "side": "LONG", "strategy": "a"},
+                {"symbol": "JPM", "notional": 1800, "side": "LONG", "strategy": "b"},
+                {"symbol": "XOM", "notional": 1800, "side": "LONG", "strategy": "c"},
+                {"symbol": "HD", "notional": 1800, "side": "LONG", "strategy": "d"},
             ],
             "margin_used_pct": 0.0,
         }
-        order = {"symbol": "NVDA", "direction": "LONG", "notional": 200, "strategy": "e", "stop_loss": 145.0}
+        # existing long: 4 * 1800 = 7200 = 72% > 70%, order adds 200 -> 7400 = 74%
+        # Each position is 18% < 20% position limit, each strategy unique < 30%
+        # Sectors: tech(MSFT)=1800, finance(JPM)=1800, energy(XOM)=1800, other(HD)=1800 — all < 30%
+        order = {"symbol": "CAT", "direction": "LONG", "notional": 200, "strategy": "e", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, portfolio)
         assert passed is False
         assert "Long exposure" in msg
@@ -198,11 +201,11 @@ class TestShortExposure:
 
 
 # =============================================================================
-# TEST 5: GROSS EXPOSURE (max 120%)
+# TEST 5: GROSS EXPOSURE (max 130%)
 # =============================================================================
 
 class TestGrossExposure:
-    """max_gross_pct = 1.20 -> $12,000 max gross."""
+    """max_gross_pct = 1.30 -> $13,000 max gross."""
 
     def test_gross_under_limit_passes(self, live_rm, base_portfolio):
         order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "test", "stop_loss": 145.0}
@@ -211,41 +214,41 @@ class TestGrossExposure:
 
     def test_gross_over_limit_rejected(self, live_rm):
         # We test _check_gross_exposure directly to avoid cascading limit failures.
-        # With $10K equity and max_gross_pct=1.20, gross limit = $12,000.
+        # With $10K equity and max_gross_pct=1.30, gross limit = $13,000.
         portfolio = {
             "equity": 10_000.0,
             "cash": 5_000.0,
             "positions": [
-                {"symbol": "AAPL", "notional": 1400, "side": "LONG", "strategy": "a"},
-                {"symbol": "JPM", "notional": 1400, "side": "LONG", "strategy": "b"},
-                {"symbol": "XOM", "notional": 1400, "side": "SHORT", "strategy": "c"},
-                {"symbol": "COIN", "notional": 1400, "side": "LONG", "strategy": "d"},
-                {"symbol": "HD", "notional": 1400, "side": "SHORT", "strategy": "e"},
-                {"symbol": "CAT", "notional": 1400, "side": "LONG", "strategy": "f"},
-                {"symbol": "UPS", "notional": 1400, "side": "SHORT", "strategy": "g"},
-                {"symbol": "BAC", "notional": 1400, "side": "LONG", "strategy": "h"},
+                {"symbol": "AAPL", "notional": 1600, "side": "LONG", "strategy": "a"},
+                {"symbol": "JPM", "notional": 1600, "side": "LONG", "strategy": "b"},
+                {"symbol": "XOM", "notional": 1600, "side": "SHORT", "strategy": "c"},
+                {"symbol": "COIN", "notional": 1600, "side": "LONG", "strategy": "d"},
+                {"symbol": "HD", "notional": 1600, "side": "SHORT", "strategy": "e"},
+                {"symbol": "CAT", "notional": 1600, "side": "LONG", "strategy": "f"},
+                {"symbol": "UPS", "notional": 1600, "side": "SHORT", "strategy": "g"},
+                {"symbol": "BAC", "notional": 1600, "side": "LONG", "strategy": "h"},
             ],
             "margin_used_pct": 0.0,
         }
-        # existing = 8 * 1400 = 11200
-        # order 900 -> total 12100 > 12000 -> gross fails
-        # But position limit: 900 / 10000 = 9% < 15% OK
-        # strategy: 900 / 10000 = 9% < 20% OK
-        order = {"symbol": "WFC", "direction": "LONG", "notional": 900, "strategy": "i"}
+        # existing = 8 * 1600 = 12800
+        # order 300 -> total 13100 > 13000 -> gross fails
+        # position limit: 300 / 10000 = 3% < 20% OK
+        # strategy: 300 / 10000 = 3% < 30% OK
+        order = {"symbol": "WFC", "direction": "LONG", "notional": 300, "strategy": "i", "stop_loss": 145.0}
         passed, msg = live_rm._check_gross_exposure(order, portfolio)
         assert passed is False
         assert "Gross exposure" in msg
 
 
 # =============================================================================
-# TEST 6: MAX POSITIONS COUNT (max 6)
+# TEST 6: MAX POSITIONS COUNT (max 12)
 # =============================================================================
 
 class TestMaxPositions:
-    """max_positions = 10 (updated from 6 in limits_live.yaml)."""
+    """max_positions = 12 (updated from 10 in limits_live.yaml)."""
 
     def test_under_max_positions_passes(self, live_rm):
-        """5 positions + 1 new unique symbol = 6 <= max 10, passes."""
+        """5 positions + 1 new unique symbol = 6 <= max 12, passes."""
         portfolio = {
             "equity": 10_000.0,
             "cash": 5_000.0,
@@ -283,13 +286,13 @@ class TestMaxPositions:
         assert passed is True
 
     def test_new_symbol_over_max_rejected(self, live_rm):
-        """11th unique symbol is rejected (max_positions=10)."""
+        """13th unique symbol is rejected (max_positions=12)."""
         portfolio = {
             "equity": 10_000.0,
             "cash": 5_000.0,
             "positions": [
                 {"symbol": f"SYM{i}", "notional": 200, "side": "LONG", "strategy": f"s{i}"}
-                for i in range(10)
+                for i in range(12)
             ],
             "margin_used_pct": 0.0,
         }
@@ -300,14 +303,14 @@ class TestMaxPositions:
 
 
 # =============================================================================
-# TEST 7: CASH RESERVE (min 15%)
+# TEST 7: CASH RESERVE (min 5%)
 # =============================================================================
 
 class TestCashReserve:
-    """min_cash_pct = 0.10 -> must keep $1,000 in cash on $10K."""
+    """min_cash_pct = 0.05 -> must keep $500 in cash on $10K."""
 
     def test_enough_cash_passes(self, live_rm, base_portfolio):
-        # 10000 - 1500 = 8500 cash / 10000 = 85% > 10%
+        # 10000 - 1500 = 8500 cash / 10000 = 85% > 5%
         order = {"symbol": "AAPL", "direction": "LONG", "notional": 1500, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, base_portfolio)
         assert passed is True
@@ -315,14 +318,14 @@ class TestCashReserve:
     def test_not_enough_cash_rejected(self, live_rm):
         portfolio = {
             "equity": 10_000.0,
-            "cash": 1_200.0,
+            "cash": 800.0,
             "positions": [
                 {"symbol": "AAPL", "notional": 1500, "side": "LONG", "strategy": "a"},
             ],
             "margin_used_pct": 0.0,
         }
-        # 1200 - 700 = 500 / 10000 = 5% < 10%
-        order = {"symbol": "MSFT", "direction": "LONG", "notional": 700, "strategy": "test", "stop_loss": 145.0}
+        # 800 - 500 = 300 / 10000 = 3% < 5%
+        order = {"symbol": "MSFT", "direction": "LONG", "notional": 500, "strategy": "test", "stop_loss": 145.0}
         passed, msg = live_rm.validate_order(order, portfolio)
         assert passed is False
         assert "Cash reserve" in msg
@@ -660,8 +663,8 @@ class TestPaperLiveIsolation:
         """LiveRiskManager loads limits_live.yaml, not limits.yaml."""
         assert live_rm.mode == "LIVE"
         assert live_rm.capital == 10_000
-        assert live_rm.position_limits.get("max_position_pct") == 0.15
-        assert live_rm.position_limits.get("max_positions") == 10  # Updated from 6
+        assert live_rm.position_limits.get("max_position_pct") == 0.20
+        assert live_rm.position_limits.get("max_positions") == 12  # Updated from 10
 
     def test_paper_uses_paper_limits(self, paper_rm):
         """Original RiskManager loads limits.yaml with paper settings."""
@@ -681,14 +684,14 @@ class TestPaperLiveIsolation:
         assert live_hourly < paper_hourly
 
     def test_live_requires_more_cash(self, live_rm, paper_rm):
-        """Live min cash (15%) is higher than paper (7%)."""
-        live_cash = live_rm.position_limits.get("min_cash_pct", 0.15)
+        """Live min cash (5%) is lower than paper (7%) — $10K needs less reserve."""
+        live_cash = live_rm.position_limits.get("min_cash_pct", 0.05)
         paper_cash = paper_rm.limits["exposure_limits"]["min_cash"]
-        assert live_cash > paper_cash
+        assert live_cash < paper_cash
 
     def test_live_max_positions_capped(self, live_rm):
-        """Live has explicit max_positions cap (10)."""
-        assert live_rm.position_limits.get("max_positions") == 10
+        """Live has explicit max_positions cap (12)."""
+        assert live_rm.position_limits.get("max_positions") == 12
 
     def test_modifying_live_doesnt_affect_paper(self, live_rm, paper_rm):
         """Mutating live limits dict doesn't change paper limits."""

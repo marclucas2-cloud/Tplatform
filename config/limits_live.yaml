@@ -5,13 +5,13 @@ capital: 10000
 mode: LIVE
 
 position_limits:
-  max_position_pct: 0.15          # $1,500 max par position
-  max_strategy_pct: 0.25          # $2,500 max par strategie (was 20%)
-  max_long_pct: 0.60              # $6,000 max long
+  max_position_pct: 0.20          # $2,000 max par position (was 15%) — Fix #4 $10K
+  max_strategy_pct: 0.30          # $3,000 max par strategie (was 25%) — Fix #4
+  max_long_pct: 0.70              # $7,000 max long (was 60%) — Fix #4
   max_short_pct: 0.40             # $4,000 max short
-  max_gross_pct: 1.20             # $12,000 max gross (levier 1.5x)
-  max_positions: 10               # Max 10 positions (was 6) — ROC optim
-  min_cash_pct: 0.10              # 10% min cash (was 15%) — ROC optim dynamique
+  max_gross_pct: 1.30             # $13,000 max gross (was 1.20) — Fix #4
+  max_positions: 12               # Max 12 positions (was 10) — Fix #4
+  min_cash_pct: 0.05              # 5% min cash (was 10%) — Fix #4 $500 suffisant
 
 margin_limits:
   max_margin_used_pct: 0.70       # Alerte
@@ -56,7 +56,7 @@ futures_limits:
 # Combined limits
 combined_limits:
   max_total_margin_pct: 0.80        # Total margin (equity+FX+futures) < 80%
-  min_cash_pct: 0.15                # 15% combined cash free (was 20%) — ROC optim
+  min_cash_pct: 0.10                # 10% combined cash free (was 15%) — Fix #4
 
 # Same sector map as paper
 sector_map:

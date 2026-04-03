@@ -27,33 +27,33 @@ OVERRIDE_PATH = ROOT / "data" / "regime_override.json"
 
 # Default activation matrix — used if config/regime.yaml not found
 DEFAULT_MATRIX: dict[str, dict[str, float]] = {
-    # FX strategies
-    "fx_carry_vol_scaled":     {"TREND_STRONG": 1.0, "MEAN_REVERT": 1.0, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.5},
-    "fx_carry_momentum":       {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.8, "HIGH_VOL": 0.3, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.5},
-    # Crypto strategies
-    "crypto_dual_momentum":    {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.7, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.5},
-    "crypto_vol_breakout":     {"TREND_STRONG": 0.5, "MEAN_REVERT": 0.0, "HIGH_VOL": 1.0, "PANIC": 0.5, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.3},
-    "crypto_btc_dom_rotation": {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.5},
-    "crypto_borrow_carry":     {"TREND_STRONG": 1.0, "MEAN_REVERT": 1.0, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.5, "UNKNOWN": 0.7},
-    "crypto_liq_momentum":     {"TREND_STRONG": 0.3, "MEAN_REVERT": 0.3, "HIGH_VOL": 1.0, "PANIC": 1.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.3},
-    "crypto_weekend_gap":      {"TREND_STRONG": 0.5, "MEAN_REVERT": 1.0, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.5},
-    "crypto_range_bb":         {"TREND_STRONG": 0.3, "MEAN_REVERT": 1.0, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.5},
-    "crypto_vol_expansion":    {"TREND_STRONG": 0.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 1.0, "PANIC": 1.0, "LOW_LIQUIDITY": 0.5, "UNKNOWN": 0.3},
-    # Futures strategies
-    "mes_trend":               {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.3, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.0, "UNKNOWN": 0.3},
-    "mes_mnq_pairs":           {"TREND_STRONG": 0.3, "MEAN_REVERT": 1.0, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.0, "UNKNOWN": 0.3},
-    # US equity strategies
-    "dow_seasonal":            {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.3, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.5},
-    "corr_hedge":              {"TREND_STRONG": 0.5, "MEAN_REVERT": 0.5, "HIGH_VOL": 1.0, "PANIC": 1.0, "LOW_LIQUIDITY": 0.5, "UNKNOWN": 0.5},
-    "vix_short":               {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.0, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.3},
-    "high_beta_short":         {"TREND_STRONG": 0.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 1.0, "PANIC": 1.0, "LOW_LIQUIDITY": 0.5, "UNKNOWN": 0.3},
-    "late_day_mr":             {"TREND_STRONG": 0.3, "MEAN_REVERT": 1.0, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.5},
-    # EU equity strategies
-    "eu_gap_open":             {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.3, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.5},
-    "bce_momentum":            {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.5},
-    "auto_sector_german":      {"TREND_STRONG": 0.5, "MEAN_REVERT": 1.0, "HIGH_VOL": 0.3, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.5},
-    "brent_lag":               {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.5},
-    "eu_close_us":             {"TREND_STRONG": 0.5, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.5},
+    # FX strategies — UNKNOWN raised to 0.8 (Fix #6: "on ne sait pas" != "on ne trade pas")
+    "fx_carry_vol_scaled":     {"TREND_STRONG": 1.0, "MEAN_REVERT": 1.0, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.8},
+    "fx_carry_momentum":       {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.8, "HIGH_VOL": 0.3, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.8},
+    # Crypto strategies — UNKNOWN raised to 0.7-0.8 (Fix #6)
+    "crypto_dual_momentum":    {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.7, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.8},
+    "crypto_vol_breakout":     {"TREND_STRONG": 0.5, "MEAN_REVERT": 0.0, "HIGH_VOL": 1.0, "PANIC": 0.5, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.7},
+    "crypto_btc_dom_rotation": {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.7},
+    "crypto_borrow_carry":     {"TREND_STRONG": 1.0, "MEAN_REVERT": 1.0, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.5, "UNKNOWN": 0.8},
+    "crypto_liq_momentum":     {"TREND_STRONG": 0.3, "MEAN_REVERT": 0.3, "HIGH_VOL": 1.0, "PANIC": 1.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.7},
+    "crypto_weekend_gap":      {"TREND_STRONG": 0.5, "MEAN_REVERT": 1.0, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.7},
+    "crypto_range_bb":         {"TREND_STRONG": 0.3, "MEAN_REVERT": 1.0, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.7},
+    "crypto_vol_expansion":    {"TREND_STRONG": 0.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 1.0, "PANIC": 1.0, "LOW_LIQUIDITY": 0.5, "UNKNOWN": 0.7},
+    # Futures strategies — UNKNOWN raised to 0.7 (Fix #6)
+    "mes_trend":               {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.3, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.0, "UNKNOWN": 0.7},
+    "mes_mnq_pairs":           {"TREND_STRONG": 0.3, "MEAN_REVERT": 1.0, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.0, "UNKNOWN": 0.7},
+    # US equity strategies — UNKNOWN raised to 0.7-0.8 (Fix #6)
+    "dow_seasonal":            {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.3, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.8},
+    "corr_hedge":              {"TREND_STRONG": 0.5, "MEAN_REVERT": 0.5, "HIGH_VOL": 1.0, "PANIC": 1.0, "LOW_LIQUIDITY": 0.5, "UNKNOWN": 0.7},
+    "vix_short":               {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.0, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.7},
+    "high_beta_short":         {"TREND_STRONG": 0.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 1.0, "PANIC": 1.0, "LOW_LIQUIDITY": 0.5, "UNKNOWN": 0.7},
+    "late_day_mr":             {"TREND_STRONG": 0.3, "MEAN_REVERT": 1.0, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.8},
+    # EU equity strategies — UNKNOWN raised to 0.8 (Fix #6)
+    "eu_gap_open":             {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.3, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.8},
+    "bce_momentum":            {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.8},
+    "auto_sector_german":      {"TREND_STRONG": 0.5, "MEAN_REVERT": 1.0, "HIGH_VOL": 0.3, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.8},
+    "brent_lag":               {"TREND_STRONG": 1.0, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.8},
+    "eu_close_us":             {"TREND_STRONG": 0.5, "MEAN_REVERT": 0.5, "HIGH_VOL": 0.5, "PANIC": 0.0, "LOW_LIQUIDITY": 0.3, "UNKNOWN": 0.8},
 }
 
 # Map strategies to their asset class for regime lookup

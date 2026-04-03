@@ -105,7 +105,7 @@ def kill_switch(tmp_path):
 # =========================================================================
 
 class TestPositionSizingGuard:
-    """Verify per-position cap (15% in limits_live.yaml) blocks oversized orders."""
+    """Verify per-position cap (20% in limits_live.yaml) blocks oversized orders."""
 
     def test_50pct_of_capital_rejected(self, rm):
         """Order for 50% of capital on a single position -> REJECTED."""
@@ -116,11 +116,11 @@ class TestPositionSizingGuard:
         assert "osition" in msg.lower() or "limit" in msg.lower()
 
     def test_16pct_of_capital_rejected(self, rm):
-        """Order for 16% of capital -> REJECTED (15% cap in config)."""
-        order = _make_order(notional=1600)  # 16% of $10K
+        """Order for 21% of capital -> REJECTED (20% cap in config)."""
+        order = _make_order(notional=2100)  # 21% of $10K
         portfolio = _make_portfolio(equity=10_000, cash=8_000)
         passed, msg = rm.validate_order(order, portfolio)
-        assert not passed, f"16% position should be rejected (15% cap), got: {msg}"
+        assert not passed, f"21% position should be rejected (20% cap), got: {msg}"
 
     def test_9pct_of_capital_accepted(self, rm):
         """Order for 9% of capital -> ACCEPTED (below 15% cap)."""
@@ -130,15 +130,15 @@ class TestPositionSizingGuard:
         assert passed, f"9% position should be accepted, got: {msg}"
 
     def test_existing_position_adds_up(self, rm):
-        """Existing 10% + new 6% = 16% on same symbol -> REJECTED."""
+        """Existing 15% + new 6% = 21% on same symbol -> REJECTED (20% cap)."""
         order = _make_order(symbol="NVDA", notional=600)  # +6%
         portfolio = _make_portfolio(
             equity=10_000,
             cash=8_000,
-            positions=[_position(symbol="NVDA", notional=1000)],  # 10% already
+            positions=[_position(symbol="NVDA", notional=1500)],  # 15% already
         )
         passed, msg = rm.validate_order(order, portfolio)
-        assert not passed, f"10% + 6% = 16% should be rejected, got: {msg}"
+        assert not passed, f"15% + 6% = 21% should be rejected, got: {msg}"
 
 
 # =========================================================================
@@ -268,22 +268,22 @@ class TestExposureGuard:
     """Verify net long/short exposure limits block excessive directional bets."""
 
     def test_long_exposure_exceeds_limit(self, rm):
-        """Already 55% long + 10% new long -> REJECTED (60% cap).
+        """Already 65% long + 10% new long -> REJECTED (70% cap).
 
-        Uses distinct strategies (each under 20% cap) to isolate the
-        exposure check from the strategy concentration check.
+        Uses distinct strategies (each under 30% cap) and distinct sectors
+        to isolate the exposure check from strategy/sector concentration checks.
         """
         positions = [
-            _position(symbol="AAPL", notional=1400, side="LONG", strategy="strat_a"),
-            _position(symbol="MSFT", notional=1400, side="LONG", strategy="strat_b"),
-            _position(symbol="AMZN", notional=1400, side="LONG", strategy="strat_c"),
-            _position(symbol="GOOG", notional=1300, side="LONG", strategy="strat_d"),
+            _position(symbol="AAPL", notional=1700, side="LONG", strategy="strat_a", sector="tech"),
+            _position(symbol="JPM", notional=1700, side="LONG", strategy="strat_b", sector="finance"),
+            _position(symbol="XOM", notional=1600, side="LONG", strategy="strat_c", sector="energy"),
+            _position(symbol="PFE", notional=1500, side="LONG", strategy="strat_d", sector="health"),
         ]
-        # Total long = 5500 = 55%. New order = 10%. Total = 65% > 60% cap.
-        order = _make_order(symbol="NVDA", direction="LONG", notional=1000, strategy="strat_e")
-        portfolio = _make_portfolio(equity=10_000, cash=4_000, positions=positions)
+        # Total long = 6500 = 65%. New order = 10%. Total = 75% > 70% cap.
+        order = _make_order(symbol="DIS", direction="LONG", notional=1000, strategy="strat_e", stop_loss=145.0)
+        portfolio = _make_portfolio(equity=10_000, cash=3_000, positions=positions)
         passed, msg = rm.validate_order(order, portfolio)
-        assert not passed, f"55% + 10% = 65% long should be rejected, got: {msg}"
+        assert not passed, f"65% + 10% = 75% long should be rejected, got: {msg}"
         assert "ong" in msg.lower() or "exposure" in msg.lower()
 
     def test_short_exposure_exceeds_limit(self, rm):
@@ -556,15 +556,15 @@ class TestExtremePriceInjection:
         assert not passed, f"Negative equity should reject all, got: {msg}"
 
     def test_max_positions_exceeded(self, rm):
-        """Already at max positions (10) + new symbol -> REJECTED."""
+        """Already at max positions (12) + new symbol -> REJECTED."""
         positions = [
             _position(symbol=f"SYM{i}", notional=200, side="LONG")
-            for i in range(10)  # max_positions=10 in limits_live.yaml
+            for i in range(12)  # max_positions=12 in limits_live.yaml
         ]
-        order = _make_order(symbol="NEW_SYMBOL", notional=200)
+        order = _make_order(symbol="NEW_SYMBOL", notional=200, stop_loss=145.0)
         portfolio = _make_portfolio(equity=10_000, cash=5_000, positions=positions)
         passed, msg = rm.validate_order(order, portfolio)
-        assert not passed, f"11th symbol should be rejected (max 10), got: {msg}"
+        assert not passed, f"13th symbol should be rejected (max 12), got: {msg}"
         assert "position" in msg.lower() or "max" in msg.lower()
 
 
@@ -680,23 +680,24 @@ class TestConcurrentGuard:
 # =========================================================================
 
 class TestStrategyConcentrationGuard:
-    """Verify per-strategy cap (20% in limits_live.yaml) blocks over-concentration."""
+    """Verify per-strategy cap (30% in limits_live.yaml) blocks over-concentration."""
 
     def test_strategy_over_25pct_rejected(self, rm):
-        """Existing 20% + new 6% = 26% on same strategy -> REJECTED (max 25%)."""
+        """Existing 20% + new 11% = 31% on same strategy -> REJECTED (max 30%)."""
         positions = [
             _position(symbol="AAPL", notional=2000, strategy="momentum_us"),
         ]
         order = _make_order(
             symbol="MSFT",
-            notional=600,
+            notional=1100,
             strategy="momentum_us",
+            stop_loss=145.0,
         )
         portfolio = _make_portfolio(
             equity=10_000, cash=6_000, positions=positions,
         )
         passed, msg = rm.validate_order(order, portfolio)
-        assert not passed, f"26% strategy concentration should be rejected, got: {msg}"
+        assert not passed, f"31% strategy concentration should be rejected, got: {msg}"
         assert "trategy" in msg.lower()
 
     def test_strategy_within_limit_accepted(self, rm):
@@ -753,15 +754,15 @@ class TestDeleveragingGuard:
 # =========================================================================
 
 class TestCashReserveGuard:
-    """Verify minimum cash reserve (15%) blocks orders that drain cash."""
+    """Verify minimum cash reserve (5%) blocks orders that drain cash."""
 
     def test_order_drains_cash_below_reserve(self, rm):
-        """Order that would leave less than 15% cash -> REJECTED."""
-        # equity=10K, cash=2K. Order of 1K would leave cash at 1K = 10% < 15%.
-        order = _make_order(notional=1000)
-        portfolio = _make_portfolio(equity=10_000, cash=2000)
+        """Order that would leave less than 5% cash -> REJECTED."""
+        # equity=10K, cash=800. Order of 500 would leave cash at 300 = 3% < 5%.
+        order = _make_order(notional=500, stop_loss=145.0)
+        portfolio = _make_portfolio(equity=10_000, cash=800)
         passed, msg = rm.validate_order(order, portfolio)
-        assert not passed, f"Draining cash below 15% should be rejected, got: {msg}"
+        assert not passed, f"Draining cash below 5% should be rejected, got: {msg}"
 
     def test_order_preserves_cash_reserve(self, rm):
         """Order that preserves 15%+ cash -> ACCEPTED."""
