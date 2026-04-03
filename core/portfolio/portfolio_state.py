@@ -301,11 +301,11 @@ class PortfolioStateEngine:
             account = broker.get_account_info()
             equity = float(account.get("equity", account.get("total_equity", 0)))
             cash = float(account.get("cash", account.get("available_balance", 0)))
-            paper = bool(account.get("paper", True))
+            paper = bool(account.get("paper", False))
         except Exception:
             equity = 0.0
             cash = 0.0
-            paper = True
+            paper = False
 
         try:
             positions = broker.get_positions()
