@@ -1,0 +1,37 @@
+# U4-03: Risk Thresholds calibrated for $10-50K capital
+# These replace the $100K+ assumptions in the original config
+
+# Adaptive thresholds (adjusted by utilization via AdaptiveGuards)
+adaptive:
+  cash_min_pct: 0.05            # $500 buffer (was 10% = $1K)
+  max_position_pct: 0.20        # $2,000 max per position (was 15%)
+  max_strategy_pct: 0.30        # $3,000 max per strategy (was 25%)
+  max_long_pct: 0.70            # $7,000 max long (was 60%)
+  max_short_pct: 0.40           # $4,000 max short (unchanged)
+  max_gross_pct: 0.95           # 95% max deployed (was 90%)
+  max_positions: 12             # >= number of active strats (was 10)
+  signal_quality_threshold: 0.35 # Slightly more permissive (was 0.40)
+
+# Fixed thresholds (NEVER adjusted — safety absolue)
+fixed:
+  daily_loss_pct: 0.03          # -3% = $300 → still relevant at $10K
+  hourly_loss_pct: 0.015        # -1.5% = $150
+  weekly_loss_pct: 0.05         # -5% = $500
+  hard_floor_dd: 0.10           # -10% = $1,000 → always relevant
+  sl_mandatory: true            # Every order must have a stop-loss
+  margin_block_pct: 0.85        # Block new trades at 85% margin
+
+# Min position sizes (below = SKIP or aggregate)
+min_position_usd:
+  crypto_spot: 50
+  crypto_margin: 100
+  fx: 200
+  eu_equity: 200
+  us_equity: 100
+  futures: 0                    # 1 contract minimum, no $ floor
+
+# Sizing
+sizing:
+  base: "global"                # Size on total NAV ($45K), not per-broker
+  kelly_fraction: 0.25          # 1/4 Kelly (was 1/8 — too small at $10K)
+  max_broker_exposure_pct: 0.80 # Cap per broker

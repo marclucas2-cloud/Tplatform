@@ -1,0 +1,50 @@
+# U5-03: Always-On Strategy Registry
+# Strategies that must ALWAYS have capital deployed
+# No entry signal needed — always in position, sizing varies by regime
+
+always_on_strategies:
+  # FX Carry — structural carry on JPY crosses
+  - name: "fx_carry_audjpy"
+    broker: "ibkr"
+    instrument: "AUDJPY"
+    direction: "LONG"
+    base_allocation_pct: 8
+    min_allocation_pct: 2     # Even in PANIC, 2% minimum
+    vol_target_annual: 0.05
+    rebalance_threshold_pct: 20
+
+  - name: "fx_carry_eurjpy"
+    broker: "ibkr"
+    instrument: "EURJPY"
+    direction: "LONG"
+    base_allocation_pct: 8
+    min_allocation_pct: 2
+    vol_target_annual: 0.05
+    rebalance_threshold_pct: 20
+
+  - name: "fx_carry_usdjpy"
+    broker: "ibkr"
+    instrument: "USDJPY"
+    direction: "LONG"
+    base_allocation_pct: 6
+    min_allocation_pct: 1
+    vol_target_annual: 0.05
+    rebalance_threshold_pct: 20
+
+  # Crypto Earn — idle capital in flexible earn
+  - name: "earn_usdc"
+    broker: "binance"
+    instrument: "USDC"
+    product: "flexible_earn"
+    allocation: "all_idle_above_100"
+
+  - name: "earn_btc"
+    broker: "binance"
+    instrument: "BTC"
+    product: "flexible_earn"
+    allocation: "all_idle_above_0.001"
+
+# Impact:
+#   ~22% of IBKR capital always deployed in FX carry
+#   ~50% of Binance capital always in Earn
+#   Utilization floor ~25% instead of 0%
