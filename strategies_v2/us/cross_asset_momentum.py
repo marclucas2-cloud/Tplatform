@@ -75,9 +75,9 @@ class CrossAssetMomentumConfig:
     rebalance_day: int = 0              # 0=Monday
 
     # Signal
-    use_dual_momentum: bool = True  # Combine 12M + 1M signals
-    allow_short: bool = False       # Long-only or long/short
-    vol_target_annual: float = 0.10 # 10% annual vol target
+    use_dual_momentum: bool = False  # 12M only (1M too noisy for weekly rebalance)
+    allow_short: bool = False        # Long-only or long/short
+    vol_target_annual: float = 0.10  # 10% annual vol target
 
     # Sizing
     method: str = "INVERSE_VOL"     # INVERSE_VOL or EQUAL_WEIGHT
