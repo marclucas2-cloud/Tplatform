@@ -89,6 +89,52 @@ from core.broker.broker_health import BrokerHealthRegistry  # noqa: E402
 
 
 
+# --- V14: Global NAV helper for sizing on total capital ---
+_global_nav_cache = {"nav": 0.0, "ts": 0.0}
+
+
+def _get_global_nav() -> float:
+    """Get total NAV across all brokers. Cached 5 min."""
+    import time as _t
+    if _t.time() - _global_nav_cache["ts"] < 300 and _global_nav_cache["nav"] > 0:
+        return _global_nav_cache["nav"]
+
+    nav = 0.0
+    # Binance equity
+    try:
+        bnb_state = Path(__file__).resolve().parent / "data" / "crypto_equity_state.json"
+        if bnb_state.exists():
+            import json as _json
+            with open(bnb_state) as f:
+                nav += _json.load(f).get("total_equity_usd", 0)
+    except Exception:
+        nav += 10_000  # Fallback
+
+    # IBKR equity
+    try:
+        ibkr_state = Path(__file__).resolve().parent / "data" / "state" / "ibkr_equity.json"
+        if ibkr_state.exists():
+            import json as _json
+            with open(ibkr_state) as f:
+                nav += _json.load(f).get("equity", 0)
+        else:
+            nav += 10_000  # Fallback
+    except Exception:
+        nav += 10_000
+
+    # Alpaca equity
+    try:
+        alp_key = os.getenv("ALPACA_API_KEY", "")
+        if alp_key:
+            nav += 30_000  # Alpaca paper/live — use nominal until API wired
+    except Exception:
+        pass
+
+    _global_nav_cache["nav"] = nav
+    _global_nav_cache["ts"] = _t.time()
+    return nav
+
+
 # --- Graceful shutdown handler ---
 def _handle_sigterm(signum, frame):
     """Graceful shutdown on Railway redeploy — closes positions and cancels orders."""
@@ -469,6 +515,92 @@ def run_fx_carry_cycle():
     finally:
         if _ibkr_carry:
             _ibkr_carry.disconnect()
+        _ibkr_lock.release()
+
+
+def run_always_on_carry_cycle():
+    """V14: Always-On FX Carry — IBKR is never at 0% utilization.
+
+    3 carry positions (AUDJPY, EURJPY, USDJPY) are ALWAYS active.
+    Sizing varies by regime + vol scaling. Min floor even in PANIC.
+    Rebalance if sizing drifts > 20% from target.
+    """
+    if not _ibkr_lock.acquire(blocking=False):
+        logger.warning("ALWAYS-ON CARRY SKIP — IBKR lock held")
+        return
+    try:
+        logger.info("=== ALWAYS-ON CARRY CYCLE ===")
+
+        from core.strategies.always_on_carrier import AlwaysOnCarrier
+
+        # Get IBKR equity
+        ibkr_equity = 10_000  # Default
+        try:
+            from core.broker.ibkr_adapter import IBKRBroker
+            _ibkr = IBKRBroker(client_id=10)
+            ibkr_info = _ibkr.get_account_info()
+            ibkr_equity = ibkr_info.get("equity", 10_000)
+            _ibkr.disconnect()
+        except Exception as e:
+            logger.warning(f"  CARRY: IBKR equity fetch failed: {e}, using ${ibkr_equity}")
+
+        # Get current regime
+        current_regime = "UNKNOWN"
+        try:
+            import json as _json
+            regime_path = Path(__file__).resolve().parent / "data" / "regime_state.json"
+            if regime_path.exists():
+                with open(regime_path) as f:
+                    rs = _json.load(f)
+                current_regime = rs.get("FX", rs.get("global", "UNKNOWN"))
+        except Exception:
+            pass
+
+        carrier = AlwaysOnCarrier()
+        targets = carrier.compute_targets(
+            equity_by_broker={"ibkr": ibkr_equity},
+            regime=current_regime,
+        )
+
+        for t in targets:
+            logger.info(
+                "  CARRY %s %s: target $%.0f (current $%.0f) alloc=%.1f%% regime=%s %s",
+                t.instrument, t.direction, t.target_notional, t.current_notional,
+                t.allocation_pct, current_regime,
+                "REBALANCE" if t.needs_rebalance else "OK",
+            )
+
+        # NOTE: Execution is NOT wired yet — log-only for now
+        # When ready: submit IBKR FX orders for each target that needs_rebalance
+        # This is the always-on carrier, NOT the signal-based FX carry cycle
+
+        total_deployed = carrier.get_total_deployed(targets)
+        logger.info(
+            "  CARRY total: $%.0f deployed (%.0f%% of IBKR equity)",
+            total_deployed, total_deployed / ibkr_equity * 100 if ibkr_equity > 0 else 0,
+        )
+
+        # Save state
+        import json as _json
+        state_path = Path(__file__).resolve().parent / "data" / "state" / "always_on_carry.json"
+        state_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(state_path, "w") as f:
+            _json.dump({
+                "timestamp": datetime.now(PARIS).isoformat(),
+                "regime": current_regime,
+                "ibkr_equity": ibkr_equity,
+                "targets": [t.to_dict() for t in targets],
+                "total_deployed": total_deployed,
+            }, f, indent=2)
+
+        _log_event("always_on_carry", details={
+            "regime": current_regime, "total_deployed": total_deployed,
+            "n_positions": len(targets),
+        })
+
+    except Exception as e:
+        logger.error(f"  ALWAYS-ON CARRY ERROR: {e}", exc_info=True)
+    finally:
         _ibkr_lock.release()
 
 
@@ -1851,11 +1983,15 @@ def run_crypto_cycle():
 
                 candle = pd.Series(candle_data)
 
-                # State avec capital alloue (1/8 Kelly SOFT_LAUNCH)
-                # FIX: utiliser l'equity LIVE, pas le capital statique du YAML
-                sizing_capital = current_equity if current_equity > 0 else total_capital
+                # V14: Global Sizer — size on total NAV ($45K), not broker-only ($10K)
+                # Cap to 80% of broker equity to avoid over-concentration
+                _global_nav = _get_global_nav()
+                sizing_capital = _global_nav if _global_nav > 0 else (current_equity if current_equity > 0 else total_capital)
                 alloc_pct = config.get("allocation_pct", 0.10)
                 strat_capital = sizing_capital * alloc_pct * CRYPTO_KELLY_FRACTION
+                # Cap: never exceed 80% of Binance equity for this position
+                _broker_cap = (current_equity if current_equity > 0 else total_capital) * 0.80
+                strat_capital = min(strat_capital, _broker_cap)
                 state = {
                     "capital": sizing_capital,
                     "equity": current_equity,
@@ -2907,6 +3043,7 @@ def main():
     last_v10_cycle = 0
     last_v11_hrp = 0
     last_v12_regime = 0
+    last_always_on_carry = 0
     V12_REGIME_INTERVAL = 900  # 15 min
     v11_eod_done_today = False
     after_close_checked_today = False
@@ -3052,6 +3189,9 @@ def main():
         "xmomentum": CycleRunner("xmomentum", run_cross_asset_momentum_cycle,
                                   alert_callback=_cycle_alert,
                                   metrics_callback=_cycle_metrics_cb),
+        "always_on_carry": CycleRunner("always_on_carry", run_always_on_carry_cycle,
+                                        alert_callback=_cycle_alert,
+                                        metrics_callback=_cycle_metrics_cb),
     }
     logger.info(f"  CycleRunners initialized: {list(_runners.keys())}")
 
@@ -3441,6 +3581,11 @@ def main():
         if time.time() - last_v11_hrp >= V11_HRP_INTERVAL:
             _runners["v11_hrp"].run()
             last_v11_hrp = time.time()
+
+        # === V14 ALWAYS-ON CARRY every 4 hours (24/7 incl weekends for FX) ===
+        if time.time() - last_always_on_carry >= V11_HRP_INTERVAL:
+            _runners["always_on_carry"].run()
+            last_always_on_carry = time.time()
 
         # === V12 REGIME ENGINE every 15 min ===
         if time.time() - last_v12_regime >= V12_REGIME_INTERVAL:

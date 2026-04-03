@@ -34,6 +34,8 @@ class LiveRiskManager(RiskManager):
 
     Loads limits from config/limits_live.yaml by default. All checks are
     logged to an audit file for post-trade review.
+
+    V14: Adaptive guards — thresholds adjust by utilization rate.
     """
 
     def __init__(self, limits_path=None):
@@ -43,6 +45,14 @@ class LiveRiskManager(RiskManager):
 
         # Thread-safety lock for validate_order
         self._validate_lock = threading.Lock()
+
+        # V14: Adaptive guards (thermostat by utilization)
+        self._current_utilization_pct = 50.0  # Default nominal
+        try:
+            from core.risk.adaptive_guards import AdaptiveGuards
+            self._adaptive_guards = AdaptiveGuards()
+        except ImportError:
+            self._adaptive_guards = None
 
         # Live-specific config sections
         self.live_limits = self.limits
@@ -71,6 +81,10 @@ class LiveRiskManager(RiskManager):
         """Update capital from live equity for accurate % calculations."""
         if live_equity > 0:
             self.capital = live_equity
+
+    def update_utilization(self, utilization_pct: float) -> None:
+        """V14: Update utilization rate for adaptive guards."""
+        self._current_utilization_pct = utilization_pct
 
     # ------------------------------------------------------------------
     # Audit logging
@@ -120,6 +134,37 @@ class LiveRiskManager(RiskManager):
                     f"{order.get('symbol', '?')} — no stop_loss provided"
                 )
                 return False, "stop_loss is MANDATORY for all new orders"
+
+            # V14: Apply adaptive guards (thermostat by utilization)
+            if self._adaptive_guards:
+                util = self._current_utilization_pct
+                adj = self._adaptive_guards.adjust
+                # Adjust adaptive thresholds (safety guards NEVER change)
+                self.position_limits["max_position_pct"] = adj(
+                    "max_position_pct",
+                    self.live_limits.get("position_limits", {}).get("max_position_pct", 0.20),
+                    util,
+                ).adjusted
+                self.position_limits["max_strategy_pct"] = adj(
+                    "max_strategy_pct",
+                    self.live_limits.get("position_limits", {}).get("max_strategy_pct", 0.30),
+                    util,
+                ).adjusted
+                self.position_limits["min_cash_pct"] = adj(
+                    "min_cash_pct",
+                    self.live_limits.get("position_limits", {}).get("min_cash_pct", 0.05),
+                    util,
+                ).adjusted
+                self.position_limits["max_positions"] = int(adj(
+                    "max_positions",
+                    self.live_limits.get("position_limits", {}).get("max_positions", 12),
+                    util,
+                ).adjusted)
+                self.position_limits["max_gross_pct"] = adj(
+                    "max_gross_pct",
+                    self.live_limits.get("position_limits", {}).get("max_gross_pct", 1.30),
+                    util,
+                ).adjusted
 
             checks = [
                 ("position_limit", self._check_position_limit(order, portfolio)),
