@@ -467,7 +467,8 @@ STRATEGY_REGISTRY = {
 
     # ── Crypto Strategies (Binance France) ───────────────────────────────
 
-    "STRAT-001": {
+    # Crypto strategies — clefs par ID reel (matching STRATEGY_PHASES)
+    "btc_eth_dual_momentum": {
         "name": "BTC/ETH Dual Momentum",
         "tier": "S",
         "type": "crypto",
@@ -500,7 +501,7 @@ STRATEGY_REGISTRY = {
         "max_leverage": 2,
     },
 
-    "STRAT-002": {
+    "altcoin_rs": {
         "name": "Altcoin Relative Strength",
         "tier": "A",
         "type": "crypto",
@@ -530,7 +531,7 @@ STRATEGY_REGISTRY = {
         "max_leverage": 1.5,
     },
 
-    "STRAT-003": {
+    "btc_mean_reversion": {
         "name": "BTC Mean Reversion",
         "tier": "A",
         "type": "crypto",
@@ -559,7 +560,7 @@ STRATEGY_REGISTRY = {
         "max_leverage": 1,
     },
 
-    "STRAT-004": {
+    "vol_breakout": {
         "name": "Volatility Breakout",
         "tier": "A",
         "type": "crypto",
@@ -586,7 +587,7 @@ STRATEGY_REGISTRY = {
         "max_leverage": 2,
     },
 
-    "STRAT-005": {
+    "btc_dominance_rotation": {
         "name": "BTC Dominance Rotation V2",
         "tier": "B",
         "type": "crypto",
@@ -613,7 +614,7 @@ STRATEGY_REGISTRY = {
         "max_leverage": 1,
     },
 
-    "STRAT-006": {
+    "borrow_rate_carry": {
         "name": "Borrow Rate Carry",
         "tier": "B",
         "type": "crypto",
@@ -641,7 +642,7 @@ STRATEGY_REGISTRY = {
         "max_leverage": 1,
     },
 
-    "STRAT-007": {
+    "liquidation_momentum": {
         "name": "Liquidation Momentum",
         "tier": "B",
         "type": "crypto",
@@ -670,7 +671,81 @@ STRATEGY_REGISTRY = {
         "max_leverage": 3,
     },
 
-    "STRAT-008": {
+    # FX Strategies — IBKR (live)
+    "fx_carry_vs": {
+        "name": "FX Carry Vol-Scaled",
+        "tier": "S", "type": "fx",
+        "edge_type": "Carry (structural rate differential + vol scaling)",
+        "description": "Carry trade sur paires JPY crosses avec vol scaling (Barroso & Santa-Clara 2015).",
+        "why_it_works": "Le carry est structurel : le JPY a un taux de 0%, l'AUD a 4.35%.",
+        "parameters": {"pairs": {"value": "AUDJPY, EURJPY, USDJPY, NZDUSD", "description": "4 paires G10"}},
+        "tickers": ["AUDJPY", "EURJPY", "USDJPY", "NZDUSD"],
+        "backtest": {"sharpe": 3.04, "win_rate": 58, "profit_factor": 1.8, "max_dd": 4.2, "trades": 120},
+    },
+    "fx_carry_momentum": {
+        "name": "FX Carry Momentum Filter",
+        "tier": "A", "type": "fx",
+        "edge_type": "Carry + momentum (63d filter)",
+        "description": "FX carry filtre par momentum 63 jours.",
+        "why_it_works": "Le filtre momentum evite les carry crashes.",
+        "parameters": {"momentum_period": {"value": "63 jours", "description": "Lookback momentum"}},
+        "tickers": ["AUDJPY", "EURJPY", "USDJPY", "NZDUSD"],
+        "backtest": {"sharpe": 2.17, "win_rate": 55, "profit_factor": 1.6, "max_dd": 5.1, "trades": 90},
+    },
+    "fx_carry_g10": {
+        "name": "FX Carry G10",
+        "tier": "A", "type": "fx",
+        "edge_type": "Carry (G10 basket)",
+        "description": "Carry trade sur l'ensemble des paires G10.",
+        "why_it_works": "Diversification du carry sur plus de paires reduit le risque de crash.",
+        "parameters": {},
+        "tickers": ["AUDJPY", "EURJPY", "USDJPY", "NZDUSD", "GBPUSD", "EURGBP"],
+        "backtest": {"sharpe": 2.5, "win_rate": 56, "profit_factor": 1.5, "max_dd": 5.0, "trades": 100},
+    },
+    # EU Strategies — IBKR (live)
+    "eu_gap_open": {
+        "name": "EU Gap Open",
+        "tier": "S", "type": "eu_equity",
+        "edge_type": "Gap continuation (EU open)",
+        "description": "Gap a l'ouverture EU > 0.5% avec volume confirme.",
+        "why_it_works": "Les gaps EU sont causes par les mouvements overnight US/Asie.",
+        "parameters": {"min_gap": {"value": "0.5%", "description": "Gap minimum"}},
+        "tickers": ["MC.PA", "SAP.DE", "ASML.AS"],
+        "backtest": {"sharpe": 8.56, "win_rate": 75, "profit_factor": 3.2, "max_dd": 2.1, "trades": 72},
+    },
+    "auto_sector_german": {
+        "name": "Auto Sector German",
+        "tier": "A", "type": "eu_equity",
+        "edge_type": "Sector rotation (German autos)",
+        "description": "Rotation BMW/Mercedes/VW basee sur les indicateurs macro allemands.",
+        "why_it_works": "Le secteur auto allemand reagit fortement aux PMI et prix du petrole.",
+        "parameters": {},
+        "tickers": ["BMW.DE", "MBG.DE", "VOW3.DE"],
+        "backtest": {"sharpe": 13.43, "win_rate": 75, "profit_factor": 3.0, "max_dd": 1.8, "trades": 97},
+    },
+    "brent_lag": {
+        "name": "Brent Lag Play",
+        "tier": "A", "type": "eu_equity",
+        "edge_type": "Lead-lag (Brent → EU energy stocks)",
+        "description": "Les mouvements du Brent precedent ceux des stocks energy EU de 1-2 jours.",
+        "why_it_works": "Les stocks EU energy reagissent avec retard quand le Brent bouge la nuit.",
+        "parameters": {"brent_threshold": {"value": "2%", "description": "Mouvement Brent minimum"}},
+        "tickers": ["TTE.PA", "BP.L", "SHEL.L"],
+        "backtest": {"sharpe": 4.08, "win_rate": 58, "profit_factor": 1.7, "max_dd": 3.5, "trades": 729},
+    },
+    # V14: Cross-Asset Momentum
+    "cross_asset_momentum": {
+        "name": "Cross-Asset Momentum",
+        "tier": "B", "type": "multi_asset",
+        "edge_type": "Time-series momentum (Moskowitz 2012)",
+        "description": "Momentum 12 mois sur 5 classes d'actifs. Inverse-vol risk parity, weekly rebalance.",
+        "why_it_works": "Momentum time-series documente sur 100+ ans en finance academique.",
+        "parameters": {"lookback": {"value": "252 jours", "description": "12 mois momentum"}},
+        "tickers": ["SPY", "TLT", "GLD", "EURUSD", "BTC"],
+        "backtest": {"sharpe": 0.81, "win_rate": 55, "profit_factor": 1.3, "max_dd": 5.2, "trades": 100},
+    },
+
+    "weekend_gap_reversal": {
         "name": "Weekend Gap Reversal",
         "tier": "B",
         "type": "crypto",

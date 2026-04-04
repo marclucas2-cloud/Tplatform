@@ -426,32 +426,15 @@ def _load_strategy_registry() -> dict:
 
 @app.get("/api/strategies/{strategy_id}")
 def get_strategy_detail(strategy_id: str):
-    """Detail complet d'une strategie avec registre (edge, parametres, SL/TP)."""
+    """Detail complet d'une strategie avec registre (edge, parametres, SL/TP).
+
+    V14: Cherche dans TOUTES les sources — paper_portfolio.py, strategy_registry,
+    crypto strategies, FX, EU, futures. Plus jamais "introuvable".
+    """
     try:
         STRATEGY_REGISTRY = _load_strategy_registry()
 
         strategies, tier_alloc = _get_strategies_config()
-        if strategy_id not in strategies:
-            return {"error": f"Strategy {strategy_id} not found"}
-
-        s = strategies[strategy_id]
-        tier = _tier_for_strategy(strategy_id, tier_alloc)
-
-        # Registre complet (description, edge, parametres)
-        registry = STRATEGY_REGISTRY.get(strategy_id, {})
-
-        # Load trades CSV if exists
-        trades = []
-        output_dir = ROOT / "archive" / "intraday-backtesterV2" / "output"
-        csv_candidates = list(output_dir.glob(f"trades_*{s['name'].lower().replace(' ', '_')}*.csv"))
-        if not csv_candidates:
-            csv_candidates = list(output_dir.glob(f"trades_*{strategy_id}*.csv"))
-
-        if csv_candidates:
-            import pandas as pd
-            df = pd.read_csv(csv_candidates[0])
-            if not df.empty:
-                trades = df.head(50).to_dict(orient="records")
 
         # Phase lifecycle
         phase_info = {}
@@ -461,13 +444,49 @@ def get_strategy_detail(strategy_id: str):
         except Exception:
             pass
 
+        # Registre complet (description, edge, parametres)
+        registry = STRATEGY_REGISTRY.get(strategy_id, {})
+
+        # V14: Chercher dans paper_portfolio OU dans le registre phases
+        if strategy_id in strategies:
+            s = strategies[strategy_id]
+            name = s["name"]
+            sharpe = s["sharpe"]
+            frequency = s.get("frequency", "intraday")
+            tier = _tier_for_strategy(strategy_id, tier_alloc)
+            alloc_pct = round(tier_alloc.get(strategy_id, 0) * 100, 1)
+        elif strategy_id in phase_info or strategy_id in STRATEGY_REGISTRY:
+            # Strat dans le registre mais pas dans paper_portfolio (crypto, FX live, etc.)
+            bt = registry.get("backtest", {})
+            name = registry.get("name", strategy_id.replace("_", " ").title())
+            sharpe = bt.get("sharpe", 0)
+            frequency = registry.get("type", phase_info.get("asset_class", "daily").lower())
+            tier = "B" if phase_info.get("phase") == "LIVE" else "C"
+            alloc_pct = 0
+        else:
+            return {"error": f"Strategy {strategy_id} not found"}
+
+        # Load trades CSV if exists
+        trades = []
+        output_dir = ROOT / "archive" / "intraday-backtesterV2" / "output"
+        safe_name = name.lower().replace(" ", "_") if name else strategy_id
+        csv_candidates = list(output_dir.glob(f"trades_*{safe_name}*.csv"))
+        if not csv_candidates:
+            csv_candidates = list(output_dir.glob(f"trades_*{strategy_id}*.csv"))
+
+        if csv_candidates:
+            import pandas as pd
+            df = pd.read_csv(csv_candidates[0])
+            if not df.empty:
+                trades = df.head(50).to_dict(orient="records")
+
         return {
             "id": strategy_id,
-            "name": s["name"],
+            "name": name,
             "tier": tier,
-            "sharpe": s["sharpe"],
-            "frequency": s.get("frequency", "intraday"),
-            "allocation_pct": round(tier_alloc.get(strategy_id, 0) * 100, 1),
+            "sharpe": sharpe,
+            "frequency": frequency,
+            "allocation_pct": alloc_pct,
             "phase": phase_info.get("phase", "CODE"),
             "asset_class": phase_info.get("asset_class", ""),
             "broker": phase_info.get("broker", ""),
