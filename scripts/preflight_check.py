@@ -178,7 +178,7 @@ def _check_ibkr_paper(result: PreflightResult):
 
 
 def _check_fx_data(result: PreflightResult):
-    """Data FX: each parquet < 48h old."""
+    """Data FX: each parquet < 72h old (tolere weekends, fermeture FX Ven 22h -> Lun 22h)."""
     data_dir = ROOT / "data" / "fx"
     if not data_dir.exists():
         result.add("fx_data", False, "data/fx/ n'existe pas")
@@ -190,14 +190,14 @@ def _check_fx_data(result: PreflightResult):
         fpath = data_dir / f"{pair}_1D.parquet"
         if not fpath.exists():
             stale.append(f"{pair} (absent)")
-        elif now - fpath.stat().st_mtime > 48 * 3600:
+        elif now - fpath.stat().st_mtime > 72 * 3600:
             hours = (now - fpath.stat().st_mtime) / 3600
             stale.append(f"{pair} ({hours:.0f}h)")
 
     if stale:
         result.add("fx_data", False, f"parquets stale: {', '.join(stale)}")
     else:
-        result.add("fx_data", True, "4 parquets < 48h")
+        result.add("fx_data", True, "4 parquets < 72h")
 
 
 def _check_crypto_data(result: PreflightResult):
