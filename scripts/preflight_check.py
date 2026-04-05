@@ -245,7 +245,8 @@ def _check_margin(result: PreflightResult):
         from core.broker.binance_broker import BinanceBroker
         broker = BinanceBroker()
         # Try to get margin account — if it works, margin is enabled
-        resp = broker._request("GET", "/sapi/v1/margin/isolated/account", signed=True, weight=10)
+        # Use _get helper (which handles spot_base URL internally)
+        resp = broker._get("/sapi/v1/margin/isolated/account", signed=True, weight=10)
         assets = resp.get("assets", [])
         enabled = [a["symbol"] for a in assets if a.get("enabled", False) or a.get("isolatedCreated", False)]
         btc_margin = "BTCUSDC" in enabled or "BTCUSDT" in enabled
