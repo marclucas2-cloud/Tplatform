@@ -12,6 +12,7 @@ Commandes:
   /trades     — Derniers trades executes
   /costs      — Couts trading (commissions, slippage)
   /health     — Infra status (worker, IBKR, Binance)
+  /restart_ibgw — Restart IB Gateway (live + paper)
   /kill CONFIRM — KILL SWITCH (ferme tout)
   /help       — Commandes
 """
@@ -603,6 +604,50 @@ async def cmd_kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="Markdown")
 
 
+async def cmd_restart_ibgw(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """/restart_ibgw — Redemarrer IB Gateway (live + paper) sans intervention."""
+    if not _auth(update):
+        return
+
+    import socket
+
+    results = []
+    for svc, port, label in [
+        ("ibgateway", 4002, "LIVE"),
+        ("ibgateway-paper", 4003, "PAPER"),
+    ]:
+        try:
+            r = subprocess.run(
+                ["systemctl", "restart", svc],
+                capture_output=True, text=True, timeout=30,
+            )
+            if r.returncode == 0:
+                results.append(f"{label}: restart OK")
+            else:
+                results.append(f"{label}: restart FAILED ({r.stderr.strip()[:80]})")
+        except Exception as e:
+            results.append(f"{label}: {e}")
+
+    # Attendre que les ports soient up
+    await update.message.reply_text(
+        "IB Gateway restart en cours... verification dans 15s",
+        parse_mode="Markdown",
+    )
+    import asyncio
+    await asyncio.sleep(15)
+
+    for port, label in [(4002, "LIVE"), (4003, "PAPER")]:
+        host = os.environ.get("IBKR_HOST", "127.0.0.1")
+        try:
+            with socket.create_connection((host, port), timeout=5):
+                results.append(f"{label} port {port}: OK")
+        except Exception:
+            results.append(f"{label} port {port}: FAIL")
+
+    text = "*IB Gateway Restart*\n\n" + "\n".join(f"  {r}" for r in results)
+    await update.message.reply_text(text, parse_mode="Markdown")
+
+
 async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not _auth(update):
         return
@@ -620,6 +665,7 @@ async def cmd_help(update: Update, context: ContextTypes.DEFAULT_TYPE):
         "📈 /trades — Derniers trades\n"
         "💸 /costs — Couts trading\n"
         "🏥 /health — Infra status\n"
+        "🔄 /restart\\_ibgw — Restart IB Gateway\n"
         "🔴 /kill CONFIRM — KILL SWITCH\n"
         "📊 /regime — Regime marche V12\n"
         "💼 /portfolio — NAV cross-broker V12\n"
@@ -796,6 +842,7 @@ def main():
     app.add_handler(CommandHandler("costs", cmd_costs))
     app.add_handler(CommandHandler("health", cmd_health))
     app.add_handler(CommandHandler("kill", cmd_kill))
+    app.add_handler(CommandHandler("restart_ibgw", cmd_restart_ibgw))
     app.add_handler(CommandHandler("regime", cmd_regime))
     app.add_handler(CommandHandler("portfolio", cmd_portfolio))
     app.add_handler(CommandHandler("emergency", cmd_emergency))

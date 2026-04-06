@@ -1,6 +1,7 @@
 """Worker alert routing and structured event logging."""
 import json
 import logging
+import time
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -14,6 +15,7 @@ _events_log_path.parent.mkdir(parents=True, exist_ok=True)
 _SIGNAL_FILL_LOG = Path(__file__).parent.parent.parent / "data" / "monitoring" / "signal_fill_ratio.jsonl"
 _SIGNAL_FILL_LOG.parent.mkdir(parents=True, exist_ok=True)
 _SIGNAL_FILL_HISTORY: list[dict] = []
+_SIGNAL_FILL_LAST_ALERT: float = 0  # throttle: 1 alert per 4h max
 
 
 def log_event(action: str, strategy: str = "", details: dict | None = None):
@@ -89,6 +91,13 @@ def record_signal_fill(cycle: str, n_signals: int, n_fills: int, n_errors: int):
     if not recent_with_signals:
         return
 
+    global _SIGNAL_FILL_LAST_ALERT
+    now = time.time()
+
+    # Throttle: max 1 signal-to-fill alert per 4h to avoid spam
+    if now - _SIGNAL_FILL_LAST_ALERT < 14400:
+        return
+
     # Check consecutive errors
     consecutive_errors = 0
     for e in reversed(_SIGNAL_FILL_HISTORY):
@@ -103,6 +112,7 @@ def record_signal_fill(cycle: str, n_signals: int, n_fills: int, n_errors: int):
         )
         logger.critical(msg)
         send_alert(msg, level="critical")
+        _SIGNAL_FILL_LAST_ALERT = now
         return
 
     last_6 = recent_with_signals[-6:]
@@ -113,11 +123,12 @@ def record_signal_fill(cycle: str, n_signals: int, n_fills: int, n_errors: int):
         total_f = sum(e["n_fills"] for e in last_12)
         if total_s > 0 and total_f == 0:
             msg = (
-                f"SIGNAL-TO-FILL CRITICAL: 0% fills sur {len(last_12)} cycles "
-                f"({total_s} signaux, 0 fills) — {cycle}"
+                f"SIGNAL-TO-FILL: 0 fills sur {len(last_12)} cycles "
+                f"({total_s} signaux) — {cycle}"
             )
-            logger.critical(msg)
-            send_alert(msg, level="critical")
+            logger.warning(msg)
+            send_alert(msg, level="warning")
+            _SIGNAL_FILL_LAST_ALERT = now
             return
 
     if len(last_6) >= 6:
@@ -130,3 +141,4 @@ def record_signal_fill(cycle: str, n_signals: int, n_fills: int, n_errors: int):
             )
             logger.warning(msg)
             send_alert(msg, level="warning")
+            _SIGNAL_FILL_LAST_ALERT = now

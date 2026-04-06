@@ -3251,7 +3251,7 @@ def main():
             if time.time() - last_heartbeat <= 60:  # Just after heartbeat
                 try:
                     _h = now_paris.hour
-                    if _h in (7, 11, 15, 19, 23):  # 5x/day digest
+                    if _h in (7, 15, 23):  # 3x/day digest (matin, aprem, soir)
                         from core.telegram_v2 import tg
                         _bnb_eq = 0
                         _ibkr_eq = 0
