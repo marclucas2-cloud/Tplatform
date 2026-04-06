@@ -1762,7 +1762,17 @@ def run_crypto_cycle():
                 except Exception as e:
                     logger.warning(f"Earn positions indisponibles: {e}")
 
-                current_equity = spot_equity + earn_total
+                # Inclure le collateral en isolated margin (transferé depuis spot/earn)
+                margin_collateral = 0
+                try:
+                    margin_resp = broker._get("/sapi/v1/margin/isolated/account", signed=True, weight=10)
+                    for ma in margin_resp.get("assets", []):
+                        q = ma.get("quoteAsset", {})
+                        margin_collateral += float(q.get("free", 0)) + float(q.get("locked", 0))
+                except Exception as _me:
+                    logger.warning(f"Margin collateral indisponible: {_me}")
+
+                current_equity = spot_equity + earn_total + margin_collateral
 
                 # Séparer earn volatile (BTC/ETH) vs earn stable (USDC)
                 stable_earn = sum(
@@ -1780,7 +1790,7 @@ def run_crypto_cycle():
 
                 logger.info(
                     f"  Equity: spot=${spot_equity:,.0f} + earn=${earn_total:,.0f} "
-                    f"= total=${current_equity:,.0f} "
+                    f"+ margin=${margin_collateral:,.0f} = total=${current_equity:,.0f} "
                     f"(dd_equity=${dd_equity:,.0f}, volatile_earn=${volatile_earn:,.0f})"
                 )
             except Exception as e:
