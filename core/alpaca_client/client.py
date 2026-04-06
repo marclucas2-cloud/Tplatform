@@ -437,6 +437,25 @@ class AlpacaClient:
         sl_request = None
         tp_request = None
         if stop_loss is not None and stop_loss > 0:
+            # FIX: Alpaca exige SL >= base_price + 0.01 pour SELL (short).
+            # Si le prix a bougé depuis le signal, ajuster le SL.
+            if side == OrderSide.SELL:
+                try:
+                    data_client = self._get_data_client()
+                    from alpaca.data.requests import StockLatestQuoteRequest
+                    _q = data_client.get_stock_latest_quote(
+                        StockLatestQuoteRequest(symbol_or_symbols=symbol)
+                    )
+                    _base = float(_q[symbol].ask_price or _q[symbol].bid_price or 0)
+                    if _base > 0 and stop_loss < _base + 0.01:
+                        old_sl = stop_loss
+                        stop_loss = round(_base * 1.005, 2)  # SL a +0.5% au-dessus du prix
+                        logger.warning(
+                            f"SHORT SL ajuste: {symbol} SL ${old_sl:.2f} < base ${_base:.2f} "
+                            f"-> ${stop_loss:.2f}"
+                        )
+                except Exception as _sl_err:
+                    logger.warning(f"SHORT SL check failed for {symbol}: {_sl_err}")
             sl_request = StopLossRequest(stop_price=round(stop_loss, 2))
         if take_profit is not None and take_profit > 0:
             tp_request = TakeProfitRequest(limit_price=round(take_profit, 2))

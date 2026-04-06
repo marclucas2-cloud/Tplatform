@@ -645,7 +645,7 @@ def run_cross_asset_momentum_cycle():
                     parquet = data_dir / f"{ticker}.parquet"
                     import time as _time
                     if not parquet.exists() or (_time.time() - parquet.stat().st_mtime) / 3600 > 20:
-                        df = _fetch_alpaca_rest(api_ticker, start, end, headers, f"https://data.alpaca.markets/v2/{atype}")
+                        df = _fetch_alpaca_rest(api_ticker, start, end, headers, "https://data.alpaca.markets/v2")
                         if df is not None and len(df) > 100:
                             df.to_parquet(parquet)
                             logger.info("  XMOMENTUM: refreshed %s (%d bars)", ticker, len(df))
