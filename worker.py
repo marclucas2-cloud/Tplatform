@@ -256,6 +256,11 @@ def run_fx_carry_cycle():
     try:
         logger.info("=== FX CARRY CYCLE ===")
 
+        # Guard: IBKR FX margin permissions required
+        if os.getenv("IBKR_FX_ENABLED", "false").lower() != "true":
+            logger.warning("  FX CARRY SKIP — IBKR_FX_ENABLED not set (enable FX permissions in IBKR portal first)")
+            return
+
         # Check IBKR connection
         ibkr_host = os.getenv("IBKR_HOST", "127.0.0.1")
         ibkr_port = int(os.getenv("IBKR_PORT", "4002"))
@@ -572,10 +577,13 @@ def run_always_on_carry_cycle():
             )
 
         # Execute rebalance orders via IBKR
+        # GUARD: skip if IBKR account lacks FX margin permissions
+        # Remove this guard once FX trading permissions are enabled in IBKR portal
+        _ibkr_fx_enabled = os.getenv("IBKR_FX_ENABLED", "false").lower() == "true"
         n_carry_orders = 0
         _ibkr_carry = None
         rebalance_needed = [t for t in targets if t.needs_rebalance]
-        if rebalance_needed:
+        if rebalance_needed and _ibkr_fx_enabled:
             try:
                 from core.broker.ibkr_adapter import IBKRBroker
                 _ibkr_carry = IBKRBroker(client_id=10)
