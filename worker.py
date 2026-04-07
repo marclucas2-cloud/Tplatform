@@ -571,9 +571,47 @@ def run_always_on_carry_cycle():
                 "REBALANCE" if t.needs_rebalance else "OK",
             )
 
-        # NOTE: Execution is NOT wired yet — log-only for now
-        # When ready: submit IBKR FX orders for each target that needs_rebalance
-        # This is the always-on carrier, NOT the signal-based FX carry cycle
+        # Execute rebalance orders via IBKR
+        n_carry_orders = 0
+        _ibkr_carry = None
+        rebalance_needed = [t for t in targets if t.needs_rebalance]
+        if rebalance_needed:
+            try:
+                from core.broker.ibkr_adapter import IBKRBroker
+                _ibkr_carry = IBKRBroker(client_id=10)
+
+                for t in rebalance_needed:
+                    delta = t.target_notional - t.current_notional
+                    if abs(delta) < 100:  # ignore tiny rebalances
+                        continue
+                    direction = t.direction if delta > 0 else ("SELL" if t.direction == "BUY" else "BUY")
+                    try:
+                        result = _ibkr_carry.create_position(
+                            symbol=t.instrument,
+                            direction=direction,
+                            notional=abs(delta),
+                            _authorized_by="always_on_carry",
+                        )
+                        n_carry_orders += 1
+                        logger.info(
+                            "  CARRY EXEC: %s %s $%.0f -> %s",
+                            direction, t.instrument, abs(delta), result,
+                        )
+                    except Exception as oe:
+                        logger.error("  CARRY EXEC FAILED: %s %s — %s", t.instrument, direction, oe)
+
+                _ibkr_carry.disconnect()
+            except Exception as ce:
+                logger.error("  CARRY IBKR connect failed: %s", ce)
+                if _ibkr_carry:
+                    _ibkr_carry.disconnect()
+
+        if n_carry_orders > 0:
+            _send_alert(
+                f"ALWAYS-ON CARRY: {n_carry_orders} ordre(s)\n"
+                + "\n".join(f"  {t.instrument} {t.direction} ${t.target_notional:,.0f}" for t in rebalance_needed),
+                level="info",
+            )
 
         total_deployed = carrier.get_total_deployed(targets)
         logger.info(
