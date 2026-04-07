@@ -888,7 +888,25 @@ def run_futures_paper_cycle():
         except Exception as e:
             logger.error(f"    MES Trend+MR error: {e}")
 
-        # 3. MES/MNQ Pairs
+        # 3. MES 3-Day Stretch Mean Reversion
+        try:
+            from strategies_v2.futures.mes_3day_stretch import MES3DayStretch
+            strat_3d = MES3DayStretch()
+            strat_3d.set_data_feed(feed)
+            bar = feed.get_latest_bar("MES")
+            if bar:
+                sig = strat_3d.on_bar(bar, portfolio_state)
+                if sig:
+                    signals.append(("MES 3-Day Stretch", sig))
+                    logger.info(f"    MES 3-Day Stretch: {sig.side} MES @ {bar.close:.2f} SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f}")
+                else:
+                    logger.info("    MES 3-Day Stretch: pas de signal")
+            else:
+                logger.info("    MES 3-Day Stretch: pas de bar disponible")
+        except Exception as e:
+            logger.error(f"    MES 3-Day Stretch error: {e}")
+
+        # 4. MES/MNQ Pairs
         if "MNQ" in data_sources:
             try:
                 from strategies_v2.futures.mes_mnq_pairs import MESMNQPairs
