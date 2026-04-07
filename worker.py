@@ -584,7 +584,10 @@ def run_always_on_carry_cycle():
                     delta = t.target_notional - t.current_notional
                     if abs(delta) < 100:  # ignore tiny rebalances
                         continue
-                    direction = t.direction if delta > 0 else ("SELL" if t.direction == "BUY" else "BUY")
+                    # Map LONG/SHORT -> BUY/SELL for IBKR
+                    _dir_map = {"LONG": "BUY", "SHORT": "SELL", "BUY": "BUY", "SELL": "SELL"}
+                    base_dir = _dir_map.get(t.direction.upper(), "BUY")
+                    direction = base_dir if delta > 0 else ("SELL" if base_dir == "BUY" else "BUY")
                     try:
                         result = _ibkr_carry.create_position(
                             symbol=t.instrument,
