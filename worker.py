@@ -870,7 +870,25 @@ def run_futures_paper_cycle():
         except Exception as e:
             logger.error(f"    MES Trend error: {e}")
 
-        # 2. MES/MNQ Pairs
+        # 2. MES Trend+MR Hybrid (RSI2 + EMA50 filter)
+        try:
+            from strategies_v2.futures.mes_trend_mr import MESTrendMR
+            strat_mr = MESTrendMR()
+            strat_mr.set_data_feed(feed)
+            bar = feed.get_latest_bar("MES")
+            if bar:
+                sig = strat_mr.on_bar(bar, portfolio_state)
+                if sig:
+                    signals.append(("MES Trend+MR", sig))
+                    logger.info(f"    MES Trend+MR: {sig.side} MES @ {bar.close:.2f} SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f} str={sig.strength:.2f}")
+                else:
+                    logger.info("    MES Trend+MR: pas de signal")
+            else:
+                logger.info("    MES Trend+MR: pas de bar disponible")
+        except Exception as e:
+            logger.error(f"    MES Trend+MR error: {e}")
+
+        # 3. MES/MNQ Pairs
         if "MNQ" in data_sources:
             try:
                 from strategies_v2.futures.mes_mnq_pairs import MESMNQPairs
