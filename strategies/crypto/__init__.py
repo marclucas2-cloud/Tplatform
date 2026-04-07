@@ -136,6 +136,18 @@ try:
 except Exception as e:
     logger.warning(f"Failed to load STRAT-012 (vol_expansion_bear): {e}")
 
+# STRAT-015 BB Mean Reversion Short — WF VALIDATED (Sharpe 1.47, PF 1.8, 74% WR)
+try:
+    from strategies.crypto.bb_mr_short import (
+        STRATEGY_CONFIG as STRAT_015_CONFIG,
+    )
+    from strategies.crypto.bb_mr_short import (
+        signal_fn as strat_015_signal,
+    )
+    CRYPTO_STRATEGIES["STRAT-015"] = {"config": STRAT_015_CONFIG, "signal_fn": strat_015_signal}
+except Exception as e:
+    logger.warning(f"Failed to load STRAT-015 (bb_mr_short): {e}")
+
 logger.info(f"Loaded {len(CRYPTO_STRATEGIES)} crypto strategies")
 
 # Total allocation raw (may exceed 100% with new strategies)
