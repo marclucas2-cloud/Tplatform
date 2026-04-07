@@ -125,11 +125,14 @@ def signal_fn(candle: pd.Series, state: dict, **kwargs) -> dict | None:
         return None
 
     positions = state.get("positions", [])
-    has_position = len(positions) > 0
+    # Only consider positions for THIS strategy's symbols
+    my_symbols = [s.replace("USDT", "USDC") for s in STRATEGY_CONFIG["symbols"]]
+    my_positions = [p for p in positions if p.get("symbol", "") in my_symbols]
+    has_position = len(my_positions) > 0
 
     # ── Exit checks for existing SHORT position ───────────────────
     if has_position:
-        pos = positions[0]
+        pos = my_positions[0]
 
         # Mean reversion target: price reverted to BB mid
         if price <= bb_mid:

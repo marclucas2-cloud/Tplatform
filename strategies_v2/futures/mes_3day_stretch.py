@@ -60,16 +60,16 @@ class MES3DayStretch(StrategyBase):
         sym = self.SYMBOL
 
         # Get last N bars to check consecutive direction
-        bars = self.data_feed.get_bars(sym, self.consec_days + 1)
-        if bars is None or len(bars) < self.consec_days:
+        bars_df = self.data_feed.get_bars(sym, self.consec_days + 1)
+        if bars_df is None or len(bars_df) < self.consec_days:
             return None
 
-        recent = bars[-self.consec_days:]
+        recent = bars_df.tail(self.consec_days)
 
         # Check 3 consecutive down days
-        all_down = all(b.close < b.open for b in recent)
+        all_down = all(recent.iloc[i]["close"] < recent.iloc[i]["open"] for i in range(len(recent)))
         # Check 3 consecutive up days
-        all_up = all(b.close > b.open for b in recent)
+        all_up = all(recent.iloc[i]["close"] > recent.iloc[i]["open"] for i in range(len(recent)))
 
         if all_down:
             return Signal(

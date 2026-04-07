@@ -101,7 +101,13 @@ class DataFeed:
         df = self._data[symbol]
         # Strictly less than current timestamp — the bar closing AT
         # self._timestamp is still "forming" and not visible.
-        visible = df.loc[df.index < self._timestamp]
+        # Normalize timezone: strip tz from timestamp if index is tz-naive
+        ts = self._timestamp
+        if df.index.tz is None and ts.tzinfo is not None:
+            ts = ts.tz_localize(None)
+        elif df.index.tz is not None and ts.tzinfo is None:
+            ts = ts.tz_localize(df.index.tz)
+        visible = df.loc[df.index < ts]
         self._cache[cache_key] = visible
         return visible
 
