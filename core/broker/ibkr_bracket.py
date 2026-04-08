@@ -282,16 +282,22 @@ class BracketOrderManager:
 
         tp_order_id = tp_order.orderId
 
-        # Verify all orders are accepted (not rejected asynchronously)
-        self._ib.sleep(1.0)  # Allow time for IBKR to process
+        # Verify child orders are accepted (not rejected asynchronously)
+        # Note: for MARKET parent orders, the parent fills instantly and
+        # leaves openTrades — only check SL and TP children.
+        self._ib.sleep(1.5)  # Allow time for IBKR to process
         open_order_ids = {t.order.orderId for t in self._ib.openTrades()}
+        # Also check filled trades (parent may already be filled)
+        filled_ids = {t.order.orderId for t in self._ib.trades()
+                      if t.orderStatus.status == "Filled"}
+        all_known = open_order_ids | filled_ids
+
         missing = []
-        for label, oid in [("parent", parent_order_id), ("SL", sl_order_id), ("TP", tp_order_id)]:
-            if oid not in open_order_ids:
+        for label, oid in [("SL", sl_order_id), ("TP", tp_order_id)]:
+            if oid not in all_known:
                 missing.append(f"{label}(id={oid})")
 
         if missing:
-            # Cancel all orders in the bracket to avoid partial protection
             for trade in self._ib.openTrades():
                 if trade.order.orderId in (parent_order_id, sl_order_id, tp_order_id):
                     try:
@@ -300,7 +306,7 @@ class BracketOrderManager:
                         pass
             raise BracketOrderError(
                 f"Bracket verification FAILED for {symbol}: "
-                f"orders not confirmed by IBKR: {', '.join(missing)}. "
+                f"child orders not confirmed: {', '.join(missing)}. "
                 f"All bracket orders cancelled for safety."
             )
 
