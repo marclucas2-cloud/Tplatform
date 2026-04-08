@@ -1066,8 +1066,8 @@ def _run_futures_cycle(live: bool = False):
                 logger.error(f"    FUTURES TIME-EXIT FAILED {pos_sym}: {te}")
 
         # 2. New entries with bracket orders (SL+TP broker-side)
-        from core.broker.ibkr_bracket import IBKRBracketManager
-        bracket_mgr = IBKRBracketManager(ib=ibkr._ib)
+        from core.broker.ibkr_bracket import BracketOrderManager
+        bracket_mgr = BracketOrderManager(ib=ibkr._ib)
 
         for name, sig in signals:
             sym = sig.symbol
