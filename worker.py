@@ -777,7 +777,9 @@ def run_cross_asset_momentum_cycle():
 
 
 def run_futures_live_cycle():
-    """Futures LIVE — same strategies as paper but on port 4002."""
+    """Futures LIVE — DISABLED until single-position-per-symbol is bulletproof."""
+    if os.getenv("IBKR_FUTURES_LIVE", "false").lower() != "true":
+        return
     _run_futures_cycle(live=True)
 
 
