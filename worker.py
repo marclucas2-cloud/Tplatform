@@ -2459,39 +2459,6 @@ def run_crypto_cycle():
                 if exec_symbol.endswith("USDT"):
                     exec_symbol = exec_symbol.replace("USDT", "USDC")
 
-                # GUARD: double-confirmation for margin trades
-                # Signal must be stable 2 cycles in a row before executing
-                if market_type == "margin":
-                    _confirm_key = f"{strat_id}:{exec_symbol}:{side}"
-                    _confirm_path = ROOT / "data" / "state" / "pending_margin_signals.json"
-                    _pending = {}
-                    try:
-                        if _confirm_path.exists():
-                            _pending = json.loads(_confirm_path.read_text(encoding="utf-8"))
-                    except Exception:
-                        pass
-
-                    if _confirm_key not in _pending:
-                        _pending[_confirm_key] = datetime.now(UTC).isoformat()
-                        try:
-                            _confirm_path.parent.mkdir(parents=True, exist_ok=True)
-                            _confirm_path.write_text(json.dumps(_pending))
-                        except Exception:
-                            pass
-                        logger.info(
-                            f"  [{strat_id}] MARGIN CONFIRM PENDING — {side} {exec_symbol} "
-                            f"(will execute next cycle if signal persists)"
-                        )
-                        continue
-                    else:
-                        # Signal confirmed — clear and execute
-                        del _pending[_confirm_key]
-                        try:
-                            _confirm_path.write_text(json.dumps(_pending))
-                        except Exception:
-                            pass
-                        logger.info(f"  [{strat_id}] MARGIN CONFIRMED — executing {side} {exec_symbol}")
-
                 _v12_on_signal(strat_id, exec_symbol, side, price)
 
                 # CRO M-4: conflict detection — BUY+SELL same symbol in same cycle
