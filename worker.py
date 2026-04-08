@@ -537,6 +537,10 @@ def run_always_on_carry_cycle():
     try:
         logger.info("=== ALWAYS-ON CARRY CYCLE ===")
 
+        if os.getenv("IBKR_FX_ENABLED", "false").lower() != "true":
+            logger.info("  ALWAYS-ON CARRY SKIP — IBKR_FX_ENABLED=false (IBIE no FX leverage)")
+            return
+
         from core.strategies.always_on_carrier import AlwaysOnCarrier
 
         # Get IBKR equity
@@ -1028,6 +1032,46 @@ def _run_futures_cycle(live: bool = False):
                 _fut_positions = json.loads(_fut_state_path.read_text(encoding="utf-8"))
         except Exception:
             pass
+
+        # FIX A: Reconcile state file with actual IBKR positions
+        # If state says we have a position but IBKR doesn't, remove from state
+        try:
+            _ibkr_real_pos = {p.contract.symbol: p.position for p in ibkr._ib.positions() if abs(p.position) > 0}
+            stale_keys = [k for k in _fut_positions if k not in _ibkr_real_pos]
+            for k in stale_keys:
+                logger.info(f"    RECONCILE: removing stale {k} from state (no IBKR position)")
+                del _fut_positions[k]
+        except Exception as _re:
+            logger.warning(f"    RECONCILE error: {_re}")
+
+        # FIX B: Check that open positions have active bracket orders (SL/TP)
+        # If not, log a CRITICAL warning — brackets should be reposed at next cycle
+        try:
+            _open_order_syms = {t.contract.symbol for t in ibkr._ib.openTrades()}
+            for pos_sym in list(_fut_positions.keys()):
+                if pos_sym in _ibkr_real_pos and pos_sym not in _open_order_syms:
+                    logger.critical(
+                        f"    BRACKET MISSING: {pos_sym} has position but no SL/TP orders! "
+                        f"Closing position for safety."
+                    )
+                    # Close the unprotected position
+                    try:
+                        from ib_insync import Future as IbFuture, MarketOrder as IbMarketOrder
+                        _close_fut = IbFuture(pos_sym, exchange="CME")
+                        _close_details = ibkr._ib.reqContractDetails(_close_fut)
+                        if _close_details:
+                            _close_side = "BUY" if _ibkr_real_pos[pos_sym] < 0 else "SELL"
+                            _close_trade = ibkr._ib.placeOrder(
+                                _close_details[0].contract,
+                                IbMarketOrder(_close_side, abs(int(_ibkr_real_pos[pos_sym])))
+                            )
+                            time.sleep(3); ibkr._ib.sleep(2)
+                            logger.info(f"    BRACKET SAFETY CLOSE: {_close_side} {pos_sym} -> {_close_trade.orderStatus.status}")
+                            del _fut_positions[pos_sym]
+                    except Exception as _be:
+                        logger.error(f"    BRACKET SAFETY CLOSE FAILED: {_be}")
+        except Exception as _bce:
+            logger.warning(f"    BRACKET CHECK error: {_bce}")
 
         n_fut_orders = 0
         _is_live = os.environ.get("IBKR_PORT") == os.environ.get("IBKR_LIVE_PORT", "4002")
