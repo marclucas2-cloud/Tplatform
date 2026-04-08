@@ -816,7 +816,7 @@ def _run_futures_cycle(live: bool = False):
             _fut_ib = _FutIB()
             _ibkr_host = os.environ.get("IBKR_HOST", "127.0.0.1")
             _fut_ib.connect(_ibkr_host, target_port, clientId=_fut_rng.randint(70, 79), timeout=10)
-            import time as _ft; _ft.sleep(1)
+            import time as _ft; _ft.sleep(3)  # Wait for positions/orders to load
 
             # Create a minimal adapter-like wrapper for compatibility
             class _FutIBKR:
@@ -1032,17 +1032,21 @@ def _run_futures_cycle(live: bool = False):
         })
 
         # === EXECUTION: bracket orders via IBKR (live or paper) ===
-        _fut_state_path = ROOT / "data" / "state" / "futures_positions.json"
+        # CRITICAL: separate state files for live vs paper to avoid cross-contamination
+        _state_suffix = "live" if live else "paper"
+        _fut_state_path = ROOT / "data" / "state" / f"futures_positions_{_state_suffix}.json"
         _fut_state_path.parent.mkdir(parents=True, exist_ok=True)
         _fut_positions = {}
         try:
             if _fut_state_path.exists():
                 _fut_positions = json.loads(_fut_state_path.read_text(encoding="utf-8"))
         except Exception:
+            logger.warning(f"    FUTURES: failed to load state file {_fut_state_path}")
             pass
 
         # FIX A: Reconcile state file with actual IBKR positions
         # If state says we have a position but IBKR doesn't, remove from state
+        _ibkr_real_pos = {}  # initialized empty in case positions() fails
         try:
             _ibkr_real_pos = {p.contract.symbol: p.position for p in ibkr._ib.positions() if abs(p.position) > 0}
             stale_keys = [k for k in _fut_positions if k not in _ibkr_real_pos]
@@ -1093,8 +1097,8 @@ def _run_futures_cycle(live: bool = False):
             logger.warning(f"    BRACKET CHECK error: {_bce}")
 
         n_fut_orders = 0
-        _is_live = os.environ.get("IBKR_PORT") == os.environ.get("IBKR_LIVE_PORT", "4002")
-        _mode = "LIVE" if _is_live else "PAPER"
+        # _mode already set from the 'live' parameter (line 802), do NOT
+        # re-derive from os.environ which doesn't reflect target_port
 
         # 1. Time-exit: close positions held > 48h (any symbol)
         for pos_key, pos_info in list(_fut_positions.items()):
@@ -1116,6 +1120,19 @@ def _run_futures_cycle(live: bool = False):
                 details = ibkr._ib.reqContractDetails(fut_contract)
                 if details:
                     fut_contract = details[0].contract
+
+                # Cancel existing OCA bracket orders BEFORE closing
+                _oca_group = pos_info.get("oca_group", "")
+                if _oca_group:
+                    for _ot in ibkr._ib.openTrades():
+                        if getattr(_ot.order, 'ocaGroup', '') == _oca_group:
+                            try:
+                                ibkr._ib.cancelOrder(_ot.order)
+                                logger.info(f"    TIME-EXIT: cancelled OCA order {_ot.order.orderId} for {pos_sym}")
+                            except Exception:
+                                pass
+                    time.sleep(1); ibkr._ib.sleep(0.5)
+
                 order = IbMarketOrder(close_side, int(pos_info.get("qty", 1)))
                 trade = ibkr._ib.placeOrder(fut_contract, order)
                 time.sleep(3); ibkr._ib.sleep(2)
@@ -1134,10 +1151,43 @@ def _run_futures_cycle(live: bool = False):
         from ib_insync import Future as IbFuture, MarketOrder as IbMarketOrder, StopOrder, LimitOrder
         import uuid as _uuid
 
+        # Refresh IBKR real positions right before entry decisions
+        # (initial query at line 1047 may be stale after time-exits above)
+        try:
+            _ibkr_real_pos = {p.contract.symbol: p.position for p in ibkr._ib.positions() if abs(p.position) > 0}
+        except Exception:
+            pass  # keep previous _ibkr_real_pos
+
+        # HARD LIMIT: max 2 futures contracts total across all symbols
+        # MES = ~$33K notional, 2 = ~$66K. Never exceed this on a $10K account.
+        MAX_FUTURES_CONTRACTS = 2
+        _total_existing = sum(abs(int(v)) for v in _ibkr_real_pos.values())
+        if _total_existing >= MAX_FUTURES_CONTRACTS:
+            logger.warning(
+                f"    FUTURES {_mode}: HARD LIMIT — {_total_existing} contracts already open "
+                f"(max {MAX_FUTURES_CONTRACTS}). Skipping all new entries."
+            )
+            signals = []  # clear all signals
+
+        # Track symbols already traded THIS cycle (prevents 2nd+ signal on same sym)
+        _traded_this_cycle = set()
+
         for name, sig in signals:
             sym = sig.symbol
+
+            # GUARD 1: state file says we already have a position
             if sym in _fut_positions:
-                logger.info(f"    {name}: SKIP — already positioned in {sym}")
+                logger.info(f"    {name}: SKIP — already positioned in {sym} (state file)")
+                continue
+
+            # GUARD 2: IBKR says we already have a real position on this symbol
+            if sym in _ibkr_real_pos:
+                logger.warning(f"    {name}: SKIP — IBKR real position exists for {sym} ({_ibkr_real_pos[sym]} lots)")
+                continue
+
+            # GUARD 3: already traded this symbol earlier in this loop iteration
+            if sym in _traded_this_cycle:
+                logger.info(f"    {name}: SKIP — already traded {sym} this cycle")
                 continue
 
             qty = 1
@@ -1191,6 +1241,7 @@ def _run_futures_cycle(live: bool = False):
                     "mode": _mode,
                     "_authorized_by": f"futures_{_mode.lower()}_{name}",
                 }
+                _traded_this_cycle.add(sym)
                 n_fut_orders += 1
                 _send_alert(
                     f"FUTURES {_mode}: {sig.side} {sym} @ {_fill_price:.2f}\n"
@@ -1579,11 +1630,27 @@ def run_live_risk_cycle():
 
         # --- SOFTWARE SL/TP for futures positions ---
         # IBKR presets kill GTC orders on futures. This is the backup.
+        # Check both live and paper state files
+        _fut_pos = {}
+        for _sfx in ("live", "paper"):
+            _fsp = ROOT / "data" / "state" / f"futures_positions_{_sfx}.json"
+            try:
+                if _fsp.exists():
+                    _fut_pos.update(json.loads(_fsp.read_text(encoding="utf-8")))
+            except Exception:
+                pass
+        # Also check legacy file for migration
         _fut_state_path = ROOT / "data" / "state" / "futures_positions.json"
         try:
             if _fut_state_path.exists():
-                _fut_pos = json.loads(_fut_state_path.read_text(encoding="utf-8"))
-                if _fut_pos:
+                _legacy = json.loads(_fut_state_path.read_text(encoding="utf-8"))
+                for k, v in _legacy.items():
+                    if k not in _fut_pos:
+                        _fut_pos[k] = v
+        except Exception:
+            pass
+        try:
+            if _fut_pos:
                     import socket as _sl_sock
                     _ibkr_host = os.getenv("IBKR_HOST", "127.0.0.1")
                     _ibkr_port = int(os.getenv("IBKR_PORT", "4002"))
@@ -1681,7 +1748,11 @@ def run_live_risk_cycle():
                                         )
                                         del _fut_pos[_ps]
 
-                            _fut_state_path.write_text(json.dumps(_fut_pos, indent=2))
+                            # Write back to split state files (by mode)
+                            for _wsfx in ("live", "paper"):
+                                _wsf = ROOT / "data" / "state" / f"futures_positions_{_wsfx}.json"
+                                _wdata = {k: v for k, v in _fut_pos.items() if v.get("mode", "").upper() == _wsfx.upper()}
+                                _wsf.write_text(json.dumps(_wdata, indent=2))
                             _sl_ib.disconnect()
                         except Exception as _sle:
                             logger.warning(f"  FUTURES SL CHECK error: {_sle}")
