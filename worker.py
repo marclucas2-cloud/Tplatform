@@ -1120,9 +1120,11 @@ def _run_futures_cycle(live: bool = False):
             except Exception as te:
                 logger.error(f"    FUTURES TIME-EXIT FAILED {pos_sym}: {te}")
 
-        # 2. New entries with bracket orders (SL+TP broker-side)
-        from core.broker.ibkr_bracket import BracketOrderManager
-        bracket_mgr = BracketOrderManager(ib_connection=ibkr._ib)
+        # 2. New entries: market order + standalone OCA (SL+TP)
+        # NOTE: do NOT use parentId brackets — IBKR cancels children when
+        # market parent fills instantly. Use standalone OCA orders instead.
+        from ib_insync import Future as IbFuture, MarketOrder as IbMarketOrder, StopOrder, LimitOrder
+        import uuid as _uuid
 
         for name, sig in signals:
             sym = sig.symbol
@@ -1132,27 +1134,40 @@ def _run_futures_cycle(live: bool = False):
 
             qty = 1
             try:
-                # Get current price for bracket validation
-                _bar = feed.get_latest_bar(sym)
-                _entry_price = _bar.close if _bar else sig.stop_loss
+                _fut = IbFuture(sym, exchange="CME")
+                _details = ibkr._ib.reqContractDetails(_fut)
+                if not _details:
+                    logger.warning(f"    {name}: no contract details for {sym}")
+                    continue
+                _contract = _details[0].contract
 
-                result = bracket_mgr.create_bracket_order(
-                    symbol=sym,
-                    direction=sig.side,
-                    quantity=qty,
-                    entry_price=_entry_price,
-                    stop_loss_price=sig.stop_loss,
-                    take_profit_price=sig.take_profit,
-                    instrument_type="FUTURES",
-                    order_type="MARKET",
-                    tif="GTC",
-                )
+                # Step 1: Market entry
+                _entry_order = IbMarketOrder(sig.side, qty)
+                _entry_trade = ibkr._ib.placeOrder(_contract, _entry_order)
+                time.sleep(4); ibkr._ib.sleep(2)
+                _fill_price = _entry_trade.orderStatus.avgFillPrice or 0
+
+                if _entry_trade.orderStatus.status != "Filled":
+                    logger.warning(f"    {name}: entry not filled ({_entry_trade.orderStatus.status})")
+                    continue
+
+                # Step 2: OCA SL + TP (standalone, no parentId)
+                _exit_side = "BUY" if sig.side == "SELL" else "SELL"
+                _oca = f"OCA_{sym}_{_uuid.uuid4().hex[:8]}"
+
+                _sl = StopOrder(_exit_side, qty, sig.stop_loss)
+                _sl.tif = "GTC"; _sl.ocaGroup = _oca; _sl.ocaType = 1; _sl.outsideRth = True
+                ibkr._ib.placeOrder(_contract, _sl)
+                time.sleep(1)
+
+                _tp = LimitOrder(_exit_side, qty, sig.take_profit)
+                _tp.tif = "GTC"; _tp.ocaGroup = _oca; _tp.ocaType = 1; _tp.outsideRth = True
+                ibkr._ib.placeOrder(_contract, _tp)
+                time.sleep(2); ibkr._ib.sleep(1)
 
                 logger.info(
-                    f"    FUTURES {_mode} BRACKET: {sig.side} {sym} qty={qty} "
-                    f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f} "
-                    f"-> parent={result.get('parent_order_id')} "
-                    f"sl={result.get('sl_order_id')} tp={result.get('tp_order_id')}"
+                    f"    FUTURES {_mode}: {sig.side} {sym} @ {_fill_price:.2f} "
+                    f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f} [OCA {_oca}]"
                 )
 
                 _fut_positions[sym] = {
@@ -1160,19 +1175,17 @@ def _run_futures_cycle(live: bool = False):
                     "symbol": sym,
                     "side": sig.side,
                     "qty": qty,
+                    "entry": _fill_price,
                     "sl": sig.stop_loss,
                     "tp": sig.take_profit,
-                    "parent_id": result.get("parent_order_id"),
-                    "sl_id": result.get("sl_order_id"),
-                    "tp_id": result.get("tp_order_id"),
-                    "oca_group": result.get("oca_group"),
+                    "oca_group": _oca,
                     "opened_at": datetime.now(UTC).isoformat(),
                     "mode": _mode,
                     "_authorized_by": f"futures_{_mode.lower()}_{name}",
                 }
                 n_fut_orders += 1
                 _send_alert(
-                    f"FUTURES {_mode}: {sig.side} {sym} [BRACKET]\n"
+                    f"FUTURES {_mode}: {sig.side} {sym} @ {_fill_price:.2f}\n"
                     f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f}\n"
                     f"Strat: {name}",
                     level="info" if _mode == "PAPER" else "warning",
