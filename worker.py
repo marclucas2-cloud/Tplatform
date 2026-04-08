@@ -1077,11 +1077,15 @@ def _run_futures_cycle(live: bool = False):
 
             qty = 1
             try:
+                # Get current price for bracket validation
+                _bar = feed.get_latest_bar(sym)
+                _entry_price = _bar.close if _bar else sig.stop_loss
+
                 result = bracket_mgr.create_bracket_order(
                     symbol=sym,
                     direction=sig.side,
                     quantity=qty,
-                    entry_price=0,  # market order
+                    entry_price=_entry_price,
                     stop_loss_price=sig.stop_loss,
                     take_profit_price=sig.take_profit,
                     instrument_type="FUTURES",
