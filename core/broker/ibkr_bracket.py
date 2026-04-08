@@ -750,18 +750,19 @@ class BracketOrderManager:
         elif instrument_type == "FUTURES":
             from ib_insync import Future
 
-            # Determine exchange from known symbols
             exchange_map = {
                 "MES": "CME", "MNQ": "CME", "MCL": "NYMEX", "MGC": "COMEX",
                 "ES": "CME", "NQ": "CME", "CL": "NYMEX", "GC": "COMEX",
             }
             exchange = exchange_map.get(symbol, "CME")
 
-            return Future(
-                symbol=symbol,
-                exchange=exchange,
-                currency="USD",
-            )
+            fut = Future(symbol=symbol, exchange=exchange, currency="USD")
+            # Resolve to front month contract
+            if self._ib:
+                details = self._ib.reqContractDetails(fut)
+                if details:
+                    return details[0].contract
+            return fut
 
         else:
             raise BracketOrderError(
