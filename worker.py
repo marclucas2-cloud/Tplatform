@@ -932,14 +932,115 @@ def run_futures_paper_cycle():
             "signals": len(signals), "equity": equity,
         })
 
-        # NOTE: Paper mode — signaux logues, pas d'execution
+        # === EXECUTION: paper orders via IBKR paper (port 4003) ===
+        # Manage open positions: time-exit after 2 days
+        _fut_state_path = ROOT / "data" / "state" / "futures_paper_positions.json"
+        _fut_state_path.parent.mkdir(parents=True, exist_ok=True)
+        _fut_positions = {}
+        try:
+            if _fut_state_path.exists():
+                _fut_positions = json.loads(_fut_state_path.read_text(encoding="utf-8"))
+        except Exception:
+            pass
+
+        n_fut_orders = 0
+
+        # 1. Time-exit: close positions held > 2 days
+        positions_to_close = []
+        for pos_key, pos_info in list(_fut_positions.items()):
+            opened = pos_info.get("opened_at", "")
+            if opened:
+                try:
+                    age_h = (datetime.now(UTC) - datetime.fromisoformat(opened)).total_seconds() / 3600
+                    if age_h >= 48:  # 2 days
+                        positions_to_close.append((pos_key, pos_info))
+                except Exception:
+                    pass
+
+        for pos_key, pos_info in positions_to_close:
+            close_side = "SELL" if pos_info.get("side") == "BUY" else "BUY"
+            try:
+                from ib_insync import Future as IbFuture, MarketOrder as IbMarketOrder
+                fut_contract = IbFuture("MES", exchange="CME")
+                ibkr._ib.qualifyContracts(fut_contract)
+                # Use front month
+                details = ibkr._ib.reqContractDetails(fut_contract)
+                if details:
+                    fut_contract = details[0].contract
+                order = IbMarketOrder(close_side, int(pos_info.get("qty", 1)))
+                trade = ibkr._ib.placeOrder(fut_contract, order)
+                import time as _ft
+                _ft.sleep(3)
+                ibkr._ib.sleep(2)
+                logger.info(
+                    f"    FUTURES TIME-EXIT: {close_side} MES (held {age_h:.0f}h) -> {trade.orderStatus.status}"
+                )
+                del _fut_positions[pos_key]
+                n_fut_orders += 1
+            except Exception as te:
+                logger.error(f"    FUTURES TIME-EXIT FAILED: {te}")
+
+        # 2. New entries from signals (only if no open position for that symbol)
         for name, sig in signals:
-            _send_alert(
-                f"FUTURES PAPER SIGNAL: {name}\n"
-                f"{sig.side} {sig.symbol} SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f}\n"
-                f"Strength: {sig.strength:.2f}",
-                level="info"
-            )
+            sym = sig.symbol
+            if sym in _fut_positions:
+                logger.info(f"    {name}: SKIP — already positioned in {sym}")
+                continue
+
+            try:
+                from ib_insync import Future as IbFuture, MarketOrder as IbMarketOrder
+                fut_contract = IbFuture(sym, exchange="CME")
+                ibkr._ib.qualifyContracts(fut_contract)
+                details = ibkr._ib.reqContractDetails(fut_contract)
+                if not details:
+                    logger.warning(f"    {name}: no MES contract details")
+                    continue
+                fut_contract = details[0].contract
+
+                qty = 1
+                order = IbMarketOrder(sig.side, qty)
+                trade = ibkr._ib.placeOrder(fut_contract, order)
+                import time as _ft
+                _ft.sleep(3)
+                ibkr._ib.sleep(2)
+
+                filled_price = trade.orderStatus.avgFillPrice or 0
+
+                logger.info(
+                    f"    FUTURES ORDER: {sig.side} {sym} qty={qty} "
+                    f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f} "
+                    f"-> {trade.orderStatus.status} fill={filled_price}"
+                )
+
+                if trade.orderStatus.status in ("Filled", "Submitted", "PreSubmitted"):
+                    _fut_positions[sym] = {
+                        "strategy": name,
+                        "side": sig.side,
+                        "qty": qty,
+                        "entry": filled_price or sig.stop_loss,
+                        "sl": sig.stop_loss,
+                        "tp": sig.take_profit,
+                        "opened_at": datetime.now(UTC).isoformat(),
+                    }
+                    n_fut_orders += 1
+                    _send_alert(
+                        f"FUTURES PAPER TRADE: {sig.side} {sym}\n"
+                        f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f}\n"
+                        f"Strat: {name}",
+                        level="info"
+                    )
+
+            except Exception as oe:
+                logger.error(f"    FUTURES ORDER FAILED: {name} — {oe}")
+
+        # Save positions state
+        try:
+            _fut_state_path.write_text(json.dumps(_fut_positions, indent=2))
+        except Exception:
+            pass
+
+        if n_fut_orders > 0:
+            logger.info(f"  FUTURES PAPER: {n_fut_orders} ordre(s) executes")
 
     except Exception as e:
         logger.error(f"FUTURES PAPER CYCLE ERROR: {e}", exc_info=True)
