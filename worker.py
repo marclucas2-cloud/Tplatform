@@ -1619,14 +1619,59 @@ def run_live_risk_cycle():
                                     t.contract.symbol == _ps and t.order.orderType in ("STP", "STOP")
                                     for t in _sl_ib.openTrades()
                                 )
-                                if not _has_sl:
-                                    # Repose SL
+                                # Software SL: check price vs SL level
+                                _cur_price = _real_pos[_ps].avgCost / 5  # avgCost = price * multiplier
+                                # Get market price from portfolio
+                                for _pitem in _sl_ib.portfolio():
+                                    if _pitem.contract.symbol == _ps and abs(_pitem.position) > 0:
+                                        _cur_price = _pitem.marketPrice
+                                        break
+
+                                _sl_hit = False
+                                if _pos_side == "SELL" and _cur_price >= _sl_price:
+                                    _sl_hit = True
+                                elif _pos_side == "BUY" and _cur_price <= _sl_price:
+                                    _sl_hit = True
+
+                                if _sl_hit:
                                     _exit_side = "BUY" if _pos_side == "SELL" else "SELL"
-                                    _new_sl = _SlStop(_exit_side, 1, _sl_price)
-                                    _new_sl.tif = "GTC"; _new_sl.outsideRth = True
-                                    _sl_ib.placeOrder(_pc, _new_sl)
-                                    time.sleep(1)
-                                    logger.warning(f"  FUTURES SL REPOSED: {_ps} SL={_sl_price}")
+                                    _close_ord = _SlMkt(_exit_side, abs(int(_real_pos[_ps].position)))
+                                    _close_trade = _sl_ib.placeOrder(_pc, _close_ord)
+                                    time.sleep(4); _sl_ib.sleep(2)
+                                    logger.critical(
+                                        f"  FUTURES SOFTWARE SL HIT: {_ps} price={_cur_price:.2f} >= SL={_sl_price:.2f} "
+                                        f"-> {_close_trade.orderStatus.status}"
+                                    )
+                                    _send_alert(
+                                        f"FUTURES SL HIT: {_exit_side} {_ps}\n"
+                                        f"Price={_cur_price:.2f} SL={_sl_price:.2f}",
+                                        level="critical",
+                                    )
+                                    del _fut_pos[_ps]
+                                else:
+                                    # Check TP too
+                                    _tp_hit = False
+                                    if _tp_price > 0:
+                                        if _pos_side == "SELL" and _cur_price <= _tp_price:
+                                            _tp_hit = True
+                                        elif _pos_side == "BUY" and _cur_price >= _tp_price:
+                                            _tp_hit = True
+
+                                    if _tp_hit:
+                                        _exit_side = "BUY" if _pos_side == "SELL" else "SELL"
+                                        _close_ord = _SlMkt(_exit_side, abs(int(_real_pos[_ps].position)))
+                                        _close_trade = _sl_ib.placeOrder(_pc, _close_ord)
+                                        time.sleep(4); _sl_ib.sleep(2)
+                                        logger.info(
+                                            f"  FUTURES SOFTWARE TP HIT: {_ps} price={_cur_price:.2f} TP={_tp_price:.2f} "
+                                            f"-> {_close_trade.orderStatus.status}"
+                                        )
+                                        _send_alert(
+                                            f"FUTURES TP HIT: {_exit_side} {_ps}\n"
+                                            f"Price={_cur_price:.2f} TP={_tp_price:.2f}",
+                                            level="info",
+                                        )
+                                        del _fut_pos[_ps]
 
                             _fut_state_path.write_text(json.dumps(_fut_pos, indent=2))
                             _sl_ib.disconnect()
