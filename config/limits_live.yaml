@@ -50,7 +50,7 @@ fx_limits:
 futures_limits:
   max_futures_margin_pct: 0.35      # $3,500 margin futures max (35% capital)
   max_single_contract_margin_pct: 0.20  # $2,000 max per contract type
-  allowed_contracts: [MCL, MES]
+  allowed_contracts: [MCL, MES, MNQ, MGC]
   max_contracts_per_symbol: 2
 
 # Combined limits

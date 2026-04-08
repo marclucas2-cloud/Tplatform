@@ -772,34 +772,51 @@ def run_cross_asset_momentum_cycle():
         logger.error(f"  XMOMENTUM ERROR: {e}", exc_info=True)
 
 
-def run_futures_paper_cycle():
-    """Futures Paper Trading — MES Trend + MES/MNQ Pairs on IBKR paper (port 4003).
+def run_futures_live_cycle():
+    """Futures LIVE — same strategies as paper but on port 4002."""
+    _run_futures_cycle(live=True)
 
-    WF BORDERLINE: MES Trend Sharpe 1.46, MES/MNQ Pairs Sharpe 0.76.
-    Daily frequency, uses data/futures/ parquet files.
+
+def run_futures_paper_cycle():
+    """Futures Paper — strategies on IBKR paper port 4003."""
+    _run_futures_cycle(live=False)
+
+
+def _run_futures_cycle(live: bool = False):
+    """Futures execution cycle — shared between live and paper.
+
+    Strategies: MES Trend, MES Trend+MR, MES 3-Day Stretch,
+    Overnight MES/MNQ, TSMOM multi, Commodity Seasonality.
+    All with bracket orders (SL+TP broker-side).
     """
     if not _ibkr_lock.acquire(blocking=False):
-        logger.warning("FUTURES PAPER SKIP — IBKR lock held")
+        logger.warning("FUTURES SKIP — IBKR lock held")
         return
-    try:
-        logger.info("=== FUTURES PAPER CYCLE ===")
 
-        # Switch to IBKR paper (port 4003)
+    _mode = "LIVE" if live else "PAPER"
+    try:
+        logger.info(f"=== FUTURES {_mode} CYCLE ===")
+
+        if live:
+            target_port = os.environ.get("IBKR_PORT", "4002")
+        else:
+            target_port = os.environ.get("IBKR_PAPER_PORT", "4003")
+
         _saved_port = os.environ.get("IBKR_PORT")
         _saved_paper = os.environ.get("IBKR_PAPER")
-        os.environ["IBKR_PORT"] = os.environ.get("IBKR_PAPER_PORT", "4003")
-        os.environ["IBKR_PAPER"] = "true"
+        os.environ["IBKR_PORT"] = target_port
+        os.environ["IBKR_PAPER"] = "false" if live else "true"
 
         try:
             from core.broker.factory import _broker_cache
             from core.broker.ibkr_adapter import IBKRBroker
             _broker_cache.pop("ibkr", None)
             import random as _fut_rng
-            ibkr = IBKRBroker(client_id=_fut_rng.randint(70, 79))  # random to avoid zombie
+            ibkr = IBKRBroker(client_id=_fut_rng.randint(70, 79))
             ibkr_info = ibkr.get_account_info()
             equity = float(ibkr_info.get("equity", 0))
         except Exception as e:
-            logger.warning(f"  FUTURES PAPER SKIP — IBKR paper not connected: {e}")
+            logger.warning(f"  FUTURES {_mode} SKIP — IBKR not connected: {e}")
             return
         finally:
             if _saved_port is not None:
@@ -815,7 +832,7 @@ def run_futures_paper_cycle():
             logger.warning("  FUTURES PAPER SKIP — equity=0")
             return
 
-        logger.info(f"  FUTURES PAPER equity: ${equity:,.0f}")
+        logger.info(f"  FUTURES {_mode} equity: ${equity:,.0f}")
 
         # Load futures data
         import pandas as pd
@@ -1002,9 +1019,8 @@ def run_futures_paper_cycle():
             "signals": len(signals), "equity": equity,
         })
 
-        # === EXECUTION: paper orders via IBKR paper (port 4003) ===
-        # Manage open positions: time-exit after 2 days
-        _fut_state_path = ROOT / "data" / "state" / "futures_paper_positions.json"
+        # === EXECUTION: bracket orders via IBKR (live or paper) ===
+        _fut_state_path = ROOT / "data" / "state" / "futures_positions.json"
         _fut_state_path.parent.mkdir(parents=True, exist_ok=True)
         _fut_positions = {}
         try:
@@ -1014,94 +1030,97 @@ def run_futures_paper_cycle():
             pass
 
         n_fut_orders = 0
+        _is_live = os.environ.get("IBKR_PORT") == os.environ.get("IBKR_LIVE_PORT", "4002")
+        _mode = "LIVE" if _is_live else "PAPER"
 
-        # 1. Time-exit: close positions held > 2 days
-        positions_to_close = []
+        # 1. Time-exit: close positions held > 48h (any symbol)
         for pos_key, pos_info in list(_fut_positions.items()):
             opened = pos_info.get("opened_at", "")
-            if opened:
-                try:
-                    age_h = (datetime.now(UTC) - datetime.fromisoformat(opened)).total_seconds() / 3600
-                    if age_h >= 48:  # 2 days
-                        positions_to_close.append((pos_key, pos_info))
-                except Exception:
-                    pass
+            if not opened:
+                continue
+            try:
+                age_h = (datetime.now(UTC) - datetime.fromisoformat(opened)).total_seconds() / 3600
+            except Exception:
+                continue
+            if age_h < 48:
+                continue
 
-        for pos_key, pos_info in positions_to_close:
+            pos_sym = pos_info.get("symbol", pos_key)
             close_side = "SELL" if pos_info.get("side") == "BUY" else "BUY"
             try:
                 from ib_insync import Future as IbFuture, MarketOrder as IbMarketOrder
-                fut_contract = IbFuture("MES", exchange="CME")
-                ibkr._ib.qualifyContracts(fut_contract)
-                # Use front month
+                fut_contract = IbFuture(pos_sym, exchange="CME")
                 details = ibkr._ib.reqContractDetails(fut_contract)
                 if details:
                     fut_contract = details[0].contract
                 order = IbMarketOrder(close_side, int(pos_info.get("qty", 1)))
                 trade = ibkr._ib.placeOrder(fut_contract, order)
-                import time as _ft
-                _ft.sleep(3)
-                ibkr._ib.sleep(2)
+                time.sleep(3); ibkr._ib.sleep(2)
                 logger.info(
-                    f"    FUTURES TIME-EXIT: {close_side} MES (held {age_h:.0f}h) -> {trade.orderStatus.status}"
+                    f"    FUTURES TIME-EXIT: {close_side} {pos_sym} (held {age_h:.0f}h) "
+                    f"-> {trade.orderStatus.status}"
                 )
                 del _fut_positions[pos_key]
                 n_fut_orders += 1
             except Exception as te:
-                logger.error(f"    FUTURES TIME-EXIT FAILED: {te}")
+                logger.error(f"    FUTURES TIME-EXIT FAILED {pos_sym}: {te}")
 
-        # 2. New entries from signals (only if no open position for that symbol)
+        # 2. New entries with bracket orders (SL+TP broker-side)
+        from core.broker.ibkr_bracket import IBKRBracketManager
+        bracket_mgr = IBKRBracketManager(ib=ibkr._ib)
+
         for name, sig in signals:
             sym = sig.symbol
             if sym in _fut_positions:
                 logger.info(f"    {name}: SKIP — already positioned in {sym}")
                 continue
 
+            qty = 1
             try:
-                from ib_insync import Future as IbFuture, MarketOrder as IbMarketOrder
-                fut_contract = IbFuture(sym, exchange="CME")
-                ibkr._ib.qualifyContracts(fut_contract)
-                details = ibkr._ib.reqContractDetails(fut_contract)
-                if not details:
-                    logger.warning(f"    {name}: no MES contract details")
-                    continue
-                fut_contract = details[0].contract
-
-                qty = 1
-                order = IbMarketOrder(sig.side, qty)
-                trade = ibkr._ib.placeOrder(fut_contract, order)
-                import time as _ft
-                _ft.sleep(3)
-                ibkr._ib.sleep(2)
-
-                filled_price = trade.orderStatus.avgFillPrice or 0
-
-                logger.info(
-                    f"    FUTURES ORDER: {sig.side} {sym} qty={qty} "
-                    f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f} "
-                    f"-> {trade.orderStatus.status} fill={filled_price}"
+                result = bracket_mgr.create_bracket_order(
+                    symbol=sym,
+                    direction=sig.side,
+                    quantity=qty,
+                    entry_price=0,  # market order
+                    stop_loss_price=sig.stop_loss,
+                    take_profit_price=sig.take_profit,
+                    instrument_type="FUTURES",
+                    order_type="MARKET",
+                    tif="GTC",
                 )
 
-                if trade.orderStatus.status in ("Filled", "Submitted", "PreSubmitted"):
-                    _fut_positions[sym] = {
-                        "strategy": name,
-                        "side": sig.side,
-                        "qty": qty,
-                        "entry": filled_price or sig.stop_loss,
-                        "sl": sig.stop_loss,
-                        "tp": sig.take_profit,
-                        "opened_at": datetime.now(UTC).isoformat(),
-                    }
-                    n_fut_orders += 1
-                    _send_alert(
-                        f"FUTURES PAPER TRADE: {sig.side} {sym}\n"
-                        f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f}\n"
-                        f"Strat: {name}",
-                        level="info"
-                    )
+                logger.info(
+                    f"    FUTURES {_mode} BRACKET: {sig.side} {sym} qty={qty} "
+                    f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f} "
+                    f"-> parent={result.get('parent_order_id')} "
+                    f"sl={result.get('sl_order_id')} tp={result.get('tp_order_id')}"
+                )
+
+                _fut_positions[sym] = {
+                    "strategy": name,
+                    "symbol": sym,
+                    "side": sig.side,
+                    "qty": qty,
+                    "sl": sig.stop_loss,
+                    "tp": sig.take_profit,
+                    "parent_id": result.get("parent_order_id"),
+                    "sl_id": result.get("sl_order_id"),
+                    "tp_id": result.get("tp_order_id"),
+                    "oca_group": result.get("oca_group"),
+                    "opened_at": datetime.now(UTC).isoformat(),
+                    "mode": _mode,
+                    "_authorized_by": f"futures_{_mode.lower()}_{name}",
+                }
+                n_fut_orders += 1
+                _send_alert(
+                    f"FUTURES {_mode}: {sig.side} {sym} [BRACKET]\n"
+                    f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f}\n"
+                    f"Strat: {name}",
+                    level="info" if _mode == "PAPER" else "warning",
+                )
 
             except Exception as oe:
-                logger.error(f"    FUTURES ORDER FAILED: {name} — {oe}")
+                logger.error(f"    FUTURES BRACKET FAILED: {name} {sym} — {oe}")
 
         # Save positions state
         try:
@@ -1110,7 +1129,7 @@ def run_futures_paper_cycle():
             pass
 
         if n_fut_orders > 0:
-            logger.info(f"  FUTURES PAPER: {n_fut_orders} ordre(s) executes")
+            logger.info(f"  FUTURES {_mode}: {n_fut_orders} ordre(s) executes")
 
     except Exception as e:
         logger.error(f"FUTURES PAPER CYCLE ERROR: {e}", exc_info=True)
@@ -3459,6 +3478,9 @@ def main():
         "futures": CycleRunner("futures", run_futures_paper_cycle,
                                alert_callback=_cycle_alert,
                                metrics_callback=_cycle_metrics_cb),
+        "futures_live": CycleRunner("futures_live", run_futures_live_cycle,
+                                    alert_callback=_cycle_alert,
+                                    metrics_callback=_cycle_metrics_cb),
         "fx_paper": CycleRunner("fx_paper", run_fx_paper_cycle,
                                 alert_callback=_cycle_alert,
                                 metrics_callback=_cycle_metrics_cb),
@@ -3508,9 +3530,10 @@ def main():
         if is_weekday() and now_paris.hour < 10:
             run_fx_carry_cycle._done_today = False
 
-        # === FUTURES PAPER DAILY (lun-ven, 16h Paris = ouverture US) ===
+        # === FUTURES DAILY (lun-ven, 16h Paris = ouverture US) ===
         if is_weekday() and now_paris.hour == 16 and not getattr(run_futures_paper_cycle, '_done_today', False):
-            _runners["futures"].run()
+            _runners["futures"].run()       # paper (port 4003)
+            _runners["futures_live"].run()  # live (port 4002)
             run_futures_paper_cycle._done_today = True
         if is_weekday() and now_paris.hour < 16:
             run_futures_paper_cycle._done_today = False
