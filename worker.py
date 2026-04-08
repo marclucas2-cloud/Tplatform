@@ -2370,6 +2370,10 @@ def run_crypto_cycle():
                             f"  [{strat_id}] Position fermee: {result}"
                         )
                         n_actions += 1
+                        # Reset hourly baseline to avoid false kill switch
+                        # when closing a margin position changes equity mechanically
+                        risk_mgr._hourly_start_equity = dd_equity
+                        risk_mgr._last_hourly_reset = time.time()
                     except Exception as e:
                         logger.error(
                             f"  [{strat_id}] Erreur close: {e}"
@@ -2480,6 +2484,12 @@ def run_crypto_cycle():
                         f"— {result.get('status', '???')}"
                     )
                     n_orders += 1
+
+                    # Reset hourly baseline after margin trade to avoid
+                    # false kill switch from equity shift
+                    if market_type == "margin":
+                        risk_mgr._hourly_start_equity = dd_equity
+                        risk_mgr._last_hourly_reset = time.time()
 
                     # Post-execution verification: check filled qty
                     filled = float(result.get("filled_qty", 0))
