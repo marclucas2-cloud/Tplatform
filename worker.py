@@ -1569,6 +1569,76 @@ def run_live_risk_cycle():
 
         logger.info(f"Live risk cycle OK — equity=${equity:,.0f}, daily_pnl={daily_pnl_pct:.2%}")
 
+        # --- SOFTWARE SL/TP for futures positions ---
+        # IBKR presets kill GTC orders on futures. This is the backup.
+        _fut_state_path = ROOT / "data" / "state" / "futures_positions.json"
+        try:
+            if _fut_state_path.exists():
+                _fut_pos = json.loads(_fut_state_path.read_text(encoding="utf-8"))
+                if _fut_pos:
+                    import socket as _sl_sock
+                    _ibkr_host = os.getenv("IBKR_HOST", "127.0.0.1")
+                    _ibkr_port = int(os.getenv("IBKR_PORT", "4002"))
+                    try:
+                        with _sl_sock.create_connection((_ibkr_host, _ibkr_port), timeout=3):
+                            pass
+                    except Exception:
+                        _fut_pos = {}  # IBKR not connected, skip
+
+                    if _fut_pos:
+                        from ib_insync import IB as _SlIB, Future as _SlFut, MarketOrder as _SlMkt, StopOrder as _SlStop
+                        import random as _sl_rng
+                        _sl_ib = _SlIB()
+                        try:
+                            _sl_ib.connect(_ibkr_host, _ibkr_port, clientId=_sl_rng.randint(90, 98), timeout=8)
+                            time.sleep(1)
+
+                            # Check each futures position
+                            for _ps, _pi in list(_fut_pos.items()):
+                                _sl_price = _pi.get("sl", 0)
+                                _tp_price = _pi.get("tp", 0)
+                                _pos_side = _pi.get("side", "")
+                                if _sl_price <= 0:
+                                    continue
+
+                                # Get current price
+                                _pf = _SlFut(_ps, exchange="CME")
+                                _pd = _sl_ib.reqContractDetails(_pf)
+                                if not _pd:
+                                    continue
+                                _pc = _pd[0].contract
+                                _real_pos = {p.contract.symbol: p for p in _sl_ib.positions()}
+                                if _ps not in _real_pos or abs(_real_pos[_ps].position) == 0:
+                                    # Position gone (SL/TP hit or closed)
+                                    logger.info(f"  FUTURES SL CHECK: {_ps} position gone — removing from state")
+                                    del _fut_pos[_ps]
+                                    continue
+
+                                # Check if SL order still exists
+                                _has_sl = any(
+                                    t.contract.symbol == _ps and t.order.orderType in ("STP", "STOP")
+                                    for t in _sl_ib.openTrades()
+                                )
+                                if not _has_sl:
+                                    # Repose SL
+                                    _exit_side = "BUY" if _pos_side == "SELL" else "SELL"
+                                    _new_sl = _SlStop(_exit_side, 1, _sl_price)
+                                    _new_sl.tif = "GTC"; _new_sl.outsideRth = True
+                                    _sl_ib.placeOrder(_pc, _new_sl)
+                                    time.sleep(1)
+                                    logger.warning(f"  FUTURES SL REPOSED: {_ps} SL={_sl_price}")
+
+                            _fut_state_path.write_text(json.dumps(_fut_pos, indent=2))
+                            _sl_ib.disconnect()
+                        except Exception as _sle:
+                            logger.warning(f"  FUTURES SL CHECK error: {_sle}")
+                            try:
+                                _sl_ib.disconnect()
+                            except Exception:
+                                pass
+        except Exception:
+            pass
+
     except Exception as e:
         logger.error(f"Live risk cycle error: {e}", exc_info=True)
     finally:
