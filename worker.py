@@ -1045,31 +1045,42 @@ def _run_futures_cycle(live: bool = False):
             logger.warning(f"    RECONCILE error: {_re}")
 
         # FIX B: Check that open positions have active bracket orders (SL/TP)
-        # If not, log a CRITICAL warning — brackets should be reposed at next cycle
+        # If missing, REPOSE the brackets instead of closing the position
         try:
             _open_order_syms = {t.contract.symbol for t in ibkr._ib.openTrades()}
-            for pos_sym in list(_fut_positions.keys()):
+            for pos_sym, pos_info in list(_fut_positions.items()):
                 if pos_sym in _ibkr_real_pos and pos_sym not in _open_order_syms:
-                    logger.critical(
-                        f"    BRACKET MISSING: {pos_sym} has position but no SL/TP orders! "
-                        f"Closing position for safety."
+                    logger.warning(
+                        f"    BRACKET MISSING: {pos_sym} — reposing SL/TP"
                     )
-                    # Close the unprotected position
                     try:
-                        from ib_insync import Future as IbFuture, MarketOrder as IbMarketOrder
-                        _close_fut = IbFuture(pos_sym, exchange="CME")
-                        _close_details = ibkr._ib.reqContractDetails(_close_fut)
-                        if _close_details:
-                            _close_side = "BUY" if _ibkr_real_pos[pos_sym] < 0 else "SELL"
-                            _close_trade = ibkr._ib.placeOrder(
-                                _close_details[0].contract,
-                                IbMarketOrder(_close_side, abs(int(_ibkr_real_pos[pos_sym])))
-                            )
-                            time.sleep(3); ibkr._ib.sleep(2)
-                            logger.info(f"    BRACKET SAFETY CLOSE: {_close_side} {pos_sym} -> {_close_trade.orderStatus.status}")
-                            del _fut_positions[pos_sym]
+                        from ib_insync import Future as IbFuture, StopOrder, LimitOrder
+                        import uuid as _uuid
+                        _rb_fut = IbFuture(pos_sym, exchange="CME")
+                        _rb_details = ibkr._ib.reqContractDetails(_rb_fut)
+                        if not _rb_details:
+                            continue
+                        _rb_contract = _rb_details[0].contract
+                        _rb_qty = abs(int(_ibkr_real_pos[pos_sym]))
+                        _rb_side = "BUY" if _ibkr_real_pos[pos_sym] < 0 else "SELL"
+                        _rb_sl = pos_info.get("sl", 0)
+                        _rb_tp = pos_info.get("tp", 0)
+                        if _rb_sl <= 0 or _rb_tp <= 0:
+                            continue
+                        _rb_oca = f"REBRACKET_{pos_sym}_{_uuid.uuid4().hex[:8]}"
+                        _sl_ord = StopOrder(_rb_side, _rb_qty, _rb_sl)
+                        _sl_ord.tif = "GTC"; _sl_ord.ocaGroup = _rb_oca; _sl_ord.ocaType = 1
+                        _tp_ord = LimitOrder(_rb_side, _rb_qty, _rb_tp)
+                        _tp_ord.tif = "GTC"; _tp_ord.ocaGroup = _rb_oca; _tp_ord.ocaType = 1
+                        ibkr._ib.placeOrder(_rb_contract, _sl_ord)
+                        time.sleep(0.5)
+                        ibkr._ib.placeOrder(_rb_contract, _tp_ord)
+                        time.sleep(2); ibkr._ib.sleep(1)
+                        logger.info(
+                            f"    BRACKET REPOSED: {pos_sym} SL={_rb_sl} TP={_rb_tp} OCA={_rb_oca}"
+                        )
                     except Exception as _be:
-                        logger.error(f"    BRACKET SAFETY CLOSE FAILED: {_be}")
+                        logger.error(f"    BRACKET REPOSE FAILED {pos_sym}: {_be}")
         except Exception as _bce:
             logger.warning(f"    BRACKET CHECK error: {_bce}")
 
