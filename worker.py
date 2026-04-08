@@ -906,7 +906,58 @@ def run_futures_paper_cycle():
         except Exception as e:
             logger.error(f"    MES 3-Day Stretch error: {e}")
 
-        # 4. MES/MNQ Pairs
+        # 4. Overnight Buy-Close MES
+        try:
+            from strategies_v2.futures.overnight_buy_close import OvernightBuyClose
+            strat_on_mes = OvernightBuyClose(symbol="MES")
+            strat_on_mes.set_data_feed(feed)
+            bar = feed.get_latest_bar("MES")
+            if bar:
+                sig = strat_on_mes.on_bar(bar, portfolio_state)
+                if sig:
+                    signals.append(("Overnight MES", sig))
+                    logger.info(f"    Overnight MES: {sig.side} @ {bar.close:.2f}")
+                else:
+                    logger.info("    Overnight MES: pas de signal (below EMA20)")
+        except Exception as e:
+            logger.error(f"    Overnight MES error: {e}")
+
+        # 5. Overnight Buy-Close MNQ
+        if "MNQ" in data_sources:
+            try:
+                strat_on_mnq = OvernightBuyClose(symbol="MNQ")
+                strat_on_mnq.set_data_feed(feed)
+                bar_mnq = feed.get_latest_bar("MNQ")
+                if bar_mnq:
+                    sig = strat_on_mnq.on_bar(bar_mnq, portfolio_state)
+                    if sig:
+                        signals.append(("Overnight MNQ", sig))
+                        logger.info(f"    Overnight MNQ: {sig.side} @ {bar_mnq.close:.2f}")
+                    else:
+                        logger.info("    Overnight MNQ: pas de signal")
+            except Exception as e:
+                logger.error(f"    Overnight MNQ error: {e}")
+
+        # 6. TSMOM Multi (MES, MNQ, MCL, MGC)
+        for tsmom_sym in ["MES", "MNQ", "MCL", "MGC"]:
+            if tsmom_sym not in data_sources:
+                continue
+            try:
+                from strategies_v2.futures.tsmom_multi import TSMOMMulti
+                strat_ts = TSMOMMulti(symbol=tsmom_sym)
+                strat_ts.set_data_feed(feed)
+                bar_ts = feed.get_latest_bar(tsmom_sym)
+                if bar_ts:
+                    sig = strat_ts.on_bar(bar_ts, portfolio_state)
+                    if sig:
+                        signals.append((f"TSMOM {tsmom_sym}", sig))
+                        logger.info(f"    TSMOM {tsmom_sym}: {sig.side} @ {bar_ts.close:.2f} str={sig.strength:.2f}")
+                    else:
+                        logger.info(f"    TSMOM {tsmom_sym}: pas de signal")
+            except Exception as e:
+                logger.error(f"    TSMOM {tsmom_sym} error: {e}")
+
+        # 7. MES/MNQ Pairs
         if "MNQ" in data_sources:
             try:
                 from strategies_v2.futures.mes_mnq_pairs import MESMNQPairs
