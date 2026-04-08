@@ -802,35 +802,41 @@ def _run_futures_cycle(live: bool = False):
         logger.info(f"=== FUTURES {_mode} CYCLE ===")
 
         if live:
-            target_port = os.environ.get("IBKR_PORT", "4002")
+            target_port = int(os.environ.get("IBKR_PORT", "4002"))
         else:
-            target_port = os.environ.get("IBKR_PAPER_PORT", "4003")
+            target_port = int(os.environ.get("IBKR_PAPER_PORT", "4003"))
 
-        _saved_port = os.environ.get("IBKR_PORT")
-        _saved_paper = os.environ.get("IBKR_PAPER")
-        os.environ["IBKR_PORT"] = target_port
-        os.environ["IBKR_PAPER"] = "false" if live else "true"
-
+        # Connect directly with explicit port — do NOT modify os.environ
+        # to avoid race conditions with other threads
         try:
-            from core.broker.factory import _broker_cache
-            from core.broker.ibkr_adapter import IBKRBroker
-            _broker_cache.pop("ibkr", None)
+            from ib_insync import IB as _FutIB
             import random as _fut_rng
-            ibkr = IBKRBroker(client_id=_fut_rng.randint(70, 79))
+            _fut_ib = _FutIB()
+            _ibkr_host = os.environ.get("IBKR_HOST", "127.0.0.1")
+            _fut_ib.connect(_ibkr_host, target_port, clientId=_fut_rng.randint(70, 79), timeout=10)
+            import time as _ft; _ft.sleep(1)
+
+            # Create a minimal adapter-like wrapper for compatibility
+            class _FutIBKR:
+                def __init__(self, ib):
+                    self._ib = ib
+                def get_account_info(self):
+                    acct = {}
+                    for a in self._ib.accountSummary():
+                        if a.tag == "NetLiquidation":
+                            acct["equity"] = float(a.value)
+                        elif a.tag == "TotalCashValue":
+                            acct["cash"] = float(a.value)
+                    return acct
+                def disconnect(self):
+                    self._ib.disconnect()
+
+            ibkr = _FutIBKR(_fut_ib)
             ibkr_info = ibkr.get_account_info()
             equity = float(ibkr_info.get("equity", 0))
         except Exception as e:
-            logger.warning(f"  FUTURES {_mode} SKIP — IBKR not connected: {e}")
+            logger.warning(f"  FUTURES {_mode} SKIP — IBKR port {target_port} not connected: {e}")
             return
-        finally:
-            if _saved_port is not None:
-                os.environ["IBKR_PORT"] = _saved_port
-            elif "IBKR_PORT" in os.environ:
-                del os.environ["IBKR_PORT"]
-            if _saved_paper is not None:
-                os.environ["IBKR_PAPER"] = _saved_paper
-            elif "IBKR_PAPER" in os.environ:
-                del os.environ["IBKR_PAPER"]
 
         if equity <= 0:
             logger.warning("  FUTURES PAPER SKIP — equity=0")
