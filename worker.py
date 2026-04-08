@@ -1067,7 +1067,7 @@ def _run_futures_cycle(live: bool = False):
 
         # 2. New entries with bracket orders (SL+TP broker-side)
         from core.broker.ibkr_bracket import BracketOrderManager
-        bracket_mgr = BracketOrderManager(ib=ibkr._ib)
+        bracket_mgr = BracketOrderManager(ib_connection=ibkr._ib)
 
         for name, sig in signals:
             sym = sig.symbol
