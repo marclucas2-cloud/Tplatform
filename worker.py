@@ -957,7 +957,26 @@ def run_futures_paper_cycle():
             except Exception as e:
                 logger.error(f"    TSMOM {tsmom_sym} error: {e}")
 
-        # 7. MES/MNQ Pairs
+        # 7. Commodity Seasonality (MCL, MGC) — paper monitoring
+        for season_sym in ["MCL", "MGC"]:
+            if season_sym not in data_sources:
+                continue
+            try:
+                from strategies_v2.futures.commodity_season import CommoditySeason
+                strat_cs = CommoditySeason(symbol=season_sym)
+                strat_cs.set_data_feed(feed)
+                bar_cs = feed.get_latest_bar(season_sym)
+                if bar_cs:
+                    sig = strat_cs.on_bar(bar_cs, portfolio_state)
+                    if sig:
+                        signals.append((f"Season {season_sym}", sig))
+                        logger.info(f"    Season {season_sym}: {sig.side} @ {bar_cs.close:.2f}")
+                    else:
+                        logger.info(f"    Season {season_sym}: hors fenetre saisonniere")
+            except Exception as e:
+                logger.error(f"    Season {season_sym} error: {e}")
+
+        # 8. MES/MNQ Pairs
         if "MNQ" in data_sources:
             try:
                 from strategies_v2.futures.mes_mnq_pairs import MESMNQPairs
