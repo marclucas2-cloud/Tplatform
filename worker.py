@@ -2361,6 +2361,20 @@ def run_crypto_cycle():
 
                 # Pour les signaux CLOSE
                 if action == "CLOSE":
+                    # GUARD: verify position actually exists on broker before closing
+                    _has_pos = False
+                    try:
+                        _cur_positions = broker.get_positions()
+                        _has_pos = any(
+                            p.get("symbol", "") == trade_symbol
+                            and abs(float(p.get("market_val", 0))) > 1
+                            for p in _cur_positions
+                        )
+                    except Exception:
+                        pass
+                    if not _has_pos:
+                        logger.info(f"  [{strat_id}] CLOSE SKIP — no {trade_symbol} position on broker")
+                        continue
                     try:
                         result = broker.close_position(
                             trade_symbol,
@@ -2444,6 +2458,39 @@ def run_crypto_cycle():
                 exec_symbol = signal.get("symbol", trade_symbol)
                 if exec_symbol.endswith("USDT"):
                     exec_symbol = exec_symbol.replace("USDT", "USDC")
+
+                # GUARD: double-confirmation for margin trades
+                # Signal must be stable 2 cycles in a row before executing
+                if market_type == "margin":
+                    _confirm_key = f"{strat_id}:{exec_symbol}:{side}"
+                    _confirm_path = ROOT / "data" / "state" / "pending_margin_signals.json"
+                    _pending = {}
+                    try:
+                        if _confirm_path.exists():
+                            _pending = json.loads(_confirm_path.read_text(encoding="utf-8"))
+                    except Exception:
+                        pass
+
+                    if _confirm_key not in _pending:
+                        _pending[_confirm_key] = datetime.now(UTC).isoformat()
+                        try:
+                            _confirm_path.parent.mkdir(parents=True, exist_ok=True)
+                            _confirm_path.write_text(json.dumps(_pending))
+                        except Exception:
+                            pass
+                        logger.info(
+                            f"  [{strat_id}] MARGIN CONFIRM PENDING — {side} {exec_symbol} "
+                            f"(will execute next cycle if signal persists)"
+                        )
+                        continue
+                    else:
+                        # Signal confirmed — clear and execute
+                        del _pending[_confirm_key]
+                        try:
+                            _confirm_path.write_text(json.dumps(_pending))
+                        except Exception:
+                            pass
+                        logger.info(f"  [{strat_id}] MARGIN CONFIRMED — executing {side} {exec_symbol}")
 
                 _v12_on_signal(strat_id, exec_symbol, side, price)
 
