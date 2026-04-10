@@ -27,6 +27,7 @@ archive/intraday-backtesterV2/data_cache/
 *.csv
 *.parquet
 !strategies/*.json
+!data/calendar_bce.csv
 
 # === State files (contiennent des infos de compte) ===
 *_state.json

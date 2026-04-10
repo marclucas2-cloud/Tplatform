@@ -1,37 +1,67 @@
-# SYNTHESE COMPLETE — TRADING PLATFORM V14.0 (PERFORMANCE + CAPITAL DEPLOYMENT)
-## Portefeuille Quantitatif — 5 classes d'actifs, 47 strategies, ~24h/24h
-### Date : 3 avril 2026 | 3,509 tests | ~145 fichiers test | CRO 9.5/10 APPROUVE
+# SYNTHESE COMPLETE — TRADING PLATFORM V15.3 (PORTEFEUILLE DIVERSIFIE + MACRO ECB)
+## Portefeuille Quantitatif — 3 classes d'actifs, 55 strategies codees, 4 LIVE + 3 CODE (MacroECB DAX/CAC40/ESTX50)
+### Date : 10 avril 2026 | 3,523 tests | ~146 fichiers test | CRO 9.0/10 APPROUVE
 
 ---
 
 ## 1. RESUME EXECUTIF
 
-| Indicateur | V13.0 | **V14.0 (Perf+Capital)** |
+| Indicateur | V15.2 | **V15.3 (+MacroECB)** |
 |-----------|:---:|:---:|
-| Classes d'actifs | 5 | **5** |
-| Strategies total | 46 | **47** (+1 Cross-Asset Momentum paper) |
-| Tests | 3,320 | **3,509** (+189 : 89 perf + 21 funnel + 33 capital + 46 stat arb) |
-| Modules core | ~155 | **~210** (+23 perf + 15 capital + 3 funnel + 8 stat arb + 5 scripts) |
-| Brokers LIVE | 2 | **2** (Binance $10K + IBKR $10K) + Alpaca paper |
-| Capital deploye | ~$20K | **~$20K** (cible $45K) |
-| Signal funnel | pas de diagnostic | **14-layer funnel logger + diagnostic scripts** |
-| Capital utilization | non mesure | **UtilizationRate + CashDrag + DeploymentMonitor** |
-| Guards | fixes | **Adaptatives** (thermostat par utilization) |
-| Always-on | aucune | **FX Carry (3 paires) + Earn crypto** |
-| Sizing | per-broker | **Global $45K NAV** (cap per-broker 80%) |
-| Research pipeline | ad-hoc | **6 gates** (thesis→backtest→WF→cost→corr→paper) |
-| New alpha | -- | **Cross-Asset Momentum** (Moskowitz 2012, paper mode) |
-| CRO score | 9.5/10 | **9.5/10** (audit V14.0 : H-1 slippage Binance corrige) |
+| Strategies codees | 54 | **55** (+MacroECB multi-instrument) |
+| Strategies LIVE | 4 | **4** (3 MacroECB en CODE_REVIEW, deploiement V15.4) |
+| Strategies DISABLED | 9 | **9** (inchanges) |
+| Capital deploye | EUR 18.6K | **EUR 18.6K** |
+| ROC backtest 3 ans | 22.8%/an | **31.7%/an** (+8.9pts grace a MacroECB) |
+| PnL backtest 3 ans | +$6,840 | **+$9,591** (+$2,751) |
+| Avg trade | $11 | **$15** |
+| PF portefeuille | 1.30 | **1.36** |
+| Sharpe portefeuille | 0.83 | **1.00** (+20%) |
+| MaxDD | -$2,914 | **-$3,031** (+4%) |
+| Mois profitables | 65% | **62%** |
+| Tests | 3,509 | **3,523** (+14 MacroECB) |
 
-**V13.0->V14.0 : 4 chantiers majeurs.**
+**V15.2->V15.3 : Ajout MacroECB event-driven, portfolio Sharpe 0.83 -> 1.00.**
 
-**1. Performance & Alpha (23 modules)** : Signal Quality Filter v2 (5 dimensions, score 0-1). Adaptive Stops v2 (noise floor + regime). Entry Timing (LIMIT patience, intraday timing, fade-in). Exit Optimizer (trailing stop adaptatif + time stops + partial profits). Smart Router v2 (spread monitoring, maker/taker). Cost Model Audit + Commission Burn Analysis. HRP Diagnostic + Kelly Recalibration + MDC Sizing. Research Pipeline (6 gates) + Auto Backtest + Parameter Sweep. On-Chain Pipeline (MVRV, netflow, hashrate, fear&greed). Sentiment Pipeline. Calibration NEED_LIVE (slippage, win rate drift, regime effectiveness, meta-activation).
+**1. Decouverte cle** : 6 strategies EU intraday testees sur 5 ans de data 5min/15min IBKR (2021-2026, 601K bars), une seule a un edge robuste apres couts : **Macro ECB Event Momentum**. Les 5 autres (ORB, Mean Reversion RSI, Lunch Effect, US Open Impact, Pairs DAX/ESTX50) ont edge < couts apres tuning.
 
-**2. Signal Funnel Unblock (7 fixes)** : Diagnostic scripts (signal_funnel + crypto). Min Position Size filter ($50-200 par asset class). Funnel Logger structure (FUNNEL|strat|layer|action). UNKNOWN regime multipliers 0.3-0.5 → 0.7-0.8. Guards adaptes $10K (position 20%, cash 5%, 12 max positions).
+**2. Strategie MacroECB validee** :
+   - Mecanique : trade le momentum 30min post annonce BCE (14:15 CET) si |move| > 0.15%, SL=50% du move, TP=2x move, max hold 3h
+   - Multi-instrument : DAX (avg +$172/tr), CAC40 (+$87), ESTX50 (+$45)
+   - 5 ans : 69 trades / +$7,004 / Sharpe 3.18 / PF 1.84 / MaxDD -$1,846
+   - WF yearly 4/6 PASS (gagnant 2022-2024 + 2026, perdant 2021 + 2025 = pause cycles)
+   - Decorrelation parfaite avec les 4 LIVE (event-driven, 8 jours/an)
 
-**3. Capital Deployment (15 modules)** : Utilization Rate Calculator (regime targets). Cash Drag ($idle × 10% / 365). Deployment Monitor (blocked strategies diagnostic). Guard Pass Rate Tracker (biggest killers). Adaptive Guards (thermostat). Always-On FX Carry (3 paires, vol scaling, PANIC=0.2 pas 0). Always-On Earn crypto (USDC/BTC/ETH flexible). Allocation Gap Tracker (ALIGNED/DRIFTING/MISALIGNED/BLOCKED). Active Rebalancer (turnover-controlled). Global Portfolio Sizer ($45K NAV). Cross-Broker Capital Optimizer. Signal Aggregator.
+**3. Backtest portefeuille V15.3 (4 LIVE + 3 MacroECB, 3 ans, max 3 positions)** :
 
-**4. Stat Arb Research** : MidCap stat arb teste (REJECTED, Sharpe -1.28). Cross-Asset Momentum code + backtest (Sharpe 0.81, DD -5.21%) → deploye en paper dans le worker (cycle daily 16h15 CET).
+| Strategie | Sym | Trades | WR | PnL 3 ans | Avg/trade | Sharpe |
+|-----------|-----|:------:|:--:|:---------:|:---------:|:------:|
+| Sector Rotation EU | DAX/CAC40 | 53 | 58% | +$3,416 | $64 | 3.11 |
+| **MacroECB (3 inst)** | DAX/CAC/ESTX | **27** | **37%** | **+$2,751** | **$102** | **3.02** |
+| Gold-Equity Div | MES | 44 | 41% | +$2,078 | $47 | 1.74 |
+| Overnight MES | MES | 523 | 50% | +$895 | $2 | 0.36 |
+| EU Gap Open | ESTX50 | 8 | 50% | +$452 | $56 | 0.80 |
+| **TOTAL V15.3** | | **655** | **50%** | **+$9,591** | **$15** | **1.00** |
+
+Return: +95.9% / 3 ans = **31.7%/an** | PF: **1.36** | MaxDD: **-$3,031** (-30%)
+12 trades MacroECB rejetes par slot conflict (max 3 pos) — pertinent pour augmenter MAX_POS=4 en V15.4.
+
+**4. Code livre** :
+   - `strategies_v2/futures/macro_ecb.py` : StrategyBase multi-instrument
+   - `core/worker/cycles/macro_ecb_cycle.py` : runner cycle dedie (skip jours non-BCE)
+   - `data/calendar_bce.csv` : 42 dates ECB 2021-2026 hardcodees
+   - `tests/test_macro_ecb.py` : 14 tests PASS (config, params, signal logic, BCE filter, one-per-day)
+   - `scripts/backtest_eu_intraday.py` : framework backtest 6 strats + WF
+   - `scripts/backtest_portfolio_v153.py` : portfolio combiner 4 LIVE + 3 MacroECB
+
+**5. Strats EU rejetees** (edge < couts apres tuning intraday 5min/15min) :
+   - EU-01 ORB DAX : 462 tr / -$3,945 / avg -$9
+   - EU-02 Mean Reversion RSI ESTX50 : 1174 tr / -$2,544 / avg -$2 (presque break-even)
+   - EU-03 Lunch Effect DAX : 942 tr / -$10,683 / avg -$11
+   - EU-04 US Open Impact ESTX50 : prometteur (+$27/tr sur 25 trades) mais MES historique limite a 8 mois -> abandon temporaire
+   - EU-05 Pairs DAX/ESTX50 : 1226 tr / -$8,116 / avg -$7 (double cost tue l'edge)
+
+**6. Decision deploiement** : 3 MacroECB en CODE_REVIEW, deploiement V15.4 apres validation cycle worker en paper.
 
 ---
 
@@ -86,49 +116,53 @@ Critere : ratio OOS/IS > 0.5 ET >= 50% fenetres profitables.
 (OpEx 10.41, Gap 5.22, Crypto V2 3.49) sont les plus severement rejetees en OOS.
 C'est le signe classique de l'overfitting. 9 strategies archivees dans archive/rejected/.
 
-### 2.6 Strategies EU actives (5 — pipeline multi-strats deploye)
+### 2.6 Strategies EU — migrees vers section 2.8
 
-| Strategie | Sharpe | WR | Trades | Walk-Forward | Statut |
-|-----------|:------:|:--:|:------:|:------------:|:------:|
-| EU Gap Open | 8.56 | 75% | 72 | 4/4 PASS | **ACTIF** |
-| BCE Momentum Drift v2 | 14.93 | 77% | 99 | VALIDATED | **DEPLOYE** (disabled: 8 events/an) |
-| Auto Sector German | 13.43 | 75% | 97 | VALIDATED | **LIVE** |
-| Brent Lag Play | 4.08 | 58% | 729 | 4/5 PASS | **LIVE** |
-| EU Close -> US Afternoon | 2.43 | 60% | 113 | VALIDATED | **DEPLOYE** (needs Alpaca live) |
+Les strats EU historiques (EU Gap, BCE Momentum, Auto Sector, Brent Lag) etaient conçues pour le pipeline Alpaca US, jamais cablees en live. Les backtests individuels (Sharpe 8-14) n'ont pas ete valides en portefeuille combine.
 
-3 strats EU LIVE sur IBKR port 4002 (clientId=11), concentrees 2 tickers/strat, 15% alloc/strat.
+**Survivantes migrees en 2.8** : EU Gap Open (ESTX50 futures) et Sector Rotation (DAX/CAC40 indices). Validees par backtest portefeuille 3 ans.
 
-### 2.7 Forex (12 strategies — allocation 18%)
+**Non migrees** : BCE Momentum (8 events/an = trop rare), Brent Lag (negatif en portefeuille), EU Close->US (necessite Alpaca live).
 
-| Strategie | Sharpe | Trades | Statut |
-|-----------|:------:|:------:|:------:|
-| EUR/USD Trend | 4.62 | 47 | **ACTIF** |
-| EUR/GBP Mean Reversion | 3.65 | 32 | **ACTIF** |
-| EUR/JPY Carry | 2.50 | 91 | **ACTIF** |
-| AUD/JPY Carry | 1.58 | 101 | **ACTIF** |
-| GBP/USD Trend (FX-002) | est. 2.0 | — | **LIVE P1** |
-| USD/CHF Mean Reversion (FX-003) | est. 1.5 | — | **CODE** |
-| NZD/USD Carry (FX-004) | est. 1.2 | — | **CODE** |
-| Asian Range Breakout (FX-007) | — | — | **CODE** |
-| Bollinger Squeeze (FX-008) | — | — | **CODE** |
-| London Fix Flow (FX-009) | — | — | **CODE** |
-| Session Overlap Momentum (FX-010) | — | — | **CODE** |
-| EOM Flow Rebalancing (FX-011) | — | — | **CODE** |
+### 2.7 Forex — MORT (IBIE France interdit levier FX retail)
 
-**Data FX collectee** : 134,940 candles (8 paires, 1H/4H/1D, 2-5 ans depuis IBKR)
+**16 strats codees, 0 executable.** IBIE (Interactive Brokers Ireland) ne permet pas le levier FX pour les clients retail francais. Confirme par le support IBKR le 8 avril 2026. Ordres FX passent en statut "Inactive" immediatement.
 
-### 2.8 Futures Micro (8 strategies — allocation 10%)
+**Options futures** : broker FX alternatif (Pepperstone, IC Markets, Darwinex — ESMA 30:1). Decision reportee.
 
-| Strategie | Instrument | Margin | Sharpe cible | Statut |
-|-----------|:----------:|:------:|:------------:|:------:|
-| MES Trend Following (FUT-003) | MES | $1,400 | 1.5+ | **CODE** |
-| MNQ Mean Reversion (FUT-004) | MNQ | $1,800 | 1.0+ | **CODE** |
-| Brent Lag Futures (FUT-002) | MCL | $600 | 4.0+ | **CODE** |
-| Gold Trend (FUT-005) | MGC | $1,000 | 1.0+ | **CODE** |
-| M2K Opening Range Breakout (FUT-005) | M2K | $500 | 1.0+ | **CODE** |
-| MES Overnight Momentum (FUT-006) | MES | $1,400 | 1.2+ | **CODE** |
-| MGC Gold VIX Hedge (FUT-007) | MGC | $1,000 | 1.0+ | **CODE** |
-| MES-MNQ Pairs Spread (FUT-008) | MES/MNQ | $3,200 | 0.8+ | **CODE** |
+**Data FX conservee** : 134,940 candles (8 paires, 1H/4H/1D, 2-5 ans depuis IBKR). Reutilisable si broker FX ajoute.
+
+### 2.8 Futures + EU Indices — Portefeuille diversifie (backtest 3 ans, 2023-2026)
+
+**4 strategies LIVE** (backtest portefeuille combine, toutes positives) :
+
+| Strategie | Sym | PnL 3 ans | Trades | WR | Avg/trade | Sharpe | Statut |
+|-----------|-----|:---------:|:------:|:--:|:---------:|:------:|:------:|
+| Sector Rotation EU | DAX/CAC40 | **+$3,416** | 53 | 58% | $64 | 1.17 | **LIVE** |
+| Gold-Equity Div | MES+MGC | **+$2,078** | 44 | 41% | $47 | 1.17 | **LIVE** |
+| Overnight Buy-Close | MES | **+$895** | 523 | 50% | $2 | 0.29 | **LIVE** |
+| EU Gap Open | ESTX50 | **+$452** | 8 | 50% | $56 | 0.65 | **LIVE** |
+
+**Portefeuille backtest combine** : +$6,840, Sharpe 0.83, WF 3/6, PF 1.30, MaxDD -$2,914.
+**Correlations** : toutes < 0.12 (excellente decorrelation).
+**ROC attendu** : ~22.8%/an ($185/mois).
+
+**Systeme de priorite** : EU Gap (9) > Gold-Eq (7) > Sector (6) > Overnight (5).
+**Execution** : OCA SL+TP, software SL/TP 5min, SL recalcule depuis fill, max 3 positions.
+
+**9 strategies DISABLED** (backtest portefeuille negatif) :
+
+| Strategie | PnL 3 ans | Raison rejet |
+|-----------|:---------:|--------------|
+| TSMOM MES | -$5,118 | WR 35%, trade trop souvent, saigne le portfolio |
+| MES Trend+MR | -$2,240 | WR 35%, RSI2 trigger trop souvent |
+| Brent Lag MCL | -$825 | Negatif en portefeuille (positif isole) |
+| VIX Mean Reversion | -$414 | SL trop serre, WR 36% |
+| 3-Day Stretch | — | SHORT mecanique en bull = catastrophique |
+| MES Trend | — | Sharpe faible (0.5) |
+| Overnight MNQ | — | Doublon MES |
+| TSMOM multi | — | Trop de symboles pour 10K |
+| MIB/ESTX50 Spread | +$57K isole | **PAPER** (24 trades < 30 = pas significatif) |
 
 ### 2.10 Crypto Binance France — Portefeuille INDEPENDANT ($10K post-realloc, Margin + Spot + Earn)
 
@@ -174,19 +208,15 @@ FX Cross-Pair Momentum, EURO STOXX 50 Trend, Calendar Spread ES, Protective Puts
 
 ### Structure cible V5.1
 
-**Portefeuille IBKR ($10K) :**
+**Portefeuille IBKR (EUR 10K) — REEL V15.2 :**
 
-| Bucket | Allocation V5 | Strategies | Broker |
-|--------|:-----------------:|-----------|:------:|
-| US Intraday | **25%** | DoW, Corr Hedge, VIX Short, High-Beta Short, + borderline | Alpaca |
-| US Event | **8%** | FOMC Reaction | Alpaca |
-| US Daily | **7%** | Momentum ETF, Pairs MU/AMAT, VRP | Alpaca |
-| EU Intraday | **15%** | EU Gap, Brent Lag, EU Close->US | IBKR |
-| EU Event | **10%** | BCE Momentum, Auto Sector, BCE Press Conference | IBKR |
-| FX Swing | **18%** | 7 paires FX (24h) | IBKR |
-| Futures Trend | **7%** | MES Trend, MNQ MR | IBKR |
-| Futures Energy | **3%** | MCL Brent Lag | IBKR |
-| Cash | **7%** | Buffer + margin futures | — |
+| Bucket | Allocation | Strategies | Statut |
+|--------|:---------:|-----------|:------:|
+| EU Indices | **35%** | Sector Rotation (DAX/CAC40), EU Gap (ESTX50) | **LIVE** |
+| Futures MES | **30%** | Overnight MES, Gold-Equity Div (MES+MGC) | **LIVE** |
+| Cash/Margin | **35%** | Reserve margin futures + buffer | — |
+| ~~FX Swing~~ | ~~18%~~ | ~~7 paires FX~~ | **MORT** (IBIE interdit levier FX) |
+| ~~US Intraday~~ | ~~25%~~ | ~~DoW, Corr Hedge~~ | **PAPER** (Alpaca, pas de capital live) |
 
 **Portefeuille Crypto INDEPENDANT ($10K post-realloc, Binance France V2) :**
 
@@ -268,21 +298,17 @@ shorts int(), idempotence lock, reconciliation (alerte si broker down),
 threading.Lock (validate_order, broker_init, kill_switch activate),
 atomic state write (tmpfile + os.replace sur 3 fichiers d'etat).
 
-### Kill switch calibre par strategie — LIVE V7.5
+### Kill switch calibre — LIVE V15.2
 
-**IBKR :**
+**IBKR (4 strats actives) :**
 
 | Strategie | Type | Seuil kill |
 |-----------|------|:----------:|
-| EUR/USD Trend | FX swing | -3.0% |
-| EUR/GBP MR | FX swing | -3.0% |
-| EUR/JPY Carry | FX swing | -3.0% |
-| AUD/JPY Carry | FX swing | -3.0% |
-| GBP/USD Trend | FX swing | -3.0% |
+| Overnight MES | Futures overnight | -2.5% |
+| Gold-Equity Div | Futures swing 5j | -2.5% |
+| Sector Rotation EU | EU indices weekly | -4.0% |
 | EU Gap Open | EU intraday | -1.5% |
-| MCL Brent Lag | Futures | -2.5% |
-| MES Trend | Futures | -2.5% |
-| **PORTFOLIO IBKR** | Global | **-4.0% daily** |
+| **PORTFOLIO IBKR** | Global | **-5.0% daily** (YAML) |
 
 **Crypto (Binance France) :**
 
@@ -375,7 +401,8 @@ Intraday US : 16 testees, 4 validated, 3 borderline, 9 rejected. Overnight : 9/9
 7. **Overnight** : Edge mort depuis 2021 (5Y de preuve)
 8. **Couts EU** : 0.26% RT actions -> TP > 1.5% obligatoire. Futures 100x moins cher.
 9. **Walk-forward** : Les Sharpe spectaculaires en backtest = overfitting probable. **OpEx 10.41 -> OOS -3.99.**
-10. **Significativite** : < 30 trades = bruit statistique. Pas d'exception.
+10. **Significativite** : < 30 trades = bruit statistique. Pas d'exception. (EU Gap Open = 8 trades/3 ans → a surveiller)
+11. **Backtest portefeuille** : JAMAIS deployer sur backtest isole. Tout candidat passe le backtest portefeuille combine 3 ans avec toutes les strats actives + contraintes live (slots, priorite, interactions). Lecon V15.1 : 5 strats WF-pass individuellement → portefeuille -$6K.
 
 ---
 
@@ -582,7 +609,16 @@ Audit CRO : **9.5/10** (12/12 domaines PASS, 67 fixes cumules)
 | **2 avril** | **V12.5 ZERO-BUG AUDIT : 40 bugs fixes (12 worker, 8 V12, 5 secu, 3 kill chain, 12 paper/live). Kill chain unifiee. Paper/live isoles. DD crypto excl earn passif. Warmup 3 cycles. 22 regression tests. CRO 9.5/10.** |
 | **3 avril AM** | **Fix V10 safety mode DD 90.9% (paper default=False). Vendredi Saint = marches EU/US fermes.** |
 | **3 avril** | **Cleanup V12 : refactor worker.py (3800→3292 lignes, 6 modules extraits core/worker/), ruff lint 600+ fichiers, archive intraday-backtesterV2, 118 tests (bot_service+preflight). 3,116 tests.** |
-| **3 avril** | **V13.0 ROBUSTESSE STRUCTURELLE XXXL : 22 taches, 7 chantiers (R1-R7). TaskQueue PriorityQueue, CycleRunners (9 cycles), WorkerState thread-safe, OrderStateMachine (9 etats), PositionSM (7 etats), EventLogger JSONL, MetricsPipeline SQLite, AnomalyDetector 18 regles, BrokerHealth 4 etats, ContractTesting 3 brokers, PartialDataHandler, ReplayEngine, ShadowMode, deploy.sh+rollback, pre_deploy_check.py. 181 tests robustesse. 3,297 tests total. CRO 8.5/10 (modules PRETS, non cables dans live path).** |
+| **3 avril** | **V13.0 ROBUSTESSE STRUCTURELLE XXXL : 22 taches, 7 chantiers (R1-R7). TaskQueue, CycleRunners, OrderSM, PositionSM, EventLogger, MetricsPipeline, AnomalyDetector, BrokerHealth, ContractTesting, deploy.sh+rollback. 181 tests. 3,297 total.** |
+| **7 avril** | **Futures IBKR live : marge activee, permissions futures, SL/TP software (presets IBKR tuent GTC), bracket OCA standalone** |
+| **8 avril** | **Bug 4 contrats MES au lieu de 1 : triple guard + MAX_FUTURES_CONTRACTS=2 + connexion directe (plus de os.environ mutation). Emergency close 4 MES @ 6784** |
+| **9 avril AM** | **STRAT-015 BB MR Short deploye Binance. Backtest 8+8 strats EU indices : MIB/ESTX50 Spread WF 4/5 +$57K** |
+| **9 avril PM** | **PO decision : 3 futures live. Kill switch 1.5%->5%. Dashboard deep audit : 14 bugs fixes. Chatbot enrichi. CRO 9.0/10 : disconnect, orphan cancel, thresholds YAML** |
+| **9 avril soir** | **Discovery pipeline : 6 candidats backtestes (11 ans). VIX MR WF 5/8, Gold-Equity WF 5/8, MCL TSMOM FAIL, BTC TSMOM FAIL, crypto FAIL** |
+| **10 avril AM** | **CONFRONTATION REALITE : backtest portefeuille 3 ans = -$6,175 (FAIL). TSMOM -$5K, Trend+MR -$2K. Seul Overnight MES positif. 5 strats DISABLED. ROC 1%/an. Erreur : backtests individuels sans test portefeuille** |
+| **10 avril PM** | **PIVOT EU+FUTURES : Sector Rotation DAX/CAC40 ($64/trade, Sharpe 1.17) + EU Gap ESTX50 ($56/trade) + Gold-Equity Div ($47/trade). Backtest portefeuille 4 strats combine : +$6,840 (22.8%/an), WF 3/6 PASS, PF 1.30, corr < 0.12. Deploy live.** |
+| **10 avril soir** | **DOWNLOAD EU INTRADAY 5Y : 601K bars 5min/15min DAX/CAC40/ESTX50 via IBKR Index, 4h13 sur Hetzner. 6 strats EU intraday testees (ORB DAX, MR RSI, Lunch Effect, US Open Impact, Pairs, Macro ECB). 5/6 REJETEES (edge<couts). Une seule gagnante : MacroECB.** |
+| **10 avril nuit** | **V15.3 MACROECB MULTI-INSTRUMENT : 3 indices (DAX +$172/tr, CAC40 +$87, ESTX50 +$45), 69 trades 5 ans, +$7,004, Sharpe 3.18, WF 4/6 yearly. Portfolio combine 4 LIVE+3 MacroECB : 22.8%/an -> 31.7%/an, Sharpe 0.83->1.00 (+20%), MaxDD -2914->-3031 (+4%). Code livre : strategies_v2/futures/macro_ecb.py + core/worker/cycles/macro_ecb_cycle.py + 14 tests PASS. CODE_REVIEW pour deploiement V15.4.** |
 
 ---
 
@@ -590,42 +626,48 @@ Audit CRO : **9.5/10** (12/12 domaines PASS, 67 fixes cumules)
 
 26 phases en 11 jours (22 mars - 1 avril 2026) : Expansion (3->34 strats) -> Critique (purge 9 overfittees) -> Consolidation (WF, VaR, MC) -> Expansion V5 (4 classes) -> Live-Ready V6 (14 modules) -> Hardening V7 (27 bugs) -> CRO V7.2 GO-LIVE -> ROC V7.3 -> Crypto V7.5 (8 strats Binance) -> CRO V7.6 -> BacktesterV2 (event-driven, WF, MC) -> Hardening S3 (fuzzing+stress) -> CRO 9.5/10 -> Dashboard XL + Crypto LIVE V8.5 -> Crypto ROC V9.0 -> Audit CRO V9.0 (27 fixes) -> V9.5 (+13 strats, Hetzner VPS, 265K candles) -> V10.0 Portfolio-Aware (8 modules risk) -> V11 HRP+Kelly deploye -> **Realloc Binance $23K->$10K** -> **V12.0 Regime Engine + RoR + Chaos (15 modules, 15 cmds Telegram, backup daily)**
 
-### AUDIT CRO V13.0 — Score 9.5/10 (toutes reserves corrigees)
+### AUDIT CRO V15.0 — Score 9.0/10
 
-| Domaine | **V13.0** | Amelioration V13 |
+| Domaine | **V15.0** | Amelioration V15 |
 |---------|:-------:|-----------------|
-| D1 Execution ordres | **PASS** | SL MANDATORY (validate_order + CryptoOrderManager), OrderTracker cable, bracket IBKR |
-| D2 Gestion risque | **PASS** | Kill chain unifiee, CycleRunners error boundaries, BrokerHealth init |
-| D3 Integrite donnees | **PASS** | .shift(1), guard ET, timezone zoneinfo |
-| D4 Coherence BT/live | **PASS** | Commissions coherentes ($0 Alpaca, 0.10% Binance, $2 IBKR FX) |
-| D5 Securite | **PASS** | env vars, guards, pre-deploy checklist 6 checks |
-| D6 Moteur backtest | **PASS** | Determinisme, pas de double position |
-| D7 Strategies actives | **PASS** | 11 crypto + 1 FX + 3 EU live, WF validated |
-| D8 Pipeline | **PASS** | CycleRunners (9 cycles), MetricsPipeline, EventLogger actifs |
-| D9 Monitoring | **PASS+** | AnomalyDetector 18 regles, /health enrichi, dead man's switch, ReplayEngine |
-| D10 Infrastructure | **PASS** | deploy.sh canary, SIGTERM ferme positions + cancel ordres + flush metrics |
-| D11 Compliance | **PASS** | PDT rule, tax classifier FR, wash sale detect |
-| D12 Documentation | **PASS** | Synthese V13.0, CLAUDE.md a jour, 3320 tests |
+| D1 Execution ordres | **PASS** | OCA SL+TP, software SL/TP 5min, orphan cancel, disconnect finally |
+| D2 Gestion risque | **PASS** | Daily -5% YAML, triple guard, max 2 contrats, deleverage 3 niveaux |
+| D3 Integrite donnees | **PASS** | .shift(1), guard ET, UTC |
+| D4 Coherence BT/live | **PASS** | State persiste, reconciliation startup+4h, time-exit 48h |
+| D5 Securite | **PASS** | Connexion directe (0 env mutation), port isolation live/paper |
+| D6 Moteur backtest | **PASS** | WF 5 fenetres, no lookahead |
+| D7 Strategies actives | **PASS** | 3 futures LIVE (WF validated) + 11 crypto + PO decision documentee |
+| D8 Pipeline | **PASS** | CycleRunners, ibkr_lock, error boundaries |
+| D9 Monitoring | **PASS** | Dashboard prod, events.jsonl, snapshots 5min, Telegram 15 cmds |
+| D10 Infrastructure | **PASS** | Hetzner VPS, 3 services systemd, IB Gateway watchdog |
+| D11 Compliance | **PASS** | cash_flows.jsonl, journal DB, tax PFU 30% |
+| D12 Documentation | **PASS** | CLAUDE.md + SYNTHESE V15.0 a jour |
 
-**Reserves corrigees (session 3 avril) :**
-- [H-1] CORRIGE : OrderTracker cable dans CryptoOrderManager (DRAFT→VALIDATED→SUBMITTED→FILLED tracke)
-- [H-2] CORRIGE : validate_order() rejette tout ordre sans stop_loss (reduce_only exempte)
-- [H-3] CORRIGE : SIGTERM ferme Binance + cancel Alpaca + flush metrics/events
-- [M-1] CORRIGE : /health enrichi (pid, memory_mb, cpu, uptime, cycles health)
-- [M-2] CORRIGE : CLAUDE.md mis a jour (3320 tests)
-- [M-3] CORRIGE : Dead man's switch dans worker loop (alerte si heartbeat >35min)
-- [M-4] CORRIGE : Couts US alignes sur Alpaca $0 commission
-- [L-1] CORRIGE : gc.collect() a 300MB dans worker loop
-- [L-2] CORRIGE : 23 tests CRO reserves (SL mandatory, OrderTracker, SIGTERM, health, dead man's switch)
+**Critiques fixes (session 9 avril) :**
+- [C-1] CORRIGE : Kill switch thresholds hardcodes 1.5% dans Python → YAML 5%
+- [C-2] CORRIGE : FX paper os.environ mutation → connexion directe
+- [C-3] CORRIGE : Entry not filled → cancelOrder() orphan
+- [C-4] CORRIGE : Disconnect dans finally (598 erreurs clientId eliminees)
+- [C-5] CORRIGE : Kill switch cascade IBKR→crypto sans raison
+
+**Dashboard fixes (session 9 avril) :**
+- 14 bugs fixes : equity curve reelle, drawdown reel, kill switch reset, EUR currency, journal IBKR badge, margin level ratio, correlation calculee, nav cost_basis, strategies count dynamique, tax sans fausses donnees
 
 ### Prochain pas
 
-**ACTIF depuis 2 avril :**
-- IBKR $10K live : 1 FX carry momentum (4 paires), 3 EU intraday (Gap, Sector, Brent), clientId=10/11
-- Binance $10K live : 11 strats crypto, cycle 15min 24/7, paires USDC, dd_equity excl earn
-- Alpaca paper : RSI2 Mean Reversion + daily strategies
-- VPS Hetzner : worker nohup, IB Gateway watchdog, backup quotidien
+**ACTIF depuis 10 avril :**
+- IBKR EUR 9.9K live : **4 strats** (Overnight MES + EU Gap ESTX50 + Sector Rotation DAX/CAC40 + Gold-Equity Div MES), cycle 16h CET
+- Binance $8.7K live : 11 strats crypto codees, 0 signal (vol ratio trop bas, attend correctement)
+- ROC attendu : **~22.8%/an** (backtest 3 ans, $185/mois)
 
-**Allocation cible :** Binance $10K + IBKR $10K (fait) + Alpaca $25K (en attente capital) = $45K
+**Regle de deploiement (lecon V15.1)** :
+- Tout candidat doit passer le **backtest portefeuille combine 3 ans** avec toutes les strats deja actives
+- Plus JAMAIS de deploiement sur backtest isole
+
+**Prochaines etapes :**
+- Valider les premieres semaines live (ROC reel vs backtest)
+- Crypto : attendre breakout vol (les strats existent, le marche non)
+- Explorer strats futures swing 2-5j sur MCL (corr -0.34 avec MES, $10/pt)
+- MIB/ESTX50 Spread en paper monitoring (besoin > 30 trades pour significativite)
 
 **V13.0 operationnel :** CycleRunners actifs (9 cycles, error boundaries), MetricsPipeline SQLite, EventLogger JSONL, AnomalyDetector configure, /health Telegram enrichi. 22 modules robustesse PRETS pour integration Phase 2.

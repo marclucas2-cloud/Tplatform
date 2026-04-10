@@ -788,6 +788,46 @@ def run_futures_paper_cycle():
     _run_futures_cycle(live=False)
 
 
+def run_macro_ecb_paper_cycle():
+    """MacroECB event-driven cycle — paper mode dry_run.
+
+    Triggered ~14:50 Paris on ECB Governing Council meeting days. Fetches
+    DAX/CAC40/ESTX50 5min bars and computes the 30-min move post 14:15
+    announcement. If |move| > 0.15%, emits BUY/SELL signal in direction.
+
+    PAPER MODE : dry_run=True, only logs signals, does NOT send orders.
+    To go live : set dry_run=False and pass a futures_executor callable.
+
+    Backtest 2021-2026 : Sharpe 3.18, +$7,004 / 5 ans, WF 4/6 yearly PASS.
+    """
+    if not _ibkr_lock.acquire(blocking=False):
+        logger.warning("MACRO ECB SKIP — IBKR lock held")
+        return
+    try:
+        from core.worker.cycles.macro_ecb_cycle import run_macro_ecb_cycle
+        # Paper port (4003) by default
+        host = os.environ.get("IBKR_HOST", "127.0.0.1")
+        port = int(os.environ.get("IBKR_PAPER_PORT", "4003"))
+        result = run_macro_ecb_cycle(
+            ibkr_host=host,
+            ibkr_port=port,
+            dry_run=True,  # PAPER : never send real orders
+        )
+        if result.get("skipped"):
+            logger.info(f"  MACRO ECB skipped: {result['skipped']}")
+        elif result.get("signals"):
+            logger.info(f"  MACRO ECB: {len(result['signals'])} signals (DRY RUN, not sent)")
+            for s in result["signals"]:
+                logger.info(f"    -> {s['side']} {s['index_symbol']} @ {s['entry_price']:.2f} "
+                            f"SL={s['stop_loss']:.2f} TP={s['take_profit']:.2f}")
+        else:
+            logger.info("  MACRO ECB: ECB day but no signal (move below threshold)")
+    except Exception as e:
+        logger.error(f"MACRO ECB cycle error: {e}", exc_info=True)
+    finally:
+        _ibkr_lock.release()
+
+
 def _run_futures_cycle(live: bool = False):
     """Futures execution cycle — shared between live and paper.
 
@@ -850,7 +890,7 @@ def _run_futures_cycle(live: bool = False):
         import pandas as pd
         data_dir = Path(__file__).resolve().parent / "data" / "futures"
         data_sources = {}
-        for sym in ["MES", "MNQ"]:
+        for sym in ["MES", "MNQ", "MIB", "ESTX50", "VIX", "MGC", "DAX", "CAC40"]:
             fpath = data_dir / f"{sym}_1D.parquet"
             if fpath.exists():
                 df = pd.read_parquet(fpath)
@@ -881,59 +921,14 @@ def _run_futures_cycle(live: bool = False):
 
         signals = []
 
-        # 1. MES Trend
-        try:
-            from strategies_v2.futures.mes_trend import MESTrend
-            strat = MESTrend()
-            strat.set_data_feed(feed)
-            bar = feed.get_latest_bar("MES")
-            if bar:
-                sig = strat.on_bar(bar, portfolio_state)
-                if sig:
-                    signals.append(("MES Trend", sig))
-                    logger.info(f"    MES Trend: {sig.side} MES @ {bar.close:.2f} SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f} str={sig.strength:.2f}")
-                else:
-                    logger.info("    MES Trend: pas de signal")
-            else:
-                logger.info("    MES Trend: pas de bar disponible")
-        except Exception as e:
-            logger.error(f"    MES Trend error: {e}")
+        # 1. MES Trend — DISABLED (PO decision: Sharpe faible, redondant avec Trend+MR)
+        logger.info("    MES Trend: DISABLED (PO P0)")
 
-        # 2. MES Trend+MR Hybrid (RSI2 + EMA50 filter)
-        try:
-            from strategies_v2.futures.mes_trend_mr import MESTrendMR
-            strat_mr = MESTrendMR()
-            strat_mr.set_data_feed(feed)
-            bar = feed.get_latest_bar("MES")
-            if bar:
-                sig = strat_mr.on_bar(bar, portfolio_state)
-                if sig:
-                    signals.append(("MES Trend+MR", sig))
-                    logger.info(f"    MES Trend+MR: {sig.side} MES @ {bar.close:.2f} SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f} str={sig.strength:.2f}")
-                else:
-                    logger.info("    MES Trend+MR: pas de signal")
-            else:
-                logger.info("    MES Trend+MR: pas de bar disponible")
-        except Exception as e:
-            logger.error(f"    MES Trend+MR error: {e}")
+        # 2. MES Trend+MR — DISABLED (backtest 3 ans: -$2,240, WR 35%)
+        logger.info("    MES Trend+MR: DISABLED (backtest 3 ans NEGATIF)")
 
-        # 3. MES 3-Day Stretch Mean Reversion
-        try:
-            from strategies_v2.futures.mes_3day_stretch import MES3DayStretch
-            strat_3d = MES3DayStretch()
-            strat_3d.set_data_feed(feed)
-            bar = feed.get_latest_bar("MES")
-            if bar:
-                sig = strat_3d.on_bar(bar, portfolio_state)
-                if sig:
-                    signals.append(("MES 3-Day Stretch", sig))
-                    logger.info(f"    MES 3-Day Stretch: {sig.side} MES @ {bar.close:.2f} SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f}")
-                else:
-                    logger.info("    MES 3-Day Stretch: pas de signal")
-            else:
-                logger.info("    MES 3-Day Stretch: pas de bar disponible")
-        except Exception as e:
-            logger.error(f"    MES 3-Day Stretch error: {e}")
+        # 3. MES 3-Day Stretch — DISABLED (PO P0: SHORT mecanique en bull = catastrophique)
+        logger.info("    MES 3-Day Stretch: DISABLED (PO P0)")
 
         # 4. Overnight Buy-Close MES
         try:
@@ -951,24 +946,12 @@ def _run_futures_cycle(live: bool = False):
         except Exception as e:
             logger.error(f"    Overnight MES error: {e}")
 
-        # 5. Overnight Buy-Close MNQ
-        if "MNQ" in data_sources:
-            try:
-                strat_on_mnq = OvernightBuyClose(symbol="MNQ")
-                strat_on_mnq.set_data_feed(feed)
-                bar_mnq = feed.get_latest_bar("MNQ")
-                if bar_mnq:
-                    sig = strat_on_mnq.on_bar(bar_mnq, portfolio_state)
-                    if sig:
-                        signals.append(("Overnight MNQ", sig))
-                        logger.info(f"    Overnight MNQ: {sig.side} @ {bar_mnq.close:.2f}")
-                    else:
-                        logger.info("    Overnight MNQ: pas de signal")
-            except Exception as e:
-                logger.error(f"    Overnight MNQ error: {e}")
+        # 5. Overnight Buy-Close MNQ — DISABLED (PO P0: doublon du MES)
+        logger.info("    Overnight MNQ: DISABLED (PO P0)")
 
-        # 6. TSMOM Multi (MES, MNQ, MCL, MGC)
-        for tsmom_sym in ["MES", "MNQ", "MCL", "MGC"]:
+        # 6. TSMOM — DISABLED (backtest 3 ans: -$5,118, WR 35%, CATASTROPHIQUE)
+        logger.info("    TSMOM MES: DISABLED (backtest 3 ans NEGATIF)")
+        for tsmom_sym in []:
             if tsmom_sym not in data_sources:
                 continue
             try:
@@ -985,6 +968,63 @@ def _run_futures_cycle(live: bool = False):
                         logger.info(f"    TSMOM {tsmom_sym}: pas de signal")
             except Exception as e:
                 logger.error(f"    TSMOM {tsmom_sym} error: {e}")
+
+        # 6b. EU Gap Open (ESTX50) — priority 9
+        if "ESTX50" in data_sources:
+            try:
+                from strategies_v2.futures.eu_gap_open import EUGapOpen
+                strat_gap = EUGapOpen()
+                strat_gap.set_data_feed(feed)
+                bar_estx = feed.get_latest_bar("ESTX50")
+                if bar_estx:
+                    sig = strat_gap.on_bar(bar_estx, portfolio_state)
+                    if sig:
+                        signals.append(("EU Gap Open", sig))
+                        logger.info(f"    EU Gap Open: {sig.side} ESTX50 @ {bar_estx.close:.2f} str={sig.strength:.2f}")
+                    else:
+                        logger.info("    EU Gap Open: pas de gap > 1%")
+                else:
+                    logger.info("    EU Gap Open: pas de bar ESTX50")
+            except Exception as e:
+                logger.error(f"    EU Gap Open error: {e}")
+
+        # 6c. Sector Rotation EU (DAX/CAC40) — priority 6, weekly Monday
+        if "DAX" in data_sources and "CAC40" in data_sources:
+            try:
+                from strategies_v2.futures.sector_rotation_eu import SectorRotationEU
+                strat_rot = SectorRotationEU()
+                strat_rot.set_data_feed(feed)
+                bar_dax = feed.get_latest_bar("DAX")
+                if bar_dax:
+                    sig = strat_rot.on_bar(bar_dax, portfolio_state)
+                    if sig:
+                        signals.append(("Sector Rotation", sig))
+                        logger.info(f"    Sector Rotation: {sig.side} {sig.symbol} @ {bar_dax.close:.2f} str={sig.strength:.2f}")
+                    else:
+                        logger.info("    Sector Rotation: pas de signal (pas lundi ou pas de divergence)")
+                else:
+                    logger.info("    Sector Rotation: pas de bar DAX")
+            except Exception as e:
+                logger.error(f"    Sector Rotation error: {e}")
+
+        # 6c. Gold-Equity Divergence — PAPER only
+        if "MGC" in data_sources:
+            try:
+                from strategies_v2.futures.gold_equity_divergence import GoldEquityDivergence
+                strat_ge = GoldEquityDivergence()
+                strat_ge.set_data_feed(feed)
+                bar = feed.get_latest_bar("MES")
+                if bar:
+                    sig = strat_ge.on_bar(bar, portfolio_state)
+                    if sig:
+                        signals.append(("Gold-Equity Div", sig))
+                        logger.info(f"    Gold-Equity Div: {sig.side} MES @ {bar.close:.2f} str={sig.strength:.2f}")
+                    else:
+                        logger.info("    Gold-Equity Div: pas de signal (pas de divergence)")
+                else:
+                    logger.info("    Gold-Equity Div: pas de bar MES")
+            except Exception as e:
+                logger.error(f"    Gold-Equity Div error: {e}")
 
         # 7. Commodity Seasonality (MCL, MGC) — paper monitoring
         for season_sym in ["MCL", "MGC"]:
@@ -1025,6 +1065,27 @@ def _run_futures_cycle(live: bool = False):
                 logger.error(f"    MES/MNQ Pairs error: {e}")
         else:
             logger.info("    MES/MNQ Pairs: SKIP — pas de data MNQ")
+
+        # 9. MIB/ESTX50 Spread (Relative Value) — paper only
+        if "MIB" in data_sources and "ESTX50" in data_sources:
+            try:
+                from strategies_v2.futures.mib_estx50_spread import MIBEstx50Spread
+                strat_spread = MIBEstx50Spread()
+                strat_spread.set_data_feed(feed)
+                bar_mib = feed.get_latest_bar("MIB")
+                if bar_mib:
+                    sig = strat_spread.on_bar(bar_mib, portfolio_state)
+                    if sig:
+                        signals.append(("MIB/ESTX50 Spread", sig))
+                        logger.info(f"    MIB/ESTX50 Spread: {sig.side} MIB @ {bar_mib.close:.2f} str={sig.strength:.2f}")
+                    else:
+                        logger.info("    MIB/ESTX50 Spread: pas de signal (z-score dans le range)")
+                else:
+                    logger.info("    MIB/ESTX50 Spread: pas de bar MIB")
+            except Exception as e:
+                logger.error(f"    MIB/ESTX50 Spread error: {e}")
+        else:
+            logger.info("    MIB/ESTX50 Spread: SKIP — data MIB/ESTX50 manquante")
 
         logger.info(f"  FUTURES PAPER: {len(signals)} signal(s)")
         _log_event("cycle_end", "futures_paper", {
@@ -1159,20 +1220,41 @@ def _run_futures_cycle(live: bool = False):
             pass  # keep previous _ibkr_real_pos
 
         # HARD LIMIT: max 2 futures contracts total across all symbols
-        # MES = ~$33K notional, 2 = ~$66K. Never exceed this on a $10K account.
         MAX_FUTURES_CONTRACTS = 2
         _total_existing = sum(abs(int(v)) for v in _ibkr_real_pos.values())
-        if _total_existing >= MAX_FUTURES_CONTRACTS:
+        _slots_available = MAX_FUTURES_CONTRACTS - _total_existing
+
+        if _slots_available <= 0:
             logger.warning(
                 f"    FUTURES {_mode}: HARD LIMIT — {_total_existing} contracts already open "
                 f"(max {MAX_FUTURES_CONTRACTS}). Skipping all new entries."
             )
-            signals = []  # clear all signals
+            signals = []
 
-        # Track symbols already traded THIS cycle (prevents 2nd+ signal on same sym)
+        # Sort signals by PRIORITY (high conviction/rare signals first)
+        # VIX MR = priority 10 (rare, haute conviction)
+        # Gold-Equity = priority 7
+        # Overnight = priority 5
+        # Trend+MR = priority 4
+        # TSMOM = priority 3
+        # Others = priority 1
+        _STRAT_PRIORITY = {
+            "EU Gap Open": 9,
+            "Brent Lag MCL": 8,
+            "Gold-Equity Div": 7,
+            "Sector Rotation": 6,
+            "Overnight MES": 5,
+        }
+        signals.sort(key=lambda x: _STRAT_PRIORITY.get(x[0], 1), reverse=True)
+
+        # Track symbols already traded THIS cycle
         _traded_this_cycle = set()
+        _contracts_opened = 0
 
         for name, sig in signals:
+            if _contracts_opened >= _slots_available:
+                logger.info(f"    {name}: SKIP — no slots left ({_slots_available} available, {_contracts_opened} used)")
+                continue
             sym = sig.symbol
 
             # GUARD 1: state file says we already have a position
@@ -1206,12 +1288,33 @@ def _run_futures_cycle(live: bool = False):
                 _fill_price = _entry_trade.orderStatus.avgFillPrice or 0
 
                 if _entry_trade.orderStatus.status != "Filled":
-                    logger.warning(f"    {name}: entry not filled ({_entry_trade.orderStatus.status})")
+                    logger.warning(f"    {name}: entry not filled ({_entry_trade.orderStatus.status}) — cancelling")
+                    try:
+                        ibkr._ib.cancelOrder(_entry_trade.order)
+                        time.sleep(1); ibkr._ib.sleep(0.5)
+                    except Exception:
+                        pass
                     continue
 
                 # Step 2: OCA SL + TP (standalone, no parentId)
+                # CRITICAL: recalculate SL/TP from FILL price, not signal price
+                # Signal price = bar.close at signal time, fill price = actual execution
                 _exit_side = "BUY" if sig.side == "SELL" else "SELL"
                 _oca = f"OCA_{sym}_{_uuid.uuid4().hex[:8]}"
+                _signal_price = sig.stop_loss + sig.take_profit  # just for logging
+                _sl_offset = abs(sig.stop_loss - _fill_price) if sig.stop_loss else 20
+                _tp_offset = abs(sig.take_profit - _fill_price) if sig.take_profit else 40
+                # Use the LARGER of: original offset or recalculated from fill
+                # Recalculate from fill price to ensure SL is on correct side
+                if sig.side == "BUY":
+                    _real_sl = _fill_price - _sl_offset
+                    _real_tp = _fill_price + _tp_offset
+                else:  # SELL
+                    _real_sl = _fill_price + _sl_offset
+                    _real_tp = _fill_price - _tp_offset
+                # Override signal SL/TP with fill-based values
+                sig.stop_loss = round(_real_sl, 2)
+                sig.take_profit = round(_real_tp, 2)
 
                 _sl = StopOrder(_exit_side, qty, sig.stop_loss)
                 _sl.tif = "GTC"; _sl.ocaGroup = _oca; _sl.ocaType = 1; _sl.outsideRth = True
@@ -1243,6 +1346,30 @@ def _run_futures_cycle(live: bool = False):
                 }
                 _traded_this_cycle.add(sym)
                 n_fut_orders += 1
+                _contracts_opened += 1
+                _log_event("futures_trade", name, {
+                    "mode": _mode, "symbol": sym, "side": sig.side,
+                    "qty": qty, "fill_price": _fill_price,
+                    "sl": sig.stop_loss, "tp": sig.take_profit,
+                    "oca_group": _oca, "equity": equity,
+                })
+                # Write to journal DB for dashboard
+                try:
+                    import sqlite3 as _sql
+                    _jdb = "live_journal.db" if live else "paper_journal.db"
+                    _jpath = ROOT / "data" / _jdb
+                    _jconn = _sql.connect(str(_jpath))
+                    _jconn.execute(
+                        "INSERT OR IGNORE INTO trades (trade_id, strategy, instrument, direction, "
+                        "quantity, entry_price, entry_time, status, broker, asset_class) "
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, 'open', 'IBKR', 'futures')",
+                        (_oca, name, sym, sig.side, qty, _fill_price,
+                         datetime.now(UTC).isoformat()),
+                    )
+                    _jconn.commit()
+                    _jconn.close()
+                except Exception as _je:
+                    logger.debug(f"Journal write skip: {_je}")
                 _send_alert(
                     f"FUTURES {_mode}: {sig.side} {sym} @ {_fill_price:.2f}\n"
                     f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f}\n"
@@ -1265,6 +1392,11 @@ def _run_futures_cycle(live: bool = False):
     except Exception as e:
         logger.error(f"FUTURES PAPER CYCLE ERROR: {e}", exc_info=True)
     finally:
+        # Disconnect IBKR to free clientId for next cycle
+        try:
+            ibkr.disconnect()
+        except Exception:
+            pass
         _ibkr_lock.release()
 
 
@@ -1285,33 +1417,37 @@ def run_fx_paper_cycle():
         logger.info("=== FX PAPER CYCLE ===")
         _log_event("cycle_start", "fx_paper")
 
-        # Connect to IBKR paper (port 4003)
-        _saved_port = os.environ.get("IBKR_PORT")
-        _saved_paper = os.environ.get("IBKR_PAPER")
-        os.environ["IBKR_PORT"] = os.environ.get("IBKR_PAPER_PORT", "4003")
-        os.environ["IBKR_PAPER"] = "true"
-
+        # Connect to IBKR paper — direct connection, NO os.environ mutation
+        # (CRO fix: os.environ mutation causes race conditions with other threads)
+        _fx_paper_port = int(os.environ.get("IBKR_PAPER_PORT", "4003"))
         try:
-            # clientId=2 pour eviter conflit avec EU paper (clientId=1) sur port 4003
+            from ib_insync import IB as _FxPaperIB
             import random as _fx_rng
+            _fx_ib = _FxPaperIB()
+            _ibkr_host = os.environ.get("IBKR_HOST", "127.0.0.1")
+            _fx_ib.connect(_ibkr_host, _fx_paper_port, clientId=_fx_rng.randint(80, 89), timeout=10)
+            import time as _fxt; _fxt.sleep(3)
 
-            from core.broker.ibkr_adapter import IBKRBroker
-            ibkr = IBKRBroker(client_id=_fx_rng.randint(80, 89))
+            class _FxPaperIBKR:
+                def __init__(self, ib):
+                    self._ib = ib
+                def get_account_info(self):
+                    acct = {}
+                    for a in self._ib.accountSummary():
+                        if a.tag == "NetLiquidation":
+                            acct["equity"] = float(a.value)
+                        elif a.tag == "TotalCashValue":
+                            acct["cash"] = float(a.value)
+                    return acct
+                def disconnect(self):
+                    self._ib.disconnect()
+
+            ibkr = _FxPaperIBKR(_fx_ib)
             ibkr_info = ibkr.get_account_info()
             equity = float(ibkr_info.get("equity", 0))
         except Exception as e:
-            logger.warning(f"  FX PAPER SKIP — IBKR paper not connected: {e}")
+            logger.warning(f"  FX PAPER SKIP — IBKR paper port {_fx_paper_port} not connected: {e}")
             return
-        finally:
-            # Restore env vars
-            if _saved_port is not None:
-                os.environ["IBKR_PORT"] = _saved_port
-            elif "IBKR_PORT" in os.environ:
-                del os.environ["IBKR_PORT"]
-            if _saved_paper is not None:
-                os.environ["IBKR_PAPER"] = _saved_paper
-            elif "IBKR_PAPER" in os.environ:
-                del os.environ["IBKR_PAPER"]
 
         if equity <= 0:
             logger.warning("  FX PAPER SKIP — equity=0")
@@ -1390,6 +1526,10 @@ def run_fx_paper_cycle():
     except Exception as e:
         logger.error(f"FX PAPER CYCLE ERROR: {e}", exc_info=True)
     finally:
+        try:
+            ibkr.disconnect()
+        except Exception:
+            pass
         _ibkr_lock.release()
 
 
@@ -1506,8 +1646,22 @@ def run_live_risk_cycle():
                 level="critical"
             )
 
-        # Check kill switch triggers
-        kill_switch = LiveKillSwitch()
+        # Check kill switch triggers — use thresholds from limits_live.yaml
+        _ks_thresholds = {}
+        try:
+            import yaml as _ks_yaml
+            _limits = _ks_yaml.safe_load((ROOT / "config" / "limits_live.yaml").read_text(encoding="utf-8"))
+            _cb = _limits.get("circuit_breakers", {})
+            _ks_cfg = _limits.get("kill_switch", {})
+            _ks_thresholds = {
+                "daily_loss_pct": _cb.get("daily_loss_pct", 0.05),
+                "hourly_loss_pct": _cb.get("hourly_loss_pct", 0.03),
+                "trailing_5d_loss_pct": _ks_cfg.get("trailing_5d_loss_pct", 0.08),
+                "monthly_loss_pct": _ks_cfg.get("max_monthly_loss_pct", 0.12),
+            }
+        except Exception:
+            pass
+        kill_switch = LiveKillSwitch(thresholds=_ks_thresholds)
         ks_result = kill_switch.check_automatic_triggers(
             daily_pnl=daily_pnl_pct * risk_mgr.capital,
             capital=risk_mgr.capital,
@@ -1627,6 +1781,36 @@ def run_live_risk_cycle():
             logger.warning(f"VixStressGuard skip: {e}")
 
         logger.info(f"Live risk cycle OK — equity=${equity:,.0f}, daily_pnl={daily_pnl_pct:.2%}")
+
+        # --- Write portfolio snapshot for dashboard ---
+        try:
+            _snap_dir = ROOT / "logs" / "portfolio"
+            _snap_dir.mkdir(parents=True, exist_ok=True)
+            _snap_file = _snap_dir / f"{datetime.now(UTC).strftime('%Y-%m-%d')}.jsonl"
+            _snap = {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "portfolio": {
+                    "brokers": [
+                        {"broker": "ibkr", "equity": equity, "cash": equity, "positions": 0},
+                    ],
+                    "total_equity": equity,
+                    "daily_pnl_pct": daily_pnl_pct,
+                },
+            }
+            # Add Binance equity if available
+            try:
+                from core.broker.binance_broker import BinanceBroker
+                _bnb = BinanceBroker()
+                _bnb_info = _bnb.get_account_info()
+                _bnb_eq = _bnb_info.get("equity", 0)
+                _snap["portfolio"]["brokers"].append({"broker": "binance", "equity": _bnb_eq})
+                _snap["portfolio"]["total_equity"] += _bnb_eq
+            except Exception:
+                pass
+            with open(_snap_file, "a", encoding="utf-8") as f:
+                f.write(json.dumps(_snap, default=str) + "\n")
+        except Exception as _se:
+            logger.debug(f"Portfolio snapshot skip: {_se}")
 
         # --- SOFTWARE SL/TP for futures positions ---
         # IBKR presets kill GTC orders on futures. This is the backup.
@@ -3771,6 +3955,9 @@ def main():
         "always_on_carry": CycleRunner("always_on_carry", run_always_on_carry_cycle,
                                         alert_callback=_cycle_alert,
                                         metrics_callback=_cycle_metrics_cb),
+        "macro_ecb": CycleRunner("macro_ecb", run_macro_ecb_paper_cycle,
+                                  alert_callback=_cycle_alert,
+                                  metrics_callback=_cycle_metrics_cb),
     }
     logger.info(f"  CycleRunners initialized: {list(_runners.keys())}")
 
@@ -3810,6 +3997,15 @@ def main():
             run_cross_asset_momentum_cycle._done_today = True
         if is_weekday() and now_paris.hour < 16:
             run_cross_asset_momentum_cycle._done_today = False
+
+        # === MACRO ECB EVENT DRIVEN (lun-ven, 14h50 Paris, jours BCE only) ===
+        # Le module skip lui-meme les jours non-BCE; on declenche tous les jours
+        # de semaine a 14h50 par securite. Mode PAPER (dry_run=True) pour V15.3.
+        if is_weekday() and now_paris.hour == 14 and now_paris.minute >= 50 and not getattr(run_macro_ecb_paper_cycle, '_done_today', False):
+            _runners["macro_ecb"].run()
+            run_macro_ecb_paper_cycle._done_today = True
+        if is_weekday() and now_paris.hour < 14:
+            run_macro_ecb_paper_cycle._done_today = False
 
         # === HEARTBEAT toutes les 30 min (local log only, y compris weekends) ===
         if time.time() - last_heartbeat >= HEARTBEAT_INTERVAL:
