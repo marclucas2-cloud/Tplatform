@@ -242,14 +242,15 @@ def run_macro_ecb_cycle(
 
                 if not dry_run and futures_executor is not None:
                     try:
-                        ok = futures_executor(sig)
+                        # Pass the active IBKR connection so executor can place orders
+                        ok = futures_executor(sig, ib)
                         if ok:
                             result["sent_orders"].append(sig)
                             logger.info(f"    [{sym}] Order sent")
                         else:
                             logger.warning(f"    [{sym}] Order rejected by executor")
                     except Exception as e:
-                        logger.error(f"    [{sym}] Order error: {e}")
+                        logger.error(f"    [{sym}] Order error: {e}", exc_info=True)
                 elif dry_run:
                     logger.info(f"    [{sym}] DRY-RUN: not sending order")
             else:
