@@ -81,8 +81,8 @@ def run_preflight(block_on_failure: bool = True) -> PreflightResult:
     # 3. IBKR paper (port 4003 — warning only)
     _check_ibkr_paper(result)
 
-    # 4. Data FX parquets freshness
-    _check_fx_data(result)
+    # 4. Data FX — DISABLED (IBIE France interdit levier FX retail, 0 strat FX active)
+    # _check_fx_data(result)
 
     # 5. Data crypto API
     _check_crypto_data(result)
