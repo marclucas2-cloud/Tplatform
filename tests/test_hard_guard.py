@@ -247,15 +247,15 @@ class TestCircuitBreakerGuard:
         assert triggered1 and triggered2, "Circuit breaker should persist"
 
     def test_weekly_loss_triggers_sizing_reduction(self, rm):
-        """Weekly loss > 3% triggers REDUCE_SIZING action."""
+        """Weekly loss > 8% triggers REDUCE_SIZING action."""
         portfolio = _make_portfolio(equity=10_000)
-        result = rm.check_all_limits(portfolio, weekly_pnl_pct=-0.04)
+        result = rm.check_all_limits(portfolio, weekly_pnl_pct=-0.09)
         assert "REDUCE_SIZING_50" in result["actions"]
 
     def test_monthly_loss_triggers_close_all(self, rm):
-        """Monthly loss > 5% triggers CLOSE_ALL_REVIEW."""
+        """Monthly loss > 12% triggers CLOSE_ALL_REVIEW."""
         portfolio = _make_portfolio(equity=10_000)
-        result = rm.check_all_limits(portfolio, monthly_pnl_pct=-0.06)
+        result = rm.check_all_limits(portfolio, monthly_pnl_pct=-0.13)
         assert not result["passed"]
         assert "CLOSE_ALL_REVIEW" in result["actions"]
 
@@ -483,7 +483,7 @@ class TestKillSwitchGuard:
     def test_daily_loss_triggers_kill_switch(self, kill_switch):
         """Daily loss exceeding threshold triggers kill switch."""
         result = kill_switch.check_automatic_triggers(
-            daily_pnl=-200,
+            daily_pnl=-600,  # -6% > -5% threshold
             capital=10_000,
         )
         assert result["triggered"]
@@ -724,15 +724,15 @@ class TestStrategyConcentrationGuard:
 class TestDeleveragingGuard:
     """Verify progressive deleveraging triggers at correct DD thresholds."""
 
-    def test_level_1_at_1pct_dd(self, rm):
-        """DD of 1% triggers Level 1 (30% reduction)."""
-        level, reduction, msg = rm.check_progressive_deleveraging(0.01)
+    def test_level_1_at_3pct_dd(self, rm):
+        """DD of 3% triggers Level 1 (30% reduction)."""
+        level, reduction, msg = rm.check_progressive_deleveraging(0.03)
         assert level == 1
         assert reduction == pytest.approx(0.30)
 
-    def test_level_2_at_1_5pct_dd(self, rm):
-        """DD of 1.5% triggers Level 2 (50% reduction)."""
-        level, reduction, msg = rm.check_progressive_deleveraging(0.015)
+    def test_level_2_at_5pct_dd(self, rm):
+        """DD of 5% triggers Level 2 (50% reduction)."""
+        level, reduction, msg = rm.check_progressive_deleveraging(0.05)
         assert level == 2
         assert reduction == pytest.approx(0.50)
 
