@@ -111,10 +111,10 @@ class TestInitialState:
 
     def test_default_thresholds_loaded(self, ks):
         """Default thresholds should be loaded."""
-        assert ks.thresholds["daily_loss_pct"] == 0.015
-        assert ks.thresholds["trailing_5d_loss_pct"] == 0.03
-        assert ks.thresholds["monthly_loss_pct"] == 0.05
-        assert ks.thresholds["strategy_loss_pct"] == 0.02
+        assert ks.thresholds["daily_loss_pct"] == 0.05
+        assert ks.thresholds["trailing_5d_loss_pct"] == 0.08
+        assert ks.thresholds["monthly_loss_pct"] == 0.12
+        assert ks.thresholds["strategy_loss_pct"] == 0.05
 
 
 # =============================================================================
@@ -125,17 +125,17 @@ class TestDailyLossTrigger:
     def test_daily_loss_triggers(self, ks):
         """Daily loss exceeding threshold should trigger."""
         result = ks.check_automatic_triggers(
-            daily_pnl=-200.0,
+            daily_pnl=-600.0,
             capital=10_000.0,
         )
         assert result["triggered"] is True
         assert result["trigger_type"] == "DAILY_LOSS"
-        assert "-1.50%" in result["reason"]
+        assert "-6.00%" in result["reason"]
 
     def test_daily_loss_within_threshold(self, ks):
         """Daily loss within threshold should NOT trigger."""
         result = ks.check_automatic_triggers(
-            daily_pnl=-100.0,  # -1.0% < -1.5% threshold
+            daily_pnl=-400.0,  # -4.0% < -5.0% threshold
             capital=10_000.0,
         )
         assert result["triggered"] is False
@@ -157,9 +157,9 @@ class TestRolling5dTrigger:
     def test_rolling_5d_triggers(self, ks):
         """Rolling 5-day loss exceeding threshold should trigger."""
         result = ks.check_automatic_triggers(
-            daily_pnl=-50.0,  # daily OK
+            daily_pnl=-100.0,  # daily OK (-1%)
             capital=10_000.0,
-            rolling_5d_pnl=-400.0,  # -4% > -3% threshold
+            rolling_5d_pnl=-900.0,  # -9% > -8% threshold
         )
         assert result["triggered"] is True
         assert result["trigger_type"] == "ROLLING_5D_LOSS"
@@ -167,9 +167,9 @@ class TestRolling5dTrigger:
     def test_rolling_5d_within_threshold(self, ks):
         """Rolling 5-day loss within threshold should NOT trigger."""
         result = ks.check_automatic_triggers(
-            daily_pnl=-50.0,
+            daily_pnl=-100.0,
             capital=10_000.0,
-            rolling_5d_pnl=-200.0,  # -2% < -3% threshold
+            rolling_5d_pnl=-600.0,  # -6% < -8% threshold
         )
         assert result["triggered"] is False
 
@@ -182,9 +182,9 @@ class TestMonthlyLossTrigger:
     def test_monthly_loss_triggers(self, ks):
         """Monthly loss exceeding threshold should trigger."""
         result = ks.check_automatic_triggers(
-            daily_pnl=-50.0,
+            daily_pnl=-100.0,
             capital=10_000.0,
-            monthly_pnl=-600.0,  # -6% > -5% threshold
+            monthly_pnl=-1300.0,  # -13% > -12% threshold
         )
         assert result["triggered"] is True
         assert result["trigger_type"] == "MONTHLY_LOSS"
@@ -192,9 +192,9 @@ class TestMonthlyLossTrigger:
     def test_monthly_loss_within_threshold(self, ks):
         """Monthly loss within threshold should NOT trigger."""
         result = ks.check_automatic_triggers(
-            daily_pnl=-50.0,
+            daily_pnl=-100.0,
             capital=10_000.0,
-            monthly_pnl=-400.0,  # -4% < -5% threshold
+            monthly_pnl=-1000.0,  # -10% < -12% threshold
         )
         assert result["triggered"] is False
 
@@ -207,9 +207,9 @@ class TestStrategyTrigger:
     def test_strategy_loss_triggers(self, ks):
         """Per-strategy loss exceeding default threshold should trigger."""
         result = ks.check_automatic_triggers(
-            daily_pnl=-50.0,
+            daily_pnl=-100.0,
             capital=10_000.0,
-            strategy_pnls={"orb_v2": -250.0},  # -2.5% > -2% threshold
+            strategy_pnls={"orb_v2": -600.0},  # -6% > -5% threshold
         )
         assert result["triggered"] is True
         assert result["trigger_type"] == "STRATEGY_LOSS"
@@ -219,9 +219,9 @@ class TestStrategyTrigger:
     def test_strategy_loss_within_threshold(self, ks):
         """Per-strategy loss within threshold should NOT trigger."""
         result = ks.check_automatic_triggers(
-            daily_pnl=-50.0,
+            daily_pnl=-100.0,
             capital=10_000.0,
-            strategy_pnls={"orb_v2": -150.0},  # -1.5% < -2% threshold
+            strategy_pnls={"orb_v2": -400.0},  # -4% < -5% threshold
         )
         assert result["triggered"] is False
 
@@ -411,7 +411,7 @@ class TestStatusReport:
         """Status should include threshold configuration."""
         status = ks.get_status()
         assert "thresholds" in status
-        assert status["thresholds"]["daily_loss_pct"] == 0.015
+        assert status["thresholds"]["daily_loss_pct"] == 0.05
 
 
 # =============================================================================
@@ -501,44 +501,42 @@ class TestPaperContinuesWhenLiveKilled:
 
 class TestThresholdsWith10KCapital:
     def test_10k_daily_threshold(self, ks):
-        """With $10K capital, -1.5% daily = -$150 loss triggers."""
-        # -$149 should NOT trigger
-        result = ks.check_automatic_triggers(daily_pnl=-149.0, capital=10_000.0)
+        """With $10K capital, -5% daily = -$500 loss triggers."""
+        result = ks.check_automatic_triggers(daily_pnl=-499.0, capital=10_000.0)
         assert result["triggered"] is False
 
-        # -$151 should trigger
-        result = ks.check_automatic_triggers(daily_pnl=-151.0, capital=10_000.0)
+        result = ks.check_automatic_triggers(daily_pnl=-501.0, capital=10_000.0)
         assert result["triggered"] is True
 
     def test_10k_rolling_threshold(self, ks):
-        """With $10K capital, -3% rolling = -$300 loss triggers."""
+        """With $10K capital, -8% rolling = -$800 loss triggers."""
         result = ks.check_automatic_triggers(
-            daily_pnl=-50.0,
+            daily_pnl=-100.0,
             capital=10_000.0,
-            rolling_5d_pnl=-299.0,
+            rolling_5d_pnl=-799.0,
         )
         assert result["triggered"] is False
 
         result = ks.check_automatic_triggers(
-            daily_pnl=-50.0,
+            daily_pnl=-100.0,
             capital=10_000.0,
-            rolling_5d_pnl=-301.0,
+            rolling_5d_pnl=-801.0,
         )
         assert result["triggered"] is True
 
     def test_10k_monthly_threshold(self, ks):
-        """With $10K capital, -5% monthly = -$500 loss triggers."""
+        """With $10K capital, -12% monthly = -$1200 loss triggers."""
         result = ks.check_automatic_triggers(
-            daily_pnl=-50.0,
+            daily_pnl=-100.0,
             capital=10_000.0,
-            monthly_pnl=-499.0,
+            monthly_pnl=-1199.0,
         )
         assert result["triggered"] is False
 
         result = ks.check_automatic_triggers(
-            daily_pnl=-50.0,
+            daily_pnl=-100.0,
             capital=10_000.0,
-            monthly_pnl=-501.0,
+            monthly_pnl=-1201.0,
         )
         assert result["triggered"] is True
 
@@ -585,10 +583,10 @@ class TestTriggerPriority:
     def test_daily_checked_first(self, ks):
         """When multiple triggers are breached, daily should fire first."""
         result = ks.check_automatic_triggers(
-            daily_pnl=-200.0,
+            daily_pnl=-600.0,
             capital=10_000.0,
-            rolling_5d_pnl=-400.0,
-            monthly_pnl=-600.0,
-            strategy_pnls={"test": -300.0},
+            rolling_5d_pnl=-900.0,
+            monthly_pnl=-1300.0,
+            strategy_pnls={"test": -600.0},
         )
         assert result["trigger_type"] == "DAILY_LOSS"
