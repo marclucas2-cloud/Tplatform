@@ -110,8 +110,9 @@ def _make_mock_ib(positions: list | None = None, fill_price: float = 18005.0,
     ib.positions.return_value = pos_objs
 
     # ib.reqContractDetails() -> [ContractDetails(contract=...)]
+    # IBKR uses the index symbol for futures (DAX→FDXM, CAC40→FCE, ESTX50→FESX)
     contract = MagicMock()
-    contract.symbol = "FDXM"
+    contract.symbol = "DAX"
     details = MagicMock()
     details.contract = contract
     ib.reqContractDetails.return_value = [details]

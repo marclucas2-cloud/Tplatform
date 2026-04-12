@@ -809,8 +809,8 @@ def _make_macro_ecb_executor(mode: str):
     # Closure-local tracking of positions opened during this cycle
     opened_this_cycle: dict = {}
 
-    # Index → future + exchange mapping
-    INDEX_TO_FUTURE = {"DAX": "FDXM", "CAC40": "FCE", "ESTX50": "FESX"}
+    # IBKR uses the INDEX symbol to qualify futures (DAX→FDXM, CAC40→FCE, ESTX50→FESX)
+    # ib.positions() also returns p.contract.symbol = "DAX" (not "FDXM")
     INDEX_TO_EXCHANGE = {"DAX": "EUREX", "CAC40": "MONEP", "ESTX50": "EUREX"}
     MAX_FUTURES_CONTRACTS = 2
 
@@ -844,10 +844,10 @@ def _make_macro_ecb_executor(mode: str):
             )
             return False
 
-        # 3. Map index to future
-        future_sym = INDEX_TO_FUTURE.get(sig.symbol)
+        # 3. Map index to exchange (IBKR uses index symbol for future qualification)
+        future_sym = sig.symbol
         exchange = INDEX_TO_EXCHANGE.get(sig.symbol)
-        if not future_sym or not exchange:
+        if not exchange:
             logger.error(f"    MACRO ECB: unknown index {sig.symbol}")
             return False
 
@@ -857,7 +857,7 @@ def _make_macro_ecb_executor(mode: str):
             return False
 
         try:
-            # 5. Qualify future contract (EUREX for FDXM/FESX, MONEP for FCE)
+            # 5. Qualify future contract (IBKR: Future("DAX") → FDXM, Future("ESTX50") → FESX)
             fut = IbFuture(future_sym, exchange=exchange, currency="EUR")
             details = ib.reqContractDetails(fut)
             if not details:
