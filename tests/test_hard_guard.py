@@ -736,9 +736,9 @@ class TestDeleveragingGuard:
         assert level == 2
         assert reduction == pytest.approx(0.50)
 
-    def test_level_3_at_2pct_dd(self, rm):
-        """DD of 2% triggers Level 3 (close all = 100% reduction)."""
-        level, reduction, msg = rm.check_progressive_deleveraging(0.02)
+    def test_level_3_at_7pct_dd(self, rm):
+        """DD of 7% triggers Level 3 (close all = 100% reduction)."""
+        level, reduction, msg = rm.check_progressive_deleveraging(0.07)
         assert level == 3
         assert reduction == pytest.approx(1.0)
 

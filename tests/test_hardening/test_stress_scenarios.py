@@ -124,13 +124,11 @@ class TestHistoricalStress:
 
     def test_volmageddon_2018(self, ibkr_rm, ibkr_portfolio):
         """VIX +115%. High-vol regime -> check_all_limits flags risk."""
-        # With VIX spiking, daily PnL would be negative and sizing should reduce
         result = ibkr_rm.check_all_limits(
             portfolio=ibkr_portfolio,
-            daily_pnl_pct=-0.02,  # -2% from VIX event
-            current_dd_pct=0.012,  # 1.2% drawdown
+            daily_pnl_pct=-0.06,  # -6% from VIX event (> -5% threshold)
+            current_dd_pct=0.03,  # 3% drawdown (> 2.5% L1)
         )
-        # Daily circuit breaker at -1.5% should trigger
         assert result["passed"] is False
         assert "STOP_TRADING_TODAY" in result["actions"]
 

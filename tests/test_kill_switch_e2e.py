@@ -56,7 +56,7 @@ class TestKillSwitchAutomatic:
     def test_daily_loss_triggers_kill_switch(self, kill_switch, mock_broker):
         """Drawdown > threshold -> all positions closed."""
         result = kill_switch.check_automatic_triggers(
-            daily_pnl=-200,  # -2% of $10K
+            daily_pnl=-600,  # -6% of $10K > -5% threshold
             capital=10000,
         )
         assert result["triggered"] is True

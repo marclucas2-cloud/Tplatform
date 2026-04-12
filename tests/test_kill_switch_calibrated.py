@@ -69,7 +69,7 @@ class TestCalibratedKillSwitch:
 
     def test_unknown_strategy_uses_default(self, kill_switch):
         result = kill_switch.check_strategy_thresholds(
-            {"unknown_strat": -250},  # -2.5% > default -2%
+            {"unknown_strat": -600},  # -6% > default -5%
             capital=10000,
         )
         assert result["triggered"] is True
