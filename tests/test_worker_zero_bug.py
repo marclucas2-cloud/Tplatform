@@ -162,7 +162,7 @@ class TestDigestIBKREquity:
     def test_digest_fetches_ibkr(self):
         """Digest section should fetch IBKR equity via IBKRBroker."""
         # Find the digest section (need more chars to include IBKR block)
-        digest_start = WORKER_SOURCE.find("5x/day digest")
+        digest_start = WORKER_SOURCE.find("3x/day digest")
         assert digest_start > 0, "Digest section not found"
         digest_section = WORKER_SOURCE[digest_start:digest_start + 1500]
 

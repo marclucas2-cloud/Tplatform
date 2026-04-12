@@ -332,11 +332,11 @@ class TestCashReserve:
 
 
 # =============================================================================
-# TEST 8: CIRCUIT BREAKER — DAILY (1.5%)
+# TEST 8: CIRCUIT BREAKER — DAILY (5%)
 # =============================================================================
 
 class TestCircuitBreakerDaily:
-    """daily_loss_pct = 0.015 -> -$150 stops trading today."""
+    """daily_loss_pct = 0.05 -> -$500 stops trading today."""
 
     def test_no_loss_passes(self, live_rm, base_portfolio):
         result = live_rm.check_all_limits(base_portfolio, daily_pnl_pct=0.0)
@@ -344,12 +344,12 @@ class TestCircuitBreakerDaily:
         assert daily_check["passed"] is True
 
     def test_small_loss_passes(self, live_rm, base_portfolio):
-        result = live_rm.check_all_limits(base_portfolio, daily_pnl_pct=-0.01)
+        result = live_rm.check_all_limits(base_portfolio, daily_pnl_pct=-0.03)
         daily_check = next(c for c in result["checks"] if c["name"] == "circuit_breaker_daily")
         assert daily_check["passed"] is True
 
     def test_loss_over_threshold_triggers(self, live_rm, base_portfolio):
-        result = live_rm.check_all_limits(base_portfolio, daily_pnl_pct=-0.02)
+        result = live_rm.check_all_limits(base_portfolio, daily_pnl_pct=-0.06)
         daily_check = next(c for c in result["checks"] if c["name"] == "circuit_breaker_daily")
         assert daily_check["passed"] is False
         assert result["passed"] is False
@@ -357,51 +357,51 @@ class TestCircuitBreakerDaily:
 
     def test_circuit_breaker_method_direct(self, live_rm):
         """Direct check_circuit_breaker method also works."""
-        triggered, msg = live_rm.check_circuit_breaker(daily_pnl_pct=-0.02)
+        triggered, msg = live_rm.check_circuit_breaker(daily_pnl_pct=-0.06)
         assert triggered is True
         assert "CIRCUIT BREAKER DAILY" in msg
 
 
 # =============================================================================
-# TEST 9: CIRCUIT BREAKER — HOURLY (1%)
+# TEST 9: CIRCUIT BREAKER — HOURLY (3%)
 # =============================================================================
 
 class TestCircuitBreakerHourly:
-    """hourly_loss_pct = 0.01 -> -$100 pauses 30 min."""
+    """hourly_loss_pct = 0.03 -> -$300 pauses 30 min."""
 
     def test_small_hourly_passes(self, live_rm, base_portfolio):
-        result = live_rm.check_all_limits(base_portfolio, hourly_pnl_pct=-0.005)
+        result = live_rm.check_all_limits(base_portfolio, hourly_pnl_pct=-0.02)
         hourly_check = next(c for c in result["checks"] if c["name"] == "circuit_breaker_hourly")
         assert hourly_check["passed"] is True
 
     def test_hourly_over_threshold_triggers(self, live_rm, base_portfolio):
-        result = live_rm.check_all_limits(base_portfolio, hourly_pnl_pct=-0.015)
+        result = live_rm.check_all_limits(base_portfolio, hourly_pnl_pct=-0.04)
         hourly_check = next(c for c in result["checks"] if c["name"] == "circuit_breaker_hourly")
         assert hourly_check["passed"] is False
         assert "PAUSE_30_MIN" in result["actions"]
 
 
 # =============================================================================
-# TEST 10: CIRCUIT BREAKER — WEEKLY (3%)
+# TEST 10: CIRCUIT BREAKER — WEEKLY (8%)
 # =============================================================================
 
 class TestCircuitBreakerWeekly:
-    """weekly_loss_pct = 0.03 -> -$300 reduces sizing 50%."""
+    """weekly_loss_pct = 0.08 -> -$800 reduces sizing 50%."""
 
     def test_weekly_under_limit_passes(self, live_rm, base_portfolio):
-        result = live_rm.check_all_limits(base_portfolio, weekly_pnl_pct=-0.02)
+        result = live_rm.check_all_limits(base_portfolio, weekly_pnl_pct=-0.06)
         weekly_check = next(c for c in result["checks"] if c["name"] == "circuit_breaker_weekly")
         assert weekly_check["passed"] is True
 
     def test_weekly_over_limit_triggers(self, live_rm, base_portfolio):
-        result = live_rm.check_all_limits(base_portfolio, weekly_pnl_pct=-0.04)
+        result = live_rm.check_all_limits(base_portfolio, weekly_pnl_pct=-0.09)
         weekly_check = next(c for c in result["checks"] if c["name"] == "circuit_breaker_weekly")
         assert weekly_check["passed"] is False
         assert "REDUCE_SIZING_50" in result["actions"]
 
     def test_weekly_does_not_fully_block(self, live_rm, base_portfolio):
         """Weekly circuit breaker adds action but doesn't set blocked_reason alone."""
-        result = live_rm.check_all_limits(base_portfolio, weekly_pnl_pct=-0.04)
+        result = live_rm.check_all_limits(base_portfolio, weekly_pnl_pct=-0.09)
         # Weekly alone doesn't block if daily/hourly are fine
         # Check that blocked_reason is not set from weekly
         if result["blocked_reason"] is not None:
@@ -409,53 +409,53 @@ class TestCircuitBreakerWeekly:
 
 
 # =============================================================================
-# TEST 11: DELEVERAGING LEVEL 1 (DD >= 1%)
+# TEST 11: DELEVERAGING LEVEL 1 (DD >= 2.5%)
 # =============================================================================
 
 class TestDeleveragingLevel1:
-    """level_1_dd_pct = 0.01 -> reduce 30%."""
+    """level_1_dd_pct = 0.025 -> reduce 30%."""
 
     def test_no_dd_no_deleveraging(self, live_rm):
-        level, reduction, msg = live_rm.check_progressive_deleveraging(0.005)
+        level, reduction, msg = live_rm.check_progressive_deleveraging(0.015)
         assert level == 0
         assert reduction == 0.0
 
     def test_level_1_triggered(self, live_rm):
-        level, reduction, msg = live_rm.check_progressive_deleveraging(0.01)
+        level, reduction, msg = live_rm.check_progressive_deleveraging(0.025)
         assert level == 1
         assert reduction == 0.30
         assert "L1" in msg
 
     def test_level_1_in_check_all(self, live_rm, base_portfolio):
-        result = live_rm.check_all_limits(base_portfolio, current_dd_pct=0.012)
+        result = live_rm.check_all_limits(base_portfolio, current_dd_pct=0.03)
         assert result["deleveraging"]["level"] == 1
         assert result["deleveraging"]["reduction_pct"] == 0.30
         assert "DELEVERAGE_L1" in result["actions"]
 
 
 # =============================================================================
-# TEST 12: DELEVERAGING LEVEL 2 (DD >= 1.5%)
+# TEST 12: DELEVERAGING LEVEL 2 (DD >= 4%)
 # =============================================================================
 
 class TestDeleveragingLevel2:
-    """level_2_dd_pct = 0.015 -> reduce 50%."""
+    """level_2_dd_pct = 0.04 -> reduce 50%."""
 
     def test_level_2_triggered(self, live_rm):
-        level, reduction, msg = live_rm.check_progressive_deleveraging(0.015)
+        level, reduction, msg = live_rm.check_progressive_deleveraging(0.04)
         assert level == 2
         assert reduction == 0.50
         assert "L2" in msg
 
 
 # =============================================================================
-# TEST 13: DELEVERAGING LEVEL 3 (DD >= 2%)
+# TEST 13: DELEVERAGING LEVEL 3 (DD >= 6%)
 # =============================================================================
 
 class TestDeleveragingLevel3:
-    """level_3_dd_pct = 0.02 -> close all (100%)."""
+    """level_3_dd_pct = 0.06 -> close all (100%)."""
 
     def test_level_3_triggered(self, live_rm):
-        level, reduction, msg = live_rm.check_progressive_deleveraging(0.02)
+        level, reduction, msg = live_rm.check_progressive_deleveraging(0.06)
         assert level == 3
         assert reduction == 1.00
         assert "L3" in msg or "Close all" in msg
@@ -520,19 +520,19 @@ class TestMarginBlock:
 
 
 # =============================================================================
-# TEST 16: KILL SWITCH — 5-DAY TRAILING (3%)
+# TEST 16: KILL SWITCH — 5-DAY TRAILING (8%)
 # =============================================================================
 
 class TestKillSwitch5D:
-    """trailing_5d_loss_pct = 0.03 -> close all."""
+    """trailing_5d_loss_pct = 0.08 -> close all."""
 
     def test_small_trailing_loss_ok(self, live_rm, base_portfolio):
-        result = live_rm.check_all_limits(base_portfolio, trailing_5d_pnl_pct=-0.02)
+        result = live_rm.check_all_limits(base_portfolio, trailing_5d_pnl_pct=-0.06)
         ks = next(c for c in result["checks"] if c["name"] == "kill_switch_5d")
         assert ks["passed"] is True
 
     def test_large_trailing_loss_triggers(self, live_rm, base_portfolio):
-        result = live_rm.check_all_limits(base_portfolio, trailing_5d_pnl_pct=-0.04)
+        result = live_rm.check_all_limits(base_portfolio, trailing_5d_pnl_pct=-0.09)
         ks = next(c for c in result["checks"] if c["name"] == "kill_switch_5d")
         assert ks["passed"] is False
         assert result["passed"] is False
@@ -540,19 +540,19 @@ class TestKillSwitch5D:
 
 
 # =============================================================================
-# TEST 17: KILL SWITCH — MONTHLY (5%)
+# TEST 17: KILL SWITCH — MONTHLY (12%)
 # =============================================================================
 
 class TestKillSwitchMonthly:
-    """max_monthly_loss_pct = 0.05 -> close all + review."""
+    """max_monthly_loss_pct = 0.12 -> close all + review."""
 
     def test_small_monthly_loss_ok(self, live_rm, base_portfolio):
-        result = live_rm.check_all_limits(base_portfolio, monthly_pnl_pct=-0.03)
+        result = live_rm.check_all_limits(base_portfolio, monthly_pnl_pct=-0.10)
         ks = next(c for c in result["checks"] if c["name"] == "kill_switch_monthly")
         assert ks["passed"] is True
 
     def test_large_monthly_loss_triggers(self, live_rm, base_portfolio):
-        result = live_rm.check_all_limits(base_portfolio, monthly_pnl_pct=-0.06)
+        result = live_rm.check_all_limits(base_portfolio, monthly_pnl_pct=-0.13)
         ks = next(c for c in result["checks"] if c["name"] == "kill_switch_monthly")
         assert ks["passed"] is False
         assert result["passed"] is False
@@ -640,10 +640,10 @@ class TestNoBypass:
         """When multiple limits fail, blocked_reason is the first failure."""
         result = live_rm.check_all_limits(
             {"equity": 10_000, "cash": 0, "positions": []},
-            daily_pnl_pct=-0.05,
-            hourly_pnl_pct=-0.05,
+            daily_pnl_pct=-0.06,
+            hourly_pnl_pct=-0.04,
             trailing_5d_pnl_pct=-0.10,
-            monthly_pnl_pct=-0.10,
+            monthly_pnl_pct=-0.15,
             margin_used_pct=0.95,
         )
         assert result["passed"] is False
@@ -671,17 +671,17 @@ class TestPaperLiveIsolation:
         assert paper_rm.limits["position_limits"]["max_single_position"] == 0.10
         assert paper_rm.limits["position_limits"]["max_single_strategy"] == 0.15
 
-    def test_live_has_tighter_daily_cb(self, live_rm, paper_rm):
-        """Live daily CB (1.5%) is tighter than paper (5%)."""
-        live_daily = live_rm.circuit_breakers_cfg.get("daily_loss_pct", 0.015)
+    def test_live_has_matching_daily_cb(self, live_rm, paper_rm):
+        """Live daily CB (5%) matches paper (5%) — futures need wider thresholds."""
+        live_daily = live_rm.circuit_breakers_cfg.get("daily_loss_pct", 0.05)
         paper_daily = paper_rm.limits["risk_limits"]["circuit_breaker_daily_dd"]
-        assert live_daily < paper_daily
+        assert live_daily <= paper_daily
 
-    def test_live_has_tighter_hourly_cb(self, live_rm, paper_rm):
-        """Live hourly CB (1%) is tighter than paper (3%)."""
-        live_hourly = live_rm.circuit_breakers_cfg.get("hourly_loss_pct", 0.01)
+    def test_live_has_matching_hourly_cb(self, live_rm, paper_rm):
+        """Live hourly CB (3%) matches paper (3%) — futures need wider thresholds."""
+        live_hourly = live_rm.circuit_breakers_cfg.get("hourly_loss_pct", 0.03)
         paper_hourly = paper_rm.limits["risk_limits"]["circuit_breaker_hourly_dd"]
-        assert live_hourly < paper_hourly
+        assert live_hourly <= paper_hourly
 
     def test_live_requires_more_cash(self, live_rm, paper_rm):
         """Live min cash (5%) is lower than paper (7%) — $10K needs less reserve."""
@@ -776,13 +776,13 @@ class TestEdgeCases:
 
     def test_exact_threshold_daily_cb(self, live_rm, base_portfolio):
         """Loss exactly at threshold should NOT trigger (using >)."""
-        result = live_rm.check_all_limits(base_portfolio, daily_pnl_pct=-0.015)
+        result = live_rm.check_all_limits(base_portfolio, daily_pnl_pct=-0.05)
         daily_check = next(c for c in result["checks"] if c["name"] == "circuit_breaker_daily")
         assert daily_check["passed"] is True
 
     def test_just_over_threshold_daily_cb(self, live_rm, base_portfolio):
         """Loss just above threshold triggers."""
-        result = live_rm.check_all_limits(base_portfolio, daily_pnl_pct=-0.0151)
+        result = live_rm.check_all_limits(base_portfolio, daily_pnl_pct=-0.0501)
         daily_check = next(c for c in result["checks"] if c["name"] == "circuit_breaker_daily")
         assert daily_check["passed"] is False
 
@@ -814,6 +814,6 @@ class TestEdgeCases:
 
     def test_deleveraging_negative_dd_uses_abs(self, live_rm):
         """Negative DD value is treated as positive (abs)."""
-        level, reduction, _ = live_rm.check_progressive_deleveraging(-0.02)
+        level, reduction, _ = live_rm.check_progressive_deleveraging(-0.06)
         assert level == 3
         assert reduction == 1.00

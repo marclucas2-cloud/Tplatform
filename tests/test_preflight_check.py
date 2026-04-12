@@ -280,7 +280,7 @@ class TestCheckFXData:
             _check_fx_data(result)
 
         assert result.checks["fx_data"]["passed"] is True
-        assert "4 parquets < 48h" in result.checks["fx_data"]["message"]
+        assert "4 parquets < 72h" in result.checks["fx_data"]["message"]
 
     def test_fx_data_dir_missing(self, result, tmp_path):
         """data/fx/ does not exist -> fail."""
@@ -437,7 +437,7 @@ class TestCheckMargin:
     def test_margin_pass(self, result):
         """At least 1 margin pair enabled including BTCUSDC -> pass."""
         mock_broker = MagicMock()
-        mock_broker._request.return_value = {
+        mock_broker._get.return_value = {
             "assets": [
                 {"symbol": "BTCUSDC", "enabled": True, "isolatedCreated": True},
                 {"symbol": "ETHUSDC", "enabled": True, "isolatedCreated": True},
@@ -455,7 +455,7 @@ class TestCheckMargin:
     def test_margin_none_enabled(self, result):
         """No margin pairs enabled -> fail (non-blocking)."""
         mock_broker = MagicMock()
-        mock_broker._request.return_value = {
+        mock_broker._get.return_value = {
             "assets": [
                 {"symbol": "BTCUSDC", "enabled": False, "isolatedCreated": False},
             ]
@@ -472,7 +472,7 @@ class TestCheckMargin:
     def test_margin_exception(self, result):
         """Margin API error -> fail (non-blocking)."""
         mock_broker = MagicMock()
-        mock_broker._request.side_effect = Exception("Margin not available")
+        mock_broker._get.side_effect = Exception("Margin not available")
         mock_module = MagicMock()
         mock_module.BinanceBroker.return_value = mock_broker
         with patch.dict("sys.modules", {"core.broker.binance_broker": mock_module}):
@@ -710,13 +710,13 @@ class TestRunPreflight:
         mock_crypto, mock_earn, mock_margin, mock_ks, mock_disk,
         mock_ibgateway, mock_telegram, mock_persist
     ):
-        """run_preflight calls all 11 check functions + persist."""
+        """run_preflight calls all 10 active check functions + persist (FX disabled)."""
         result = run_preflight(block_on_failure=False)
 
         mock_binance.assert_called_once()
         mock_ibkr_live.assert_called_once()
         mock_ibkr_paper.assert_called_once()
-        mock_fx.assert_called_once()
+        mock_fx.assert_not_called()  # FX check disabled (IBIE France interdit levier FX retail)
         mock_crypto.assert_called_once()
         mock_earn.assert_called_once()
         mock_margin.assert_called_once()
@@ -821,7 +821,7 @@ class TestEdgeCases:
     def test_margin_btcusdt_also_accepted(self, result):
         """BTCUSDT (not only BTCUSDC) is accepted as valid margin pair."""
         mock_broker = MagicMock()
-        mock_broker._request.return_value = {
+        mock_broker._get.return_value = {
             "assets": [
                 {"symbol": "BTCUSDT", "enabled": True, "isolatedCreated": True},
             ]

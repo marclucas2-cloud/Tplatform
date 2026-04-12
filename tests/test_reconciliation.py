@@ -306,10 +306,14 @@ class TestRunComplete:
              "avg_entry": 500.0, "market_val": -2500.0, "unrealized_pl": 0.0},
         ]
 
-        with patch("scripts.reconciliation.AlpacaClient") as MockClient:
+        with patch("scripts.reconciliation.AlpacaClient") as MockClient, \
+             patch("core.broker.ibkr_adapter.IBKRBroker") as MockIBKR:
             mock_instance = MagicMock()
             mock_instance.get_positions.return_value = mock_alpaca_positions
             MockClient.from_env.return_value = mock_instance
+            mock_ibkr = MagicMock()
+            mock_ibkr.get_positions.return_value = mock_alpaca_positions
+            MockIBKR.return_value = mock_ibkr
 
             result = reconciler.run()
 
