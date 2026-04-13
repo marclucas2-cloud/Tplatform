@@ -168,13 +168,27 @@ class PortfolioStateEngine:
         # Leverage = gross exposure / equity
         leverage_real = total_gross / total_equity if total_equity > 0 else 0.0
 
-        # Drawdown tracking
+        # Drawdown tracking — peak resets DAILY (intraday DD only)
+        # Cross-day persistence would require a state file; we keep DD intraday
+        # to (a) stay consistent with circuit breaker semantics (3% daily) and
+        # (b) avoid false alarms after cash flow events (rebalance, deposit,
+        # withdrawal) which the V10 engine cannot distinguish from PnL.
         today = datetime.utcnow().strftime("%Y-%m-%d")
         if self._last_reset_date != today:
             self._daily_start_equity = total_equity
+            self._peak_equity = total_equity  # DAILY RESET — intraday peak only
             self._last_reset_date = today
 
         if total_equity > self._peak_equity:
+            self._peak_equity = total_equity
+
+        # Sanity guard: if peak is unrealistically > current (>2x), reset.
+        # Catches transient broker errors that inflate equity briefly.
+        if self._peak_equity > total_equity * 2 and total_equity > 0:
+            logger.warning(
+                f"V10 PEAK SANITY RESET: peak ${self._peak_equity:,.0f} > "
+                f"2x current ${total_equity:,.0f} — likely transient error, resetting peak"
+            )
             self._peak_equity = total_equity
 
         drawdown_pct = 0.0

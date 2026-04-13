@@ -2929,10 +2929,18 @@ def run_crypto_cycle():
                 # Cap: never exceed 80% of Binance equity for this position
                 _broker_cap = (current_equity if current_equity > 0 else total_capital) * 0.80
                 strat_capital = min(strat_capital, _broker_cap)
+                # Filter dust positions (<$5) so strategies don't think
+                # they hold something the worker guard refuses to close.
+                # This matches the worker's CLOSE guard at line 3040 (>$1)
+                # with a safety margin to avoid edge-case loops.
+                _live_positions = [
+                    p for p in positions
+                    if abs(float(p.get("market_val", 0))) > 5
+                ]
                 state = {
                     "capital": sizing_capital,
                     "equity": current_equity,
-                    "positions": positions,
+                    "positions": _live_positions,
                     "i": len(df_full) - 1 if df_full is not None and not df_full.empty else 0,
                 }
 
@@ -4078,6 +4086,74 @@ def main():
                                f"qty={p.get('qty',0)}")
         except Exception as e:
             logger.warning(f"Crypto reconciliation failed: {e}")
+
+    # Futures IBKR reconciliation — sync state file with broker reality
+    # Fixes "futures_positions_live.json={} but IBKR has 1 MES" desync.
+    try:
+        _ibkr_host = os.environ.get("IBKR_HOST", "127.0.0.1")
+        _ibkr_live_port = int(os.environ.get("IBKR_PORT", "4002"))
+        from ib_insync import IB as _BootIB
+        import random as _boot_rng
+        _boot_ib = _BootIB()
+        _boot_ib.RequestTimeout = 20
+        _boot_ib.connect(_ibkr_host, _ibkr_live_port,
+                         clientId=_boot_rng.randint(220, 229), timeout=15)
+        time.sleep(2)
+        _live_pos = {p.contract.symbol: p for p in _boot_ib.positions() if abs(p.position) > 0}
+        _state_file = ROOT / "data" / "state" / "futures_positions_live.json"
+        _state_file.parent.mkdir(parents=True, exist_ok=True)
+        _existing = {}
+        if _state_file.exists():
+            try:
+                _existing = json.loads(_state_file.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+
+        # Add real broker positions missing from state
+        _added = 0
+        for sym, pos in _live_pos.items():
+            if sym in _existing:
+                continue
+            _existing[sym] = {
+                "strategy": "RECONCILED_AT_BOOT",
+                "symbol": sym,
+                "side": "BUY" if pos.position > 0 else "SELL",
+                "qty": abs(int(pos.position)),
+                "entry": float(getattr(pos, "avgCost", 0)) / max(int(getattr(pos.contract, "multiplier", 1) or 1), 1),
+                "sl": 0,
+                "tp": 0,
+                "oca_group": "",
+                "opened_at": datetime.now(UTC).isoformat(),
+                "mode": "LIVE",
+                "_authorized_by": "boot_reconciliation",
+            }
+            _added += 1
+
+        # Remove state positions that no longer exist on broker
+        _removed = 0
+        for sym in list(_existing.keys()):
+            if sym not in _live_pos:
+                logger.info(f"FUTURES BOOT RECONCILE: removing stale {sym} from state (not on IBKR)")
+                del _existing[sym]
+                _removed += 1
+
+        if _added or _removed:
+            _state_file.write_text(json.dumps(_existing, indent=2))
+            logger.warning(
+                f"FUTURES BOOT RECONCILE: state file updated — added {_added}, removed {_removed} "
+                f"(broker={list(_live_pos.keys())})"
+            )
+        else:
+            logger.info(
+                f"FUTURES BOOT RECONCILE: state file in sync ({len(_live_pos)} live positions)"
+            )
+
+        try:
+            _boot_ib.disconnect()
+        except Exception:
+            pass
+    except Exception as e:
+        logger.warning(f"Futures IBKR reconciliation skipped: {e}")
 
     # === V10 PORTFOLIO-AWARE RISK MODULES ===
     logger.info("  Initializing V10 portfolio-aware risk modules...")
