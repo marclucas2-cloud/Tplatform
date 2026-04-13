@@ -1322,42 +1322,99 @@ def _run_futures_cycle(live: bool = False):
             logger.warning(f"    RECONCILE error: {_re}")
 
         # FIX B: Check that open positions have active bracket orders (SL/TP)
-        # If missing, REPOSE the brackets instead of closing the position
+        # If missing, REPOSE the brackets. If repose impossible (no SL/TP in
+        # state, or placeOrder fails), FAIL-SAFE: close the position at market
+        # immediately — never leave a live position unprotected (CRO rule).
         try:
+            from ib_insync import (
+                Future as IbFuture,
+                StopOrder,
+                LimitOrder,
+                MarketOrder as _FailMarketOrder,
+            )
+            import uuid as _uuid
             _open_order_syms = {t.contract.symbol for t in ibkr._ib.openTrades()}
             for pos_sym, pos_info in list(_fut_positions.items()):
                 if pos_sym in _ibkr_real_pos and pos_sym not in _open_order_syms:
-                    logger.warning(
-                        f"    BRACKET MISSING: {pos_sym} — reposing SL/TP"
-                    )
-                    try:
-                        from ib_insync import Future as IbFuture, StopOrder, LimitOrder
-                        import uuid as _uuid
-                        _rb_fut = IbFuture(pos_sym, exchange="CME")
-                        _rb_details = ibkr._ib.reqContractDetails(_rb_fut)
-                        if not _rb_details:
-                            continue
-                        _rb_contract = _rb_details[0].contract
-                        _rb_qty = abs(int(_ibkr_real_pos[pos_sym]))
-                        _rb_side = "BUY" if _ibkr_real_pos[pos_sym] < 0 else "SELL"
-                        _rb_sl = pos_info.get("sl", 0)
-                        _rb_tp = pos_info.get("tp", 0)
-                        if _rb_sl <= 0 or _rb_tp <= 0:
-                            continue
-                        _rb_oca = f"REBRACKET_{pos_sym}_{_uuid.uuid4().hex[:8]}"
-                        _sl_ord = StopOrder(_rb_side, _rb_qty, _rb_sl)
-                        _sl_ord.tif = "GTC"; _sl_ord.ocaGroup = _rb_oca; _sl_ord.ocaType = 1
-                        _tp_ord = LimitOrder(_rb_side, _rb_qty, _rb_tp)
-                        _tp_ord.tif = "GTC"; _tp_ord.ocaGroup = _rb_oca; _tp_ord.ocaType = 1
-                        ibkr._ib.placeOrder(_rb_contract, _sl_ord)
-                        time.sleep(0.5)
-                        ibkr._ib.placeOrder(_rb_contract, _tp_ord)
-                        time.sleep(2); ibkr._ib.sleep(1)
-                        logger.info(
-                            f"    BRACKET REPOSED: {pos_sym} SL={_rb_sl} TP={_rb_tp} OCA={_rb_oca}"
+                    logger.warning(f"    BRACKET MISSING: {pos_sym} — reposing SL/TP")
+
+                    _rb_sl = float(pos_info.get("sl", 0) or 0)
+                    _rb_tp = float(pos_info.get("tp", 0) or 0)
+                    _rb_qty = abs(int(_ibkr_real_pos[pos_sym]))
+                    _rb_side = "BUY" if _ibkr_real_pos[pos_sym] < 0 else "SELL"
+
+                    _repose_ok = False
+                    _fail_reason = ""
+
+                    if _rb_sl > 0 and _rb_tp > 0:
+                        # Attempt repose
+                        try:
+                            _rb_fut = IbFuture(pos_sym, exchange="CME")
+                            _rb_details = ibkr._ib.reqContractDetails(_rb_fut)
+                            if _rb_details:
+                                _rb_contract = _rb_details[0].contract
+                                _rb_oca = f"REBRACKET_{pos_sym}_{_uuid.uuid4().hex[:8]}"
+                                _sl_ord = StopOrder(_rb_side, _rb_qty, _rb_sl)
+                                _sl_ord.tif = "GTC"; _sl_ord.ocaGroup = _rb_oca; _sl_ord.ocaType = 1
+                                _tp_ord = LimitOrder(_rb_side, _rb_qty, _rb_tp)
+                                _tp_ord.tif = "GTC"; _tp_ord.ocaGroup = _rb_oca; _tp_ord.ocaType = 1
+                                ibkr._ib.placeOrder(_rb_contract, _sl_ord)
+                                time.sleep(0.5)
+                                ibkr._ib.placeOrder(_rb_contract, _tp_ord)
+                                time.sleep(2); ibkr._ib.sleep(1)
+                                logger.info(
+                                    f"    BRACKET REPOSED: {pos_sym} SL={_rb_sl} TP={_rb_tp} OCA={_rb_oca}"
+                                )
+                                _repose_ok = True
+                            else:
+                                _fail_reason = "no contract details"
+                        except Exception as _be:
+                            _fail_reason = str(_be)[:100]
+                            logger.error(f"    BRACKET REPOSE FAILED {pos_sym}: {_be}")
+                    else:
+                        _fail_reason = f"invalid SL/TP in state (sl={_rb_sl}, tp={_rb_tp})"
+
+                    if not _repose_ok:
+                        # FAIL-SAFE: close position at market immediately.
+                        # Never leave a live position unprotected.
+                        logger.critical(
+                            f"    BRACKET FAIL-SAFE: {pos_sym} — {_fail_reason}. "
+                            f"Closing position at market to enforce SL obligatoire rule."
                         )
-                    except Exception as _be:
-                        logger.error(f"    BRACKET REPOSE FAILED {pos_sym}: {_be}")
+                        try:
+                            _fs_fut = IbFuture(pos_sym, exchange="CME")
+                            _fs_details = ibkr._ib.reqContractDetails(_fs_fut)
+                            if _fs_details:
+                                _fs_contract = _fs_details[0].contract
+                                _fs_order = _FailMarketOrder(_rb_side, _rb_qty)
+                                _fs_order.outsideRth = True
+                                _fs_trade = ibkr._ib.placeOrder(_fs_contract, _fs_order)
+                                time.sleep(4); ibkr._ib.sleep(2)
+                                _fs_status = _fs_trade.orderStatus.status
+                                _fs_fill = _fs_trade.orderStatus.avgFillPrice or 0
+                                logger.critical(
+                                    f"    BRACKET FAIL-SAFE CLOSED: {pos_sym} "
+                                    f"status={_fs_status} fill={_fs_fill}"
+                                )
+                                _send_alert(
+                                    f"CRITICAL: {pos_sym} closed by BRACKET FAIL-SAFE\n"
+                                    f"Reason: {_fail_reason}\n"
+                                    f"Fill: {_fs_fill:.2f} ({_fs_status})\n"
+                                    f"Position was unprotected (no SL/TP).",
+                                    level="critical",
+                                )
+                                if pos_sym in _fut_positions:
+                                    del _fut_positions[pos_sym]
+                        except Exception as _fse:
+                            logger.critical(
+                                f"    BRACKET FAIL-SAFE FAILED for {pos_sym}: {_fse} — "
+                                f"MANUAL INTERVENTION REQUIRED"
+                            )
+                            _send_alert(
+                                f"BRACKET FAIL-SAFE FAILED on {pos_sym}: {_fse}\n"
+                                f"Manual intervention required!",
+                                level="critical",
+                            )
         except Exception as _bce:
             logger.warning(f"    BRACKET CHECK error: {_bce}")
 
@@ -4090,8 +4147,13 @@ def main():
         except Exception as e:
             logger.warning(f"Crypto reconciliation failed: {e}")
 
-    # Futures IBKR reconciliation — sync state file with broker reality
-    # Fixes "futures_positions_live.json={} but IBKR has 1 MES" desync.
+    # Futures IBKR reconciliation — sync state file with broker reality.
+    # Walks IBKR positions and recovers SL/TP from existing OCA orders.
+    # If no brackets found on IBKR, falls back to strategy defaults
+    # (Overnight MES: SL=entry-30, TP=entry+50). This ensures the next
+    # BRACKET MISSING check in _run_futures_cycle has valid values to repose.
+    # Fixes "futures_positions_live.json={} but IBKR has 1 MES" desync +
+    # "bracket missing repose skipped silently because sl=0".
     try:
         _ibkr_host = os.environ.get("IBKR_HOST", "127.0.0.1")
         _ibkr_live_port = int(os.environ.get("IBKR_PORT", "4002"))
@@ -4103,6 +4165,40 @@ def main():
                          clientId=_boot_rng.randint(220, 229), timeout=15)
         time.sleep(2)
         _live_pos = {p.contract.symbol: p for p in _boot_ib.positions() if abs(p.position) > 0}
+
+        # Read existing open orders to recover SL/TP from any OCA bracket still alive
+        _live_brackets: dict[str, dict] = {}  # symbol -> {sl, tp, oca}
+        try:
+            _all_trades = _boot_ib.reqAllOpenOrders()
+            # Group orders by symbol, detect SL (STP) and TP (LMT) per OCA
+            _by_sym: dict[str, list] = {}
+            for _t in _all_trades:
+                _sym = _t.contract.symbol
+                _by_sym.setdefault(_sym, []).append(_t)
+            for _sym, _trades in _by_sym.items():
+                _sl_px = 0.0
+                _tp_px = 0.0
+                _oca = ""
+                for _t in _trades:
+                    _ot = _t.order.orderType
+                    if _ot in ("STP", "STOP"):
+                        _sl_px = float(_t.order.auxPrice or 0)
+                        _oca = _t.order.ocaGroup or _oca
+                    elif _ot in ("LMT", "LIMIT"):
+                        _tp_px = float(_t.order.lmtPrice or 0)
+                        _oca = _t.order.ocaGroup or _oca
+                if _sl_px > 0 or _tp_px > 0:
+                    _live_brackets[_sym] = {"sl": _sl_px, "tp": _tp_px, "oca": _oca}
+        except Exception as _boe:
+            logger.warning(f"FUTURES BOOT RECONCILE: open orders scan failed: {_boe}")
+
+        # Strategy default SL/TP offsets (points) for fallback
+        # Overnight MES/MNQ: SL=entry-30, TP=entry+50 (overnight_buy_close.py)
+        _STRAT_DEFAULTS = {
+            "MES": {"sl_points": 30, "tp_points": 50, "multiplier": 5},
+            "MNQ": {"sl_points": 30, "tp_points": 50, "multiplier": 2},
+        }
+
         _state_file = ROOT / "data" / "state" / "futures_positions_live.json"
         _state_file.parent.mkdir(parents=True, exist_ok=True)
         _existing = {}
@@ -4112,25 +4208,71 @@ def main():
             except Exception:
                 pass
 
-        # Add real broker positions missing from state
+        # Add / refresh broker positions
         _added = 0
+        _refreshed = 0
         for sym, pos in _live_pos.items():
+            _mult = int(getattr(pos.contract, "multiplier", 1) or 1)
+            _entry_px = float(getattr(pos, "avgCost", 0)) / max(_mult, 1)
+
+            # Recover SL/TP: 1) from live broker brackets, 2) from existing state,
+            # 3) from strategy defaults
+            _sl = 0.0
+            _tp = 0.0
+            _oca = ""
+            if sym in _live_brackets:
+                _sl = _live_brackets[sym]["sl"]
+                _tp = _live_brackets[sym]["tp"]
+                _oca = _live_brackets[sym]["oca"]
+                logger.info(f"FUTURES BOOT RECONCILE: {sym} SL/TP recovered from IBKR brackets (sl={_sl}, tp={_tp})")
+            elif sym in _existing and _existing[sym].get("sl", 0) > 0 and _existing[sym].get("tp", 0) > 0:
+                _sl = float(_existing[sym]["sl"])
+                _tp = float(_existing[sym]["tp"])
+                _oca = _existing[sym].get("oca_group", "")
+                logger.info(f"FUTURES BOOT RECONCILE: {sym} SL/TP kept from existing state")
+            elif sym in _STRAT_DEFAULTS and _entry_px > 0:
+                _d = _STRAT_DEFAULTS[sym]
+                _side_long = pos.position > 0
+                if _side_long:
+                    _sl = round(_entry_px - _d["sl_points"], 2)
+                    _tp = round(_entry_px + _d["tp_points"], 2)
+                else:
+                    _sl = round(_entry_px + _d["sl_points"], 2)
+                    _tp = round(_entry_px - _d["tp_points"], 2)
+                logger.warning(
+                    f"FUTURES BOOT RECONCILE: {sym} SL/TP synthesized from strategy defaults "
+                    f"(sl={_sl}, tp={_tp}) — bracket will be reposed in next futures cycle"
+                )
+            else:
+                logger.critical(
+                    f"FUTURES BOOT RECONCILE: {sym} UNPROTECTED — no SL/TP available. "
+                    f"Will be closed by BRACKET FAIL-SAFE in next futures cycle."
+                )
+
             if sym in _existing:
-                continue
-            _existing[sym] = {
-                "strategy": "RECONCILED_AT_BOOT",
-                "symbol": sym,
-                "side": "BUY" if pos.position > 0 else "SELL",
-                "qty": abs(int(pos.position)),
-                "entry": float(getattr(pos, "avgCost", 0)) / max(int(getattr(pos.contract, "multiplier", 1) or 1), 1),
-                "sl": 0,
-                "tp": 0,
-                "oca_group": "",
-                "opened_at": datetime.now(UTC).isoformat(),
-                "mode": "LIVE",
-                "_authorized_by": "boot_reconciliation",
-            }
-            _added += 1
+                _existing[sym]["sl"] = _sl
+                _existing[sym]["tp"] = _tp
+                if _oca:
+                    _existing[sym]["oca_group"] = _oca
+                _existing[sym]["entry"] = _entry_px or _existing[sym].get("entry", 0)
+                _existing[sym]["qty"] = abs(int(pos.position))
+                _existing[sym]["side"] = "BUY" if pos.position > 0 else "SELL"
+                _refreshed += 1
+            else:
+                _existing[sym] = {
+                    "strategy": "RECONCILED_AT_BOOT",
+                    "symbol": sym,
+                    "side": "BUY" if pos.position > 0 else "SELL",
+                    "qty": abs(int(pos.position)),
+                    "entry": _entry_px,
+                    "sl": _sl,
+                    "tp": _tp,
+                    "oca_group": _oca,
+                    "opened_at": datetime.now(UTC).isoformat(),
+                    "mode": "LIVE",
+                    "_authorized_by": "boot_reconciliation",
+                }
+                _added += 1
 
         # Remove state positions that no longer exist on broker
         _removed = 0
@@ -4140,11 +4282,11 @@ def main():
                 del _existing[sym]
                 _removed += 1
 
-        if _added or _removed:
+        if _added or _removed or _refreshed:
             _state_file.write_text(json.dumps(_existing, indent=2))
             logger.warning(
-                f"FUTURES BOOT RECONCILE: state file updated — added {_added}, removed {_removed} "
-                f"(broker={list(_live_pos.keys())})"
+                f"FUTURES BOOT RECONCILE: state updated — added {_added}, refreshed {_refreshed}, "
+                f"removed {_removed} (broker={list(_live_pos.keys())})"
             )
         else:
             logger.info(

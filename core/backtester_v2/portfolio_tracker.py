@@ -140,6 +140,10 @@ class PortfolioTracker:
         """Check if SL/TP are hit for positions on *bar.symbol*.
 
         Uses bar high/low to detect stop triggers within the candle.
+        **Gap protection**: if the bar opens beyond the stop (gap down on LONG,
+        gap up on SHORT), the fill price is the **open**, not the stop price.
+        This matches realistic broker behaviour where a stop order becomes a
+        market order on trigger — on a gap, the market price is the bar open.
 
         Args:
             bar: Current bar to check against.
@@ -160,7 +164,14 @@ class PortfolioTracker:
                 pos.side == -1 and bar.high >= pos.sl
             )
             if triggered:
-                events.append(self._make_stop_fill(pos, bar, pos.sl, close_side, "SL"))
+                # Gap protection: fill at worst of (stop, open).
+                # LONG: if open < SL, fill at open (bad gap down).
+                # SHORT: if open > SL, fill at open (bad gap up).
+                if pos.side == 1:
+                    sl_fill = min(pos.sl, bar.open)
+                else:
+                    sl_fill = max(pos.sl, bar.open)
+                events.append(self._make_stop_fill(pos, bar, sl_fill, close_side, "SL"))
                 return events  # SL takes priority, skip TP
 
         # Take-profit check
@@ -169,7 +180,14 @@ class PortfolioTracker:
                 pos.side == -1 and bar.low <= pos.tp
             )
             if triggered:
-                events.append(self._make_stop_fill(pos, bar, pos.tp, close_side, "TP"))
+                # Gap protection (favorable): if open > TP on LONG, fill at open
+                # (lucky gap up). For SHORT, if open < TP, fill at open.
+                # Keep original TP if bar opens inside the range.
+                if pos.side == 1:
+                    tp_fill = max(pos.tp, bar.open)
+                else:
+                    tp_fill = min(pos.tp, bar.open)
+                events.append(self._make_stop_fill(pos, bar, tp_fill, close_side, "TP"))
 
         return events
 
