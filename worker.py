@@ -53,6 +53,8 @@ from core.worker.alerts import send_alert as _send_alert  # noqa: E402
 from core.worker.config import (  # noqa: E402
     CRYPTO_INTERVAL_SECONDS,
     CRYPTO_KELLY_FRACTION,
+    DAILY_HOUR,
+    DAILY_MINUTE,
     ET,
     INTRADAY_INTERVAL_SECONDS,
     LIVE_RISK_INTERVAL_SECONDS,
@@ -253,6 +255,7 @@ def run_fx_carry_cycle():
     if not _ibkr_lock.acquire(blocking=False):
         logger.warning("FX CARRY SKIP — IBKR lock held")
         return
+    _ibkr_carry = None  # Pre-init for the finally block (fixes UnboundLocalError on early return)
     try:
         logger.info("=== FX CARRY CYCLE ===")
 
