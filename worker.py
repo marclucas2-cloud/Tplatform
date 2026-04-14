@@ -805,8 +805,9 @@ def run_bracket_watchdog_cycle():
     between cycles if brackets vanish (IBKR disconnect, order expiry, etc.).
     """
     if not _ibkr_lock.acquire(blocking=False):
-        logger.debug("BRACKET WATCHDOG skip — IBKR lock held")
+        logger.info("BRACKET WATCHDOG skip — IBKR lock held")
         return
+    logger.info("=== BRACKET WATCHDOG CYCLE ===")
     try:
         from ib_insync import (
             IB as _WdIB,
@@ -834,7 +835,7 @@ def run_bracket_watchdog_cycle():
 
             _live_positions = [p for p in _ib.positions() if abs(p.position) > 0]
             if not _live_positions:
-                logger.debug("BRACKET WATCHDOG: no live positions")
+                logger.info("BRACKET WATCHDOG: 0 live positions, nothing to check")
                 return
 
             _open_trades = _ib.reqAllOpenOrders()
@@ -1014,8 +1015,10 @@ def run_bracket_watchdog_cycle():
                     )
 
             if _unprotected == 0:
-                logger.debug(
-                    f"BRACKET WATCHDOG OK: {len(_live_positions)} positions all protected"
+                _syms = [p.contract.symbol for p in _live_positions]
+                logger.info(
+                    f"BRACKET WATCHDOG OK: {len(_live_positions)} positions all protected "
+                    f"({', '.join(_syms)})"
                 )
         finally:
             try:
