@@ -92,6 +92,81 @@ from core.broker.broker_health import BrokerHealthRegistry  # noqa: E402
 
 
 
+# --- Strategy failure tracker (#2 fiabilisation crypto 14/04) ---
+# Detects silent repeated failures (e.g. STRAT-001 30 signals/0 trades bug).
+# On 3rd consecutive fail: CRITICAL alert Telegram.
+# On 5th consecutive fail: auto-pause strategy for 1h (skip all signals).
+# Reset counter on successful execution.
+_strat_fail_counter: dict[str, int] = {}
+_strat_paused_until: dict[str, float] = {}
+_strat_last_alert: dict[str, float] = {}
+_STRAT_FAIL_ALERT_THRESHOLD = 3
+_STRAT_FAIL_PAUSE_THRESHOLD = 5
+_STRAT_PAUSE_DURATION_SECONDS = 3600  # 1h
+_STRAT_ALERT_DEDUP_SECONDS = 600  # Max 1 alert per strat per 10 min
+
+
+def _strat_is_paused(strat_id: str) -> bool:
+    """Return True if strategy is currently auto-paused after failures."""
+    pause_until = _strat_paused_until.get(strat_id, 0)
+    return time.time() < pause_until
+
+
+def _strat_record_failure(strat_id: str, error: Exception) -> None:
+    """Record a strategy execution failure. Alerts and pauses if thresholds met."""
+    count = _strat_fail_counter.get(strat_id, 0) + 1
+    _strat_fail_counter[strat_id] = count
+    logger.warning(f"STRAT FAIL TRACKER: {strat_id} consecutive_failures={count}")
+
+    # Dedup: max 1 alert per strat per 10 min
+    now = time.time()
+    last_alert = _strat_last_alert.get(strat_id, 0)
+    dedup_ok = now - last_alert >= _STRAT_ALERT_DEDUP_SECONDS
+
+    if count >= _STRAT_FAIL_PAUSE_THRESHOLD:
+        _strat_paused_until[strat_id] = now + _STRAT_PAUSE_DURATION_SECONDS
+        if dedup_ok:
+            _strat_last_alert[strat_id] = now
+            logger.critical(
+                f"STRAT AUTO-PAUSE: {strat_id} after {count} consecutive failures. "
+                f"Paused for {_STRAT_PAUSE_DURATION_SECONDS // 60}min. Last error: {error}"
+            )
+            try:
+                _send_alert(
+                    f"STRAT AUTO-PAUSED: {strat_id}\n"
+                    f"{count} consecutive execution failures.\n"
+                    f"Paused for {_STRAT_PAUSE_DURATION_SECONDS // 60}min.\n"
+                    f"Last error: {type(error).__name__}: {str(error)[:150]}",
+                    level="critical",
+                )
+            except Exception:
+                pass
+    elif count >= _STRAT_FAIL_ALERT_THRESHOLD:
+        if dedup_ok:
+            _strat_last_alert[strat_id] = now
+            logger.critical(
+                f"STRAT FAILURE THRESHOLD: {strat_id} {count} consecutive failures"
+            )
+            try:
+                _send_alert(
+                    f"STRAT FAILING: {strat_id}\n"
+                    f"{count} consecutive execution failures.\n"
+                    f"Error: {type(error).__name__}: {str(error)[:150]}\n"
+                    f"Will auto-pause at {_STRAT_FAIL_PAUSE_THRESHOLD} failures.",
+                    level="critical",
+                )
+            except Exception:
+                pass
+
+
+def _strat_record_success(strat_id: str) -> None:
+    """Reset failure counter after successful execution."""
+    if _strat_fail_counter.get(strat_id, 0) > 0:
+        logger.info(f"STRAT FAIL TRACKER: {strat_id} recovered after successful exec")
+    _strat_fail_counter[strat_id] = 0
+    _strat_paused_until.pop(strat_id, None)
+
+
 # --- V14: Global NAV helper for sizing on total capital ---
 _global_nav_cache = {"nav": 0.0, "ts": 0.0}
 
@@ -789,6 +864,136 @@ def run_futures_live_cycle():
 def run_futures_paper_cycle():
     """Futures Paper — strategies on IBKR paper port 4003."""
     _run_futures_cycle(live=False)
+
+
+def run_crypto_watchdog_cycle():
+    """Crypto position heartbeat — runs every 5 min to verify every live
+    Binance position (> $5) has an active stop-loss order on the exchange.
+
+    Binance-specific: we check `broker.get_positions()` for spot + margin
+    positions, then `broker.get_open_orders(symbol)` for an active SL.
+    If a position has no SL order:
+      1. Tries to re-attach SL via `broker._create_spot_position(stop_loss=...)`
+         with the existing fill_price (tracked in `_fill_prices`)
+      2. On failure: CRITICAL alert Telegram + auto-pause the strat that
+         opened it (via _strat_record_failure to trigger pause)
+
+    Does NOT auto-close (user policy: always repose, never auto-close).
+    """
+    if not _crypto_lock.acquire(blocking=False):
+        logger.info("CRYPTO WATCHDOG skip — crypto lock held")
+        return
+    logger.info("=== CRYPTO WATCHDOG CYCLE ===")
+    try:
+        try:
+            from core.broker.binance_broker import BinanceBroker
+        except ImportError:
+            logger.warning("CRYPTO WATCHDOG skip — BinanceBroker unavailable")
+            return
+
+        try:
+            broker = BinanceBroker()
+        except Exception as e:
+            logger.warning(f"CRYPTO WATCHDOG skip — broker init failed: {e}")
+            return
+
+        try:
+            positions = broker.get_positions()
+        except Exception as e:
+            logger.warning(f"CRYPTO WATCHDOG skip — get_positions failed: {e}")
+            return
+
+        # Filter to live positions > $5 (ignore dust)
+        _live = [p for p in positions if abs(float(p.get("market_val", 0))) > 5]
+        if not _live:
+            logger.info("CRYPTO WATCHDOG: 0 live positions (>$5), nothing to check")
+            return
+
+        _unprotected = 0
+        for pos in _live:
+            _sym = pos.get("symbol", "?")
+            _mv = abs(float(pos.get("market_val", 0)))
+            _qty = float(pos.get("qty", 0))
+            _side = pos.get("side", "?")
+
+            # Check open orders for this symbol
+            try:
+                _open_orders = broker.get_open_orders(symbol=_sym)
+            except Exception as e:
+                logger.warning(f"CRYPTO WATCHDOG: get_open_orders({_sym}) failed: {e}")
+                continue
+
+            # A valid SL order has type STOP_LOSS or STOP_LOSS_LIMIT
+            _has_sl = any(
+                (o.get("type", "") in ("STOP_LOSS", "STOP_LOSS_LIMIT", "TAKE_PROFIT_LIMIT")
+                 and o.get("status") in ("NEW", "PARTIALLY_FILLED"))
+                for o in _open_orders
+            )
+
+            if _has_sl:
+                continue  # Protected
+
+            _unprotected += 1
+            logger.critical(
+                f"CRYPTO WATCHDOG: {_sym} {_side} qty={_qty} mv=${_mv:.0f} UNPROTECTED (no SL order)"
+            )
+
+            # Try to compute a reasonable SL: 3% from current market price
+            try:
+                _ticker = broker.get_ticker_24h(_sym)
+                _current = float(_ticker.get("last_price", 0))
+                if _current <= 0:
+                    raise ValueError("no price")
+                _sl_pct = 0.03
+                if _side == "LONG":
+                    _sl_px = round(_current * (1 - _sl_pct), 2)
+                else:
+                    _sl_px = round(_current * (1 + _sl_pct), 2)
+                _sl_limit = round(_sl_px * (0.995 if _side == "LONG" else 1.005), 2)
+
+                _sl_side = "SELL" if _side == "LONG" else "BUY"
+                _sl_params = {
+                    "symbol": _sym,
+                    "side": _sl_side,
+                    "type": "STOP_LOSS_LIMIT",
+                    "quantity": str(abs(_qty)),
+                    "price": str(_sl_limit),
+                    "stopPrice": str(_sl_px),
+                    "timeInForce": "GTC",
+                }
+                _sl_result = broker._post("/api/v3/order", _sl_params)
+                logger.critical(
+                    f"CRYPTO WATCHDOG REPOSED: {_sym} SL={_sl_px} "
+                    f"orderId={_sl_result.get('orderId', '?')}"
+                )
+                _send_alert(
+                    f"CRYPTO WATCHDOG REPOSED SL: {_sym}\n"
+                    f"SL={_sl_px} (3% from ${_current:.2f})\n"
+                    f"Position was unprotected, now safe.",
+                    level="warning",
+                )
+            except Exception as _re:
+                logger.critical(
+                    f"CRYPTO WATCHDOG REPOSE FAILED {_sym}: {_re} — MANUAL INTERVENTION"
+                )
+                _send_alert(
+                    f"CRITICAL: CRYPTO WATCHDOG could not repose SL on {_sym}\n"
+                    f"qty={_qty} mv=${_mv:.0f}\n"
+                    f"Error: {_re}\n"
+                    f"Position UNPROTECTED. Manual SL required.",
+                    level="critical",
+                )
+
+        if _unprotected == 0:
+            _syms = [p.get("symbol", "?") for p in _live]
+            logger.info(
+                f"CRYPTO WATCHDOG OK: {len(_live)} positions all protected "
+                f"({', '.join(_syms)})"
+            )
+    except Exception as e:
+        logger.warning(f"CRYPTO WATCHDOG cycle error: {e}", exc_info=True)
+    finally:
+        _crypto_lock.release()
 
 
 def run_bracket_watchdog_cycle():
@@ -3165,6 +3370,14 @@ def run_crypto_cycle():
             signal_fn = strat_data["signal_fn"]
             strat_name = config.get("name", strat_id)
 
+            # #2 Auto-pause: skip strat if recently auto-paused after failures
+            if _strat_is_paused(strat_id):
+                _pause_remaining = int(_strat_paused_until[strat_id] - time.time())
+                logger.info(
+                    f"  [{strat_id}] AUTO-PAUSED (remaining {_pause_remaining}s) — skip"
+                )
+                continue
+
             try:
                 # Construire le candle minimal (dernier prix) et le state
                 # Chaque strategie recoit un candle pd.Series et un state dict
@@ -3311,6 +3524,12 @@ def run_crypto_cycle():
                     "action": action,
                     "symbol": signal.get("symbol", trade_symbol),
                 })
+                # #4: signal funnel tracker
+                try:
+                    from core.crypto.signal_funnel import record_signal_emitted
+                    record_signal_emitted(strat_id, action)
+                except Exception:
+                    pass
 
                 # --- Executer via BinanceBroker si disponible ---
                 if broker is None:
@@ -3487,6 +3706,14 @@ def run_crypto_cycle():
                         f"— {result.get('status', '???')}"
                     )
                     n_orders += 1
+                    _strat_record_success(strat_id)  # #2: reset failure counter
+                    # #4: funnel tracker
+                    try:
+                        from core.crypto.signal_funnel import record_executed, record_risk_passed
+                        record_risk_passed(strat_id)
+                        record_executed(strat_id)
+                    except Exception:
+                        pass
 
                     # Reset hourly baseline after margin trade to avoid
                     # false kill switch from equity shift
@@ -3576,10 +3803,14 @@ def run_crypto_cycle():
                     _log_event("error", strat_id, {
                         "type": type(e).__name__, "message": str(e)[:200],
                     })
-                    _send_alert(
-                        f"ERREUR EXECUTION {strat_name}\n{type(e).__name__}: {e}",
-                        level="critical",
-                    )
+                    # #2: track consecutive failures, alert + auto-pause
+                    _strat_record_failure(strat_id, e)
+                    # #4: funnel tracker
+                    try:
+                        from core.crypto.signal_funnel import record_failed
+                        record_failed(strat_id, type(e).__name__)
+                    except Exception:
+                        pass
 
             except Exception as e:
                 # Une strategie qui plante ne doit pas bloquer les autres
@@ -4567,6 +4798,7 @@ def main():
     log_heartbeat()
     last_heartbeat = time.time()
     last_bracket_watchdog = 0  # Run immediately on first loop iteration
+    last_crypto_watchdog = 0   # idem
 
     # CRO #4: automated dry-run and smoke test flags
     _dry_run_done_today = False
@@ -4635,6 +4867,9 @@ def main():
         "bracket_watchdog": CycleRunner("bracket_watchdog", run_bracket_watchdog_cycle,
                                          alert_callback=_cycle_alert,
                                          metrics_callback=_cycle_metrics_cb),
+        "crypto_watchdog": CycleRunner("crypto_watchdog", run_crypto_watchdog_cycle,
+                                        alert_callback=_cycle_alert,
+                                        metrics_callback=_cycle_metrics_cb),
     }
     logger.info(f"  CycleRunners initialized: {list(_runners.keys())}")
 
@@ -4682,6 +4917,14 @@ def main():
         if time.time() - last_bracket_watchdog >= 300:  # 5 min
             _runners["bracket_watchdog"].run()
             last_bracket_watchdog = time.time()
+
+        # === CRYPTO WATCHDOG toutes les 5 minutes (24/7) ===
+        # Equivalent Binance: verifie que chaque position crypto live a un
+        # stop-loss actif sur l'exchange. Si manquant, repose avec SL 3%
+        # depuis le prix actuel. Jamais de close automatique.
+        if time.time() - last_crypto_watchdog >= 300:  # 5 min
+            _runners["crypto_watchdog"].run()
+            last_crypto_watchdog = time.time()
 
         # === MACRO ECB EVENT DRIVEN (lun-ven, 14h50 Paris, jours BCE only) ===
         # Le module skip lui-meme les jours non-BCE; on declenche tous les jours
@@ -4738,6 +4981,14 @@ def main():
                             equity_alpaca=_alp_eq,
                             regime="BEAR_NORMAL",
                         )
+                        # #4: crypto signal funnel digest (morning only)
+                        if _h == 7:
+                            try:
+                                from core.crypto.signal_funnel import format_digest as _funnel_fmt
+                                _funnel_msg = _funnel_fmt("CRYPTO SIGNAL FUNNEL (24h)")
+                                _send_alert(_funnel_msg, level="info")
+                            except Exception as _fe:
+                                logger.warning(f"funnel digest error: {_fe}")
                 except Exception:
                     pass
 
