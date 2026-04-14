@@ -90,6 +90,11 @@ class IBKRBroker(BaseBroker):
             )
 
         self._ib = IB()
+        # ib_insync default RequestTimeout is 4s, too short for weekend /
+        # low-liquidity periods where reqExecutionsAsync times out during
+        # initial handshake. Caused 225+ "IBKR PERMANENTLY DOWN" false alarms
+        # in a single day. 30s gives the data farm time to wake up.
+        self._ib.RequestTimeout = 30
         self._paper = os.getenv("IBKR_PAPER", "true").lower() == "true"
         self._host = os.getenv("IBKR_HOST", "127.0.0.1")
         self._port = int(os.getenv("IBKR_PORT", "7497" if self._paper else "7496"))
@@ -131,9 +136,11 @@ class IBKRBroker(BaseBroker):
 
         for attempt in range(1, _MAX_RECONNECT_ATTEMPTS + 1):
             try:
+                # timeout=20 to match RequestTimeout=30 — gives enough slack
+                # for reqExecutionsAsync handshake during weekend / low-liq
                 self._ib.connect(
                     self._host, self._port, clientId=self._client_id,
-                    timeout=10,
+                    timeout=20,
                 )
                 self._connected = True
                 self._reconnect_attempts = 0
