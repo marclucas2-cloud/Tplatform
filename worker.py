@@ -3318,7 +3318,14 @@ def run_crypto_cycle():
                     continue
 
                 # Determiner la direction et le market_type
-                market_type = config.get("market_type", "spot")
+                # BUG FIX (14/04): le signal peut override le market_type du config.
+                # Cas typique: STRAT-001 config=margin (pour les shorts) mais
+                # le signal BUY dit spot (long en spot, pas en margin). Avant:
+                # le worker ignorait le signal et routait BUY vers margin,
+                # ce qui passait qty=None (qty n'est compute que pour SELL),
+                # d'ou "Mandatory parameter 'quantity' not sent" — 30 trades
+                # rejetes en une journee, capital dort.
+                market_type = signal.get("market_type") or config.get("market_type", "spot")
 
                 # --- Signaux EARN : pas de risque directionnel, toujours autorises ---
                 if action in ("EARN_REBALANCE", "EARN_SUBSCRIBE", "EARN_REDEEM",
@@ -3445,9 +3452,13 @@ def run_crypto_cycle():
                         f"{_cycle_signals[exec_symbol]}"
                     )
 
-                # Compute qty for SELL with proper step size rounding
+                # Compute qty with proper step size rounding.
+                # SELL: always needs qty (we sell N base units).
+                # BUY + margin: also needs qty (margin endpoint rejects quoteOrderQty).
+                # BUY + spot: qty=None is OK, the adapter uses quoteOrderQty=notional.
                 _sell_qty = None
-                if side == "SELL" and price > 0:
+                _need_qty = (side == "SELL") or (side == "BUY" and market_type == "margin")
+                if _need_qty and price > 0:
                     raw_qty = notional / price
                     # BTC pairs: step 0.00001 (5 dec), altcoins: step varies
                     if "BTC" in exec_symbol:
