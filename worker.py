@@ -870,14 +870,19 @@ def run_bracket_watchdog_cycle():
                 _mult = int(getattr(pos.contract, "multiplier", 1) or 1)
                 _entry_px = float(getattr(pos, "avgCost", 0)) / max(_mult, 1)
 
-                # Recover SL/TP from state file, else strategy defaults
+                # Recover SL/TP via 3-tier fallback — never close, always repose
                 _sl = 0.0
                 _tp = 0.0
+                _source = ""
+
+                # Tier 1: state file
                 if _sym in _state and float(_state[_sym].get("sl", 0)) > 0 and float(_state[_sym].get("tp", 0)) > 0:
                     _sl = float(_state[_sym]["sl"])
                     _tp = float(_state[_sym]["tp"])
-                    logger.info(f"BRACKET WATCHDOG: {_sym} SL/TP from state ({_sl}/{_tp})")
-                elif _sym in _STRAT_DEFAULTS and _entry_px > 0:
+                    _source = "state"
+
+                # Tier 2: strategy defaults from entry price
+                if (_sl == 0 or _tp == 0) and _sym in _STRAT_DEFAULTS and _entry_px > 0:
                     _d = _STRAT_DEFAULTS[_sym]
                     if pos.position > 0:
                         _sl = round(_entry_px - _d["sl_points"], 2)
@@ -885,7 +890,40 @@ def run_bracket_watchdog_cycle():
                     else:
                         _sl = round(_entry_px + _d["sl_points"], 2)
                         _tp = round(_entry_px - _d["tp_points"], 2)
-                    logger.warning(f"BRACKET WATCHDOG: {_sym} SL/TP synthesized ({_sl}/{_tp})")
+                    _source = "strat_defaults"
+
+                # Tier 3: synthesize from current market price (-1%/+1.5% for longs)
+                # This is the LAST RESORT — never let a position stay unprotected.
+                # Better a loose bracket than no bracket.
+                if _sl == 0 or _tp == 0:
+                    try:
+                        _fut_q = _WdFuture(
+                            _sym, exchange="CME", currency="USD",
+                            lastTradeDateOrContractMonth=pos.contract.lastTradeDateOrContractMonth,
+                        )
+                        _details_q = _ib.reqContractDetails(_fut_q)
+                        if _details_q:
+                            _c_q = _details_q[0].contract
+                            _bars = _ib.reqHistoricalData(
+                                _c_q, endDateTime="", durationStr="60 S",
+                                barSizeSetting="1 min", whatToShow="TRADES",
+                                useRTH=False, formatDate=2,
+                            )
+                            _wdt.sleep(2); _ib.sleep(1)
+                            if _bars:
+                                _current_px = float(_bars[-1].close)
+                                # 1% SL / 1.5% TP from current — conservative bracket
+                                if pos.position > 0:
+                                    _sl = round(_current_px * 0.99, 2)
+                                    _tp = round(_current_px * 1.015, 2)
+                                else:
+                                    _sl = round(_current_px * 1.01, 2)
+                                    _tp = round(_current_px * 0.985, 2)
+                                _source = f"current_px={_current_px}"
+                    except Exception as _px_err:
+                        logger.warning(
+                            f"BRACKET WATCHDOG: {_sym} current price fetch failed: {_px_err}"
+                        )
 
                 _side_exit = "SELL" if pos.position > 0 else "BUY"
                 _qty = abs(int(pos.position))
@@ -893,14 +931,25 @@ def run_bracket_watchdog_cycle():
                 _repose_ok = False
                 _fail_reason = ""
 
+                # We MUST have SL/TP by now (Tier 3 always succeeds if IBKR is up).
+                # If _sl or _tp is still 0, something is very wrong.
                 if _sl > 0 and _tp > 0:
-                    try:
-                        _fut = _WdFuture(
-                            _sym, exchange="CME", currency="USD",
-                            lastTradeDateOrContractMonth=pos.contract.lastTradeDateOrContractMonth,
-                        )
-                        _details = _ib.reqContractDetails(_fut)
-                        if _details:
+                    logger.info(
+                        f"BRACKET WATCHDOG: {_sym} repose attempt "
+                        f"SL={_sl} TP={_tp} source={_source}"
+                    )
+                    # Try repose up to 3 times to handle transient IBKR errors
+                    for _attempt in range(1, 4):
+                        try:
+                            _fut = _WdFuture(
+                                _sym, exchange="CME", currency="USD",
+                                lastTradeDateOrContractMonth=pos.contract.lastTradeDateOrContractMonth,
+                            )
+                            _details = _ib.reqContractDetails(_fut)
+                            if not _details:
+                                _fail_reason = f"no contract details (attempt {_attempt})"
+                                _wdt.sleep(2)
+                                continue
                             _contract = _details[0].contract
                             _oca = f"WATCHDOG_{_sym}_{_wd_uuid.uuid4().hex[:8]}"
                             _sl_o = _WdStop(_side_exit, _qty, _sl)
@@ -912,77 +961,57 @@ def run_bracket_watchdog_cycle():
                             _ib.placeOrder(_contract, _tp_o)
                             _wdt.sleep(2); _ib.sleep(1)
                             logger.critical(
-                                f"BRACKET WATCHDOG REPOSED: {_sym} SL={_sl} TP={_tp} OCA={_oca}"
+                                f"BRACKET WATCHDOG REPOSED: {_sym} SL={_sl} TP={_tp} "
+                                f"OCA={_oca} source={_source} attempt={_attempt}"
                             )
                             _repose_ok = True
-
-                            # Update state file
-                            if _sym not in _state:
-                                _state[_sym] = {}
-                            _state[_sym].update({
-                                "symbol": _sym, "side": "BUY" if pos.position > 0 else "SELL",
-                                "qty": _qty, "entry": _entry_px, "sl": _sl, "tp": _tp,
-                                "oca_group": _oca, "mode": "LIVE",
-                                "_authorized_by": "bracket_watchdog",
-                            })
-                            if "opened_at" not in _state[_sym]:
-                                _state[_sym]["opened_at"] = datetime.now(UTC).isoformat()
-                            _state_file.parent.mkdir(parents=True, exist_ok=True)
-                            _state_file.write_text(json.dumps(_state, indent=2))
-
-                            _send_alert(
-                                f"WATCHDOG BRACKET REPOSED: {_sym}\n"
-                                f"SL={_sl}, TP={_tp}\nPosition was unprotected, now safe.",
-                                level="critical",
+                            break
+                        except Exception as _be:
+                            _fail_reason = f"attempt {_attempt}: {str(_be)[:80]}"
+                            logger.warning(
+                                f"BRACKET WATCHDOG repose attempt {_attempt}/3 failed {_sym}: {_be}"
                             )
-                        else:
-                            _fail_reason = "no contract details"
-                    except Exception as _be:
-                        _fail_reason = str(_be)[:100]
-                        logger.error(f"BRACKET WATCHDOG repose failed {_sym}: {_be}")
+                            _wdt.sleep(3)
+
+                    if _repose_ok:
+                        # Update state file
+                        if _sym not in _state:
+                            _state[_sym] = {}
+                        _state[_sym].update({
+                            "symbol": _sym, "side": "BUY" if pos.position > 0 else "SELL",
+                            "qty": _qty, "entry": _entry_px, "sl": _sl, "tp": _tp,
+                            "oca_group": _oca, "mode": "LIVE",
+                            "_authorized_by": f"bracket_watchdog_{_source}",
+                        })
+                        if "opened_at" not in _state[_sym]:
+                            _state[_sym]["opened_at"] = datetime.now(UTC).isoformat()
+                        _state_file.parent.mkdir(parents=True, exist_ok=True)
+                        _state_file.write_text(json.dumps(_state, indent=2))
+
+                        _send_alert(
+                            f"WATCHDOG BRACKET REPOSED: {_sym}\n"
+                            f"SL={_sl}, TP={_tp} ({_source})\n"
+                            f"Position was unprotected, now safe.",
+                            level="warning",
+                        )
                 else:
-                    _fail_reason = "no SL/TP available"
+                    _fail_reason = "no SL/TP available (all 3 tiers failed)"
 
                 if not _repose_ok:
-                    # FAIL-SAFE: close at market
+                    # Repose failed after all tiers and 3 retries.
+                    # Do NOT close — user policy: always repose, never auto-close.
+                    # Alert CRITICAL so user can intervene manually.
                     logger.critical(
-                        f"BRACKET WATCHDOG FAIL-SAFE: {_sym} — {_fail_reason}. Closing at market."
+                        f"BRACKET WATCHDOG REPOSE FAILED after all retries: {_sym} — "
+                        f"{_fail_reason}. Position REMAINS UNPROTECTED. MANUAL INTERVENTION."
                     )
-                    try:
-                        _fut = _WdFuture(
-                            _sym, exchange="CME", currency="USD",
-                            lastTradeDateOrContractMonth=pos.contract.lastTradeDateOrContractMonth,
-                        )
-                        _details = _ib.reqContractDetails(_fut)
-                        if _details:
-                            _contract = _details[0].contract
-                            _order = _WdMarket(_side_exit, _qty)
-                            _order.outsideRth = True
-                            _trade = _ib.placeOrder(_contract, _order)
-                            _wdt.sleep(4); _ib.sleep(2)
-                            _status = _trade.orderStatus.status
-                            _fill = _trade.orderStatus.avgFillPrice or 0
-                            logger.critical(
-                                f"BRACKET WATCHDOG FAIL-SAFE CLOSED: {_sym} "
-                                f"status={_status} fill={_fill}"
-                            )
-                            _send_alert(
-                                f"CRITICAL: WATCHDOG FAIL-SAFE closed {_sym}\n"
-                                f"Reason: {_fail_reason}\n"
-                                f"Fill: {_fill:.2f} ({_status})",
-                                level="critical",
-                            )
-                            if _sym in _state:
-                                del _state[_sym]
-                                _state_file.write_text(json.dumps(_state, indent=2))
-                    except Exception as _fse:
-                        logger.critical(
-                            f"BRACKET WATCHDOG FAIL-SAFE FAILED {_sym}: {_fse} — MANUAL INTERVENTION"
-                        )
-                        _send_alert(
-                            f"WATCHDOG FAIL-SAFE FAILED {_sym}: {_fse}\nMANUAL INTERVENTION REQUIRED",
-                            level="critical",
-                        )
+                    _send_alert(
+                        f"CRITICAL: WATCHDOG could not repose bracket on {_sym}\n"
+                        f"Reason: {_fail_reason}\n"
+                        f"Position is UNPROTECTED. Manual bracket required.\n"
+                        f"Will retry in 5 min on next watchdog cycle.",
+                        level="critical",
+                    )
 
             if _unprotected == 0:
                 logger.debug(
