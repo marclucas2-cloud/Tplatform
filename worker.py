@@ -791,6 +791,214 @@ def run_futures_paper_cycle():
     _run_futures_cycle(live=False)
 
 
+def run_bracket_watchdog_cycle():
+    """Bracket heartbeat watchdog — runs every 5 min to verify every open
+    futures position has an active SL/TP bracket on IBKR.
+
+    If a position is detected without a bracket:
+      1. Try to repose from state file (if sl>0 and tp>0)
+      2. Try to synthesize from strategy defaults (Overnight MES: entry±30/50)
+      3. Last resort FAIL-SAFE: close the position at market + CRITICAL alert
+
+    This closes the gap where _run_futures_cycle (daily at 16h Paris) is the
+    only bracket check. Positions could remain unprotected for up to 24h
+    between cycles if brackets vanish (IBKR disconnect, order expiry, etc.).
+    """
+    if not _ibkr_lock.acquire(blocking=False):
+        logger.debug("BRACKET WATCHDOG skip — IBKR lock held")
+        return
+    try:
+        from ib_insync import (
+            IB as _WdIB,
+            Future as _WdFuture,
+            StopOrder as _WdStop,
+            LimitOrder as _WdLimit,
+            MarketOrder as _WdMarket,
+        )
+        import random as _wd_rng
+        import uuid as _wd_uuid
+
+        _host = os.environ.get("IBKR_HOST", "127.0.0.1")
+        _port = int(os.environ.get("IBKR_PORT", "4002"))
+        _ib = _WdIB()
+        _ib.RequestTimeout = 20
+        try:
+            _ib.connect(_host, _port, clientId=_wd_rng.randint(310, 319), timeout=10)
+        except Exception as e:
+            logger.warning(f"BRACKET WATCHDOG: connect failed: {e}")
+            return
+
+        try:
+            import time as _wdt
+            _wdt.sleep(2)
+
+            _live_positions = [p for p in _ib.positions() if abs(p.position) > 0]
+            if not _live_positions:
+                logger.debug("BRACKET WATCHDOG: no live positions")
+                return
+
+            _open_trades = _ib.reqAllOpenOrders()
+            _ordered_syms = {t.contract.symbol for t in _open_trades
+                             if t.orderStatus.status not in ("Cancelled", "Filled", "Inactive")}
+
+            _state_file = ROOT / "data" / "state" / "futures_positions_live.json"
+            _state = {}
+            if _state_file.exists():
+                try:
+                    _state = json.loads(_state_file.read_text(encoding="utf-8"))
+                except Exception:
+                    pass
+
+            # Strategy default SL/TP offsets
+            _STRAT_DEFAULTS = {
+                "MES": {"sl_points": 30, "tp_points": 50},
+                "MNQ": {"sl_points": 30, "tp_points": 50},
+            }
+
+            _unprotected = 0
+            for pos in _live_positions:
+                _sym = pos.contract.symbol
+                if _sym in _ordered_syms:
+                    continue  # has at least one open order — OK
+
+                # UNPROTECTED — try to repose
+                _unprotected += 1
+                logger.critical(
+                    f"BRACKET WATCHDOG: {_sym} position {pos.position} UNPROTECTED — attempting repose"
+                )
+
+                _mult = int(getattr(pos.contract, "multiplier", 1) or 1)
+                _entry_px = float(getattr(pos, "avgCost", 0)) / max(_mult, 1)
+
+                # Recover SL/TP from state file, else strategy defaults
+                _sl = 0.0
+                _tp = 0.0
+                if _sym in _state and float(_state[_sym].get("sl", 0)) > 0 and float(_state[_sym].get("tp", 0)) > 0:
+                    _sl = float(_state[_sym]["sl"])
+                    _tp = float(_state[_sym]["tp"])
+                    logger.info(f"BRACKET WATCHDOG: {_sym} SL/TP from state ({_sl}/{_tp})")
+                elif _sym in _STRAT_DEFAULTS and _entry_px > 0:
+                    _d = _STRAT_DEFAULTS[_sym]
+                    if pos.position > 0:
+                        _sl = round(_entry_px - _d["sl_points"], 2)
+                        _tp = round(_entry_px + _d["tp_points"], 2)
+                    else:
+                        _sl = round(_entry_px + _d["sl_points"], 2)
+                        _tp = round(_entry_px - _d["tp_points"], 2)
+                    logger.warning(f"BRACKET WATCHDOG: {_sym} SL/TP synthesized ({_sl}/{_tp})")
+
+                _side_exit = "SELL" if pos.position > 0 else "BUY"
+                _qty = abs(int(pos.position))
+
+                _repose_ok = False
+                _fail_reason = ""
+
+                if _sl > 0 and _tp > 0:
+                    try:
+                        _fut = _WdFuture(
+                            _sym, exchange="CME", currency="USD",
+                            lastTradeDateOrContractMonth=pos.contract.lastTradeDateOrContractMonth,
+                        )
+                        _details = _ib.reqContractDetails(_fut)
+                        if _details:
+                            _contract = _details[0].contract
+                            _oca = f"WATCHDOG_{_sym}_{_wd_uuid.uuid4().hex[:8]}"
+                            _sl_o = _WdStop(_side_exit, _qty, _sl)
+                            _sl_o.tif = "GTC"; _sl_o.ocaGroup = _oca; _sl_o.ocaType = 1; _sl_o.outsideRth = True
+                            _tp_o = _WdLimit(_side_exit, _qty, _tp)
+                            _tp_o.tif = "GTC"; _tp_o.ocaGroup = _oca; _tp_o.ocaType = 1; _tp_o.outsideRth = True
+                            _ib.placeOrder(_contract, _sl_o)
+                            _wdt.sleep(1)
+                            _ib.placeOrder(_contract, _tp_o)
+                            _wdt.sleep(2); _ib.sleep(1)
+                            logger.critical(
+                                f"BRACKET WATCHDOG REPOSED: {_sym} SL={_sl} TP={_tp} OCA={_oca}"
+                            )
+                            _repose_ok = True
+
+                            # Update state file
+                            if _sym not in _state:
+                                _state[_sym] = {}
+                            _state[_sym].update({
+                                "symbol": _sym, "side": "BUY" if pos.position > 0 else "SELL",
+                                "qty": _qty, "entry": _entry_px, "sl": _sl, "tp": _tp,
+                                "oca_group": _oca, "mode": "LIVE",
+                                "_authorized_by": "bracket_watchdog",
+                            })
+                            if "opened_at" not in _state[_sym]:
+                                _state[_sym]["opened_at"] = datetime.now(UTC).isoformat()
+                            _state_file.parent.mkdir(parents=True, exist_ok=True)
+                            _state_file.write_text(json.dumps(_state, indent=2))
+
+                            _send_alert(
+                                f"WATCHDOG BRACKET REPOSED: {_sym}\n"
+                                f"SL={_sl}, TP={_tp}\nPosition was unprotected, now safe.",
+                                level="critical",
+                            )
+                        else:
+                            _fail_reason = "no contract details"
+                    except Exception as _be:
+                        _fail_reason = str(_be)[:100]
+                        logger.error(f"BRACKET WATCHDOG repose failed {_sym}: {_be}")
+                else:
+                    _fail_reason = "no SL/TP available"
+
+                if not _repose_ok:
+                    # FAIL-SAFE: close at market
+                    logger.critical(
+                        f"BRACKET WATCHDOG FAIL-SAFE: {_sym} — {_fail_reason}. Closing at market."
+                    )
+                    try:
+                        _fut = _WdFuture(
+                            _sym, exchange="CME", currency="USD",
+                            lastTradeDateOrContractMonth=pos.contract.lastTradeDateOrContractMonth,
+                        )
+                        _details = _ib.reqContractDetails(_fut)
+                        if _details:
+                            _contract = _details[0].contract
+                            _order = _WdMarket(_side_exit, _qty)
+                            _order.outsideRth = True
+                            _trade = _ib.placeOrder(_contract, _order)
+                            _wdt.sleep(4); _ib.sleep(2)
+                            _status = _trade.orderStatus.status
+                            _fill = _trade.orderStatus.avgFillPrice or 0
+                            logger.critical(
+                                f"BRACKET WATCHDOG FAIL-SAFE CLOSED: {_sym} "
+                                f"status={_status} fill={_fill}"
+                            )
+                            _send_alert(
+                                f"CRITICAL: WATCHDOG FAIL-SAFE closed {_sym}\n"
+                                f"Reason: {_fail_reason}\n"
+                                f"Fill: {_fill:.2f} ({_status})",
+                                level="critical",
+                            )
+                            if _sym in _state:
+                                del _state[_sym]
+                                _state_file.write_text(json.dumps(_state, indent=2))
+                    except Exception as _fse:
+                        logger.critical(
+                            f"BRACKET WATCHDOG FAIL-SAFE FAILED {_sym}: {_fse} — MANUAL INTERVENTION"
+                        )
+                        _send_alert(
+                            f"WATCHDOG FAIL-SAFE FAILED {_sym}: {_fse}\nMANUAL INTERVENTION REQUIRED",
+                            level="critical",
+                        )
+
+            if _unprotected == 0:
+                logger.debug(
+                    f"BRACKET WATCHDOG OK: {len(_live_positions)} positions all protected"
+                )
+        finally:
+            try:
+                _ib.disconnect()
+            except Exception:
+                pass
+    except Exception as e:
+        logger.warning(f"BRACKET WATCHDOG cycle error: {e}")
+    finally:
+        _ibkr_lock.release()
+
+
 def _make_macro_ecb_executor(mode: str):
     """Factory for MacroECB futures executor — places bracket orders on IBKR.
 
@@ -4315,6 +4523,7 @@ def main():
     # Premier heartbeat
     log_heartbeat()
     last_heartbeat = time.time()
+    last_bracket_watchdog = 0  # Run immediately on first loop iteration
 
     # CRO #4: automated dry-run and smoke test flags
     _dry_run_done_today = False
@@ -4380,6 +4589,9 @@ def main():
         "macro_ecb": CycleRunner("macro_ecb", run_macro_ecb_live_cycle,
                                   alert_callback=_cycle_alert,
                                   metrics_callback=_cycle_metrics_cb),
+        "bracket_watchdog": CycleRunner("bracket_watchdog", run_bracket_watchdog_cycle,
+                                         alert_callback=_cycle_alert,
+                                         metrics_callback=_cycle_metrics_cb),
     }
     logger.info(f"  CycleRunners initialized: {list(_runners.keys())}")
 
@@ -4419,6 +4631,14 @@ def main():
             run_cross_asset_momentum_cycle._done_today = True
         if is_weekday() and now_paris.hour < 16:
             run_cross_asset_momentum_cycle._done_today = False
+
+        # === BRACKET WATCHDOG toutes les 5 minutes (24/7) ===
+        # Verifie que chaque position futures live a un bracket actif.
+        # Si manquant: tente repose from state, sinon fail-safe close.
+        # Protege contre les brackets qui disparaissent entre les cycles futures.
+        if time.time() - last_bracket_watchdog >= 300:  # 5 min
+            _runners["bracket_watchdog"].run()
+            last_bracket_watchdog = time.time()
 
         # === MACRO ECB EVENT DRIVEN (lun-ven, 14h50 Paris, jours BCE only) ===
         # Le module skip lui-meme les jours non-BCE; on declenche tous les jours
