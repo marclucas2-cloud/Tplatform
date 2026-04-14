@@ -106,10 +106,30 @@ _STRAT_PAUSE_DURATION_SECONDS = 3600  # 1h
 _STRAT_ALERT_DEDUP_SECONDS = 600  # Max 1 alert per strat per 10 min
 
 
+def _load_wf_pauses() -> dict:
+    """Load WF weekly pauses file (strats auto-paused after WF rejection)."""
+    try:
+        path = ROOT / "data" / "crypto" / "wf_pauses.json"
+        if not path.exists():
+            return {}
+        data = json.loads(path.read_text(encoding="utf-8"))
+        # Filter expired
+        now = datetime.now(UTC).isoformat()
+        return {k: v for k, v in data.items() if v.get("paused_until", "") > now}
+    except Exception:
+        return {}
+
+
 def _strat_is_paused(strat_id: str) -> bool:
-    """Return True if strategy is currently auto-paused after failures."""
+    """Return True if strategy is currently auto-paused after failures OR by WF."""
     pause_until = _strat_paused_until.get(strat_id, 0)
-    return time.time() < pause_until
+    if time.time() < pause_until:
+        return True
+    # Also check WF weekly pauses (strategy-name keyed, not strat-id)
+    wf_pauses = _load_wf_pauses()
+    # Strat_id can be "STRAT-001" but WF uses underlying name like "btc_eth_dual_momentum"
+    # Check both keys
+    return strat_id in wf_pauses
 
 
 def _strat_record_failure(strat_id: str, error: Exception) -> None:
@@ -3530,6 +3550,18 @@ def run_crypto_cycle():
                     record_signal_emitted(strat_id, action)
                 except Exception:
                     pass
+                # #9: quarantine observe — record signal in quarantine tracker
+                try:
+                    from core.crypto.quarantine import observe_signal, is_quarantined
+                    observe_signal(strat_id)
+                    quar, reason = is_quarantined(strat_id)
+                    if quar and action in ("BUY", "SELL"):
+                        logger.info(
+                            f"  [{strat_id}] QUARANTINE: {reason} — paper only, no live exec"
+                        )
+                        continue
+                except Exception as _qe:
+                    logger.debug(f"quarantine check failed: {_qe}")
 
                 # --- Executer via BinanceBroker si disponible ---
                 if broker is None:
@@ -3714,6 +3746,20 @@ def run_crypto_cycle():
                         record_executed(strat_id)
                     except Exception:
                         pass
+                    # #6: fidelity score — record slippage vs signal price
+                    try:
+                        from core.crypto.fidelity_score import record_trade
+                        record_trade(
+                            strat_id=strat_id,
+                            symbol=exec_symbol,
+                            side=side,
+                            signal_price=price,
+                            fill_price=float(result.get("filled_price", price) or price),
+                            qty=float(result.get("filled_qty", 0)),
+                            signal_ts=candle_data.get("timestamp", datetime.now(UTC).isoformat()),
+                        )
+                    except Exception as _fe:
+                        logger.debug(f"fidelity record failed: {_fe}")
 
                     # Reset hourly baseline after margin trade to avoid
                     # false kill switch from equity shift
@@ -4629,6 +4675,15 @@ def main():
         except Exception as e:
             logger.warning(f"Crypto reconciliation failed: {e}")
 
+    # #9 Quarantine bootstrap — release pre-existing strats so the new
+    # quarantine feature doesn't block them for 7 days.
+    try:
+        from strategies.crypto import CRYPTO_STRATEGIES as _CS_BOOT
+        from core.crypto.quarantine import bootstrap_existing as _qb
+        _qb(list(_CS_BOOT.keys()))
+    except Exception as _qbe:
+        logger.warning(f"Quarantine bootstrap skipped: {_qbe}")
+
     # Futures IBKR reconciliation — sync state file with broker reality.
     # Walks IBKR positions and recovers SL/TP from existing OCA orders.
     # If no brackets found on IBKR, falls back to strategy defaults
@@ -5008,6 +5063,25 @@ def main():
                 logger.warning(f"DRY-RUN error: {_dr_err}")
         if now_paris.hour < 6:
             _dry_run_done_today = False
+
+        # === #8 WF WEEKLY REVIEW (dimanche 04:30 CET) ===
+        # Re-run walk-forward validation on last months of data. Auto-pause
+        # strategies that fail WF criteria. Alerte Telegram.
+        if now_paris.weekday() == 6 and now_paris.hour == 4 and now_paris.minute >= 30 and not getattr(run_crypto_cycle, '_wf_weekly_done_today', False):
+            try:
+                import subprocess
+                logger.info("=== WF WEEKLY REVIEW (sunday 04:30 Paris) ===")
+                subprocess.Popen(
+                    [sys.executable, str(ROOT / "scripts" / "wf_weekly_review.py")],
+                    cwd=str(ROOT),
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                )
+                run_crypto_cycle._wf_weekly_done_today = True
+            except Exception as _wfe:
+                logger.warning(f"WF weekly launch error: {_wfe}")
+        if now_paris.hour < 4 or now_paris.weekday() != 6:
+            run_crypto_cycle._wf_weekly_done_today = False
 
         # === CRO #4: AUTOMATED SMOKE TEST (dimanche 04:00 CET) ===
         if now_paris.weekday() == 6 and now_paris.hour == 4 and not _smoke_test_done_this_week:
