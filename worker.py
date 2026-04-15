@@ -1652,6 +1652,48 @@ def _run_futures_cycle(live: bool = False):
         signals = []
 
         # ============================================================
+        # ============================================================
+        # STRATS LIVE CAPABLE (true alpha, zero-beta, paper + live)
+        # ============================================================
+        # Ces strats ont demontre un alpha pur (corr ~0 avec MES buy-hold)
+        # et tournent donc a la fois en paper (port 4003) et live (port 4002).
+        # User decision 15 avril 2026.
+
+        # LIVE-capable 1: Cross-Asset Momentum
+        # corr MES = 0.003, 5/5 WF, alpha each year 2021-2026 (incl 2 bears)
+        try:
+            from strategies_v2.futures.cross_asset_momentum import CrossAssetMomentum
+            _cam_strat = CrossAssetMomentum()
+            _cam_strat.set_data_feed(feed)
+            bar = feed.get_latest_bar("MES")
+            if bar:
+                sig = _cam_strat.on_bar(bar, portfolio_state)
+                if sig:
+                    signals.append(("Cross-Asset Mom", sig))
+                    logger.info(f"    Cross-Asset Mom ({_mode}): BUY {sig.symbol}")
+                else:
+                    logger.info(f"    Cross-Asset Mom ({_mode}): pas de rebal")
+        except Exception as e:
+            logger.error(f"    Cross-Asset Mom error: {e}")
+
+        # LIVE-capable 2: Gold Trend MGC
+        # corr MES = -0.02, positive EVERY year, alpha pur
+        if "MGC" in data_sources:
+            try:
+                from strategies_v2.futures.gold_trend_mgc import GoldTrendMGC
+                _gt_strat = GoldTrendMGC()
+                _gt_strat.set_data_feed(feed)
+                bar = feed.get_latest_bar("MGC")
+                if bar:
+                    sig = _gt_strat.on_bar(bar, portfolio_state)
+                    if sig:
+                        signals.append(("Gold Trend MGC", sig))
+                        logger.info(f"    Gold Trend MGC ({_mode}): BUY @ {bar.close:.2f}")
+                    else:
+                        logger.info(f"    Gold Trend MGC ({_mode}): below EMA20")
+            except Exception as e:
+                logger.error(f"    Gold Trend MGC error: {e}")
+
         # STRATS "REJECTED" QUI TOURNENT EN PAPER UNIQUEMENT
         # ============================================================
         # Decision user 15 avril 2026: activer en paper toutes les strats
@@ -1824,41 +1866,7 @@ def _run_futures_cycle(live: bool = False):
                 except Exception as e:
                     logger.error(f"    MGC VIX Hedge error: {e}")
 
-            # 9g. Gold Trend MGC — TRUE ALPHA (positive EVERY year 2021-2026)
-            # n=145, Sharpe 4.75, +$28,951. Positive in 2022 bear (+$249) + 2026 bear (+$8775)
-            # Uncorrelated to equity beta — real edge
-            if "MGC" in data_sources:
-                try:
-                    from strategies_v2.futures.gold_trend_mgc import GoldTrendMGC
-                    strat = GoldTrendMGC()
-                    strat.set_data_feed(feed)
-                    bar = feed.get_latest_bar("MGC")
-                    if bar:
-                        sig = strat.on_bar(bar, portfolio_state)
-                        if sig:
-                            signals.append(("Gold Trend MGC", sig))
-                            logger.info(f"    Gold Trend MGC (paper): BUY @ {bar.close:.2f}")
-                        else:
-                            logger.info("    Gold Trend MGC (paper): below EMA20")
-                except Exception as e:
-                    logger.error(f"    Gold Trend MGC error: {e}")
-
-            # 9e. Cross-Asset Momentum — BEST strat of session, 5/5 WF, Sharpe 7.87
-            # Rotate into best of MES/MNQ/M2K/MGC/MCL every 20 days.
-            try:
-                from strategies_v2.futures.cross_asset_momentum import CrossAssetMomentum
-                strat = CrossAssetMomentum()
-                strat.set_data_feed(feed)
-                bar = feed.get_latest_bar("MES")
-                if bar:
-                    sig = strat.on_bar(bar, portfolio_state)
-                    if sig:
-                        signals.append(("Cross-Asset Mom", sig))
-                        logger.info(f"    Cross-Asset Mom (paper): BUY {sig.symbol} @ {sig.stop_loss:.2f}")
-                    else:
-                        logger.info("    Cross-Asset Mom (paper): pas de rebal ou <2% mom")
-            except Exception as e:
-                logger.error(f"    Cross-Asset Mom error: {e}")
+            # (Cross-Asset Mom + Gold Trend MGC moved out of paper-only block — now LIVE+paper)
 
             # 9f. Thursday Rally MES + MNQ
             for sym in ["MES", "MNQ"]:
