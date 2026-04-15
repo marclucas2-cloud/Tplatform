@@ -196,30 +196,31 @@ def execute_plan(client, to_close: list[str], to_open: list[tuple[str, dict]], d
             stats["opened"] += 1
             continue
         try:
-            if side == "BUY":
-                client.create_position(
-                    symbol=sym, direction="BUY",
-                    notional=notional,
-                    _authorized_by=AUTHORIZED_BY,
-                )
-            else:
-                # shorts: need integer qty, not notional
-                # Estimate qty from latest price
-                try:
-                    px_data = client.get_prices(sym, timeframe="1D", bars=2)
-                    last_px = float(px_data.get("close", [0])[-1]) if px_data else 0
-                except Exception:
-                    last_px = 0
-                if last_px <= 0:
-                    logger.warning(f"  open SKIP {sym}: no price for qty calc")
-                    stats["skipped"] += 1
-                    continue
-                qty = max(1, int(notional / last_px))
-                client.create_position(
-                    symbol=sym, direction="SELL", qty=qty,
-                    _authorized_by=AUTHORIZED_BY,
-                )
-            logger.info(f"  open OK: {side} {sym} ~${notional:.0f}")
+            # Both BUY and SELL: fetch last price to compute qty (bypass CRO
+            # notional-without-SL guard — monthly strats exit at rebalance,
+            # not at stop-loss, so no SL concept).
+            try:
+                px_data = client.get_prices(sym, timeframe="1D", bars=2)
+                bars = px_data.get("bars", []) if isinstance(px_data, dict) else []
+                last_px = float(bars[-1].get("close", 0)) if bars else 0
+            except Exception as e:
+                logger.warning(f"  {sym}: get_prices failed: {e}")
+                last_px = 0
+            if last_px <= 0:
+                logger.warning(f"  open SKIP {sym}: no price for qty calc")
+                stats["skipped"] += 1
+                continue
+            qty = max(1, int(notional / last_px))
+            result = client.create_position(
+                symbol=sym, direction=side, qty=qty,
+                _authorized_by=AUTHORIZED_BY,
+            )
+            # Verify order actually placed (not REJECTED by CRO guard)
+            if isinstance(result, dict) and result.get("status") == "REJECTED":
+                logger.error(f"  open REJECTED {sym}: {result.get('reason')}")
+                stats["errors"] += 1
+                continue
+            logger.info(f"  open OK: {side} {sym} qty={qty} @ ~${last_px:.2f} notional=${qty*last_px:.0f}")
             stats["opened"] += 1
         except Exception as e:
             logger.error(f"  open FAIL {sym}: {e}")
