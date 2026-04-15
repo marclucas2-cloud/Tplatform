@@ -189,7 +189,7 @@ def signal_gold_oil(mgc, mcl, common, i, lookback=20, min_edge=0.02, last_entry=
     }
 
 
-def run_portfolio(dfs, common_all, use_first_refusal: bool, label: str):
+def run_portfolio(dfs, common_all, use_first_refusal: bool, label: str, disable_gold_trend: bool = False):
     mgc = dfs["MGC"]; mcl = dfs["MCL"]
     equity = INITIAL_EQUITY
     open_positions = {}
@@ -221,9 +221,10 @@ def run_portfolio(dfs, common_all, use_first_refusal: bool, label: str):
         sig = signal_cross_asset(dfs, common_all, i, last_rebal=last_rebal_cam)
         if sig:
             signals_today.append(sig)
-        sig = signal_gold_trend(mgc, mgc.index.get_loc(d) if d in mgc.index else -1)
-        if sig:
-            signals_today.append(sig)
+        if not disable_gold_trend:
+            sig = signal_gold_trend(mgc, mgc.index.get_loc(d) if d in mgc.index else -1)
+            if sig:
+                signals_today.append(sig)
         sig = signal_gold_oil(mgc, mcl, common_all, i, last_entry=last_entry_gor)
         if sig:
             signals_today.append(sig)
@@ -392,40 +393,60 @@ def main():
     r1 = run_portfolio(dfs, common_all, use_first_refusal=False, label="V1 BASELINE (current live)")
     # V2: first-refusal
     r2 = run_portfolio(dfs, common_all, use_first_refusal=True, label="V2 OPTION 1 (CrossAsset first-refusal)")
+    # V3: first-refusal + no gold_trend
+    r3 = run_portfolio(dfs, common_all, use_first_refusal=True, disable_gold_trend=True,
+                       label="V3 OPTION 2 (first-refusal + NO gold_trend)")
 
     print_result(r1)
     print_result(r2)
+    print_result(r3)
 
     # Diff table
     print("\n" + "=" * 72)
-    print("  COMPARAISON V1 vs V2")
+    print("  COMPARAISON V1 vs V2 vs V3")
     print("=" * 72)
+    def fmt_year(r, y):
+        if y in r['per_year'].index:
+            return f"${r['per_year'].loc[y,'total']:+,.0f}"
+        return "n/a"
+
     rows = [
-        ("PnL total",       f"${r1['total_pnl']:+,.0f}",   f"${r2['total_pnl']:+,.0f}",
-         f"{(r2['total_pnl']-r1['total_pnl'])/abs(r1['total_pnl'])*100:+.0f}%"),
-        ("CAGR",            f"{r1['roc_annual']*100:.1f}%", f"{r2['roc_annual']*100:.1f}%",
-         f"{(r2['roc_annual']-r1['roc_annual'])*100:+.1f} pts"),
-        ("Sharpe",          f"{r1['sharpe']:.2f}",          f"{r2['sharpe']:.2f}",
-         f"{r2['sharpe']-r1['sharpe']:+.2f}"),
-        ("Max DD",          f"{r1['max_dd']*100:.1f}%",     f"{r2['max_dd']*100:.1f}%",
-         f"{(r2['max_dd']-r1['max_dd'])*100:+.1f} pts"),
-        ("Trades",          f"{r1['n_trades']}",             f"{r2['n_trades']}",
-         f"{r2['n_trades']-r1['n_trades']:+d}"),
-        ("Win rate",        f"{r1['wr']*100:.1f}%",          f"{r2['wr']*100:.1f}%",
-         f"{(r2['wr']-r1['wr'])*100:+.1f} pts"),
-        ("2022 bear PnL",   f"${r1['per_year'].loc[2022,'total']:+,.0f}" if 2022 in r1['per_year'].index else "n/a",
-                            f"${r2['per_year'].loc[2022,'total']:+,.0f}" if 2022 in r2['per_year'].index else "n/a", ""),
-        ("2026 YTD PnL",    f"${r1['per_year'].loc[2026,'total']:+,.0f}" if 2026 in r1['per_year'].index else "n/a",
-                            f"${r2['per_year'].loc[2026,'total']:+,.0f}" if 2026 in r2['per_year'].index else "n/a", ""),
+        ("PnL total",
+         f"${r1['total_pnl']:+,.0f}", f"${r2['total_pnl']:+,.0f}", f"${r3['total_pnl']:+,.0f}"),
+        ("CAGR",
+         f"{r1['roc_annual']*100:.1f}%", f"{r2['roc_annual']*100:.1f}%", f"{r3['roc_annual']*100:.1f}%"),
+        ("Sharpe",
+         f"{r1['sharpe']:.2f}", f"{r2['sharpe']:.2f}", f"{r3['sharpe']:.2f}"),
+        ("Max DD",
+         f"{r1['max_dd']*100:.1f}%", f"{r2['max_dd']*100:.1f}%", f"{r3['max_dd']*100:.1f}%"),
+        ("Trades",
+         f"{r1['n_trades']}", f"{r2['n_trades']}", f"{r3['n_trades']}"),
+        ("Win rate",
+         f"{r1['wr']*100:.1f}%", f"{r2['wr']*100:.1f}%", f"{r3['wr']*100:.1f}%"),
+        ("2021",
+         fmt_year(r1,2021), fmt_year(r2,2021), fmt_year(r3,2021)),
+        ("2022 BEAR",
+         fmt_year(r1,2022), fmt_year(r2,2022), fmt_year(r3,2022)),
+        ("2023",
+         fmt_year(r1,2023), fmt_year(r2,2023), fmt_year(r3,2023)),
+        ("2024",
+         fmt_year(r1,2024), fmt_year(r2,2024), fmt_year(r3,2024)),
+        ("2025",
+         fmt_year(r1,2025), fmt_year(r2,2025), fmt_year(r3,2025)),
+        ("2026 YTD",
+         fmt_year(r1,2026), fmt_year(r2,2026), fmt_year(r3,2026)),
     ]
-    for label, v1, v2, diff in rows:
-        print(f"{label:20s} {v1:>14s} {v2:>14s} {diff:>14s}")
+    print(f"{'':20s} {'V1 baseline':>14s} {'V2 Opt1':>14s} {'V3 NoGoldTrend':>16s}")
+    for row in rows:
+        label = row[0]
+        print(f"{label:20s} {row[1]:>14s} {row[2]:>14s} {row[3]:>16s}")
 
     # Save
     out = ROOT / "reports" / "research"
     out.mkdir(parents=True, exist_ok=True)
     r2['df_trades'].to_csv(out / "ib_portfolio_v2_trades.csv", index=False)
-    print(f"\n[ok] CSV saved to {out}/ib_portfolio_v2_trades.csv")
+    r3['df_trades'].to_csv(out / "ib_portfolio_v3_trades.csv", index=False)
+    print(f"\n[ok] CSVs saved to {out}/")
     return 0
 
 
