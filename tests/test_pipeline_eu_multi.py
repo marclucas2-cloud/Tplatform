@@ -1,5 +1,5 @@
 """
-Tests unitaires du pipeline EU multi-strategies — paper_portfolio_eu.py (INFRA-005).
+Tests unitaires du pipeline EU multi-strategies — live_portfolio_eu.py (INFRA-005).
 
 Verifie :
   - Chargement strategies depuis YAML
@@ -206,7 +206,7 @@ class TestLoadStrategiesFromYaml:
 
     def test_load_strategies_from_yaml(self, sample_strategies_yaml):
         """Charge les strategies depuis le fichier YAML et verifie la structure."""
-        from scripts.paper_portfolio_eu import load_strategies_from_yaml
+        from scripts.live_portfolio_eu import load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
 
@@ -227,7 +227,7 @@ class TestLoadStrategiesFromYaml:
 
     def test_load_yaml_missing_field_raises(self, tmp_path):
         """Verifie qu'un champ manquant leve une ValueError."""
-        from scripts.paper_portfolio_eu import load_strategies_from_yaml
+        from scripts.live_portfolio_eu import load_strategies_from_yaml
 
         bad_data = {
             "strategies": {
@@ -247,7 +247,7 @@ class TestLoadStrategiesFromYaml:
 
     def test_load_yaml_missing_market_hours_tz(self, tmp_path):
         """Verifie qu'un market_hours sans tz leve une ValueError."""
-        from scripts.paper_portfolio_eu import load_strategies_from_yaml
+        from scripts.live_portfolio_eu import load_strategies_from_yaml
 
         bad_data = {
             "strategies": {
@@ -283,7 +283,7 @@ class TestStrategyRegistryFields:
 
     def test_strategy_registry_all_required_fields(self, sample_strategies_yaml):
         """Toutes les strategies du YAML ont les champs obligatoires."""
-        from scripts.paper_portfolio_eu import load_strategies_from_yaml
+        from scripts.live_portfolio_eu import load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
         required_fields = {
@@ -314,7 +314,7 @@ class TestStrategyRegistryFields:
 
     def test_production_yaml_loads(self):
         """Le vrai fichier config/strategies_eu.yaml se charge sans erreur."""
-        from scripts.paper_portfolio_eu import load_strategies_from_yaml
+        from scripts.live_portfolio_eu import load_strategies_from_yaml
 
         yaml_path = ROOT / "config" / "strategies_eu.yaml"
         if not yaml_path.exists():
@@ -335,7 +335,7 @@ class TestComputeEuAllocations:
 
     def test_compute_eu_allocations(self, sample_strategies_yaml):
         """Allocations correctes pour 100K de capital."""
-        from scripts.paper_portfolio_eu import compute_eu_allocations, load_strategies_from_yaml
+        from scripts.live_portfolio_eu import compute_eu_allocations, load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
         allocs = compute_eu_allocations(strategies, 100_000.0)
@@ -363,7 +363,7 @@ class TestComputeEuAllocations:
 
     def test_allocations_empty_if_all_disabled(self, tmp_path):
         """Aucune allocation si toutes les strategies sont disabled."""
-        from scripts.paper_portfolio_eu import compute_eu_allocations, load_strategies_from_yaml
+        from scripts.live_portfolio_eu import compute_eu_allocations, load_strategies_from_yaml
 
         data = {
             "strategies": {
@@ -393,7 +393,7 @@ class TestComputeEuAllocations:
 
     def test_max_position_respects_cap(self, sample_strategies_yaml):
         """max_position ne depasse jamais 10% du capital total."""
-        from scripts.paper_portfolio_eu import compute_eu_allocations, load_strategies_from_yaml
+        from scripts.live_portfolio_eu import compute_eu_allocations, load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
         capital = 100_000.0
@@ -411,14 +411,14 @@ class TestMarketHoursPerStrategy:
 
     def test_market_hours_check_per_strategy(self, sample_strategies_yaml):
         """Chaque strategie a sa propre fenetre horaire."""
-        from scripts.paper_portfolio_eu import is_strategy_active, load_strategies_from_yaml
+        from scripts.live_portfolio_eu import is_strategy_active, load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
 
         # Mocker un mardi a 10:00 CET
         mock_now = datetime(2026, 3, 24, 10, 0, 0)  # mardi
 
-        with patch("scripts.paper_portfolio_eu.datetime") as mock_dt:
+        with patch("scripts.live_portfolio_eu.datetime") as mock_dt:
             mock_dt.now.return_value = mock_now
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
@@ -433,14 +433,14 @@ class TestMarketHoursPerStrategy:
 
     def test_market_hours_weekend_blocked(self, sample_strategies_yaml):
         """Aucune strategie ne s'active le weekend."""
-        from scripts.paper_portfolio_eu import is_strategy_active, load_strategies_from_yaml
+        from scripts.live_portfolio_eu import is_strategy_active, load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
 
         # Samedi 14:00
         mock_now = datetime(2026, 3, 28, 14, 0, 0)  # samedi
 
-        with patch("scripts.paper_portfolio_eu.datetime") as mock_dt:
+        with patch("scripts.live_portfolio_eu.datetime") as mock_dt:
             mock_dt.now.return_value = mock_now
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
@@ -450,14 +450,14 @@ class TestMarketHoursPerStrategy:
 
     def test_market_hours_holiday_blocked(self, sample_strategies_yaml):
         """Aucune strategie ne s'active un jour ferie EU."""
-        from scripts.paper_portfolio_eu import is_strategy_active, load_strategies_from_yaml
+        from scripts.live_portfolio_eu import is_strategy_active, load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
 
         # 1er mai 2026 = vendredi ferie
         mock_now = datetime(2026, 5, 1, 14, 0, 0)
 
-        with patch("scripts.paper_portfolio_eu.datetime") as mock_dt:
+        with patch("scripts.live_portfolio_eu.datetime") as mock_dt:
             mock_dt.now.return_value = mock_now
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
 
@@ -474,7 +474,7 @@ class TestBceMomentumDrift:
 
     def test_bce_only_active_on_bce_days(self, mock_ibkr_broker, base_state):
         """bce_momentum_drift ne genere des signaux que les jours BCE."""
-        from scripts.paper_portfolio_eu import signal_bce_momentum_drift
+        from scripts.live_portfolio_eu import signal_bce_momentum_drift
 
         config = {
             "tickers": ["BNP.PA", "GLE.PA"],
@@ -496,7 +496,7 @@ class TestBceMomentumDrift:
 
     def test_bce_generates_signals_on_bce_day(self, mock_ibkr_broker, base_state):
         """bce_momentum_drift genere des signaux quand c'est un jour BCE."""
-        from scripts.paper_portfolio_eu import signal_bce_momentum_drift
+        from scripts.live_portfolio_eu import signal_bce_momentum_drift
 
         config = {
             "tickers": ["BNP.PA"],
@@ -546,7 +546,7 @@ class TestAutoSectorGerman:
 
     def test_auto_sector_event_filter(self, mock_ibkr_broker, base_state):
         """auto_sector_german filtre les tickers sans gap significatif."""
-        from scripts.paper_portfolio_eu import signal_auto_sector_german
+        from scripts.live_portfolio_eu import signal_auto_sector_german
 
         config = {
             "tickers": ["CON.DE", "SHA.DE"],
@@ -573,7 +573,7 @@ class TestAutoSectorGerman:
 
     def test_auto_sector_generates_on_big_gap(self, mock_ibkr_broker, base_state):
         """auto_sector_german genere un signal avec un gap > 0.3% et volume eleve."""
-        from scripts.paper_portfolio_eu import signal_auto_sector_german
+        from scripts.live_portfolio_eu import signal_auto_sector_german
 
         config = {
             "tickers": ["CON.DE"],
@@ -606,35 +606,35 @@ class TestBrentLagPlay:
 
     def test_brent_lag_market_hours(self, sample_strategies_yaml):
         """brent_lag_play n'est actif que 15:30-20:00 CET."""
-        from scripts.paper_portfolio_eu import is_strategy_active, load_strategies_from_yaml
+        from scripts.live_portfolio_eu import is_strategy_active, load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
         cfg = strategies["brent_lag_play"]
 
         # 10:00 CET => inactif
         mock_10 = datetime(2026, 3, 24, 10, 0, 0)
-        with patch("scripts.paper_portfolio_eu.datetime") as mock_dt:
+        with patch("scripts.live_portfolio_eu.datetime") as mock_dt:
             mock_dt.now.return_value = mock_10
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             assert is_strategy_active("brent_lag_play", cfg) is False
 
         # 16:00 CET => actif
         mock_16 = datetime(2026, 3, 24, 16, 0, 0)
-        with patch("scripts.paper_portfolio_eu.datetime") as mock_dt:
+        with patch("scripts.live_portfolio_eu.datetime") as mock_dt:
             mock_dt.now.return_value = mock_16
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             assert is_strategy_active("brent_lag_play", cfg) is True
 
         # 20:30 CET => inactif
         mock_2030 = datetime(2026, 3, 24, 20, 30, 0)
-        with patch("scripts.paper_portfolio_eu.datetime") as mock_dt:
+        with patch("scripts.live_portfolio_eu.datetime") as mock_dt:
             mock_dt.now.return_value = mock_2030
             mock_dt.side_effect = lambda *a, **kw: datetime(*a, **kw)
             assert is_strategy_active("brent_lag_play", cfg) is False
 
     def test_brent_lag_no_signal_if_oil_flat(self, mock_ibkr_broker, base_state):
         """brent_lag_play ne genere rien si le mouvement oil est < 1%."""
-        from scripts.paper_portfolio_eu import signal_brent_lag_play
+        from scripts.live_portfolio_eu import signal_brent_lag_play
 
         config = {
             "tickers": ["BP.L", "SHEL.L", "TTE.PA"],
@@ -668,7 +668,7 @@ class TestEuCloseUsCrossBroker:
 
     def test_eu_close_cross_broker_routing(self, mock_ibkr_broker, base_state):
         """eu_close_us_afternoon route vers Alpaca (execution_broker=alpaca)."""
-        from scripts.paper_portfolio_eu import signal_eu_close_us_afternoon
+        from scripts.live_portfolio_eu import signal_eu_close_us_afternoon
 
         config = {
             "tickers": ["SPY", "QQQ", "IWM"],
@@ -696,7 +696,7 @@ class TestEuCloseUsCrossBroker:
 
     def test_eu_close_no_signal_if_eu_flat(self, mock_ibkr_broker, base_state):
         """Pas de signal cross-broker si momentum EU < 0.5%."""
-        from scripts.paper_portfolio_eu import signal_eu_close_us_afternoon
+        from scripts.live_portfolio_eu import signal_eu_close_us_afternoon
 
         config = {
             "tickers": ["SPY"],
@@ -726,7 +726,7 @@ class TestEuGapOpen:
 
     def test_eu_gap_open_signal_generation(self, mock_ibkr_broker, base_state):
         """EU Gap Open genere des signaux sur gap > 0.5%."""
-        from scripts.paper_portfolio_eu import signal_eu_gap_open
+        from scripts.live_portfolio_eu import signal_eu_gap_open
 
         config = {
             "tickers": ["MC.PA", "SAP.DE"],
@@ -760,7 +760,7 @@ class TestEuGapOpen:
 
     def test_eu_gap_open_no_signal_small_gap(self, mock_ibkr_broker, base_state):
         """Pas de signal si gap < 0.5%."""
-        from scripts.paper_portfolio_eu import signal_eu_gap_open
+        from scripts.live_portfolio_eu import signal_eu_gap_open
 
         config = {
             "tickers": ["MC.PA"],
@@ -791,7 +791,7 @@ class TestCircuitBreakerEu:
 
     def test_circuit_breaker_eu(self, base_state):
         """Circuit-breaker declenche si drawdown > 5%."""
-        from scripts.paper_portfolio_eu import check_circuit_breaker_eu
+        from scripts.live_portfolio_eu import check_circuit_breaker_eu
 
         base_state["daily_capital_start"] = 100_000.0
 
@@ -807,7 +807,7 @@ class TestCircuitBreakerEu:
 
     def test_circuit_breaker_no_start(self, base_state):
         """Circuit-breaker ne declenche pas si daily_capital_start = 0."""
-        from scripts.paper_portfolio_eu import check_circuit_breaker_eu
+        from scripts.live_portfolio_eu import check_circuit_breaker_eu
 
         base_state["daily_capital_start"] = 0
         assert check_circuit_breaker_eu(base_state, 50_000.0) is False
@@ -821,7 +821,7 @@ class TestKillSwitchEu:
 
     def test_kill_switch_eu(self, base_state):
         """Kill switch declenche si PnL rolling 5j < -2% du capital alloue."""
-        from scripts.paper_portfolio_eu import check_kill_switch_eu
+        from scripts.live_portfolio_eu import check_kill_switch_eu
 
         allocated_capital = 10_000.0  # -2% = -$200
 
@@ -851,7 +851,7 @@ class TestKillSwitchEu:
 
     def test_kill_switch_not_enough_history(self, base_state):
         """Kill switch ne declenche pas si < 5 jours d'historique."""
-        from scripts.paper_portfolio_eu import check_kill_switch_eu
+        from scripts.live_portfolio_eu import check_kill_switch_eu
 
         base_state["strategy_pnl_log"] = {
             "eu_gap_open": [
@@ -864,7 +864,7 @@ class TestKillSwitchEu:
 
     def test_kill_switch_positive_pnl(self, base_state):
         """Kill switch ne declenche pas avec PnL positif."""
-        from scripts.paper_portfolio_eu import check_kill_switch_eu
+        from scripts.live_portfolio_eu import check_kill_switch_eu
 
         base_state["strategy_pnl_log"] = {
             "bce_momentum_drift": [
@@ -883,7 +883,7 @@ class TestForceCloseEuPositions:
 
     def test_force_close_eu_positions(self, base_state):
         """close_eu_positions ferme les positions EU via IBKR."""
-        from scripts.paper_portfolio_eu import close_eu_positions
+        from scripts.live_portfolio_eu import close_eu_positions
 
         # Simuler une position ouverte
         base_state["intraday_positions"] = {
@@ -900,8 +900,8 @@ class TestForceCloseEuPositions:
         mock_ibkr.close_position.return_value = {"orderId": "close-1", "status": "filled"}
 
         # Mock is_force_close_time pour ne pas bloquer (pas cross-tz)
-        with patch("scripts.paper_portfolio_eu._get_ibkr", return_value=mock_ibkr), \
-             patch("scripts.paper_portfolio_eu.is_force_close_time", return_value=False):
+        with patch("scripts.live_portfolio_eu._get_ibkr", return_value=mock_ibkr), \
+             patch("scripts.live_portfolio_eu.is_force_close_time", return_value=False):
             close_eu_positions(base_state, dry_run=False)
 
         # Position fermee
@@ -912,7 +912,7 @@ class TestForceCloseEuPositions:
 
     def test_force_close_cross_tz_delayed(self, base_state):
         """Positions cross-timezone ne sont pas fermees a 17:35 CET."""
-        from scripts.paper_portfolio_eu import close_eu_positions
+        from scripts.live_portfolio_eu import close_eu_positions
 
         base_state["intraday_positions"] = {
             "SPY": {
@@ -925,9 +925,9 @@ class TestForceCloseEuPositions:
         }
 
         # is_force_close_time retourne False pour cross-tz (pas encore 22:00)
-        with patch("scripts.paper_portfolio_eu.is_force_close_time", return_value=False), \
-             patch("scripts.paper_portfolio_eu._get_ibkr") as mock_ibkr_fn, \
-             patch("scripts.paper_portfolio_eu._get_smart_router") as mock_router_fn:
+        with patch("scripts.live_portfolio_eu.is_force_close_time", return_value=False), \
+             patch("scripts.live_portfolio_eu._get_ibkr") as mock_ibkr_fn, \
+             patch("scripts.live_portfolio_eu._get_smart_router") as mock_router_fn:
             close_eu_positions(base_state, dry_run=False)
 
         # Position PAS fermee (cross-tz, pas l'heure)
@@ -935,7 +935,7 @@ class TestForceCloseEuPositions:
 
     def test_force_close_dry_run(self, base_state):
         """Dry-run ne ferme pas reellement les positions."""
-        from scripts.paper_portfolio_eu import close_eu_positions
+        from scripts.live_portfolio_eu import close_eu_positions
 
         base_state["intraday_positions"] = {
             "MC.PA": {
@@ -947,7 +947,7 @@ class TestForceCloseEuPositions:
             }
         }
 
-        with patch("scripts.paper_portfolio_eu.is_force_close_time", return_value=False):
+        with patch("scripts.live_portfolio_eu.is_force_close_time", return_value=False):
             close_eu_positions(base_state, dry_run=True)
 
         # Position marquee comme fermee dans le state (dry-run clean)
@@ -955,7 +955,7 @@ class TestForceCloseEuPositions:
 
     def test_force_close_empty_positions(self, base_state):
         """Aucune erreur si pas de positions a fermer."""
-        from scripts.paper_portfolio_eu import close_eu_positions
+        from scripts.live_portfolio_eu import close_eu_positions
 
         base_state["intraday_positions"] = {}
         close_eu_positions(base_state, dry_run=False)
@@ -969,8 +969,8 @@ class TestForceCloseEuPositions:
 class TestExecutionAuthorization:
 
     def test_authorized_by_on_all_orders(self, mock_ibkr_broker, base_state):
-        """Tous les ordres passent avec _authorized_by='paper_portfolio_eu'."""
-        from scripts.paper_portfolio_eu import execute_eu_signals
+        """Tous les ordres passent avec _authorized_by='eu_pipeline_live'."""
+        from scripts.live_portfolio_eu import execute_eu_signals
 
         signals = {
             "eu_gap_open": [{
@@ -999,7 +999,7 @@ class TestExecutionAuthorization:
 
     def test_execution_dry_run_no_orders(self, mock_ibkr_broker, base_state):
         """Dry-run ne soumet pas d'ordres reels."""
-        from scripts.paper_portfolio_eu import execute_eu_signals
+        from scripts.live_portfolio_eu import execute_eu_signals
 
         signals = {
             "eu_gap_open": [{
@@ -1028,7 +1028,7 @@ class TestStatePersistence:
 
     def test_log_strategy_daily_pnl_eu(self, base_state):
         """log_strategy_daily_pnl_eu ajoute le PnL au log."""
-        from scripts.paper_portfolio_eu import log_strategy_daily_pnl_eu
+        from scripts.live_portfolio_eu import log_strategy_daily_pnl_eu
 
         log_strategy_daily_pnl_eu(base_state, "eu_gap_open", 150.0)
         log_strategy_daily_pnl_eu(base_state, "eu_gap_open", -50.0)
@@ -1039,13 +1039,13 @@ class TestStatePersistence:
 
     def test_state_save_load_roundtrip(self, base_state, tmp_path):
         """Le state se sauvegarde et se recharge correctement."""
-        from scripts.paper_portfolio_eu import save_state
+        from scripts.live_portfolio_eu import save_state
 
         state_path = tmp_path / "test_state.json"
         base_state["capital"] = 95_000.0
         base_state["allocations"] = {"eu_gap_open": {"pct": 0.2, "capital": 19000}}
 
-        with patch("scripts.paper_portfolio_eu.STATE_FILE", state_path):
+        with patch("scripts.live_portfolio_eu.STATE_FILE", state_path):
             save_state(base_state)
             assert state_path.exists()
 
@@ -1064,7 +1064,7 @@ class TestSignalDispatch:
 
     def test_all_strategies_have_signal_function(self, sample_strategies_yaml):
         """Chaque strategie du YAML a une fonction signal correspondante."""
-        from scripts.paper_portfolio_eu import SIGNAL_DISPATCH, load_strategies_from_yaml
+        from scripts.live_portfolio_eu import SIGNAL_DISPATCH, load_strategies_from_yaml
 
         strategies = load_strategies_from_yaml(sample_strategies_yaml)
 

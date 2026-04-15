@@ -15,7 +15,7 @@
   - Criteria: Sharpe > 1.5, max DD < 8%, 0 failed orders in 30 days
 
 - [ ] **2. IBKR paper verified** — EU + FX + Futures tested
-  - Verification: `python scripts/paper_portfolio_eu.py --status`
+  - Verification: `python scripts/live_portfolio_eu.py --status`
   - Criteria: All 5 EU strategies executed at least once, FX pairs tested
 
 - [ ] **3. IBKR futures reconciliation tested**
@@ -142,7 +142,7 @@ print('Tous les ordres IBKR annules')
 # 4. Fermer toutes les positions (si necessaire)
 # ATTENTION : verifier manuellement avant d'executer
 python scripts/paper_portfolio.py --close-all --confirm
-python scripts/paper_portfolio_eu.py --close-all --confirm
+python scripts/live_portfolio_eu.py --close-all --confirm
 
 # 5. Basculer PAPER_TRADING=true sur les deux brokers
 # 6. Redemarrer le worker paper

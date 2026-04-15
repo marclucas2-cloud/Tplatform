@@ -2,7 +2,7 @@
 # EU Strategies Registry — config/strategies_eu.yaml
 #
 # Chaque strategie EU validee walk-forward est declaree ici.
-# Le pipeline paper_portfolio_eu.py charge ce fichier au demarrage.
+# Le pipeline live_portfolio_eu.py (renomme de paper_portfolio_eu.py) charge ce fichier au demarrage.
 #
 # Champs obligatoires :
 #   name, enabled, sharpe, trades, wf_status, edge_type,

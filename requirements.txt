@@ -32,6 +32,14 @@ yfinance>=0.2.40
 # --- Alpaca Markets (paper trading + live US equities) ---
 alpaca-py>=0.20.0
 
+# --- IBKR (FX/EU/futures live via TWS/Gateway) ---
+ib_insync>=0.9.86
+
+# --- System utilities (process info, timezones, YAML config) ---
+psutil>=5.9.0
+pytz>=2023.3
+PyYAML>=6.0
+
 # --- Dashboard Pro (interface locale) ---
 streamlit>=1.35.0
 plotly>=5.18.0

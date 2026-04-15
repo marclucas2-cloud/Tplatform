@@ -192,44 +192,68 @@ _global_nav_cache = {"nav": 0.0, "ts": 0.0}
 
 
 def _get_global_nav() -> float:
-    """Get total NAV across all brokers. Cached 5 min."""
+    """Get total NAV across all brokers. Cached 5 min.
+
+    FAIL-CLOSED: returns 0.0 if ANY broker equity source is unknown.
+    Rule: absence de capital confirme = reduction de risque, jamais
+    augmentation. Callers doivent traiter 0.0 comme "NAV indisponible"
+    et fallback sur broker-local confirme, jamais injecter de nominal.
+    """
     import time as _t
     if _t.time() - _global_nav_cache["ts"] < 300 and _global_nav_cache["nav"] > 0:
         return _global_nav_cache["nav"]
 
-    nav = 0.0
-    # Binance equity
+    components = {}
+
+    # Binance equity — real source only
     try:
         bnb_state = Path(__file__).resolve().parent / "data" / "crypto_equity_state.json"
         if bnb_state.exists():
             import json as _json
             with open(bnb_state) as f:
-                nav += _json.load(f).get("total_equity_usd", 0)
-    except Exception:
-        nav += 10_000  # Fallback
+                v = float(_json.load(f).get("total_equity_usd", 0) or 0)
+                if v > 0:
+                    components["binance"] = v
+    except Exception as _e:
+        logger.warning(f"_get_global_nav: binance state unreadable — {_e}")
 
-    # IBKR equity
+    # IBKR equity — real source only
     try:
         ibkr_state = Path(__file__).resolve().parent / "data" / "state" / "ibkr_equity.json"
         if ibkr_state.exists():
             import json as _json
             with open(ibkr_state) as f:
-                nav += _json.load(f).get("equity", 0)
-        else:
-            nav += 10_000  # Fallback
-    except Exception:
-        nav += 10_000
+                v = float(_json.load(f).get("equity", 0) or 0)
+                if v > 0:
+                    components["ibkr"] = v
+    except Exception as _e:
+        logger.warning(f"_get_global_nav: ibkr state unreadable — {_e}")
 
-    # Alpaca equity
+    # Alpaca equity — real API query only (no hardcoded nominal)
     try:
         alp_key = os.getenv("ALPACA_API_KEY", "")
         if alp_key:
-            nav += 30_000  # Alpaca paper/live — use nominal until API wired
+            try:
+                from core.alpaca_client.client import AlpacaClient
+                _alp = AlpacaClient()
+                _info = _alp.get_account_info()
+                _eq = float(_info.get("equity", 0) or 0)
+                if _eq > 0:
+                    components["alpaca"] = _eq
+            except Exception as _ae:
+                logger.warning(f"_get_global_nav: alpaca query failed — {_ae}")
     except Exception:
         pass
 
+    nav = sum(components.values())
+    # Fail-closed: if no broker returned a valid equity, return 0.0 (NOT a fallback)
+    if nav <= 0:
+        logger.warning("_get_global_nav: NO broker equity available — returning 0.0 (fail-closed)")
+        return 0.0
+
     _global_nav_cache["nav"] = nav
     _global_nav_cache["ts"] = _t.time()
+    logger.info(f"_get_global_nav: ${nav:,.0f} from {list(components.keys())}")
     return nav
 
 
@@ -314,7 +338,7 @@ def run_intraday(market: str = "US"):
         _log_event("cycle_start", f"intraday_{market}")
 
         if market == "EU":
-            from scripts.paper_portfolio_eu import run_intraday_eu
+            from scripts.live_portfolio_eu import run_intraday_eu
             run_intraday_eu(dry_run=False)
         else:
             from scripts.paper_portfolio import run_intraday as _pp_run_intraday
@@ -5150,21 +5174,44 @@ def main():
             time.sleep(60)
             _pf2 = run_preflight(block_on_failure=True)
             if _pf2.blockers:
-                # Non-critical blockers (e.g. margin check) → continue degraded
-                # Critical blockers (Binance auth, IBKR down) → would have sys.exit
+                # Critical blockers (auth, broker connectivity, gateway) → HARD FAIL
+                # Non-critical blockers (margin check, etc.) → log but continue
+                _critical_keywords = ("auth", "binance", "ibkr", "4002", "gateway",
+                                      "api_key", "api key", "credentials", "connection refused")
                 _critical = [b for b in _pf2.blockers
-                            if any(kw in b.lower() for kw in ("auth", "binance", "ibkr", "4002", "gateway"))]
+                            if any(kw in b.lower() for kw in _critical_keywords)]
                 if _critical:
                     logger.critical(f"PRE-FLIGHT CRITICAL FAIL — {_critical}")
-                    _send_alert(f"PRE-FLIGHT CRITICAL: {_critical}", level="critical")
-                logger.critical(f"PRE-FLIGHT RETRY FAILED ({len(_pf2.blockers)} blockers) — worker starting degraded")
-                _send_alert(f"PRE-FLIGHT DEGRADED: {len(_pf2.blockers)} blockers\n{chr(10).join(_pf2.blockers[:3])}", level="critical")
+                    _send_alert(
+                        f"PRE-FLIGHT CRITICAL — worker REFUSING to start:\n"
+                        + "\n".join(_critical[:5]),
+                        level="critical",
+                    )
+                    # P0.4 fail-closed: no live trading if broker auth/connectivity broken
+                    logger.critical("WORKER EXITING — fix critical blockers and restart")
+                    sys.exit(2)
+                # Non-critical only: continue in degraded mode but log prominently
+                logger.critical(
+                    f"PRE-FLIGHT RETRY FAILED ({len(_pf2.blockers)} non-critical blockers) "
+                    f"— worker starting DEGRADED"
+                )
+                _send_alert(
+                    f"PRE-FLIGHT DEGRADED (non-critical): {len(_pf2.blockers)} blockers\n"
+                    + "\n".join(_pf2.blockers[:3]),
+                    level="critical",
+                )
             else:
                 logger.info(f"  Pre-flight retry OK: {len(_pf2.checks)} checks passed")
         else:
             logger.info(f"  Pre-flight OK: {len(_pf.checks)} checks passed")
+    except SystemExit:
+        raise  # propagate sys.exit from fail-closed path
     except Exception as _pf_err:
-        logger.warning(f"  Pre-flight check failed to run: {_pf_err}")
+        logger.critical(f"  Pre-flight check RAISED — unable to verify state: {_pf_err}")
+        _send_alert(
+            f"PRE-FLIGHT RAISED: {_pf_err}\nWorker starting WITHOUT preflight verification",
+            level="critical",
+        )
 
     # === RECONCILIATION AU DEMARRAGE ===
     logger.info("  Reconciliation des positions au demarrage...")
