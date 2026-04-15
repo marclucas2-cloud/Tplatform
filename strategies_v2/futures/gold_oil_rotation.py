@@ -42,12 +42,15 @@ class GoldOilRotation(StrategyBase):
         min_edge: float = 0.02,
         sl_pct: float = 0.02,
         tp_pct: float = 0.04,
+        cooldown_days: int = 10,
     ) -> None:
         self.lookback = lookback
         self.min_edge = min_edge
         self.sl_pct = sl_pct
         self.tp_pct = tp_pct
+        self.cooldown_days = cooldown_days
         self.data_feed: DataFeed | None = None
+        self._last_signal_ts = None
 
     @property
     def name(self) -> str:
@@ -67,6 +70,11 @@ class GoldOilRotation(StrategyBase):
     def on_bar(self, bar: Bar, portfolio_state: PortfolioState) -> Signal | None:
         if self.data_feed is None:
             return None
+
+        if self._last_signal_ts is not None:
+            days_since = (bar.timestamp - self._last_signal_ts).days
+            if days_since < self.cooldown_days:
+                return None
 
         mgc_bars = self.data_feed.get_bars("MGC", self.lookback + 2)
         mcl_bars = self.data_feed.get_bars("MCL", self.lookback + 2)
@@ -89,6 +97,8 @@ class GoldOilRotation(StrategyBase):
         else:
             winner = "MCL"
             winner_price = float(mcl_close.iloc[-1])
+
+        self._last_signal_ts = bar.timestamp
 
         return Signal(
             symbol=winner,
