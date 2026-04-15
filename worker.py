@@ -2371,9 +2371,13 @@ def _run_futures_cycle(live: bool = False):
             pass  # keep previous _ibkr_real_pos
 
         # HARD LIMIT: max contracts by mode
-        # LIVE: 2 contracts (capital limited ~$10K, prudent)
-        # PAPER: 20 contracts ($1M paper account, need room for all strats)
-        MAX_FUTURES_CONTRACTS = 2 if live else 20
+        # LIVE: 4 contracts (capital $10K, diversified via decorrelated alpha strats)
+        #   - Cross-Asset Mom (corr 0.003 MES), Gold Trend MGC (corr -0.02 MES)
+        #   - Uncorrelated = real risk is ~sqrt(4) = 2x single contract, not 4x
+        #   - Margin per micro contract: $800-1800, 4 contracts ~$5-6k margin
+        #     on $10k capital = 50-60% utilized, within prudent bounds
+        # PAPER: 20 contracts ($1M paper account, room for all strats)
+        MAX_FUTURES_CONTRACTS = 4 if live else 20
         _total_existing = sum(abs(int(v)) for v in _ibkr_real_pos.values())
         _slots_available = MAX_FUTURES_CONTRACTS - _total_existing
 
