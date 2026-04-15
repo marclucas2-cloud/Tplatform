@@ -1651,28 +1651,166 @@ def _run_futures_cycle(live: bool = False):
 
         signals = []
 
-        # 1. MES Trend — DISABLED (PO decision: Sharpe faible, redondant avec Trend+MR)
-        logger.info("    MES Trend: DISABLED (PO P0)")
+        # ============================================================
+        # STRATS "REJECTED" QUI TOURNENT EN PAPER UNIQUEMENT
+        # ============================================================
+        # Decision user 15 avril 2026: activer en paper toutes les strats
+        # meme celles rejetees pour collecter de la vraie data live et
+        # challenger les backtests. Live reste disabled pour ces strats.
+        if not live:
+            # 1. MES Trend
+            try:
+                from strategies_v2.futures.mes_trend import MESTrend
+                strat = MESTrend()
+                strat.set_data_feed(feed)
+                bar = feed.get_latest_bar("MES")
+                if bar:
+                    sig = strat.on_bar(bar, portfolio_state)
+                    if sig:
+                        signals.append(("MES Trend", sig))
+                        logger.info(f"    MES Trend (paper): {sig.side} @ {bar.close:.2f}")
+                    else:
+                        logger.info("    MES Trend (paper): pas de signal")
+            except Exception as e:
+                logger.error(f"    MES Trend error: {e}")
 
-        # 2. MES Trend+MR — DISABLED (backtest 3 ans: -$2,240, WR 35%)
-        logger.info("    MES Trend+MR: DISABLED (backtest 3 ans NEGATIF)")
+            # 2. MES Trend+MR
+            try:
+                from strategies_v2.futures.mes_trend_mr import MESTrendMR
+                strat = MESTrendMR()
+                strat.set_data_feed(feed)
+                bar = feed.get_latest_bar("MES")
+                if bar:
+                    sig = strat.on_bar(bar, portfolio_state)
+                    if sig:
+                        signals.append(("MES Trend+MR", sig))
+                        logger.info(f"    MES Trend+MR (paper): {sig.side} @ {bar.close:.2f}")
+                    else:
+                        logger.info("    MES Trend+MR (paper): pas de signal")
+            except Exception as e:
+                logger.error(f"    MES Trend+MR error: {e}")
 
-        # 3. MES 3-Day Stretch — DISABLED (PO P0: SHORT mecanique en bull = catastrophique)
-        logger.info("    MES 3-Day Stretch: DISABLED (PO P0)")
+            # 3. MES 3-Day Stretch
+            try:
+                from strategies_v2.futures.mes_3day_stretch import MES3DayStretch
+                strat = MES3DayStretch()
+                strat.set_data_feed(feed)
+                bar = feed.get_latest_bar("MES")
+                if bar:
+                    sig = strat.on_bar(bar, portfolio_state)
+                    if sig:
+                        signals.append(("MES 3-Day Stretch", sig))
+                        logger.info(f"    MES 3-Day Stretch (paper): {sig.side} @ {bar.close:.2f}")
+                    else:
+                        logger.info("    MES 3-Day Stretch (paper): pas de signal")
+            except Exception as e:
+                logger.error(f"    MES 3-Day Stretch error: {e}")
 
-        # 4. Overnight Buy-Close MES — DISABLED (decision user 15 avril 2026)
-        # Reason: 85 backtests testes (param sweep complet, 60 combos + WF real
-        # prod logic + 4 intraday variants), max Sharpe 0.07 (bruit), WF OOS
-        # -0.68. Paper review 31 mars avait deja flag REJECTED mais jamais
-        # applique. User decision: disable + iterate une v2 avec filtres
-        # additionnels (regime, VIX, ADX) en research mode.
-        logger.info("    Overnight MES: DISABLED (WF real prod logic Sharpe 0.07, v2 in research)")
+            # 4. Overnight MNQ (paper only — MES live est disabled)
+            try:
+                from strategies_v2.futures.overnight_buy_close import OvernightBuyClose
+                strat = OvernightBuyClose(symbol="MNQ")
+                strat.set_data_feed(feed)
+                bar = feed.get_latest_bar("MNQ")
+                if bar:
+                    sig = strat.on_bar(bar, portfolio_state)
+                    if sig:
+                        signals.append(("Overnight MNQ", sig))
+                        logger.info(f"    Overnight MNQ (paper): {sig.side} @ {bar.close:.2f}")
+                    else:
+                        logger.info("    Overnight MNQ (paper): pas de signal (below EMA20)")
+            except Exception as e:
+                logger.error(f"    Overnight MNQ error: {e}")
 
-        # 5. Overnight Buy-Close MNQ — DISABLED (PO P0: doublon du MES)
-        logger.info("    Overnight MNQ: DISABLED (PO P0)")
+            # 5. TSMOM Multi (MES, MNQ)
+            for tsmom_sym in ["MES", "MNQ"]:
+                if tsmom_sym not in data_sources:
+                    continue
+                try:
+                    from strategies_v2.futures.tsmom_multi import TSMOMMulti
+                    strat_ts = TSMOMMulti(symbol=tsmom_sym)
+                    strat_ts.set_data_feed(feed)
+                    bar_ts = feed.get_latest_bar(tsmom_sym)
+                    if bar_ts:
+                        sig = strat_ts.on_bar(bar_ts, portfolio_state)
+                        if sig:
+                            signals.append((f"TSMOM {tsmom_sym}", sig))
+                            logger.info(f"    TSMOM {tsmom_sym} (paper): {sig.side} @ {bar_ts.close:.2f}")
+                        else:
+                            logger.info(f"    TSMOM {tsmom_sym} (paper): pas de signal")
+                except Exception as e:
+                    logger.error(f"    TSMOM {tsmom_sym} error: {e}")
 
-        # 6. TSMOM — DISABLED (backtest 3 ans: -$5,118, WR 35%, CATASTROPHIQUE)
-        logger.info("    TSMOM MES: DISABLED (backtest 3 ans NEGATIF)")
+            # 6. M2K ORB
+            if "M2K" in data_sources:
+                try:
+                    from strategies_v2.futures.m2k_orb import M2KORB
+                    strat = M2KORB()
+                    strat.set_data_feed(feed)
+                    bar = feed.get_latest_bar("M2K")
+                    if bar:
+                        sig = strat.on_bar(bar, portfolio_state)
+                        if sig:
+                            signals.append(("M2K ORB", sig))
+                            logger.info(f"    M2K ORB (paper): {sig.side} @ {bar.close:.2f}")
+                        else:
+                            logger.info("    M2K ORB (paper): pas de signal")
+                except Exception as e:
+                    logger.error(f"    M2K ORB error: {e}")
+
+            # 7. MCL Brent Lag
+            if "MCL" in data_sources:
+                try:
+                    from strategies_v2.futures.mcl_brent_lag import MCLBrentLag
+                    strat = MCLBrentLag()
+                    strat.set_data_feed(feed)
+                    bar = feed.get_latest_bar("MCL")
+                    if bar:
+                        sig = strat.on_bar(bar, portfolio_state)
+                        if sig:
+                            signals.append(("MCL Brent Lag", sig))
+                            logger.info(f"    MCL Brent Lag (paper): {sig.side} @ {bar.close:.2f}")
+                        else:
+                            logger.info("    MCL Brent Lag (paper): pas de signal")
+                except Exception as e:
+                    logger.error(f"    MCL Brent Lag error: {e}")
+
+            # 8. MGC VIX Hedge
+            if "MGC" in data_sources and "VIX" in data_sources:
+                try:
+                    from strategies_v2.futures.mgc_vix_hedge import MGCVixHedge
+                    strat = MGCVixHedge()
+                    strat.set_data_feed(feed)
+                    bar = feed.get_latest_bar("MGC")
+                    if bar:
+                        sig = strat.on_bar(bar, portfolio_state)
+                        if sig:
+                            signals.append(("MGC VIX Hedge", sig))
+                            logger.info(f"    MGC VIX Hedge (paper): {sig.side} @ {bar.close:.2f}")
+                        else:
+                            logger.info("    MGC VIX Hedge (paper): pas de signal")
+                except Exception as e:
+                    logger.error(f"    MGC VIX Hedge error: {e}")
+
+            # 9. VIX Mean Reversion
+            if "VIX" in data_sources and "MES" in data_sources:
+                try:
+                    from strategies_v2.futures.vix_mean_reversion import VIXMeanReversion
+                    strat = VIXMeanReversion()
+                    strat.set_data_feed(feed)
+                    bar = feed.get_latest_bar("MES")
+                    if bar:
+                        sig = strat.on_bar(bar, portfolio_state)
+                        if sig:
+                            signals.append(("VIX MR", sig))
+                            logger.info(f"    VIX MR (paper): {sig.side} @ {bar.close:.2f}")
+                        else:
+                            logger.info("    VIX MR (paper): pas de signal")
+                except Exception as e:
+                    logger.error(f"    VIX MR error: {e}")
+        else:
+            # LIVE MODE — only keep the validated ones, all others disabled
+            logger.info("    LIVE mode: MES Trend/Trend+MR/Stretch/Overnight/TSMOM/M2K/MCL/MGC/VIX-MR all DISABLED")
         for tsmom_sym in []:
             if tsmom_sym not in data_sources:
                 continue
