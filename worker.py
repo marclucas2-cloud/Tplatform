@@ -1706,19 +1706,27 @@ def _run_futures_cycle(live: bool = False):
             except Exception as e:
                 logger.error(f"    MES 3-Day Stretch error: {e}")
 
-            # 4. Overnight MNQ (paper only — MES live est disabled)
+            # 4. Overnight MNQ — params validates par sweep 5Y sur 48 combos:
+            #    SL=150 TP=250 EMA=50 none → Sharpe 0.55, +$8,569, 299 trades
+            #    WF 2/5 profitable (juste en dessous du seuil 50%) → PAPER only
+            #    pour confirmation sur 3 mois avant toute decision live.
             try:
                 from strategies_v2.futures.overnight_buy_close import OvernightBuyClose
-                strat = OvernightBuyClose(symbol="MNQ")
+                strat = OvernightBuyClose(
+                    symbol="MNQ",
+                    sl_points=150,
+                    tp_points=250,
+                    ema_period=50,
+                )
                 strat.set_data_feed(feed)
                 bar = feed.get_latest_bar("MNQ")
                 if bar:
                     sig = strat.on_bar(bar, portfolio_state)
                     if sig:
                         signals.append(("Overnight MNQ", sig))
-                        logger.info(f"    Overnight MNQ (paper): {sig.side} @ {bar.close:.2f}")
+                        logger.info(f"    Overnight MNQ (paper SL150/TP250/EMA50): {sig.side} @ {bar.close:.2f}")
                     else:
-                        logger.info("    Overnight MNQ (paper): pas de signal (below EMA20)")
+                        logger.info("    Overnight MNQ (paper): pas de signal (below EMA50)")
             except Exception as e:
                 logger.error(f"    Overnight MNQ error: {e}")
 

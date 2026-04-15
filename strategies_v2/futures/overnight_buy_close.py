@@ -31,10 +31,17 @@ from core.backtester_v2.types import Bar, PortfolioState, Signal
 class OvernightBuyClose(StrategyBase):
     """Buy at close, sell at next open. EMA20 trend filter."""
 
-    def __init__(self, symbol: str = "MES") -> None:
+    def __init__(
+        self,
+        symbol: str = "MES",
+        sl_points: float = 30.0,
+        tp_points: float = 50.0,
+        ema_period: int = 20,
+    ) -> None:
         self._symbol = symbol
-        self.ema_period: int = 20
-        self.sl_points: float = 30.0  # safety net SL
+        self.ema_period: int = ema_period
+        self.sl_points: float = sl_points
+        self.tp_points: float = tp_points
         self.data_feed: DataFeed | None = None
 
     @property
@@ -66,7 +73,7 @@ class OvernightBuyClose(StrategyBase):
                 side="BUY",
                 strategy_name=self.name,
                 stop_loss=bar.close - self.sl_points,
-                take_profit=bar.close + 50,
+                take_profit=bar.close + self.tp_points,
                 strength=min((bar.close - ema) / ema * 100, 1.0),
             )
         return None
