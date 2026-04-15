@@ -1824,6 +1824,60 @@ def _run_futures_cycle(live: bool = False):
                 except Exception as e:
                     logger.error(f"    MGC VIX Hedge error: {e}")
 
+            # 9c. Friday-Monday MNQ — weekend effect, n=266 5Y Sharpe 1.76
+            # WF 4/5 profitable, OOS 1.86 > IS 0.03 (OOS overperform)
+            if "MNQ" in data_sources:
+                try:
+                    from strategies_v2.futures.friday_monday_mnq import FridayMondayMNQ
+                    strat = FridayMondayMNQ()
+                    strat.set_data_feed(feed)
+                    bar = feed.get_latest_bar("MNQ")
+                    if bar:
+                        sig = strat.on_bar(bar, portfolio_state)
+                        if sig:
+                            signals.append(("Friday-Monday MNQ", sig))
+                            logger.info(f"    Friday-Monday MNQ (paper): BUY @ {bar.close:.2f}")
+                        else:
+                            logger.info("    Friday-Monday MNQ (paper): pas vendredi")
+                except Exception as e:
+                    logger.error(f"    Friday-Monday MNQ error: {e}")
+
+            # 9d. Multi-TF Momentum MES — weekly confirm + daily trigger
+            # n=58 (small sample) but Sharpe 2.01 + WF 3/5 prof OOS 2.85
+            if "MES" in data_sources:
+                try:
+                    from strategies_v2.futures.multi_tf_mom_mes import MultiTFMomMES
+                    strat = MultiTFMomMES()
+                    strat.set_data_feed(feed)
+                    bar = feed.get_latest_bar("MES")
+                    if bar:
+                        sig = strat.on_bar(bar, portfolio_state)
+                        if sig:
+                            signals.append(("Multi-TF Mom MES", sig))
+                            logger.info(f"    Multi-TF Mom MES (paper): BUY @ {bar.close:.2f}")
+                        else:
+                            logger.info("    Multi-TF Mom MES (paper): conditions non alignees")
+                except Exception as e:
+                    logger.error(f"    Multi-TF Mom MES error: {e}")
+
+            # 9a. BB Squeeze MES — event-driven rare, 7/year but Sharpe 7 pure
+            # n=37, +$7904, 4/5 WF profitable, ratio 0.84
+            if "MES" in data_sources:
+                try:
+                    from strategies_v2.futures.bb_squeeze_mes import BBSqueezeMES
+                    strat = BBSqueezeMES()
+                    strat.set_data_feed(feed)
+                    bar = feed.get_latest_bar("MES")
+                    if bar:
+                        sig = strat.on_bar(bar, portfolio_state)
+                        if sig:
+                            signals.append(("BB Squeeze MES", sig))
+                            logger.info(f"    BB Squeeze MES (paper): BREAKOUT @ {bar.close:.2f}")
+                        else:
+                            logger.info("    BB Squeeze MES (paper): pas de squeeze+breakout")
+                except Exception as e:
+                    logger.error(f"    BB Squeeze MES error: {e}")
+
             # 9b. RS MES/MNQ Rotation — validated 5Y, 3/3 gates Sharpe OOS 2.28
             # Buy stronger of MES/MNQ over 3-day lookback, hold 5 days.
             # n=212, +$19,231 total, WR 58%, 4/5 WF profitable, OOS>IS (ultra robust)
