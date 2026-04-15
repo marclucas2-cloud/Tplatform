@@ -1016,6 +1016,64 @@ def run_crypto_watchdog_cycle():
         _crypto_lock.release()
 
 
+def run_us_stocks_daily_cycle():
+    """US stocks daily rebalance — 3 monthly cross-sectional strategies on Alpaca paper.
+
+    Runs once per weekday at 22:55 Paris (16:55 ET, after US close). Executes:
+      1. scripts/download_us_data.py (refresh S&P 500 daily bars, ~2 min)
+      2. scripts/run_us_stocks_daily.py --source local (tom + rs_spy + sector_rot_us)
+
+    The 3 strats only emit signals on their rebalance days:
+      - tom: entry last trading day of month, exit 3rd trading day next month
+      - rs_spy: monthly rebalance (top 5 / bottom 5 alpha vs SPY)
+      - sector_rot_us: monthly rebalance (top vs bottom GICS sector)
+
+    Gate 5 validated: Sharpe 1.24 → 2.70 combined with V15.3, MaxDD% 32.7 → 14.1.
+    Broker: Alpaca in PAPER mode (guard enforced via PAPER_TRADING=true).
+    """
+    import subprocess
+    logger.info("=== US STOCKS DAILY CYCLE ===")
+    download = ROOT / "scripts" / "download_us_data.py"
+    runner = ROOT / "scripts" / "run_us_stocks_daily.py"
+    if not runner.exists():
+        logger.error(f"US STOCKS: {runner} not found, skip")
+        return
+
+    # Step 1: refresh data (best-effort, continue if fails)
+    try:
+        r1 = subprocess.run(
+            [sys.executable, str(download)],
+            capture_output=True, text=True, timeout=600, cwd=str(ROOT),
+        )
+        if r1.returncode != 0:
+            logger.warning(f"US STOCKS data refresh FAIL (exit {r1.returncode}) — continuing with stale data")
+            logger.warning(f"  stderr: {r1.stderr[:300]}")
+        else:
+            logger.info("US STOCKS data refresh OK")
+    except subprocess.TimeoutExpired:
+        logger.warning("US STOCKS data refresh TIMEOUT — continuing with stale data")
+    except Exception as e:
+        logger.warning(f"US STOCKS data refresh exception: {e} — continuing")
+
+    # Step 2: run strategies
+    try:
+        r2 = subprocess.run(
+            [sys.executable, str(runner), "--source", "local"],
+            capture_output=True, text=True, timeout=300, cwd=str(ROOT),
+        )
+        if r2.returncode == 0:
+            logger.info("US STOCKS run OK")
+            for line in r2.stdout.splitlines()[-20:]:
+                logger.info(f"  [us] {line}")
+        else:
+            logger.error(f"US STOCKS run FAIL (exit {r2.returncode})")
+            logger.error(f"  stderr: {r2.stderr[:500]}")
+    except subprocess.TimeoutExpired:
+        logger.error("US STOCKS run TIMEOUT (>5min)")
+    except Exception as e:
+        logger.exception(f"US STOCKS run exception: {e}")
+
+
 def run_bracket_watchdog_cycle():
     """Bracket heartbeat watchdog — runs every 5 min to verify every open
     futures position has an active SL/TP bracket on IBKR.
@@ -4925,6 +4983,10 @@ def main():
         "crypto_watchdog": CycleRunner("crypto_watchdog", run_crypto_watchdog_cycle,
                                         alert_callback=_cycle_alert,
                                         metrics_callback=_cycle_metrics_cb),
+        "us_stocks_daily": CycleRunner("us_stocks_daily", run_us_stocks_daily_cycle,
+                                         alert_callback=_cycle_alert,
+                                         metrics_callback=_cycle_metrics_cb,
+                                         timeout_seconds=900.0),
     }
     logger.info(f"  CycleRunners initialized: {list(_runners.keys())}")
 
@@ -4980,6 +5042,16 @@ def main():
         if time.time() - last_crypto_watchdog >= 300:  # 5 min
             _runners["crypto_watchdog"].run()
             last_crypto_watchdog = time.time()
+
+        # === US STOCKS DAILY (lun-ven, 22h55 Paris = 16h55 ET, apres close US) ===
+        # 3 strats monthly cross-sectional (tom, rs_spy, sector_rot_us) sur Alpaca paper.
+        # Chaque strat ne trade que sur ses jours de rebalance — la majorite des runs
+        # sont des no-ops. Le cycle refresh data S&P 500 puis lance les strats.
+        if is_weekday() and now_paris.hour == 22 and now_paris.minute >= 55 and not getattr(run_us_stocks_daily_cycle, '_done_today', False):
+            _runners["us_stocks_daily"].run()
+            run_us_stocks_daily_cycle._done_today = True
+        if is_weekday() and now_paris.hour < 22:
+            run_us_stocks_daily_cycle._done_today = False
 
         # === MACRO ECB EVENT DRIVEN (lun-ven, 14h50 Paris, jours BCE only) ===
         # Le module skip lui-meme les jours non-BCE; on declenche tous les jours
