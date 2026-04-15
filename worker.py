@@ -1824,6 +1824,39 @@ def _run_futures_cycle(live: bool = False):
                 except Exception as e:
                     logger.error(f"    MGC VIX Hedge error: {e}")
 
+            # 9e. Cross-Asset Momentum — BEST strat of session, 5/5 WF, Sharpe 7.87
+            # Rotate into best of MES/MNQ/M2K/MGC/MCL every 20 days.
+            try:
+                from strategies_v2.futures.cross_asset_momentum import CrossAssetMomentum
+                strat = CrossAssetMomentum()
+                strat.set_data_feed(feed)
+                bar = feed.get_latest_bar("MES")
+                if bar:
+                    sig = strat.on_bar(bar, portfolio_state)
+                    if sig:
+                        signals.append(("Cross-Asset Mom", sig))
+                        logger.info(f"    Cross-Asset Mom (paper): BUY {sig.symbol} @ {sig.stop_loss:.2f}")
+                    else:
+                        logger.info("    Cross-Asset Mom (paper): pas de rebal ou <2% mom")
+            except Exception as e:
+                logger.error(f"    Cross-Asset Mom error: {e}")
+
+            # 9f. Thursday Rally MES + MNQ
+            for sym in ["MES", "MNQ"]:
+                if sym not in data_sources: continue
+                try:
+                    from strategies_v2.futures.thursday_rally import ThursdayRally
+                    strat = ThursdayRally(symbol=sym)
+                    strat.set_data_feed(feed)
+                    bar = feed.get_latest_bar(sym)
+                    if bar:
+                        sig = strat.on_bar(bar, portfolio_state)
+                        if sig:
+                            signals.append((f"Thursday Rally {sym}", sig))
+                            logger.info(f"    Thursday Rally {sym} (paper): BUY @ {bar.close:.2f}")
+                except Exception as e:
+                    logger.error(f"    Thursday Rally {sym} error: {e}")
+
             # 9c. Friday-Monday MNQ — weekend effect, n=266 5Y Sharpe 1.76
             # WF 4/5 profitable, OOS 1.86 > IS 0.03 (OOS overperform)
             if "MNQ" in data_sources:
