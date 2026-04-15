@@ -399,6 +399,15 @@ def get_strategies():
         return {"error": str(e), "strategies": []}
 
 
+def _get_total_strategies_count() -> int:
+    """Count total strategies from STRATEGY_PHASES (most complete source)."""
+    try:
+        from strategy_registry import STRATEGY_PHASES
+        return len(STRATEGY_PHASES)
+    except Exception:
+        return len(_load_strategy_registry())
+
+
 def _load_strategy_registry() -> dict:
     """Charge le registre des strategies via importlib (pas exec)."""
     import importlib.util
@@ -670,6 +679,34 @@ def get_trades(
     except ImportError:
         all_trades = []
 
+    # Add futures trades from events.jsonl
+    try:
+        events_path = ROOT / "logs" / "events.jsonl"
+        if events_path.exists():
+            with open(events_path, "r", encoding="utf-8") as f:
+                for line in f:
+                    try:
+                        ev = json.loads(line.strip())
+                        if ev.get("action") != "futures_trade":
+                            continue
+                        d = ev.get("details", {})
+                        all_trades.append({
+                            "date": ev.get("timestamp", "")[:10],
+                            "timestamp": ev.get("timestamp", ""),
+                            "strategy": ev.get("strategy", ""),
+                            "symbol": d.get("symbol", ""),
+                            "side": d.get("side", ""),
+                            "entry_price": d.get("fill_price", 0),
+                            "qty": d.get("qty", 1),
+                            "broker": "IBKR",
+                            "asset_class": "futures",
+                            "trade_source": d.get("mode", "live").lower(),
+                        })
+                    except Exception:
+                        continue
+    except Exception:
+        pass
+
     # Filtre par mode live/paper
     if mode == "live":
         all_trades = [t for t in all_trades if t.get("trade_source") == "live"]
@@ -744,7 +781,7 @@ def get_system_health():
         "total_equity": round(alpaca_equity + ibkr_equity + binance_equity, 2),
         "cache_files": len(cache_files),
         "cache_size_mb": round(cache_size_mb, 1),
-        "strategies_count": 46,
+        "strategies_count": _get_total_strategies_count(),
         "cro_score": 9.5,
         "timestamp": datetime.now(UTC).isoformat(),
     }
@@ -1182,6 +1219,145 @@ else:
 
 
 # ── Startup ──────────────────────────────────────────────────────────────────
+
+# ── Events / Futures trades ─────────────────────────────────────────────────
+
+@app.get("/api/events")
+def get_events(limit: int = 100, action: str | None = None):
+    """Recent events from worker (trades, signals, kill switch, etc)."""
+    events_path = ROOT / "logs" / "events.jsonl"
+    if not events_path.exists():
+        return {"events": [], "count": 0}
+    try:
+        with open(events_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        events = []
+        for line in reversed(lines[-500:]):
+            try:
+                ev = json.loads(line.strip())
+                if action and ev.get("action") != action:
+                    continue
+                events.append(ev)
+                if len(events) >= limit:
+                    break
+            except Exception:
+                continue
+        return {"events": events, "count": len(events)}
+    except Exception as e:
+        return {"error": str(e), "events": [], "count": 0}
+
+
+@app.get("/api/futures/trades")
+def get_futures_trades(limit: int = 50):
+    """Futures trades from events log."""
+    events_path = ROOT / "logs" / "events.jsonl"
+    if not events_path.exists():
+        return {"trades": [], "count": 0}
+    try:
+        with open(events_path, "r", encoding="utf-8") as f:
+            lines = f.readlines()
+        trades = []
+        for line in reversed(lines):
+            try:
+                ev = json.loads(line.strip())
+                if ev.get("action") != "futures_trade":
+                    continue
+                d = ev.get("details", {})
+                trades.append({
+                    "timestamp": ev.get("timestamp", ""),
+                    "strategy": ev.get("strategy", ""),
+                    "symbol": d.get("symbol", ""),
+                    "side": d.get("side", ""),
+                    "qty": d.get("qty", 1),
+                    "fill_price": d.get("fill_price", 0),
+                    "sl": d.get("sl", 0),
+                    "tp": d.get("tp", 0),
+                    "mode": d.get("mode", ""),
+                    "equity": d.get("equity", 0),
+                })
+                if len(trades) >= limit:
+                    break
+            except Exception:
+                continue
+        return {"trades": trades, "count": len(trades)}
+    except Exception as e:
+        return {"error": str(e), "trades": [], "count": 0}
+
+
+@app.get("/api/futures/positions")
+def get_futures_positions():
+    """Current futures positions from state files."""
+    result = {"live": {}, "paper": {}}
+    for suffix in ("live", "paper"):
+        fp = ROOT / "data" / "state" / f"futures_positions_{suffix}.json"
+        if fp.exists():
+            try:
+                result[suffix] = json.loads(fp.read_text(encoding="utf-8"))
+            except Exception:
+                pass
+    return result
+
+
+@app.get("/api/equity-history")
+def get_equity_history(days: int = 7):
+    """Equity curve from portfolio snapshots."""
+    snap_dir = ROOT / "logs" / "portfolio"
+    if not snap_dir.exists():
+        return {"data": [], "count": 0}
+    import glob
+    files = sorted(glob.glob(str(snap_dir / "*.jsonl")))[-days:]
+    data = []
+    for fpath in files:
+        try:
+            with open(fpath) as f:
+                for line in f:
+                    try:
+                        snap = json.loads(line.strip())
+                        data.append({
+                            "timestamp": snap.get("timestamp", ""),
+                            "total_equity": snap.get("portfolio", {}).get("total_equity", 0),
+                            "daily_pnl_pct": snap.get("portfolio", {}).get("daily_pnl_pct", 0),
+                            "brokers": snap.get("portfolio", {}).get("brokers", []),
+                        })
+                    except Exception:
+                        continue
+        except Exception:
+            continue
+    return {"data": data, "count": len(data)}
+
+
+@app.get("/api/books/status")
+def api_books_status():
+    """Return per-book health status (GREEN/DEGRADED/BLOCKED/UNKNOWN).
+
+    P1.2 live hardening — books are independent. A DEGRADED crypto book
+    does NOT imply DEGRADED futures book. Use per-book status for decisions.
+    """
+    try:
+        from core.governance import get_all_books_health, get_global_status
+        books = get_all_books_health(use_cache=True)
+        return {
+            "global": get_global_status(use_cache=True).value,
+            "books": {name: h.to_dict() for name, h in books.items()},
+        }
+    except Exception as e:
+        logger.error(f"/api/books/status error: {e}")
+        return {"error": str(e), "global": "UNKNOWN", "books": {}}
+
+
+@app.get("/api/governance/live-whitelist")
+def api_live_whitelist():
+    """Return the canonical live whitelist (read-only).
+
+    P1.1 live hardening — single source of truth for what's allowed in LIVE.
+    """
+    try:
+        from core.governance import load_live_whitelist
+        return load_live_whitelist()
+    except Exception as e:
+        logger.error(f"/api/governance/live-whitelist error: {e}")
+        return {"error": str(e)}
+
 
 @app.on_event("startup")
 async def startup():

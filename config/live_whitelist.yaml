@@ -1,0 +1,301 @@
+# =============================================================================
+# LIVE WHITELIST CANONIQUE — source unique de verite
+# =============================================================================
+# Ce fichier est la source de verite unique pour les strategies autorisees
+# a executer des ordres LIVE (vrai argent). Toute strategie qui n'est PAS
+# dans cette whitelist est:
+#   - soit en paper (pour apprentissage + data collection)
+#   - soit desactivee
+#
+# Contrat:
+#   - Le worker lit ce fichier au boot via load_live_whitelist()
+#   - Avant tout ordre live, le worker verifie que strategy_id est whitelist
+#   - Un signal hors whitelist est logged + bloque sans etre execute
+#   - Les promotions live passent par edit de ce fichier + commit + redeploy
+#
+# Schema par entree:
+#   strategy_id: identifiant canonique (doit matcher runtime_entrypoint)
+#   book: ibkr_futures | ibkr_fx | ibkr_eu | binance_crypto | alpaca_us
+#   status: live_core | live_probation | paper_only | disabled
+#   runtime_entrypoint: ou le code tourne (worker.py:function ou module)
+#   wf_source: fichier ou artefact avec le dernier walk-forward
+#   sizing_policy: risk_budget | kelly_quarter | fixed
+#   max_risk_usd: cap max worst-case par position ($)
+#   kill_criteria: conditions de retrait automatique
+#   notes: contexte libre
+#
+# Derniere MAJ: 2026-04-15 (P1.1 live hardening, 3 books gouvernables)
+# =============================================================================
+
+metadata:
+  version: 1
+  updated_at: "2026-04-15"
+  updated_by: "live_hardening_p1"
+  review_cadence: "hebdomadaire"
+
+# -----------------------------------------------------------------------------
+# IBKR FUTURES — 3 strats alpha pur validees 10Y + WF + MC
+# -----------------------------------------------------------------------------
+# Portefeuille V2 (first-refusal): CAGR 12.2%, Sharpe 0.87, DD -28.6%
+# Monte Carlo: P(ruine)=0%, P(DD>-40%)=8.5%, longest DD median 530j
+# Risk Budget Framework 5% equity deploye depuis le 15 avril 2026.
+# -----------------------------------------------------------------------------
+
+ibkr_futures:
+
+  - strategy_id: cross_asset_momentum
+    book: ibkr_futures
+    status: live_core
+    runtime_entrypoint: "worker.py:_run_futures_cycle (bloc STRATS LIVE CAPABLE)"
+    runtime_module: "strategies_v2.futures.cross_asset_momentum.CrossAssetMomentum"
+    wf_source: "scripts/wf_ib_portfolio.py (5 windows, 4/5 OOS profitable)"
+    sizing_policy: "risk_budget_5pct"
+    max_risk_usd: 500  # on $10K equity = 5% cap
+    priority: "first_refusal"  # CAM a priorite sur ses symboles preferes
+    universe: [MES, MNQ, M2K, MGC, MCL]
+    holding_period_days: 20
+    rebalance_cadence_days: 20
+    min_momentum_pct: 0.02
+    kill_criteria:
+      - "5 consecutive losses"
+      - "rolling 90d Sharpe < -0.5"
+      - "DD depuis peak > 35%"
+    notes: |
+      Rotate meilleur de MES/MNQ/M2K/MGC/MCL sur 20d momentum.
+      Backtest 10Y Sharpe 0.85, corr MES 0.003. First-refusal sur
+      ses symboles preferes via cam_top_pick() (bloque gold_trend
+      et gold_oil si CAM voudrait le meme symbole).
+
+  - strategy_id: gold_trend_mgc
+    book: ibkr_futures
+    status: live_core
+    runtime_entrypoint: "worker.py:_run_futures_cycle (bloc STRATS LIVE CAPABLE)"
+    runtime_module: "strategies_v2.futures.gold_trend_mgc.GoldTrendMGC"
+    wf_source: "scripts/wf_ib_portfolio.py"
+    sizing_policy: "risk_budget_5pct"
+    max_risk_usd: 500
+    priority: "secondary_to_cross_asset"
+    universe: [MGC]
+    ema_period: 20
+    sl_pct: 0.015
+    tp_pct: 0.03
+    max_hold_days: 10
+    kill_criteria:
+      - "5 consecutive losses"
+      - "rolling 90d Sharpe < -0.5"
+    notes: |
+      Long MGC si close > EMA20. Capture les rallies gold co-occurents
+      avec oil rally (spread faible -> gold_oil silencieux, gold_trend
+      seul actif). Essentiel pour 2020 COVID, 2024.
+
+  - strategy_id: gold_oil_rotation
+    book: ibkr_futures
+    status: live_core
+    runtime_entrypoint: "worker.py:_run_futures_cycle (bloc STRATS LIVE CAPABLE)"
+    runtime_module: "strategies_v2.futures.gold_oil_rotation.GoldOilRotation"
+    wf_source: "scripts/wf_gold_oil_rotation.py (5/5 OOS profitable)"
+    sizing_policy: "risk_budget_5pct"
+    max_risk_usd: 500
+    priority: "secondary_to_cross_asset"
+    universe: [MGC, MCL]
+    lookback_days: 20
+    min_edge_pct: 0.02
+    sl_pct: 0.02
+    tp_pct: 0.04
+    max_hold_days: 10
+    cooldown_days: 10
+    kill_criteria:
+      - "5 consecutive losses"
+      - "rolling 90d Sharpe < -0.5"
+    notes: |
+      Rotate long MGC vs MCL selon 20d momentum spread. Positive chaque
+      annee 2021-2026 (backtest 5Y). Sharpe 6.44 solo, 0.87 en portefeuille
+      (dilute par interactions avec gold_trend).
+
+# -----------------------------------------------------------------------------
+# BINANCE CRYPTO — 11 strats live (core + probation)
+# -----------------------------------------------------------------------------
+# Capital actif: Binance spot + earn + margin isole.
+# Kill switch: DD -5% daily, -8% weekly, -12% monthly (voir core/kill_switch_live).
+# DD exclut earn BTC/ETH passif, seuls les trades comptent.
+# -----------------------------------------------------------------------------
+
+binance_crypto:
+
+  - strategy_id: btc_eth_dual_momentum
+    book: binance_crypto
+    status: live_core
+    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-001)"
+    runtime_module: "strategies.crypto.btc_eth_dual_momentum"
+    wf_source: "data/crypto/wf_results.json"
+    sizing_policy: "allocation_pct + kelly_quarter + broker_cap_80pct"
+    notes: "BTC/ETH dual momentum core strat"
+
+  - strategy_id: volatility_breakout
+    book: binance_crypto
+    status: live_core
+    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-004)"
+    runtime_module: "strategies.crypto.volatility_breakout"
+    wf_source: "data/crypto/wf_results.json"
+    sizing_policy: "allocation_pct + kelly_quarter + broker_cap_80pct"
+
+  - strategy_id: btc_dominance_rotation_v2
+    book: binance_crypto
+    status: live_core
+    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-005)"
+    runtime_module: "strategies.crypto.btc_dominance_rotation_v2"
+    wf_source: "data/crypto/wf_results.json"
+    sizing_policy: "allocation_pct + kelly_quarter + broker_cap_80pct"
+
+  - strategy_id: borrow_rate_carry
+    book: binance_crypto
+    status: live_core
+    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-006)"
+    runtime_module: "strategies.crypto.borrow_rate_carry"
+    wf_source: "data/crypto/wf_results.json"
+    sizing_policy: "earn_rebalance (pas de position trading directe)"
+    notes: "Rebalance earn BTC/ETH/USDT selon yields, pas de risk live"
+
+  - strategy_id: liquidation_momentum
+    book: binance_crypto
+    status: live_probation
+    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-007)"
+    runtime_module: "strategies.crypto.liquidation_momentum"
+    wf_source: "data/crypto/wf_results.json"
+    sizing_policy: "allocation_pct + kelly_quarter"
+    notes: "Probation - a monitorer sur 30j"
+
+  - strategy_id: weekend_gap_reversal
+    book: binance_crypto
+    status: live_probation
+    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-008)"
+    runtime_module: "strategies.crypto.weekend_gap_reversal"
+    wf_source: "data/crypto/wf_results.json"
+    sizing_policy: "allocation_pct + kelly_quarter"
+
+  - strategy_id: trend_short_btc
+    book: binance_crypto
+    status: live_probation
+    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-009)"
+    runtime_module: "strategies.crypto.trend_short_btc"
+    wf_source: "data/crypto/wf_results.json"
+    sizing_policy: "allocation_pct + kelly_quarter"
+    notes: "Short bias, probation stricte"
+
+  - strategy_id: mr_scalp_btc
+    book: binance_crypto
+    status: live_probation
+    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-010)"
+    runtime_module: "strategies.crypto.mr_scalp_btc"
+    wf_source: "data/crypto/wf_results.json"
+    sizing_policy: "allocation_pct + kelly_quarter"
+
+  - strategy_id: liquidation_spike
+    book: binance_crypto
+    status: live_probation
+    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-011)"
+    runtime_module: "strategies.crypto.liquidation_spike"
+    wf_source: "data/crypto/wf_results.json"
+    sizing_policy: "allocation_pct + kelly_quarter"
+
+  - strategy_id: vol_expansion_bear
+    book: binance_crypto
+    status: live_probation
+    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-012)"
+    runtime_module: "strategies.crypto.vol_expansion_bear"
+    wf_source: "data/crypto/wf_results.json"
+    sizing_policy: "allocation_pct + kelly_quarter"
+    notes: "Bear-oriented, probation"
+
+  - strategy_id: range_bb_harvest
+    book: binance_crypto
+    status: live_probation
+    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-014)"
+    runtime_module: "strategies.crypto.range_bb_harvest"
+    wf_source: "data/crypto/wf_results.json"
+    sizing_policy: "allocation_pct + kelly_quarter"
+
+  - strategy_id: bb_mean_reversion_short
+    book: binance_crypto
+    status: live_probation
+    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-015)"
+    runtime_module: "strategies.crypto.bb_mean_reversion_short"
+    wf_source: "data/crypto/wf_results.json"
+    sizing_policy: "allocation_pct + kelly_quarter"
+
+# -----------------------------------------------------------------------------
+# IBKR FX — DESACTIVE (IBKR_FX_ENABLED=false sur VPS)
+# -----------------------------------------------------------------------------
+# Decision PO: FX strictement hors scope IBKR (ESMA EU leverage limits).
+# Les strats FX restent dans le repo mais ne tournent PAS en live.
+# -----------------------------------------------------------------------------
+
+ibkr_fx:
+  - strategy_id: fx_carry_momentum_filter
+    book: ibkr_fx
+    status: disabled
+    runtime_entrypoint: "worker.py:run_fx_carry_cycle"
+    runtime_module: "core.fx_live_adapter.FXCarryMomentumFilter"
+    wf_source: "data/fx/wf_structural_results.json"
+    sizing_policy: "N/A - disabled"
+    kill_criteria: ["IBKR_FX_ENABLED=false en env = blocking"]
+    notes: |
+      DESACTIVE 2026 par decision PO. ESMA EU leverage limits + pas
+      d'edge competitif sur majors FX en daily. Les anciennes strats
+      FX legacy (eurgbp_mr, eurjpy_carry, audjpy_carry) sont rejetees
+      dans data/fx/wf_results.json et ne doivent PAS etre promues.
+
+# -----------------------------------------------------------------------------
+# IBKR EU — PAPER ONLY
+# -----------------------------------------------------------------------------
+# Les strats EU tournent en paper uniquement (bloc `if not live:` dans worker).
+# eu_gap_open est rejetee au dernier WF (output/wf_eu_results/wf_eu_summary.json).
+# -----------------------------------------------------------------------------
+
+ibkr_eu:
+  - strategy_id: eu_gap_open
+    book: ibkr_eu
+    status: paper_only
+    runtime_entrypoint: "worker.py:_run_futures_cycle (bloc if not live)"
+    runtime_module: "strategies_v2.futures.eu_gap_open"
+    wf_source: "output/wf_eu_results/wf_eu_summary.json (rejected 2026-03-31)"
+    sizing_policy: "N/A - paper"
+    notes: "Paper only pour data collection, rejected OOS"
+
+  - strategy_id: vix_mean_reversion
+    book: ibkr_eu
+    status: paper_only
+    runtime_entrypoint: "worker.py:_run_futures_cycle (bloc if not live)"
+    notes: "Paper only"
+
+  - strategy_id: gold_equity_divergence
+    book: ibkr_eu
+    status: paper_only
+    notes: "Paper only"
+
+  - strategy_id: mib_estx50_spread
+    book: ibkr_eu
+    status: paper_only
+    notes: "Paper only"
+
+  - strategy_id: sector_rotation_eu
+    book: ibkr_eu
+    status: paper_only
+    notes: "Paper only"
+
+# -----------------------------------------------------------------------------
+# ALPACA US — PAPER ONLY
+# -----------------------------------------------------------------------------
+# Doctrine: paper-first, live swing only si PDT compatible (>$25K capital).
+# Actuellement en paper sur $100K simule (PAPER_TRADING=true).
+# -----------------------------------------------------------------------------
+
+alpaca_us:
+  - strategy_id: us_stocks_daily
+    book: alpaca_us
+    status: paper_only
+    runtime_entrypoint: "worker.py:run_intraday (market='US')"
+    sizing_policy: "N/A - paper"
+    notes: |
+      Paper trading sur $100K Alpaca simule. Promotion live conditionnee
+      a PDT compat + capital > $25K + 30 jours de paper stable.

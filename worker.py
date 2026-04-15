@@ -232,10 +232,12 @@ def _get_global_nav() -> float:
     # Alpaca equity — real API query only (no hardcoded nominal)
     try:
         alp_key = os.getenv("ALPACA_API_KEY", "")
-        if alp_key:
+        alp_secret = os.getenv("ALPACA_SECRET_KEY", "")
+        if alp_key and alp_secret:
             try:
                 from core.alpaca_client.client import AlpacaClient
-                _alp = AlpacaClient()
+                _paper = os.getenv("PAPER_TRADING", "true").lower() == "true"
+                _alp = AlpacaClient(api_key=alp_key, secret_key=alp_secret, paper=_paper)
                 _info = _alp.get_account_info()
                 _eq = float(_info.get("equity", 0) or 0)
                 if _eq > 0:
@@ -2492,6 +2494,14 @@ def _run_futures_cycle(live: bool = False):
         _traded_this_cycle = set()
         _contracts_opened = 0
 
+        # P1.1 Whitelist enforcement — map display_name to canonical strategy_id.
+        # Only applies in live mode. Paper mode stays permissive by design.
+        _STRAT_DISPLAY_TO_ID = {
+            "Cross-Asset Mom":   "cross_asset_momentum",
+            "Gold Trend MGC":    "gold_trend_mgc",
+            "Gold-Oil Rotation": "gold_oil_rotation",
+        }
+
         for name, sig in signals:
             if _contracts_opened >= _slots_available:
                 logger.info(f"    {name}: SKIP — no slots left ({_slots_available} available, {_contracts_opened} used)")
@@ -2514,6 +2524,30 @@ def _run_futures_cycle(live: bool = False):
                 continue
 
             qty = 1
+
+            # GUARD 3bis: P1.1 Whitelist enforcement (LIVE mode only).
+            # Paper mode skips this check (paper strats are not whitelist by design).
+            if live:
+                _canonical_id = _STRAT_DISPLAY_TO_ID.get(name)
+                if _canonical_id is None:
+                    logger.warning(
+                        f"    {name}: SKIP — no canonical strategy_id mapping "
+                        f"(add to _STRAT_DISPLAY_TO_ID in worker.py)"
+                    )
+                    continue
+                try:
+                    from core.governance.live_whitelist import is_strategy_live_allowed
+                    if not is_strategy_live_allowed(_canonical_id, "ibkr_futures"):
+                        logger.warning(
+                            f"    {name} ({_canonical_id}): SKIP — not in live_whitelist.yaml"
+                        )
+                        continue
+                except Exception as _wle:
+                    logger.critical(
+                        f"    {name}: WHITELIST CHECK FAILED — {_wle}. "
+                        f"Fail-closed: refusing live order."
+                    )
+                    continue
 
             # GUARD 4: RISK BUDGET — pre-fill estimate using (SL,TP) midpoint as entry proxy
             # Precise enforcement happens after fill via _current_risk update.
@@ -2609,6 +2643,32 @@ def _run_futures_cycle(live: bool = False):
                 logger.info(
                     f"    RISK BUDGET: +${_actual_risk:.0f} → ${_current_risk:.0f}/${_risk_budget_usd:.0f}"
                 )
+
+                # P1.4 audit trail — record the decision for post-mortem reconstructibility
+                try:
+                    from core.governance.audit_trail import record_order_decision
+                    record_order_decision(
+                        book="ibkr_futures",
+                        strategy_id=_STRAT_DISPLAY_TO_ID.get(name, name),
+                        runtime_source=f"worker.py:_run_futures_cycle(live={live})",
+                        symbol=sym,
+                        side=sig.side,
+                        qty=qty,
+                        entry_price_est=_fill_price,
+                        stop_loss=_final_sl,
+                        take_profit=_final_tp,
+                        risk_usd=_actual_risk,
+                        risk_budget_usd=_risk_budget_usd,
+                        current_risk_usd=_current_risk,
+                        sizing_source="risk_budget_5pct",
+                        authorized_by=f"futures_{_mode.lower()}_{name}",
+                        broker_response={"oca_group": _oca, "fill_price": _fill_price,
+                                         "status": "Filled"},
+                        result="ACCEPTED",
+                    )
+                except Exception as _auerr:
+                    logger.warning(f"    audit_trail write failed: {_auerr}")
+
                 _log_event("futures_trade", name, {
                     "mode": _mode, "symbol": sym, "side": sig.side,
                     "qty": qty, "fill_price": _fill_price,

@@ -40,3 +40,23 @@ testpaths = ["tests"]
 python_files = ["test_*.py"]
 python_classes = ["Test*"]
 python_functions = ["test_*"]
+# P2.3 live hardening: hermetic tests — exclude worktrees, caches, temp
+# to prevent accidentally running stale tests from .claude/worktrees or
+# picking up locally cached data from previous runs.
+norecursedirs = [
+    ".claude",
+    ".claude/worktrees",
+    "temp",
+    "archive",
+    ".venv",
+    "venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".pytest_tmp",
+    "build",
+    "dist",
+    "node_modules",
+    "dashboard/frontend/node_modules",
+    "dashboard/frontend/dist",
+]
+addopts = "-ra --strict-markers"
