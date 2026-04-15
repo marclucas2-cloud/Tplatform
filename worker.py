@@ -2370,21 +2370,45 @@ def _run_futures_cycle(live: bool = False):
         except Exception:
             pass  # keep previous _ibkr_real_pos
 
-        # HARD LIMIT: max contracts by mode
-        # LIVE: 4 contracts (capital $10K, diversified via decorrelated alpha strats)
-        #   - Cross-Asset Mom (corr 0.003 MES), Gold Trend MGC (corr -0.02 MES)
-        #   - Uncorrelated = real risk is ~sqrt(4) = 2x single contract, not 4x
-        #   - Margin per micro contract: $800-1800, 4 contracts ~$5-6k margin
-        #     on $10k capital = 50-60% utilized, within prudent bounds
-        # PAPER: 20 contracts ($1M paper account, room for all strats)
-        MAX_FUTURES_CONTRACTS = 4 if live else 20
-        _total_existing = sum(abs(int(v)) for v in _ibkr_real_pos.values())
-        _slots_available = MAX_FUTURES_CONTRACTS - _total_existing
+        # RISK BUDGET FRAMEWORK (user decision 15 avril 2026)
+        # ====================================================
+        # Approach: think in EXPOSURE not contract count.
+        # - Hard cap: max total risk-if-stopped <= 5% of equity
+        # - Plus soft cap: max 4 distinct symbols live (diversification)
+        # - Per-symbol cap: 1 contract (existing guards below)
+        #
+        # Sum of (entry - SL) * mult * qty for all open positions ≤ 5% * equity
+        # Worst case all SL hit same day = max 5% DD (within kill switch limits)
 
+        _FUT_MULT = {
+            "MES": 5, "MNQ": 2, "M2K": 5, "MGC": 10, "MCL": 100,
+            "MIB": 5, "ESTX50": 10, "DAX": 1, "CAC40": 1, "VIX": 1,
+        }
+        RISK_BUDGET_PCT = 0.05  # 5% of equity worst-case DD cap
+        _risk_budget_usd = equity * RISK_BUDGET_PCT
+        MAX_DISTINCT_SYMBOLS = 4 if live else 20
+
+        # Compute current total risk-if-stopped from state file
+        _current_risk = 0.0
+        for _pos_sym, _pos_info in _fut_positions.items():
+            _pe = float(_pos_info.get("entry", 0) or 0)
+            _ps = float(_pos_info.get("sl", 0) or 0)
+            _pq = abs(int(_pos_info.get("qty", 1) or 1))
+            _pmult = _FUT_MULT.get(_pos_sym, 1)
+            if _pe > 0 and _ps > 0:
+                _current_risk += abs(_pe - _ps) * _pmult * _pq
+
+        _total_existing = sum(abs(int(v)) for v in _ibkr_real_pos.values())
+        logger.info(
+            f"    FUTURES {_mode}: risk budget ${_current_risk:.0f}/${_risk_budget_usd:.0f} "
+            f"({_current_risk/_risk_budget_usd*100:.0f}%), {_total_existing}/{MAX_DISTINCT_SYMBOLS} symbols"
+        )
+
+        # Legacy soft cap: max 4 distinct contracts (fallback if risk data missing)
+        _slots_available = MAX_DISTINCT_SYMBOLS - _total_existing
         if _slots_available <= 0:
             logger.warning(
-                f"    FUTURES {_mode}: HARD LIMIT — {_total_existing} contracts already open "
-                f"(max {MAX_FUTURES_CONTRACTS}). Skipping all new entries."
+                f"    FUTURES {_mode}: MAX DISTINCT SYMBOLS — {_total_existing}/{MAX_DISTINCT_SYMBOLS}. Skipping."
             )
             signals = []
 
@@ -2430,6 +2454,21 @@ def _run_futures_cycle(live: bool = False):
                 continue
 
             qty = 1
+
+            # GUARD 4: RISK BUDGET — pre-fill estimate using (SL,TP) midpoint as entry proxy
+            # Precise enforcement happens after fill via _current_risk update.
+            _est_mult = _FUT_MULT.get(sym, 1)
+            if sig.stop_loss and sig.take_profit:
+                _est_entry = (sig.stop_loss + sig.take_profit) / 2.0
+                _est_risk = abs(_est_entry - sig.stop_loss) * _est_mult * qty
+            else:
+                _est_risk = 0.0
+            if _current_risk + _est_risk > _risk_budget_usd:
+                logger.warning(
+                    f"    {name}: SKIP — risk budget exceeded "
+                    f"(current ${_current_risk:.0f} + new ${_est_risk:.0f} > ${_risk_budget_usd:.0f})"
+                )
+                continue
             try:
                 _fut = IbFuture(sym, exchange="CME")
                 _details = ibkr._ib.reqContractDetails(_fut)
@@ -2505,6 +2544,11 @@ def _run_futures_cycle(live: bool = False):
                 _traded_this_cycle.add(sym)
                 n_fut_orders += 1
                 _contracts_opened += 1
+                _actual_risk = abs(_fill_price - _final_sl) * _est_mult * qty
+                _current_risk += _actual_risk
+                logger.info(
+                    f"    RISK BUDGET: +${_actual_risk:.0f} → ${_current_risk:.0f}/${_risk_budget_usd:.0f}"
+                )
                 _log_event("futures_trade", name, {
                     "mode": _mode, "symbol": sym, "side": sig.side,
                     "qty": qty, "fill_price": _fill_price,
