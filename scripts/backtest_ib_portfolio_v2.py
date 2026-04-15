@@ -24,11 +24,20 @@ import pandas as pd
 ROOT = Path(__file__).resolve().parent.parent
 
 SPECS = {
-    "MES": {"mult": 5.0,   "cost": 2.49},
-    "MNQ": {"mult": 2.0,   "cost": 1.74},
-    "M2K": {"mult": 5.0,   "cost": 1.74},
-    "MGC": {"mult": 10.0,  "cost": 2.49},
-    "MCL": {"mult": 100.0, "cost": 2.49},
+    # mult = contract multiplier
+    # cost = round-trip commission + fees (IBKR + exchange)
+    # slip = round-trip slippage estimate: 2 ticks entry + 2 ticks exit
+    #   tick sizes & dollar values:
+    #   MES 0.25pt*$5=$1.25  -> 4 ticks = $5
+    #   MNQ 0.25pt*$2=$0.50  -> 4 ticks = $2
+    #   M2K 0.10pt*$5=$0.50  -> 4 ticks = $2
+    #   MGC 0.10pt*$10=$1.00 -> 4 ticks = $4
+    #   MCL 0.01pt*$100=$1.00-> 4 ticks = $4
+    "MES": {"mult": 5.0,   "cost": 2.49, "slip": 5.0},
+    "MNQ": {"mult": 2.0,   "cost": 1.74, "slip": 2.0},
+    "M2K": {"mult": 5.0,   "cost": 1.74, "slip": 2.0},
+    "MGC": {"mult": 10.0,  "cost": 2.49, "slip": 4.0},
+    "MCL": {"mult": 100.0, "cost": 2.49, "slip": 4.0},
 }
 
 INITIAL_EQUITY = 10_000.0
@@ -189,7 +198,7 @@ def signal_gold_oil(mgc, mcl, common, i, lookback=20, min_edge=0.02, last_entry=
     }
 
 
-def run_portfolio(dfs, common_all, use_first_refusal: bool, label: str, disable_gold_trend: bool = False):
+def run_portfolio(dfs, common_all, use_first_refusal: bool, label: str, disable_gold_trend: bool = False, apply_slippage: bool = False):
     mgc = dfs["MGC"]; mcl = dfs["MCL"]
     equity = INITIAL_EQUITY
     open_positions = {}
@@ -265,6 +274,8 @@ def run_portfolio(dfs, common_all, use_first_refusal: bool, label: str, disable_
 
             exit_idx, exit_px = sim_exit(df_sym, eidx, sig["side"], entry_px, sig["sl_pct"], sig["tp_pct"], sig["mh"])
             pnl = (exit_px - entry_px) * spec["mult"] - spec["cost"]
+            if apply_slippage:
+                pnl -= spec.get("slip", 0.0)
             open_positions[sym] = {
                 "strat": sig["strat"],
                 "symbol": sym,

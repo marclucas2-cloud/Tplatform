@@ -41,7 +41,15 @@ def load_long(sym):
     df.index = pd.to_datetime(df.index)
     if df.index.tz is not None:
         df.index = df.index.tz_localize(None)
-    return df.sort_index()
+    df = df.sort_index()
+    # Drop bars with impossible prices (MCL 2020-04-20/21 WTI negative crash).
+    # These are real historical prints but cannot be used by signal logic that
+    # divides by price or computes percentage moves across them.
+    bad = (df[["open", "high", "low", "close"]] <= 0).any(axis=1)
+    if bad.any():
+        print(f"  {sym}: drop {int(bad.sum())} pathological bars (non-positive prices)")
+        df = df[~bad]
+    return df
 
 
 def main():
@@ -62,56 +70,62 @@ def main():
     years = (common_all[-1] - common_all[0]).days / 365.25
     print(f"Duration: {years:.1f} years")
 
-    # V1 baseline
-    r1 = run_portfolio(dfs, common_all, use_first_refusal=False, label="V1 BASELINE 10Y")
-    # V2 first-refusal
-    r2 = run_portfolio(dfs, common_all, use_first_refusal=True, label="V2 OPT1 FirstRefusal 10Y")
-    # V3 first-refusal + no gold_trend
-    r3 = run_portfolio(dfs, common_all, use_first_refusal=True, disable_gold_trend=True,
-                       label="V3 OPT2 NoGoldTrend 10Y")
+    # V1 baseline (no slippage)
+    r1 = run_portfolio(dfs, common_all, use_first_refusal=False, label="V1 BASELINE 10Y (no slip)")
+    # V2 first-refusal (no slippage)
+    r2 = run_portfolio(dfs, common_all, use_first_refusal=True, label="V2 OPT1 10Y (no slip)")
+    # V2 with realistic slippage
+    r2s = run_portfolio(dfs, common_all, use_first_refusal=True, apply_slippage=True,
+                        label="V2 OPT1 10Y (+ slippage 2 ticks)")
+    # V1 with realistic slippage (for comparison)
+    r1s = run_portfolio(dfs, common_all, use_first_refusal=False, apply_slippage=True,
+                        label="V1 BASELINE 10Y (+ slippage 2 ticks)")
 
     print_result(r1)
     print_result(r2)
-    print_result(r3)
+    print_result(r1s)
+    print_result(r2s)
 
-    # Compare
-    print("\n" + "=" * 80)
-    print("  COMPARAISON V1 vs V2 vs V3 — 10 ans")
-    print("=" * 80)
+    # Compare — focus on V1 vs V2, with/without slippage
+    print("\n" + "=" * 88)
+    print("  COMPARAISON 10Y — impact data fix MCL + slippage")
+    print("=" * 88)
 
     def fmt_year(r, y):
         return f"${r['per_year'].loc[y,'total']:+,.0f}" if y in r['per_year'].index else "n/a"
 
-    rows = [
-        ("PnL total",
-         f"${r1['total_pnl']:+,.0f}", f"${r2['total_pnl']:+,.0f}", f"${r3['total_pnl']:+,.0f}"),
-        ("Final equity",
-         f"${r1['final_equity']:,.0f}", f"${r2['final_equity']:,.0f}", f"${r3['final_equity']:,.0f}"),
-        ("CAGR",
-         f"{r1['roc_annual']*100:.1f}%", f"{r2['roc_annual']*100:.1f}%", f"{r3['roc_annual']*100:.1f}%"),
-        ("Sharpe",
-         f"{r1['sharpe']:.2f}", f"{r2['sharpe']:.2f}", f"{r3['sharpe']:.2f}"),
-        ("Max DD",
-         f"{r1['max_dd']*100:.1f}%", f"{r2['max_dd']*100:.1f}%", f"{r3['max_dd']*100:.1f}%"),
-        ("Trades",
-         f"{r1['n_trades']}", f"{r2['n_trades']}", f"{r3['n_trades']}"),
-        ("Win rate",
-         f"{r1['wr']*100:.1f}%", f"{r2['wr']*100:.1f}%", f"{r3['wr']*100:.1f}%"),
-    ]
-    print(f"{'':22s} {'V1 baseline':>14s} {'V2 Opt1':>14s} {'V3 NoGoldTrend':>16s}")
-    for row in rows:
-        print(f"{row[0]:22s} {row[1]:>14s} {row[2]:>14s} {row[3]:>16s}")
+    configs = [("V1 no-slip", r1), ("V2 no-slip", r2), ("V1 +slip", r1s), ("V2 +slip", r2s)]
 
-    # Per year comparison
-    print(f"\n{'Annee':<8s} {'V1':>14s} {'V2':>14s} {'V3':>14s}")
-    all_years = sorted(set(r1['per_year'].index) | set(r2['per_year'].index) | set(r3['per_year'].index))
+    rows = [
+        ("PnL total",    [f"${r['total_pnl']:+,.0f}" for _, r in configs]),
+        ("Final equity", [f"${r['final_equity']:,.0f}" for _, r in configs]),
+        ("CAGR",         [f"{r['roc_annual']*100:.1f}%" for _, r in configs]),
+        ("Sharpe",       [f"{r['sharpe']:.2f}" for _, r in configs]),
+        ("Max DD",       [f"{r['max_dd']*100:.1f}%" for _, r in configs]),
+        ("Trades",       [f"{r['n_trades']}" for _, r in configs]),
+        ("Win rate",     [f"{r['wr']*100:.1f}%" for _, r in configs]),
+    ]
+    headers = [name for name, _ in configs]
+    print(f"{'':20s} " + " ".join(f"{h:>14s}" for h in headers))
+    for label, vals in rows:
+        print(f"{label:20s} " + " ".join(f"{v:>14s}" for v in vals))
+
+    print(f"\nImpact slippage V2:")
+    slip_impact_pnl = r2s['total_pnl'] - r2['total_pnl']
+    slip_impact_cagr = (r2s['roc_annual'] - r2['roc_annual']) * 100
+    print(f"  PnL: {slip_impact_pnl:+,.0f} ({slip_impact_pnl / r2['total_pnl'] * 100:+.1f}%)")
+    print(f"  CAGR: {slip_impact_cagr:+.1f} pts")
+
+    # Per year comparison (V2 with slippage = decision-grade config)
+    print(f"\n{'Annee':<8s} {'V2 no-slip':>14s} {'V2 +slip':>14s}")
+    all_years = sorted(set(r2['per_year'].index) | set(r2s['per_year'].index))
     for y in all_years:
-        print(f"{y:<8d} {fmt_year(r1,y):>14s} {fmt_year(r2,y):>14s} {fmt_year(r3,y):>14s}")
+        print(f"{y:<8d} {fmt_year(r2,y):>14s} {fmt_year(r2s,y):>14s}")
 
     # Save
     out = ROOT / "reports" / "research"
-    r3['df_trades'].to_csv(out / "ib_portfolio_10y_v3_trades.csv", index=False)
-    print(f"\n[ok] V3 trades saved to {out}/ib_portfolio_10y_v3_trades.csv")
+    r2s['df_trades'].to_csv(out / "ib_portfolio_10y_v2_slip_trades.csv", index=False)
+    print(f"\n[ok] V2+slip trades saved to {out}/ib_portfolio_10y_v2_slip_trades.csv")
     return 0
 
 
