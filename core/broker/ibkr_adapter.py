@@ -248,6 +248,10 @@ class IBKRBroker(BaseBroker):
             for p in positions
         ]
 
+    def get_open_orders(self) -> list[dict]:
+        """Alias for orphan_detector compatibility — returns open orders only."""
+        return self.get_orders(status="open")
+
     def get_orders(self, status: str = "open", limit: int = 50) -> list[dict]:
         self._ensure_connected()
         if status == "open":

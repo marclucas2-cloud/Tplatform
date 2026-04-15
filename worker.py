@@ -1966,13 +1966,82 @@ def _run_futures_cycle(live: bool = False):
             pass
 
         # FIX A: Reconcile state file with actual IBKR positions
-        # If state says we have a position but IBKR doesn't, remove from state
+        # If state says we have a position but IBKR doesn't, the trade was
+        # closed (SL/TP hit or manual close) — update journal + remove from state
         _ibkr_real_pos = {}  # initialized empty in case positions() fails
         try:
             _ibkr_real_pos = {p.contract.symbol: p.position for p in ibkr._ib.positions() if abs(p.position) > 0}
             stale_keys = [k for k in _fut_positions if k not in _ibkr_real_pos]
             for k in stale_keys:
-                logger.info(f"    RECONCILE: removing stale {k} from state (no IBKR position)")
+                # Journal UPDATE: the position was closed between last cycle and now.
+                # Fetch recent fills to determine exit price + compute pnl.
+                try:
+                    import sqlite3 as _sql
+                    _pos_info = _fut_positions[k]
+                    _oca = _pos_info.get("oca_group", "")
+                    _entry_px = float(_pos_info.get("entry", 0))
+                    _qty = int(_pos_info.get("qty", 1))
+                    _side = _pos_info.get("side", "BUY")
+                    # Infer exit price: scan recent fills for this symbol + opposite side
+                    _exit_px = 0.0
+                    _exit_reason = "UNKNOWN"
+                    try:
+                        _opposite = "SELL" if _side == "BUY" else "BUY"
+                        _recent_fills = ibkr._ib.fills()
+                        for _f in reversed(_recent_fills):
+                            if _f.contract.symbol == k and _f.execution.side in ("SLD", "BOT"):
+                                _fill_is_exit = (_side == "BUY" and _f.execution.side == "SLD") or \
+                                               (_side == "SELL" and _f.execution.side == "BOT")
+                                if _fill_is_exit:
+                                    _exit_px = float(_f.execution.price)
+                                    # Infer reason: compare to SL/TP
+                                    _sl_stored = float(_pos_info.get("sl", 0))
+                                    _tp_stored = float(_pos_info.get("tp", 0))
+                                    if _sl_stored and abs(_exit_px - _sl_stored) < 1:
+                                        _exit_reason = "SL_HIT"
+                                    elif _tp_stored and abs(_exit_px - _tp_stored) < 1:
+                                        _exit_reason = "TP_HIT"
+                                    else:
+                                        _exit_reason = "MANUAL"
+                                    break
+                    except Exception:
+                        pass
+
+                    # Compute pnl (approx — multiplier from state or 5 default)
+                    _mult = 5 if k == "MES" else 2 if k == "MNQ" else 5 if k == "M2K" else 1
+                    if _exit_px > 0 and _entry_px > 0:
+                        if _side == "BUY":
+                            _pnl_gross = (_exit_px - _entry_px) * _qty * _mult
+                        else:
+                            _pnl_gross = (_entry_px - _exit_px) * _qty * _mult
+                        _pnl_net = _pnl_gross - 2.49 * _qty  # approx commission
+                    else:
+                        _pnl_gross = 0
+                        _pnl_net = 0
+
+                    # UPDATE the journal row (identified by oca = trade_id)
+                    _jdb = "live_journal.db" if live else "paper_journal.db"
+                    _jpath = ROOT / "data" / _jdb
+                    if _jpath.exists() and _oca:
+                        _jconn = _sql.connect(str(_jpath))
+                        _jconn.execute(
+                            "UPDATE trades SET status='closed', exit_price=?, exit_time=?, "
+                            "pnl_gross=?, pnl_net=?, exit_reason=? WHERE trade_id=?",
+                            (_exit_px, datetime.now(UTC).isoformat(),
+                             _pnl_gross, _pnl_net, _exit_reason, _oca),
+                        )
+                        _rowcount = _jconn.total_changes
+                        _jconn.commit()
+                        _jconn.close()
+                        logger.info(
+                            f"    RECONCILE + JOURNAL UPDATE: {k} closed @ {_exit_px:.2f} "
+                            f"(entry {_entry_px:.2f}) pnl=${_pnl_net:.2f} reason={_exit_reason} rows={_rowcount}"
+                        )
+                    else:
+                        logger.info(f"    RECONCILE: removing stale {k} from state (journal not updated, no oca)")
+                except Exception as _jue:
+                    logger.warning(f"    RECONCILE journal UPDATE failed for {k}: {_jue}")
+
                 del _fut_positions[k]
         except Exception as _re:
             logger.warning(f"    RECONCILE error: {_re}")
