@@ -1660,21 +1660,13 @@ def _run_futures_cycle(live: bool = False):
         # 3. MES 3-Day Stretch — DISABLED (PO P0: SHORT mecanique en bull = catastrophique)
         logger.info("    MES 3-Day Stretch: DISABLED (PO P0)")
 
-        # 4. Overnight Buy-Close MES
-        try:
-            from strategies_v2.futures.overnight_buy_close import OvernightBuyClose
-            strat_on_mes = OvernightBuyClose(symbol="MES")
-            strat_on_mes.set_data_feed(feed)
-            bar = feed.get_latest_bar("MES")
-            if bar:
-                sig = strat_on_mes.on_bar(bar, portfolio_state)
-                if sig:
-                    signals.append(("Overnight MES", sig))
-                    logger.info(f"    Overnight MES: {sig.side} @ {bar.close:.2f}")
-                else:
-                    logger.info("    Overnight MES: pas de signal (below EMA20)")
-        except Exception as e:
-            logger.error(f"    Overnight MES error: {e}")
+        # 4. Overnight Buy-Close MES — DISABLED (decision user 15 avril 2026)
+        # Reason: 85 backtests testes (param sweep complet, 60 combos + WF real
+        # prod logic + 4 intraday variants), max Sharpe 0.07 (bruit), WF OOS
+        # -0.68. Paper review 31 mars avait deja flag REJECTED mais jamais
+        # applique. User decision: disable + iterate une v2 avec filtres
+        # additionnels (regime, VIX, ADX) en research mode.
+        logger.info("    Overnight MES: DISABLED (WF real prod logic Sharpe 0.07, v2 in research)")
 
         # 5. Overnight Buy-Close MNQ — DISABLED (PO P0: doublon du MES)
         logger.info("    Overnight MNQ: DISABLED (PO P0)")
