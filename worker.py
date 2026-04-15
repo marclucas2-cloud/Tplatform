@@ -1694,6 +1694,28 @@ def _run_futures_cycle(live: bool = False):
             except Exception as e:
                 logger.error(f"    Gold Trend MGC error: {e}")
 
+        # LIVE-capable 3: Gold-Oil Rotation
+        # Sharpe 6.44 backtest, WF 5/5 OOS profitable (mean Sharpe 7.16),
+        # corr MES = 0.02, corr cross_asset = 0.002, corr gold_trend = 0.104,
+        # positive EVERY year 2021-2026 (incl 2022 +$2.4K and 2026 +$4.7K bears).
+        # Rotates long between MGC and MCL based on 20d momentum spread.
+        if "MGC" in data_sources and "MCL" in data_sources:
+            try:
+                from strategies_v2.futures.gold_oil_rotation import GoldOilRotation
+                _gor_strat = GoldOilRotation()
+                _gor_strat.set_data_feed(feed)
+                # Use MGC as the trigger bar (symbol is chosen inside on_bar)
+                bar = feed.get_latest_bar("MGC")
+                if bar:
+                    sig = _gor_strat.on_bar(bar, portfolio_state)
+                    if sig:
+                        signals.append(("Gold-Oil Rotation", sig))
+                        logger.info(f"    Gold-Oil Rotation ({_mode}): BUY {sig.symbol}")
+                    else:
+                        logger.info(f"    Gold-Oil Rotation ({_mode}): spread < 2%")
+            except Exception as e:
+                logger.error(f"    Gold-Oil Rotation error: {e}")
+
         # STRATS "REJECTED" QUI TOURNENT EN PAPER UNIQUEMENT
         # ============================================================
         # Decision user 15 avril 2026: activer en paper toutes les strats
