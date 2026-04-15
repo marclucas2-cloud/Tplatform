@@ -1019,7 +1019,7 @@ def run_crypto_watchdog_cycle():
 def run_us_stocks_daily_cycle():
     """US stocks daily rebalance — 3 monthly cross-sectional strategies on Alpaca paper.
 
-    Runs once per weekday at 22:55 Paris (16:55 ET, after US close). Executes:
+    Runs once per weekday at 16:00 Paris (10:00 ET, 30 min after US open). Executes:
       1. scripts/download_us_data.py (refresh S&P 500 daily bars, ~2 min)
       2. scripts/run_us_stocks_daily.py --source local (tom + rs_spy + sector_rot_us)
 
@@ -5043,14 +5043,15 @@ def main():
             _runners["crypto_watchdog"].run()
             last_crypto_watchdog = time.time()
 
-        # === US STOCKS DAILY (lun-ven, 22h55 Paris = 16h55 ET, apres close US) ===
+        # === US STOCKS DAILY (lun-ven, 16h00 Paris = 10h00 ET, 30 min apres US open) ===
         # 3 strats monthly cross-sectional (tom, rs_spy, sector_rot_us) sur Alpaca paper.
-        # Chaque strat ne trade que sur ses jours de rebalance — la majorite des runs
-        # sont des no-ops. Le cycle refresh data S&P 500 puis lance les strats.
-        if is_weekday() and now_paris.hour == 22 and now_paris.minute >= 55 and not getattr(run_us_stocks_daily_cycle, '_done_today', False):
+        # Signal stateless: depend du last_month_end (hier ou plus loin). La data yfinance
+        # de la veille est finalisee depuis > 8h, pas de race. Fills observables en session.
+        # Aligne avec futures_live (16h) et xmomentum (16h15) pour coherence operationnelle.
+        if is_weekday() and now_paris.hour == 16 and now_paris.minute >= 0 and not getattr(run_us_stocks_daily_cycle, '_done_today', False):
             _runners["us_stocks_daily"].run()
             run_us_stocks_daily_cycle._done_today = True
-        if is_weekday() and now_paris.hour < 22:
+        if is_weekday() and now_paris.hour < 16:
             run_us_stocks_daily_cycle._done_today = False
 
         # === MACRO ECB EVENT DRIVEN (lun-ven, 14h50 Paris, jours BCE only) ===
