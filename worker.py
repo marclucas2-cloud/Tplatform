@@ -2205,8 +2205,10 @@ def _run_futures_cycle(live: bool = False):
         except Exception:
             pass  # keep previous _ibkr_real_pos
 
-        # HARD LIMIT: max 2 futures contracts total across all symbols
-        MAX_FUTURES_CONTRACTS = 2
+        # HARD LIMIT: max contracts by mode
+        # LIVE: 2 contracts (capital limited ~$10K, prudent)
+        # PAPER: 20 contracts ($1M paper account, need room for all strats)
+        MAX_FUTURES_CONTRACTS = 2 if live else 20
         _total_existing = sum(abs(int(v)) for v in _ibkr_real_pos.values())
         _slots_available = MAX_FUTURES_CONTRACTS - _total_existing
 
