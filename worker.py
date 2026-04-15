@@ -1020,8 +1020,11 @@ def run_us_stocks_daily_cycle():
     """US stocks daily rebalance — 3 monthly cross-sectional strategies on Alpaca paper.
 
     Runs once per weekday at 16:00 Paris (10:00 ET, 30 min after US open). Executes:
-      1. scripts/download_us_data.py (refresh S&P 500 daily bars, ~2 min)
+      1. scripts/download_us_data_alpaca.py (refresh S&P 500 daily bars via Alpaca IEX, ~40s)
       2. scripts/run_us_stocks_daily.py --source local (tom + rs_spy + sector_rot_us)
+
+    Data source: Alpaca IEX feed (free tier) for consistency with execution.
+    yfinance is kept as a research fallback (scripts/download_us_data.py).
 
     The 3 strats only emit signals on their rebalance days:
       - tom: entry last trading day of month, exit 3rd trading day next month
@@ -1033,7 +1036,7 @@ def run_us_stocks_daily_cycle():
     """
     import subprocess
     logger.info("=== US STOCKS DAILY CYCLE ===")
-    download = ROOT / "scripts" / "download_us_data.py"
+    download = ROOT / "scripts" / "download_us_data_alpaca.py"
     runner = ROOT / "scripts" / "run_us_stocks_daily.py"
     if not runner.exists():
         logger.error(f"US STOCKS: {runner} not found, skip")
