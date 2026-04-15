@@ -1620,7 +1620,7 @@ def _run_futures_cycle(live: bool = False):
         import pandas as pd
         data_dir = Path(__file__).resolve().parent / "data" / "futures"
         data_sources = {}
-        for sym in ["MES", "MNQ", "MIB", "ESTX50", "VIX", "MGC", "DAX", "CAC40"]:
+        for sym in ["MES", "MNQ", "M2K", "MIB", "ESTX50", "VIX", "MGC", "MCL", "DAX", "CAC40"]:
             fpath = data_dir / f"{sym}_1D.parquet"
             if fpath.exists():
                 df = pd.read_parquet(fpath)
