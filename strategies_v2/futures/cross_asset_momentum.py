@@ -61,6 +61,29 @@ class CrossAssetMomentum(StrategyBase):
     def set_data_feed(self, feed: DataFeed) -> None:
         self.data_feed = feed
 
+    def get_top_pick(self) -> str | None:
+        """Return the symbol this strategy WOULD pick today, ignoring rebal cooldown.
+
+        Used by other strategies for first-refusal: they must not take a symbol
+        that Cross-Asset Mom would want, even if CAM is not firing today.
+        Returns None if no asset meets the min_momentum threshold.
+        """
+        if self.data_feed is None:
+            return None
+        returns = {}
+        for sym in self.UNIVERSE:
+            bars = self.data_feed.get_bars(sym, self.lookback_days + 2)
+            if bars is None or len(bars) < self.lookback_days + 1:
+                continue
+            close = bars["close"].astype(float)
+            returns[sym] = float(close.iloc[-1] / close.iloc[-self.lookback_days - 1] - 1)
+        if not returns:
+            return None
+        winner = max(returns, key=returns.get)
+        if returns[winner] < self.min_momentum:
+            return None
+        return winner
+
     def on_bar(self, bar: Bar, portfolio_state: PortfolioState) -> Signal | None:
         if self.data_feed is None:
             return None

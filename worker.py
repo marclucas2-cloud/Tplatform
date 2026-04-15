@@ -1659,42 +1659,52 @@ def _run_futures_cycle(live: bool = False):
         # et tournent donc a la fois en paper (port 4003) et live (port 4002).
         # User decision 15 avril 2026.
 
-        # LIVE-capable 1: Cross-Asset Momentum
-        # corr MES = 0.003, 5/5 WF, alpha each year 2021-2026 (incl 2 bears)
+        # LIVE-capable 1: Cross-Asset Momentum (PRIORITE MAX, first-refusal)
+        # corr MES = 0.003, 5/5 WF, alpha each year 2021-2026 (incl 2 bears).
+        # Option 1 (backtest 15 avril 2026): CAM reserve ses symboles preferes.
+        # Meme si CAM ne fire pas aujourd'hui (rebal cooldown), elle bloque les
+        # autres strats qui voudraient prendre le symbole qu'elle choisirait.
+        # Backtest: Sharpe 0.85 -> 1.06 (+25%), WR 44% -> 48%, 2022 -$1647 -> -$1369.
+        _cam_top_pick = None
         try:
             from strategies_v2.futures.cross_asset_momentum import CrossAssetMomentum
             _cam_strat = CrossAssetMomentum()
             _cam_strat.set_data_feed(feed)
             bar = feed.get_latest_bar("MES")
             if bar:
+                _cam_top_pick = _cam_strat.get_top_pick()
                 sig = _cam_strat.on_bar(bar, portfolio_state)
                 if sig:
                     signals.append(("Cross-Asset Mom", sig))
                     logger.info(f"    Cross-Asset Mom ({_mode}): BUY {sig.symbol}")
                 else:
-                    logger.info(f"    Cross-Asset Mom ({_mode}): pas de rebal")
+                    logger.info(f"    Cross-Asset Mom ({_mode}): pas de rebal "
+                                f"(top pick: {_cam_top_pick or 'none'})")
         except Exception as e:
             logger.error(f"    Cross-Asset Mom error: {e}")
 
-        # LIVE-capable 2: Gold Trend MGC
+        # LIVE-capable 2: Gold Trend MGC (SECONDARY — first-refusal CAM)
         # corr MES = -0.02, positive EVERY year, alpha pur
         if "MGC" in data_sources:
-            try:
-                from strategies_v2.futures.gold_trend_mgc import GoldTrendMGC
-                _gt_strat = GoldTrendMGC()
-                _gt_strat.set_data_feed(feed)
-                bar = feed.get_latest_bar("MGC")
-                if bar:
-                    sig = _gt_strat.on_bar(bar, portfolio_state)
-                    if sig:
-                        signals.append(("Gold Trend MGC", sig))
-                        logger.info(f"    Gold Trend MGC ({_mode}): BUY @ {bar.close:.2f}")
-                    else:
-                        logger.info(f"    Gold Trend MGC ({_mode}): below EMA20")
-            except Exception as e:
-                logger.error(f"    Gold Trend MGC error: {e}")
+            if _cam_top_pick == "MGC":
+                logger.info(f"    Gold Trend MGC ({_mode}): SKIP — CAM reserved MGC")
+            else:
+                try:
+                    from strategies_v2.futures.gold_trend_mgc import GoldTrendMGC
+                    _gt_strat = GoldTrendMGC()
+                    _gt_strat.set_data_feed(feed)
+                    bar = feed.get_latest_bar("MGC")
+                    if bar:
+                        sig = _gt_strat.on_bar(bar, portfolio_state)
+                        if sig:
+                            signals.append(("Gold Trend MGC", sig))
+                            logger.info(f"    Gold Trend MGC ({_mode}): BUY @ {bar.close:.2f}")
+                        else:
+                            logger.info(f"    Gold Trend MGC ({_mode}): below EMA20")
+                except Exception as e:
+                    logger.error(f"    Gold Trend MGC error: {e}")
 
-        # LIVE-capable 3: Gold-Oil Rotation
+        # LIVE-capable 3: Gold-Oil Rotation (SECONDARY — first-refusal CAM)
         # Sharpe 6.44 backtest, WF 5/5 OOS profitable (mean Sharpe 7.16),
         # corr MES = 0.02, corr cross_asset = 0.002, corr gold_trend = 0.104,
         # positive EVERY year 2021-2026 (incl 2022 +$2.4K and 2026 +$4.7K bears).
@@ -1704,13 +1714,17 @@ def _run_futures_cycle(live: bool = False):
                 from strategies_v2.futures.gold_oil_rotation import GoldOilRotation
                 _gor_strat = GoldOilRotation()
                 _gor_strat.set_data_feed(feed)
-                # Use MGC as the trigger bar (symbol is chosen inside on_bar)
                 bar = feed.get_latest_bar("MGC")
                 if bar:
                     sig = _gor_strat.on_bar(bar, portfolio_state)
                     if sig:
-                        signals.append(("Gold-Oil Rotation", sig))
-                        logger.info(f"    Gold-Oil Rotation ({_mode}): BUY {sig.symbol}")
+                        # First-refusal CAM: block si CAM voulait ce symbole
+                        if _cam_top_pick == sig.symbol:
+                            logger.info(f"    Gold-Oil Rotation ({_mode}): SKIP "
+                                        f"— CAM reserved {sig.symbol}")
+                        else:
+                            signals.append(("Gold-Oil Rotation", sig))
+                            logger.info(f"    Gold-Oil Rotation ({_mode}): BUY {sig.symbol}")
                     else:
                         logger.info(f"    Gold-Oil Rotation ({_mode}): spread < 2%")
             except Exception as e:
