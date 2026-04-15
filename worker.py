@@ -2099,23 +2099,24 @@ def _run_futures_cycle(live: bool = False):
                 else:  # SELL
                     _real_sl = _fill_price + _sl_offset
                     _real_tp = _fill_price - _tp_offset
-                # Override signal SL/TP with fill-based values
-                sig.stop_loss = round(_real_sl, 2)
-                sig.take_profit = round(_real_tp, 2)
+                # FIX: Signal is @dataclass(frozen=True), cannot mutate sig.stop_loss.
+                # Use local variables for the fill-based SL/TP instead.
+                _final_sl = round(_real_sl, 2)
+                _final_tp = round(_real_tp, 2)
 
-                _sl = StopOrder(_exit_side, qty, sig.stop_loss)
+                _sl = StopOrder(_exit_side, qty, _final_sl)
                 _sl.tif = "GTC"; _sl.ocaGroup = _oca; _sl.ocaType = 1; _sl.outsideRth = True
                 ibkr._ib.placeOrder(_contract, _sl)
                 time.sleep(1)
 
-                _tp = LimitOrder(_exit_side, qty, sig.take_profit)
+                _tp = LimitOrder(_exit_side, qty, _final_tp)
                 _tp.tif = "GTC"; _tp.ocaGroup = _oca; _tp.ocaType = 1; _tp.outsideRth = True
                 ibkr._ib.placeOrder(_contract, _tp)
                 time.sleep(2); ibkr._ib.sleep(1)
 
                 logger.info(
                     f"    FUTURES {_mode}: {sig.side} {sym} @ {_fill_price:.2f} "
-                    f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f} [OCA {_oca}]"
+                    f"SL={_final_sl:.2f} TP={_final_tp:.2f} [OCA {_oca}]"
                 )
 
                 _fut_positions[sym] = {
@@ -2124,8 +2125,8 @@ def _run_futures_cycle(live: bool = False):
                     "side": sig.side,
                     "qty": qty,
                     "entry": _fill_price,
-                    "sl": sig.stop_loss,
-                    "tp": sig.take_profit,
+                    "sl": _final_sl,
+                    "tp": _final_tp,
                     "oca_group": _oca,
                     "opened_at": datetime.now(UTC).isoformat(),
                     "mode": _mode,
@@ -2137,7 +2138,7 @@ def _run_futures_cycle(live: bool = False):
                 _log_event("futures_trade", name, {
                     "mode": _mode, "symbol": sym, "side": sig.side,
                     "qty": qty, "fill_price": _fill_price,
-                    "sl": sig.stop_loss, "tp": sig.take_profit,
+                    "sl": _final_sl, "tp": _final_tp,
                     "oca_group": _oca, "equity": equity,
                 })
                 # Write to journal DB for dashboard
@@ -2156,10 +2157,10 @@ def _run_futures_cycle(live: bool = False):
                     _jconn.commit()
                     _jconn.close()
                 except Exception as _je:
-                    logger.debug(f"Journal write skip: {_je}")
+                    logger.warning(f"Journal write FAILED: {_je}")
                 _send_alert(
                     f"FUTURES {_mode}: {sig.side} {sym} @ {_fill_price:.2f}\n"
-                    f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f}\n"
+                    f"SL={_final_sl:.2f} TP={_final_tp:.2f}\n"
                     f"Strat: {name}",
                     level="info" if _mode == "PAPER" else "warning",
                 )
