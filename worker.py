@@ -1706,17 +1706,41 @@ def _run_futures_cycle(live: bool = False):
             except Exception as e:
                 logger.error(f"    MES 3-Day Stretch error: {e}")
 
-            # 4. Overnight MNQ — params validates par sweep 5Y sur 48 combos:
-            #    SL=150 TP=250 EMA=50 none → Sharpe 0.55, +$8,569, 299 trades
-            #    WF 2/5 profitable (juste en dessous du seuil 50%) → PAPER only
-            #    pour confirmation sur 3 mois avant toute decision live.
+            # 3b. Overnight MES V2 — params validates par sweep V2 (640 combos) + WF 3/3
+            #     SL=60 TP=120 EMA=50 none → Sharpe 1.69, +$7,272, 163 trades 5Y
+            #     WF 4/5 profitable, IS 1.41 → OOS 1.68 (OOS > IS, robuste)
+            #     Paper only: observation avant live decision.
+            try:
+                from strategies_v2.futures.overnight_buy_close import OvernightBuyClose
+                strat = OvernightBuyClose(
+                    symbol="MES",
+                    sl_points=60,
+                    tp_points=120,
+                    ema_period=50,
+                )
+                strat.set_data_feed(feed)
+                bar = feed.get_latest_bar("MES")
+                if bar:
+                    sig = strat.on_bar(bar, portfolio_state)
+                    if sig:
+                        signals.append(("Overnight MES V2", sig))
+                        logger.info(f"    Overnight MES V2 (paper SL60/TP120/EMA50): {sig.side} @ {bar.close:.2f}")
+                    else:
+                        logger.info("    Overnight MES V2 (paper): pas de signal (below EMA50)")
+            except Exception as e:
+                logger.error(f"    Overnight MES V2 error: {e}")
+
+            # 4. Overnight MNQ — extended sweep 280 combos V2 best:
+            #    SL=140 TP=300 EMA=40 → Sharpe 1.01, +$16,589, 273 trades 5Y
+            #    WF 4/5 profitable, IS 2.77 → OOS 1.96 (ratio 0.71, robuste)
+            #    84% robust neighborhood → pas du data mining
             try:
                 from strategies_v2.futures.overnight_buy_close import OvernightBuyClose
                 strat = OvernightBuyClose(
                     symbol="MNQ",
-                    sl_points=150,
-                    tp_points=250,
-                    ema_period=50,
+                    sl_points=140,
+                    tp_points=300,
+                    ema_period=40,
                 )
                 strat.set_data_feed(feed)
                 bar = feed.get_latest_bar("MNQ")
@@ -1724,9 +1748,9 @@ def _run_futures_cycle(live: bool = False):
                     sig = strat.on_bar(bar, portfolio_state)
                     if sig:
                         signals.append(("Overnight MNQ", sig))
-                        logger.info(f"    Overnight MNQ (paper SL150/TP250/EMA50): {sig.side} @ {bar.close:.2f}")
+                        logger.info(f"    Overnight MNQ (paper SL140/TP300/EMA40): {sig.side} @ {bar.close:.2f}")
                     else:
-                        logger.info("    Overnight MNQ (paper): pas de signal (below EMA50)")
+                        logger.info("    Overnight MNQ (paper): pas de signal (below EMA40)")
             except Exception as e:
                 logger.error(f"    Overnight MNQ error: {e}")
 
@@ -1799,6 +1823,25 @@ def _run_futures_cycle(live: bool = False):
                             logger.info("    MGC VIX Hedge (paper): pas de signal")
                 except Exception as e:
                     logger.error(f"    MGC VIX Hedge error: {e}")
+
+            # 9b. RS MES/MNQ Rotation — validated 5Y, 3/3 gates Sharpe OOS 2.28
+            # Buy stronger of MES/MNQ over 3-day lookback, hold 5 days.
+            # n=212, +$19,231 total, WR 58%, 4/5 WF profitable, OOS>IS (ultra robust)
+            if "MES" in data_sources and "MNQ" in data_sources:
+                try:
+                    from strategies_v2.futures.rs_mes_mnq_rotate import RSMesMnqRotate
+                    strat = RSMesMnqRotate(lookback=3)
+                    strat.set_data_feed(feed)
+                    bar = feed.get_latest_bar("MES")
+                    if bar:
+                        sig = strat.on_bar(bar, portfolio_state)
+                        if sig:
+                            signals.append(("RS MES/MNQ", sig))
+                            logger.info(f"    RS MES/MNQ rotate (paper): {sig.side} {sig.symbol} @ {bar.close:.2f}")
+                        else:
+                            logger.info("    RS MES/MNQ rotate (paper): spread < 0.5%")
+                except Exception as e:
+                    logger.error(f"    RS MES/MNQ error: {e}")
 
             # 9. VIX Mean Reversion
             if "VIX" in data_sources and "MES" in data_sources:
