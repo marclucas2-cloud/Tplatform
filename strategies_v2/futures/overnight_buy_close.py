@@ -1,13 +1,25 @@
-"""Overnight Buy-Close-Sell-Open for MES/MNQ.
+"""Overnight Buy-Close-Sell-Open for MES/MNQ — REJECTED 15 avril 2026.
 
-Edge: Equity indices have a positive overnight return premium.
+Edge: Equity indices SHOULD have a positive overnight return premium.
 Buy at close, sell at next day open. EMA20 trend filter.
 
-Backtest (3 years):
+ORIGINAL claim (UNVERIFIED, from some old backtest):
   MES: 208 trades, 60% WR, +$13,546, Sharpe 3.85, PF 2.5, WF 4/5
   MNQ: 186 trades, 58% WR, +$27,499, Sharpe 4.14, PF 2.6, WF 5/5
 
-Paper first, live after 30 trades confirmed.
+REAL backtest 15 avril 2026 (this production logic, 5Y daily, 60 combo sweep):
+  MES: 322 trades, 39% WR, +$593, **Sharpe 0.07**, WF OOS -0.68, overfit IS 0.71->OOS 0.01
+  MNQ: similar or worse (sweep bottom: Sharpe -13.65 on tight SL variants)
+  Best OF ALL 60 combos: MES 30/50 ema50 none → Sharpe 0.07 (statistical noise)
+
+Verdict: NO edge. Strategy disabled in worker.py per user decision 15 avril.
+Kept in code for potential v2 iteration with additional filters (regime,
+VIX, ADX) in research mode only — NOT for live deploy without full WF
+rerun with real prod logic matching.
+
+Old claim was PROPAGATED through CLAUDE.md + dashboard/api/chat.py without
+ever being re-verified. This is a governance lesson — docstring claims
+must be independently re-backtested before live deployment.
 """
 from __future__ import annotations
 
