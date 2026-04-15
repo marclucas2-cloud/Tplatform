@@ -202,7 +202,8 @@ def execute_plan(client, to_close: list[str], to_open: list[tuple[str, dict]], d
             try:
                 px_data = client.get_prices(sym, timeframe="1D", bars=2)
                 bars = px_data.get("bars", []) if isinstance(px_data, dict) else []
-                last_px = float(bars[-1].get("close", 0)) if bars else 0
+                # Alpaca bars format: dict with keys t/o/h/l/c/v (single letters)
+                last_px = float(bars[-1].get("c", 0)) if bars else 0
             except Exception as e:
                 logger.warning(f"  {sym}: get_prices failed: {e}")
                 last_px = 0
