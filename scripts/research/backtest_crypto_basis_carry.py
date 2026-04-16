@@ -63,9 +63,29 @@ def funding_proxy(df: pd.DataFrame) -> pd.Series:
     return daily.fillna(FUNDING_MEDIAN_ANNUAL / 365)
 
 
+def funding_real(df: pd.DataFrame) -> pd.Series:
+    """Real Binance perp funding rate, daily aggregated.
+
+    Loads data/crypto/funding/BTCUSDT_funding_daily.parquet (downloaded by
+    scripts/research/download_binance_funding.py). Aligned to df index;
+    pre-2019-09 dates use proxy as fallback.
+    """
+    funding_path = ROOT / "data" / "crypto" / "funding" / "BTCUSDT_funding_daily.parquet"
+    if not funding_path.exists():
+        print(f"  WARN: {funding_path} not found, using proxy")
+        return funding_proxy(df)
+    f = pd.read_parquet(funding_path)
+    f.index = pd.to_datetime(f.index).tz_localize(None).normalize()
+    # Reindex to df index, fillna with proxy for pre-2019 dates
+    proxy = funding_proxy(df)
+    real_daily = f["funding_daily_sum"].reindex(df.index)
+    out = real_daily.fillna(proxy)
+    return out
+
+
 def variant_always(df: pd.DataFrame) -> pd.Series:
     """Always-on basis carry, monthly rebalance."""
-    daily_funding = funding_proxy(df)
+    daily_funding = funding_real(df)
     # Daily PnL = notional * daily_funding
     gross = daily_funding * NOTIONAL
     # Amortize setup+close cost over REBALANCE_DAYS
@@ -77,7 +97,7 @@ def variant_always(df: pd.DataFrame) -> pd.Series:
 
 def variant_bullish_filter(df: pd.DataFrame) -> pd.Series:
     """Only active when BTC 60d momentum > 0 (bull)."""
-    daily_funding = funding_proxy(df)
+    daily_funding = funding_real(df)
     mom = df["close"].pct_change(60)
     active = (mom > 0).shift(1).fillna(False)
     gross = (daily_funding * NOTIONAL).where(active, 0.0)
@@ -91,7 +111,7 @@ def variant_bullish_filter(df: pd.DataFrame) -> pd.Series:
 
 def variant_funding_filter(df: pd.DataFrame, threshold_annual: float = 0.05) -> pd.Series:
     """Only active when funding_proxy > threshold (typically bull markets)."""
-    daily_funding = funding_proxy(df)
+    daily_funding = funding_real(df)
     active = (daily_funding * 365 > threshold_annual).shift(1).fillna(False)
     gross = (daily_funding * NOTIONAL).where(active, 0.0)
     daily_cost = (COST_SETUP_CLOSE * NOTIONAL) / REBALANCE_DAYS
