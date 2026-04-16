@@ -28,21 +28,17 @@
 # =============================================================================
 
 metadata:
-  version: 3
+  version: 4
   updated_at: "2026-04-16"
-  updated_by: "gold_trend_mgc_recalibration_V1_option_B"
+  updated_by: "phase_3_1_audit_demotes"
   review_cadence: "hebdomadaire"
   notes: |
-    v2 2026-04-16: +3 candidates ibkr_futures paper_only (INT-C promotion
-    committee). T1-A calendaires MES: monday_long_oc, wednesday_long_oc,
-    pre_holiday_long.
-
-    v3 2026-04-16: gold_trend_mgc downgrade live_core -> paper_only pour
-    recalibration V1 (SL 0.4% / TP 0.8%, aligne deleveraging level_3 -1.8% NAV).
-    Le trade live ouvert sous V0 (SL 1.5% TP 3%) reste actif pour ne pas
-    casser le setup en cours; nouveaux signaux respecteront V1.
-    Transition paper_only -> live_core apres WF + MC + 30j paper sans
-    divergence > 2 sigma.
+    v2 2026-04-16: +3 candidates ibkr_futures paper_only (INT-C).
+    v3 2026-04-16: gold_trend_mgc -> paper_only (V1 recalibration SL/TP).
+    v4 2026-04-16: Phase 3.1 audit demotes (3 strats binance_crypto
+    live_probation -> paper_only): trend_short_btc, mr_scalp_btc,
+    liquidation_spike. Cf docs/audit/strategy_by_strategy_audit.md.
+    Portfolio live passe de 12 -> 9 strats (live + probation), plus defendable.
 
 # -----------------------------------------------------------------------------
 # IBKR FUTURES — 3 strats alpha pur validees 10Y + WF + MC
@@ -271,28 +267,32 @@ binance_crypto:
 
   - strategy_id: trend_short_btc
     book: binance_crypto
-    status: live_probation
+    status: paper_only   # Phase 3.1 audit 2026-04-16: preuves OOS fragmentees
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-009)"
     runtime_module: "strategies.crypto.trend_short_btc"
-    wf_source: "data/crypto/wf_results.json"
-    sizing_policy: "allocation_pct + kelly_quarter"
-    notes: "Short bias, probation stricte"
+    wf_source: "data/crypto/wf_results.json (validation insuffisante)"
+    sizing_policy: "n/a (paper_only)"
+    notes: "Demote 2026-04-16 audit Phase 3.1: short bias non valide WF correctement."
 
   - strategy_id: mr_scalp_btc
     book: binance_crypto
-    status: live_probation
+    status: paper_only   # Phase 3.1 audit 2026-04-16: preuves OOS fragmentees
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-010)"
     runtime_module: "strategies.crypto.mr_scalp_btc"
-    wf_source: "data/crypto/wf_results.json"
-    sizing_policy: "allocation_pct + kelly_quarter"
+    wf_source: "data/crypto/wf_results.json (validation insuffisante)"
+    sizing_policy: "n/a (paper_only)"
+    notes: "Demote 2026-04-16 audit Phase 3.1: pas de WF reproductible solide."
 
   - strategy_id: liquidation_spike
     book: binance_crypto
-    status: live_probation
+    status: paper_only   # Phase 3.1 audit 2026-04-16: doublon partiel STRAT-007
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-011)"
     runtime_module: "strategies.crypto.liquidation_spike"
     wf_source: "data/crypto/wf_results.json"
-    sizing_policy: "allocation_pct + kelly_quarter"
+    sizing_policy: "n/a (paper_only)"
+    notes: |
+      Demote 2026-04-16 audit Phase 3.1. Doublon partiel avec liquidation_momentum
+      (STRAT-007). A merger ou differencier clairement avant retour live.
 
   - strategy_id: vol_expansion_bear
     book: binance_crypto

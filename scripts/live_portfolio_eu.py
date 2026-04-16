@@ -979,15 +979,41 @@ def close_eu_positions(state: dict, dry_run: bool = False):
 # =============================================================================
 
 def run_eu(dry_run: bool = False):
-    """Run complet du pipeline EU multi-strategies."""
+    """Run complet du pipeline EU multi-strategies.
+
+    Phase 2.5 fix 2026-04-16: whitelist-aware. Si dry_run=False et aucune
+    strategie ibkr_eu en status live_core/live_probation dans la whitelist,
+    on FORCE dry_run=True (impossible de trader live sans whitelist).
+    """
     import pytz
     cet = pytz.timezone("Europe/Paris")
     now = datetime.now(cet)
 
+    # Phase 2.5: whitelist enforcement avant toute execution live.
+    if not dry_run:
+        try:
+            from core.governance import list_live_strategies
+            _live_eu = list_live_strategies("ibkr_eu")
+            if not _live_eu:
+                logger.critical(
+                    "EU PIPELINE: aucune strat ibkr_eu en live_whitelist (book "
+                    "= paper_only par doctrine). FORCE dry_run=True. "
+                    "Pour reactiver: ajouter strat en live_core/live_probation "
+                    "dans config/live_whitelist.yaml#ibkr_eu apres validation."
+                )
+                dry_run = True
+        except Exception as e:
+            logger.critical(
+                f"EU PIPELINE: whitelist check failed ({e}), FAIL-CLOSED "
+                f"-> FORCE dry_run=True"
+            )
+            dry_run = True
+
     logger.info("=" * 60)
-    logger.info("  PAPER PORTFOLIO EU — IBKR MULTI-STRATEGY")
+    logger.info("  LIVE PORTFOLIO EU — IBKR MULTI-STRATEGY")
     logger.info("=" * 60)
     logger.info("  Date: %s", now.strftime("%Y-%m-%d %H:%M CET"))
+    logger.info("  Mode: %s", "DRY-RUN (whitelist-protected)" if dry_run else "LIVE TRADING")
 
     state = load_state()
 

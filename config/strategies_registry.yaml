@@ -1,0 +1,486 @@
+# =============================================================================
+# STRATEGIES REGISTRY CANONIQUE — fiche par strategie
+# =============================================================================
+# Phase 1.2 du plan TODO XXL DESK PERSO 10/10.
+#
+# Une fiche canonique par strategie avec:
+#   - strategy_id, book_id, owner
+#   - status (research, paper, candidate_live, live, disabled, retired)
+#   - thesis, instrument_universe, signal_frequency, holding_period
+#   - required_data, cost_model, slippage_model, capacity_notes
+#   - risk_limits (-> risk_registry.yaml)
+#   - capital_usage_profile, correlation_notes
+#   - promotion_evidence_refs (chemin vers backtest, WF, MC, scorecards)
+#   - demotion_conditions
+#
+# Ce registre est la SOURCE DE VERITE pour tout reasoning sur les strats.
+# live_whitelist.yaml reste le contract d'autorisation, ce registre est
+# la documentation operationnelle.
+# =============================================================================
+
+metadata:
+  version: 1
+  updated_at: "2026-04-16"
+  notes: "v1 initial Phase 1.2. Consolide live_whitelist + docs strategies."
+
+# -----------------------------------------------------------------------------
+# IBKR FUTURES (6 strats)
+# -----------------------------------------------------------------------------
+
+strategies:
+
+  cross_asset_momentum:
+    book_id: ibkr_futures
+    owner: marc
+    status: live
+    thesis: |
+      Cross-asset momentum (Moskowitz-Ooi-Pedersen 2012): assets avec returns
+      positifs recents continuent de surperformer 1-12 mois. Applique sur 5
+      micro futures (MES, MNQ, M2K, MGC, MCL) diversifiant equity/gold/oil.
+    instrument_universe: [MES, MNQ, M2K, MGC, MCL]
+    signal_frequency: daily
+    holding_period: 20d
+    required_data: [MES_LONG.parquet, MNQ_LONG.parquet, M2K_LONG.parquet, MGC_LONG.parquet, MCL_LONG.parquet]
+    cost_model: "IBKR $0.85/side + 2 ticks slippage"
+    slippage_model: "2 ticks per side (cf docs/research/cost_capacity_assumptions.md)"
+    capacity_notes: "ADV MES 1M contracts, 1% = 10K = $220M. Cap perso 10 contracts."
+    risk_limits_ref: "config/risk_registry.yaml#strategies.cross_asset_momentum"
+    capital_usage_profile: "rotation 1 contract (MES/MNQ/M2K/MGC/MCL), 1 trade actif a la fois"
+    correlation_notes: "corr to MES 0.003, ALPHA pur sur 5Y daily"
+    promotion_evidence_refs:
+      - "scripts/wf_ib_portfolio.py"
+      - "ib_portfolio_wf_v2.csv (5/5 OOS profitable)"
+      - "data/research/portfolio_baseline_timeseries.parquet"
+    demotion_conditions:
+      - "5 consecutive losses"
+      - "rolling 90d Sharpe < -0.5"
+      - "drawdown_rolling_90d > -8%"
+    notes: |
+      First-refusal sur ses symboles preferes (cf worker.py ligne 1721).
+      Bloque les autres strats qui voudraient prendre le meme symbol.
+      Audit ChatGPT: ib_portfolio_wf_v2.csv montre 1 fenetre OOS a -20.5% CAGR
+      -> verdict ⚠️ "a ameliorer" mais reste live (dominante portfolio).
+
+  gold_trend_mgc:
+    book_id: ibkr_futures
+    owner: marc
+    status: paper        # 2026-04-16 downgrade live_core -> paper_only V1 recalibration
+    thesis: |
+      Gold trend follow MGC. Long si close > EMA20. Capture rallies gold
+      independants des equities (flight-to-quality + inflation expectations).
+      Positive EVERY year 2021-2026 incl bears.
+    instrument_universe: [MGC]
+    signal_frequency: daily
+    holding_period: 10d (max)
+    required_data: [MGC_LONG.parquet]
+    cost_model: "IBKR $0.85/side + 2 ticks slippage"
+    slippage_model: "2 ticks per side"
+    capacity_notes: "ADV MGC 50K contracts, 1% = 500 = $20M. Cap perso 3 contracts."
+    risk_limits_ref: "config/risk_registry.yaml#strategies.gold_trend_mgc"
+    capital_usage_profile: "1 contract MGC long-only intermittent"
+    correlation_notes: "corr to MES -0.02 (alpha pur), corr to gold_oil 0.10"
+    promotion_evidence_refs:
+      - "scripts/research/backtest_gold_trend_sl_variants.py (V1 SL 0.4% TP 0.8%)"
+      - "scripts/research/wf_mc_gold_trend_v1.py (5/5 OOS, MC P(DD>30%)=0%)"
+      - "docs/research/gold_trend_sl_recalibration.md"
+    demotion_conditions:
+      - "5 consecutive losses"
+      - "rolling 90d Sharpe < -0.5"
+    notes: |
+      V0 (1.5%/3%) etouffe par deleveraging level_3 -1.8% NAV en prod.
+      V1 (0.4%/0.8%) recalibre, validated WF+MC, en paper 30j avant retour live.
+
+  gold_oil_rotation:
+    book_id: ibkr_futures
+    owner: marc
+    status: live
+    thesis: |
+      Long le winner entre MGC/MCL selon spread momentum 20d. Pas market neutral
+      (long le gagnant absolu), mais utile car capture rotation commodity.
+    instrument_universe: [MGC, MCL]
+    signal_frequency: daily
+    holding_period: 20d
+    required_data: [MGC_LONG.parquet, MCL_LONG.parquet]
+    cost_model: "IBKR $0.85/side + 2 ticks slippage"
+    slippage_model: "2 ticks per side"
+    capacity_notes: "Cap perso 3 contracts MGC ou 5 MCL"
+    risk_limits_ref: "config/risk_registry.yaml#strategies.gold_oil_rotation"
+    capital_usage_profile: "1 contract MGC OR MCL, rotation"
+    correlation_notes: "corr to cross_asset 0.002, corr to gold_trend 0.10, corr MES 0.02"
+    promotion_evidence_refs:
+      - "scripts/wf_gold_oil_rotation.py (5/5 OOS profitable, mean Sharpe 7.16)"
+      - "Backtest 5Y +$X positive every year incl 2022/2026 bears"
+    demotion_conditions:
+      - "5 consecutive losses"
+      - "rolling 90d Sharpe < -0.5"
+    notes: |
+      Audit ChatGPT: pas market neutral (long le gagnant), juste rotation.
+      Verdict ⚠️ "a ameliorer" mais reste live (alpha confirme).
+
+  mes_monday_long_oc:
+    book_id: ibkr_futures
+    owner: marc
+    status: paper
+    thesis: |
+      Long MES open-to-close chaque lundi. Edge calendaire documente.
+      WF 3/5 OOS PASS, MC P(DD>30%)=9.8%.
+    instrument_universe: [MES]
+    signal_frequency: weekly (lundi only)
+    holding_period: 1d (open-to-close)
+    required_data: [MES_LONG.parquet]
+    cost_model: "IBKR $0.85/side + 2 ticks = $4.20 RT"
+    slippage_model: "2 ticks per side"
+    capacity_notes: "1 contract per signal (pas de scaling)"
+    risk_limits_ref: "config/risk_registry.yaml (default)"
+    capital_usage_profile: "1 contract intraday lundi"
+    correlation_notes: "corr to portfolio 0.02 (decorrele)"
+    promotion_evidence_refs:
+      - "scripts/research/backtest_futures_calendar.py (T1-A)"
+      - "docs/research/wf_reports/INT-A_tier1_validation.md"
+    demotion_conditions: ["divergence_vs_backtest > 2 sigma sur 30j paper"]
+    notes: "T1-A INT-C promotion 2026-04-16 paper_only."
+
+  mes_wednesday_long_oc:
+    book_id: ibkr_futures
+    owner: marc
+    status: paper
+    thesis: "Long MES open-to-close chaque mercredi. WF 4/5 OOS PASS."
+    instrument_universe: [MES]
+    signal_frequency: weekly (mercredi)
+    holding_period: 1d
+    required_data: [MES_LONG.parquet]
+    cost_model: "$4.20 RT"
+    capacity_notes: "1 contract"
+    risk_limits_ref: "default"
+    promotion_evidence_refs: ["docs/research/wf_reports/INT-A_tier1_validation.md"]
+    demotion_conditions: ["MC P(DD>30%) 28.3% borderline, monitor closely"]
+    notes: "T1-A INT-C 2026-04-16 paper_only. MC limite, surveiller."
+
+  mes_pre_holiday_long:
+    book_id: ibkr_futures
+    owner: marc
+    status: paper
+    thesis: "Long MES veille jour ferie NYSE. WR 61.3% sur 106 trades, WF 5/5 PASS."
+    instrument_universe: [MES]
+    signal_frequency: irregular (~10/an)
+    holding_period: 1d
+    required_data: [MES_LONG.parquet, "calendar holidays NYSE"]
+    cost_model: "$4.20 RT"
+    capacity_notes: "1 contract"
+    risk_limits_ref: "default"
+    promotion_evidence_refs: ["docs/research/wf_reports/INT-A_tier1_validation.md"]
+    demotion_conditions: ["divergence_vs_backtest > 2 sigma"]
+    notes: "T1-A INT-C 2026-04-16 paper_only. MC P(DD>30%)=0% (best risk/reward T1-A)."
+
+# -----------------------------------------------------------------------------
+# BINANCE CRYPTO (12 strats)
+# -----------------------------------------------------------------------------
+
+  btc_eth_dual_momentum:
+    book_id: binance_crypto
+    owner: marc
+    status: live
+    thesis: "Long BTC ou ETH selon 20d momentum. Margin + spot, NO perp."
+    instrument_universe: [BTCUSDC, ETHUSDC]
+    signal_frequency: 15min cycle
+    holding_period: variable (trend follow)
+    required_data: [BTCUSDT_1d.parquet, ETHUSDT_1d.parquet]
+    cost_model: "Binance spot 0.075% RT (BNB discount) + 5bps slippage"
+    capacity_notes: "Cap perso $10K notional"
+    risk_limits_ref: "config/risk_registry.yaml#strategies.btc_eth_dual_momentum"
+    promotion_evidence_refs: ["data/crypto/wf_results.json"]
+    demotion_conditions: ["5 consecutive losses", "rolling 90d Sharpe < -0.5"]
+    notes: "STRAT-001. Trade actif 2026-04-16 17:25 UTC: BUY BTCUSDC $697 FILLED."
+
+  volatility_breakout:
+    book_id: binance_crypto
+    status: live
+    thesis: "Breakout BB sur BTC quand vol expansion."
+    instrument_universe: [BTCUSDC]
+    signal_frequency: 4h
+    holding_period: variable
+    required_data: [BTCUSDT_4h.parquet]
+    cost_model: "Binance spot 0.075% RT"
+    risk_limits_ref: "config/risk_registry.yaml#strategies.volatility_breakout"
+    promotion_evidence_refs: ["data/crypto/wf_results.json"]
+    demotion_conditions: ["5 consecutive losses"]
+    notes: "STRAT-002."
+
+  btc_dominance_rotation_v2:
+    book_id: binance_crypto
+    status: disabled  # P0 fix audit ChatGPT 2026-04-16
+    thesis: "Rotation BTC/alts selon BTC dominance regime."
+    instrument_universe: [BTCUSDC, ETHUSDC]
+    signal_frequency: daily
+    holding_period: variable
+    required_data: ["dominance series (BUG: constante 30 points)"]
+    cost_model: "Binance spot"
+    risk_limits_ref: "n/a (disabled)"
+    promotion_evidence_refs: ["data/crypto/wf_results.json (validation SKIPPED)"]
+    demotion_conditions: ["DEJA DEMOTED: dominance_series cassee, regime toujours NEUTRAL"]
+    notes: |
+      STRAT-005. AUDIT CHATGPT: implementation cassee. dominance_series est
+      constante 30 points + returns_data scalaires vs series attendues
+      -> regime toujours quasi NEUTRAL, signal cassse.
+      A REACTIVER apres fix btc_dominance_v2.py:91.
+
+  borrow_rate_carry:
+    book_id: binance_crypto
+    status: paper        # P0 fix audit ChatGPT 2026-04-16
+    thesis: |
+      Rebalance Earn USDT/BTC/ETH selon yields. Doc dit "NO directional risk"
+      mais scenario DIVERSIFIED alloue 40% BTC + 40% ETH = beta crypto cache.
+    instrument_universe: [USDT, BTC, ETH (Earn flexible)]
+    signal_frequency: 15min
+    holding_period: continuous
+    required_data: ["data/crypto/earn_rates"]
+    cost_model: "0% Earn"
+    risk_limits_ref: "n/a (paper for now)"
+    promotion_evidence_refs: ["data/crypto/wf_results.json (validation SKIPPED)"]
+    demotion_conditions: ["DEJA DEMOTED: beta crypto cache"]
+    notes: |
+      STRAT-006. AUDIT CHATGPT: fausse classification de risque, beta cache.
+      A clarifier: rename ou supprimer exposition directionnelle BTC/ETH.
+
+  liquidation_momentum:
+    book_id: binance_crypto
+    status: live          # live_probation en whitelist
+    thesis: "Detect liquidation cascades + entree dans le sens de la cascade."
+    instrument_universe: [BTCUSDC]
+    signal_frequency: 15min
+    holding_period: short (5-30min)
+    required_data: ["data/crypto/funding (liquidation proxy)"]
+    cost_model: "Binance spot"
+    risk_limits_ref: "config/risk_registry.yaml#strategies.liquidation_momentum"
+    promotion_evidence_refs: ["data/crypto/wf_results.json"]
+    demotion_conditions: ["4 consecutive losses (probation strict)"]
+    notes: "STRAT-007. Probation, monitorer 30j."
+
+  weekend_gap_reversal:
+    book_id: binance_crypto
+    status: live          # live_probation
+    thesis: "Reversal des gaps weekend BTC."
+    instrument_universe: [BTCUSDC]
+    signal_frequency: weekend
+    holding_period: 1-3d
+    required_data: ["BTCUSDT_1d.parquet", "data/friday_close_price.json"]
+    cost_model: "Binance spot"
+    risk_limits_ref: "n/a (default probation)"
+    promotion_evidence_refs: ["data/crypto/wf_results.json"]
+    demotion_conditions: ["4 consecutive losses"]
+    notes: "STRAT-008. Probation."
+
+  trend_short_btc:
+    book_id: binance_crypto
+    status: paper          # 2026-04-16 Phase 3.1 demote audit
+    thesis: "Short BTC sur trend bear (margin)."
+    instrument_universe: [BTCUSDC margin]
+    signal_frequency: 15min
+    holding_period: variable
+    required_data: ["BTCUSDT_1d.parquet"]
+    cost_model: "Binance margin + borrow rate"
+    risk_limits_ref: "n/a (default)"
+    promotion_evidence_refs: ["data/crypto/wf_results.json"]
+    demotion_conditions: ["4 consecutive losses"]
+    notes: "STRAT-009. Probation. Audit ChatGPT verdict ❌ 'preuves fragmentees'."
+
+  mr_scalp_btc:
+    book_id: binance_crypto
+    status: paper          # 2026-04-16 Phase 3.1 demote audit
+    thesis: "Mean reversion scalp court terme BTC."
+    instrument_universe: [BTCUSDC]
+    signal_frequency: 15min
+    holding_period: short
+    required_data: ["BTCUSDT_4h.parquet"]
+    cost_model: "Binance spot"
+    risk_limits_ref: "n/a (default)"
+    promotion_evidence_refs: ["data/crypto/wf_results.json"]
+    demotion_conditions: ["4 consecutive losses"]
+    notes: "STRAT-010. Probation. Audit ChatGPT verdict ❌ 'preuves fragmentees'."
+
+  liquidation_spike:
+    book_id: binance_crypto
+    status: paper          # 2026-04-16 Phase 3.1 demote audit (doublon STRAT-007)
+    thesis: "Variant liquidation event v1."
+    instrument_universe: [BTCUSDC]
+    signal_frequency: 15min
+    holding_period: short
+    required_data: ["data/crypto/funding"]
+    cost_model: "Binance spot"
+    risk_limits_ref: "n/a (default)"
+    promotion_evidence_refs: ["data/crypto/wf_results.json"]
+    demotion_conditions: ["4 consecutive losses"]
+    notes: "STRAT-011. Probation. Doublon partiel avec STRAT-007."
+
+  vol_expansion_bear:
+    book_id: binance_crypto
+    status: live          # live_probation
+    thesis: "Vol expansion -> short BTC."
+    instrument_universe: [BTCUSDC margin]
+    signal_frequency: 15min
+    holding_period: variable
+    required_data: ["BTCUSDT_4h.parquet"]
+    cost_model: "Binance margin + borrow"
+    risk_limits_ref: "n/a (default)"
+    promotion_evidence_refs: ["data/crypto/wf_results.json"]
+    demotion_conditions: ["4 consecutive losses"]
+    notes: "STRAT-012. Probation."
+
+  range_bb_harvest:
+    book_id: binance_crypto
+    status: live          # live_probation
+    thesis: "Range trading via Bollinger Bands."
+    instrument_universe: [BTCUSDC]
+    signal_frequency: 15min
+    holding_period: short
+    required_data: ["BTCUSDT_4h.parquet"]
+    cost_model: "Binance spot"
+    risk_limits_ref: "n/a (default)"
+    promotion_evidence_refs: ["data/crypto/wf_results.json"]
+    demotion_conditions: ["4 consecutive losses"]
+    notes: "STRAT-014. Probation."
+
+  bb_mean_reversion_short:
+    book_id: binance_crypto
+    status: live          # live_probation
+    thesis: "BB mean reversion side short."
+    instrument_universe: [BTCUSDC margin]
+    signal_frequency: 15min
+    holding_period: short
+    required_data: ["BTCUSDT_4h.parquet"]
+    cost_model: "Binance margin + borrow"
+    risk_limits_ref: "n/a (default)"
+    promotion_evidence_refs: ["data/crypto/wf_results.json"]
+    demotion_conditions: ["4 consecutive losses"]
+    notes: "STRAT-015. Probation."
+
+# -----------------------------------------------------------------------------
+# IBKR FX (1 strat, disabled)
+# -----------------------------------------------------------------------------
+
+  fx_carry_momentum_filter:
+    book_id: ibkr_fx
+    status: disabled   # ESMA EU leverage limits
+    thesis: |
+      Carry FX (long high-yield JPY pairs) avec filtre momentum.
+      Audit ChatGPT: probablement la meilleure strat structurelle du repo
+      (cf wf_structural_results.json).
+    instrument_universe: [AUDJPY, USDJPY, EURJPY, NZDUSD]
+    signal_frequency: daily
+    holding_period: variable
+    required_data: ["data/fx/*_1D.parquet"]
+    cost_model: "IBKR FX spot $2-4 RT"
+    risk_limits_ref: "n/a (disabled)"
+    promotion_evidence_refs:
+      - "wf_structural_results.json (excellent par audit ChatGPT)"
+      - "wf_fx_all.py"
+    demotion_conditions: ["regulatory: ESMA"]
+    notes: |
+      Verdict audit ChatGPT: ⚠️ "Techniquement exploitable, operationnellement
+      desactivee". Reactiver si ESMA change ou bascule book non-EU.
+
+# -----------------------------------------------------------------------------
+# IBKR EU (5 strats, paper_only)
+# -----------------------------------------------------------------------------
+
+  eu_gap_open:
+    book_id: ibkr_eu
+    status: paper          # rejetee dans wf_eu_summary.json
+    thesis: "Gap open trade EU indices."
+    instrument_universe: [DAX, CAC40, ESTX50]
+    signal_frequency: daily
+    holding_period: 1d
+    required_data: ["data/eu/*.parquet"]
+    cost_model: "IBKR EU CFD ~10bps RT"
+    risk_limits_ref: "n/a (paper_only)"
+    promotion_evidence_refs: ["wf_eu_summary.json line 100 (REJETEE)"]
+    demotion_conditions: ["DEJA DEMOTED: WF rejet"]
+    notes: "Audit ChatGPT verdict ❌ 'a supprimer'."
+
+  vix_mean_reversion:
+    book_id: ibkr_eu
+    status: paper
+    thesis: "Mean reversion VIX entry sur EU indices."
+    instrument_universe: [DAX, CAC40, ESTX50, VIX]
+    signal_frequency: daily
+    holding_period: variable
+    required_data: ["VIX_LONG.parquet", "data/eu/*.parquet"]
+    cost_model: "IBKR EU CFD"
+    risk_limits_ref: "n/a"
+    promotion_evidence_refs: []
+    demotion_conditions: ["pas de WF valide"]
+    notes: "Paper exploration, doctrine paper_only book."
+
+  gold_equity_divergence:
+    book_id: ibkr_eu
+    status: paper
+    thesis: "Divergence gold vs EU equities -> trade convergence."
+    instrument_universe: [MGC, ESTX50]
+    signal_frequency: daily
+    holding_period: variable
+    required_data: ["MGC_LONG.parquet", "ESTX50_1D.parquet"]
+    cost_model: "IBKR EU"
+    risk_limits_ref: "n/a"
+    promotion_evidence_refs: []
+    demotion_conditions: ["pas de WF valide"]
+    notes: "Paper exploration."
+
+  mib_estx50_spread:
+    book_id: ibkr_eu
+    status: paper
+    thesis: "Spread MIB vs ESTX50 mean reversion."
+    instrument_universe: [MIB, ESTX50]
+    signal_frequency: daily
+    holding_period: variable
+    required_data: ["MIB_1D.parquet", "ESTX50_1D.parquet"]
+    cost_model: "IBKR EU"
+    risk_limits_ref: "n/a"
+    promotion_evidence_refs: []
+    demotion_conditions: ["pas de WF valide"]
+    notes: "Paper exploration."
+
+  sector_rotation_eu:
+    book_id: ibkr_eu
+    status: paper
+    thesis: "Rotation sectorielle EU (top/bottom momentum)."
+    instrument_universe: [DAX, CAC40, ESTX50, MIB]
+    signal_frequency: monthly
+    holding_period: 30d
+    required_data: ["data/futures/CAC40_1D.parquet", "etc"]
+    cost_model: "IBKR EU CFD ~10bps RT"
+    risk_limits_ref: "n/a"
+    promotion_evidence_refs: ["scripts/research/backtest_eu_sector_rotation.py (T2-C, KEEP_FOR_RESEARCH)"]
+    demotion_conditions: ["score marginal +0.15 mais standalone Sharpe -0.98"]
+    notes: "T2-C 2026-04-16 KEEP_FOR_RESEARCH."
+
+# -----------------------------------------------------------------------------
+# ALPACA US (1 strat, paper_only)
+# -----------------------------------------------------------------------------
+
+  us_stocks_daily:
+    book_id: alpaca_us
+    status: paper
+    thesis: "Cross-sectional US daily rebalance (3 sub-strats: tom + rs_spy + sector_rot_us)."
+    instrument_universe: ["SP500 large+mid"]
+    signal_frequency: daily
+    holding_period: 1-30d
+    required_data: ["yfinance daily SP500"]
+    cost_model: "Alpaca $0 commission + 3bps slippage"
+    risk_limits_ref: "config/risk_registry.yaml#books.alpaca_us"
+    promotion_evidence_refs: ["scripts/paper_portfolio.py"]
+    demotion_conditions: ["divergence_vs_backtest > 2 sigma"]
+    notes: |
+      Doctrine paper d'abord. Capital paper $100K.
+      10 trades fills aujourd'hui (2026-04-16) a 14:03 UTC = US open.
+      Reste paper tant que 30j sans divergence.
+
+# -----------------------------------------------------------------------------
+# Schema validation
+# -----------------------------------------------------------------------------
+# Chaque strat DOIT avoir: strategy_id, book_id, status, thesis,
+# instrument_universe (list), signal_frequency, holding_period,
+# required_data, cost_model, risk_limits_ref, demotion_conditions.
+#
+# Status enum: research, paper, candidate_live, live, disabled, retired
+# Si status='live' ou 'candidate_live' -> doit etre dans live_whitelist.yaml
+# avec status live_core ou live_probation.

@@ -1,0 +1,99 @@
+# =============================================================================
+# HEALTH REGISTRY CANONIQUE — conditions GREEN par book
+# =============================================================================
+# Phase 1.4 du plan TODO XXL DESK PERSO 10/10.
+#
+# Definit les criteres exacts pour qu'un book soit GREEN/DEGRADED/BLOCKED.
+# Consulte par core/governance/book_health.py + pre_order_guard (Phase 2.2).
+#
+# Status enum:
+#   GREEN     : tous les checks critical passent, tous les checks important OK
+#   DEGRADED  : tous critical OK mais 1+ important DOWN -> trading possible mais log warn
+#   BLOCKED   : 1+ critical DOWN -> NO TRADING
+#   UNKNOWN   : pas de check effectue depuis > N min
+# =============================================================================
+
+metadata:
+  version: 1
+  updated_at: "2026-04-16"
+  notes: "v1 initial. Consolide book_health.py existant."
+
+# Defaults applied if not overriden per book
+defaults:
+  health_check_freshness_max_minutes: 5
+  state_file_age_max_hours: 24
+  preflight_required_for_live: true
+
+books:
+
+  binance_crypto:
+    critical_checks:
+      - check: "binance_api_authenticated"
+        method: "BinanceBroker().get_account_info()"
+        timeout_seconds: 10
+      - check: "kill_switch_inactive"
+        source: "data/kill_switch_state.json -> active=false"
+      - check: "pre_order_guard_module_loadable"
+    important_checks:
+      - check: "binance_spot_balance_readable"
+        method: "BinanceBroker().get_positions()"
+      - check: "binance_earn_endpoint_reachable"
+        method: "BinanceBroker().get_earn_positions()"
+      - check: "data_freshness_BTCUSDT_under_24h"
+        path: "data/crypto/candles/BTCUSDT_1D_LONG.parquet"
+    derived_checks:
+      - check: "binance_funding_data_fresh"
+        path: "data/crypto/funding/BTCUSDT_funding.parquet"
+
+  ibkr_futures:
+    critical_checks:
+      - check: "ibkr_gateway_4002_connected"
+        method: "socket TCP connect to 127.0.0.1:4002"
+        timeout_seconds: 5
+      - check: "ibkr_account_authenticated"
+        method: "ib.accountSummary() returns NetLiquidation"
+      - check: "kill_switch_inactive"
+      - check: "pre_order_guard_module_loadable"
+    important_checks:
+      - check: "data_freshness_MES_under_24h"
+        path: "data/futures/MES_1D.parquet OR MES_LONG.parquet"
+      - check: "data_freshness_MGC_under_24h"
+      - check: "data_freshness_MCL_under_24h"
+      - check: "live_risk_dd_state_writable"
+        path: "data/live_risk_dd_state.json"
+    derived_checks:
+      - check: "us_market_open_or_overnight"
+        method: "calendar US"
+
+  ibkr_eu:
+    critical_checks:
+      - check: "ibkr_gateway_4003_connected_paper"
+        method: "socket TCP 127.0.0.1:4003"
+    important_checks:
+      - check: "data_freshness_DAX_under_24h"
+      - check: "data_freshness_CAC40_under_24h"
+    derived_checks: []
+    note: "Book paper_only post-P0. Health checks moins critiques."
+
+  ibkr_fx:
+    critical_checks: []
+    important_checks: []
+    derived_checks: []
+    note: "Book disabled (ESMA). Health checks N/A."
+
+  alpaca_us:
+    critical_checks:
+      - check: "alpaca_api_authenticated"
+        method: "TradingClient.get_account()"
+        timeout_seconds: 10
+      - check: "kill_switch_inactive"
+    important_checks:
+      - check: "alpaca_market_open_us"
+        method: "calendar NYSE"
+      - check: "alpaca_buying_power_positive"
+        method: "TradingClient.get_account().buying_power > 0"
+    derived_checks:
+      - check: "yfinance_sp500_data_fresh"
+
+# Convention: pre_order_guard refuse l'ordre si book.status == BLOCKED.
+# DEGRADED: warning loggue mais ordre passe (mode degraded paper-aligne).

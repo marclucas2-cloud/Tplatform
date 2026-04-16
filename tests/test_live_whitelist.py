@@ -94,12 +94,12 @@ def test_list_live_strategies_futures():
 
 def test_list_live_strategies_all_books():
     live = list_live_strategies()
-    # 2026-04-16: 2 futures live (CAM + GoldOilRotation, gold_trend_mgc demote
-    # paper_only) + 10 crypto live (btc_dominance_v2 disabled, borrow_rate_carry
-    # paper_only). gold_trend_mgc, btc_dominance et borrow_rate_carry sont
-    # demotes via P0 fix audit.
-    assert len(live) >= 10
+    # 2026-04-16 v4 whitelist Phase 3.1 audit:
+    # 2 futures live_core (CAM + GoldOilRotation)
+    # + 7 crypto live_core+probation (post P0 + Phase 3.1 demotes)
+    # = 9 strats live
+    assert len(live) >= 9
     fx_entries = [e for e in live if e["_book"] == "ibkr_fx"]
-    assert len(fx_entries) == 0  # FX disabled
+    assert len(fx_entries) == 0  # FX disabled ESMA
     eu_entries = [e for e in live if e["_book"] == "ibkr_eu"]
     assert len(eu_entries) == 0  # EU paper_only
