@@ -924,12 +924,21 @@ class CryptoRiskManager:
     def check_earn_exposure(
         self, earn_total: float
     ) -> tuple[bool, str]:
-        """Count earn positions in total exposure (max 30%)."""
+        """Count earn positions in total exposure (max MAX_EARN_PCT).
+
+        Fix 2026-04-16: use total equity (self.capital + earn_total) as
+        denominator, not self.capital alone. Reason: the worker reassigns
+        self.capital = dd_equity (which EXCLUDES earn BTC/ETH), so the
+        numerator earn_total was compared to a denominator that excludes
+        part of what's in the numerator — giving earn_pct > 100% even
+        though the real exposure (earn / total_equity) was ~50%.
+        """
+        total_equity = self.capital + earn_total
         earn_pct = (
-            earn_total / self.capital * 100 if self.capital > 0 else 0
+            earn_total / total_equity * 100 if total_equity > 0 else 0
         )
         ok = earn_pct <= self.limits.MAX_EARN_PCT
-        return ok, f"earn {earn_pct:.1f}% (max {self.limits.MAX_EARN_PCT}%)"
+        return ok, f"earn {earn_pct:.1f}% of total equity (max {self.limits.MAX_EARN_PCT}%)"
 
     # ------------------------------------------------------------------
     # Check 10: Unrealized loss per position
