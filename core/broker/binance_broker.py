@@ -38,6 +38,62 @@ SPOT_TESTNET = "https://testnet.binance.vision"
 FUTURES_BASE = "https://fapi.binance.com"
 
 
+# Phase 2.1 — STRAT_ID -> canonical strategy_id mapping for pre_order_guard.
+# Le crypto cycle passe `_authorized_by="crypto_worker_STRAT-XXX"`. La whitelist
+# utilise les canonical names (ex: btc_eth_dual_momentum). Mapping ici.
+_CRYPTO_STRAT_ID_MAP = {
+    "STRAT-001": "btc_eth_dual_momentum",
+    "STRAT-002": "vol_breakout",
+    "STRAT-003": "altcoin_relative_strength",
+    "STRAT-004": "stablecoin_supply_flow",
+    "STRAT-005": "btc_dominance_rotation_v2",
+    "STRAT-006": "borrow_rate_carry",
+    "STRAT-007": "liquidation_momentum",
+    "STRAT-008": "weekend_gap_reversal",
+    "STRAT-009": "trend_short_v1",
+    "STRAT-010": "mr_scalp_v1",
+    "STRAT-011": "liquidation_spike_v1",
+    "STRAT-012": "vol_expansion_bear",
+    "STRAT-013": "monthly_turn_of_month",
+    "STRAT-014": "range_bb_harvest",
+    "STRAT-015": "bb_mr_short",
+}
+
+# System callers that bypass pre_order_guard (internal protection mechanisms)
+_SYSTEM_CALLER_PREFIXES = (
+    "bracket_watchdog",
+    "kill_switch",
+    "sigterm",
+    "auto_deleverage",
+    "double_fill",
+    "macro_ecb",       # ECB cycle has its own gate
+)
+
+
+def _extract_strategy_from_authorized_by(authorized_by: str) -> str | None:
+    """Map _authorized_by to canonical strategy_id, or None if system caller.
+
+    Args:
+        authorized_by: format "crypto_worker_STRAT-XXX" or arbitrary string
+
+    Returns:
+        Canonical strategy_id (e.g. "btc_eth_dual_momentum") if extractable,
+        None if system caller (bypass guard).
+    """
+    if not authorized_by:
+        return None
+    # System caller -> bypass
+    for prefix in _SYSTEM_CALLER_PREFIXES:
+        if authorized_by.startswith(prefix):
+            return None
+    # crypto_worker_STRAT-XXX -> canonical
+    if authorized_by.startswith("crypto_worker_"):
+        strat_token = authorized_by[len("crypto_worker_"):]
+        return _CRYPTO_STRAT_ID_MAP.get(strat_token, strat_token)
+    # Direct canonical (e.g. "fx_carry_momentum_live", "always_on_carry")
+    return authorized_by
+
+
 class RateLimiter:
     """Weight-based rate limiter for Binance API."""
 
@@ -338,6 +394,35 @@ class BinanceBroker(BaseBroker):
     def create_position(self, symbol: str, direction: str, qty: float | None = None, notional: float | None = None, stop_loss: float | None = None, take_profit: float | None = None, _authorized_by: str | None = None, market_type: str = "spot", **kwargs) -> dict:
         if not _authorized_by:
             raise BrokerError("_authorized_by is required for all orders")
+
+        # Phase 2.1 enforcement: pre_order_guard (defense in depth).
+        # Le worker.py crypto cycle deja appelle is_strategy_live_allowed avant
+        # cet appel (post-P0 fix commit ed976ff). Ce guard est un FILET 2nd niveau
+        # contre les appels broker direct (CLI scripts, tests, code futur).
+        # Active opt-in via env BINANCE_PRE_ORDER_GUARD=true pour rollout progressif.
+        if os.getenv("BINANCE_PRE_ORDER_GUARD", "").lower() == "true":
+            try:
+                from core.governance.pre_order_guard import pre_order_guard, GuardError
+                _strat_id = _extract_strategy_from_authorized_by(_authorized_by)
+                if _strat_id is None:
+                    # System caller (bracket_watchdog, kill_switch, sigterm) -> bypass
+                    pass
+                else:
+                    _is_paper = (
+                        self.testnet
+                        or os.getenv("BINANCE_TESTNET", "").lower() == "true"
+                    )
+                    pre_order_guard(
+                        book="binance_crypto",
+                        strategy_id=_strat_id,
+                        symbol=symbol,
+                        paper_mode=_is_paper,
+                    )
+            except GuardError as ge:
+                raise BrokerError(f"pre_order_guard reject: {ge.reason}")
+            except ImportError:
+                logger.warning("pre_order_guard module not available, bypass")
+
         if market_type == "margin":
             return self._create_margin_position(symbol, direction, qty, stop_loss, take_profit, _authorized_by, **kwargs)
         return self._create_spot_position(symbol, direction, qty, notional, stop_loss, _authorized_by)

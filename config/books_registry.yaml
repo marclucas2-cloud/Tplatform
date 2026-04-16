@@ -1,0 +1,169 @@
+# =============================================================================
+# BOOKS REGISTRY CANONIQUE — source unique de verite par book
+# =============================================================================
+# Phase 1.1 du plan TODO XXL DESK PERSO 10/10.
+#
+# Definit pour chaque book: broker, scope asset, mode autorise, capital,
+# risk budget, health requirements, allowed strategies, execution windows,
+# kill switch scope.
+#
+# Ce registre est consulte par:
+#   - core/governance/registry_loader.py (loader unique au boot)
+#   - core/governance/pre_order_guard.py (verification pre-order)
+#   - worker.py cycles (resolution capital + strat allowlist)
+#   - dashboard (affichage etat reel)
+#
+# Toute modification est un PR formel. Pas de "config drift" silencieuse.
+# =============================================================================
+
+metadata:
+  version: 1
+  updated_at: "2026-04-16"
+  updated_by: "phase_1_1_books_registry_initial"
+  schema_version: 1
+  notes: |
+    v1 2026-04-16: registre initial. 5 books identifies cf doctrine projet.
+    Chaque book doit avoir un mode_authorized explicite. Pas de defaut implicite.
+
+# -----------------------------------------------------------------------------
+# Books actifs en prod
+# -----------------------------------------------------------------------------
+
+books:
+
+  - book_id: "binance_crypto"
+    broker: "binance"
+    asset_scope: ["BTC", "ETH", "BNB", "USDC margin", "USDC spot", "altcoins majors"]
+    mode_authorized: "live_allowed"   # disabled | paper_only | live_allowed
+    capital_budget_usd: 10000          # capital cible (allocation max)
+    risk_budget:
+      daily_loss_pct: 0.05             # cf data/kill_switch_state.json (override actif)
+      monthly_loss_pct: 0.12
+      max_position_pct: 0.15           # cf core/crypto/risk_manager_crypto
+      max_strategy_pct: 0.25
+    health_requirements:
+      - "binance_api_authenticated"
+      - "binance_spot_balance_readable"
+      - "kill_switch_inactive"
+    allowed_strategies_source: "config/live_whitelist.yaml#binance_crypto"
+    execution_window:
+      timezone: "UTC"
+      hours: "24x7"                    # crypto trade en continu
+    kill_switch_scope: "binance_only"  # ne kill pas IBKR/Alpaca
+    runtime_entrypoint: "worker.py:run_crypto_cycle"
+    state_files:
+      - "data/state/binance_crypto/positions.json"   # a creer (Phase 5.2)
+      - "data/state/binance_crypto/dd_state.json"    # a creer
+    notes: |
+      Book le plus actif (12 strats deployees). 11 live + 1 paper_only + 1 disabled
+      apres P0 fix. Equity reel ~$9,800 (cash $2K + earn $7.8K).
+
+  - book_id: "ibkr_futures"
+    broker: "ibkr"
+    asset_scope: ["MES", "MNQ", "M2K", "MGC", "MCL", "VIX", "MIB", "ESTX50"]
+    mode_authorized: "live_allowed"
+    capital_budget_usd: 10000          # equivalent EUR ~9.5K
+    risk_budget:
+      daily_loss_pct: 0.015            # cf config/limits_live.yaml
+      level_1_dd_pct: 0.009
+      level_3_dd_pct: 0.018
+      max_futures_contracts: 4         # cf config/limits_live.yaml futures_limits
+      max_risk_per_strat_usd: 500
+    health_requirements:
+      - "ibkr_gateway_4002_connected"
+      - "ibkr_account_authenticated"
+      - "kill_switch_inactive"
+      - "data_freshness_under_24h"     # MES_LONG.parquet
+    allowed_strategies_source: "config/live_whitelist.yaml#ibkr_futures"
+    execution_window:
+      timezone: "Europe/Paris"
+      hours: "16:00-22:00"             # ouverture US, cycle daily 14h UTC
+      days: "weekday"
+    kill_switch_scope: "ibkr_futures_only"
+    runtime_entrypoint: "worker.py:_run_futures_cycle (live=True)"
+    state_files:
+      - "data/state/ibkr_futures/positions_live.json"
+      - "data/state/ibkr_futures/positions_paper.json"
+    notes: |
+      2 strats live_core + 4 paper_only post-P0. Equity €10,152.
+      MGC trade actuel (2026-04-16) sous V0 params, en cours.
+
+  - book_id: "ibkr_eu"
+    broker: "ibkr"
+    asset_scope: ["DAX", "CAC40", "ESTX50", "MIB", "EU equities/ETFs"]
+    mode_authorized: "paper_only"     # P0 FIX: pas de live tant que script non whitelist-aware
+    capital_budget_usd: 0              # paper only -> pas de capital live
+    risk_budget:
+      paper_only_note: "n/a, mode paper"
+    health_requirements:
+      - "ibkr_gateway_4003_connected_paper"
+    allowed_strategies_source: "config/live_whitelist.yaml#ibkr_eu"
+    execution_window:
+      timezone: "Europe/Paris"
+      hours: "09:00-17:30"
+      days: "weekday"
+    kill_switch_scope: "ibkr_eu_only"
+    runtime_entrypoint: "scripts/live_portfolio_eu.py via worker.run_intraday(EU)"
+    state_files: []
+    notes: |
+      P0 fix 2026-04-16: bloque live tant que live_portfolio_eu.py pas
+      whitelist-aware. 5 strats paper_only en attente refacto.
+
+  - book_id: "ibkr_fx"
+    broker: "ibkr"
+    asset_scope: ["AUDJPY", "USDJPY", "EURJPY", "NZDUSD"]
+    mode_authorized: "disabled"        # ESMA EU leverage limits
+    capital_budget_usd: 0
+    risk_budget:
+      regulatory_note: "ESMA bloque leverage retail FX EU"
+    health_requirements: []
+    allowed_strategies_source: "config/live_whitelist.yaml#ibkr_fx"
+    execution_window:
+      timezone: "UTC"
+      hours: "24x5"
+      days: "Sunday 22:00 to Friday 22:00"
+    kill_switch_scope: "ibkr_fx_only"
+    runtime_entrypoint: "n/a (disabled)"
+    state_files: []
+    notes: |
+      1 strat disabled (fx_carry_momentum_filter). Bloquee reglementairement
+      jusqu'a changement ESMA. Code conserve pour reactivation future si
+      regulation change.
+
+  - book_id: "alpaca_us"
+    broker: "alpaca"
+    asset_scope: ["US equities SP500 large+mid caps"]
+    mode_authorized: "paper_only"      # doctrine: paper d'abord
+    capital_budget_usd: 100000         # paper $100K
+    risk_budget:
+      paper_only_note: "n/a, mode paper"
+      max_position_pct: 0.10           # 10% par symbol
+    health_requirements:
+      - "alpaca_api_authenticated"
+      - "alpaca_market_open_us"
+    allowed_strategies_source: "config/live_whitelist.yaml#alpaca_us"
+    execution_window:
+      timezone: "America/New_York"
+      hours: "09:30-16:00"
+      days: "weekday US"
+    kill_switch_scope: "alpaca_only"
+    runtime_entrypoint: "scripts/paper_portfolio.py via worker.run_intraday(US)"
+    state_files:
+      - "data/state/alpaca_us/paper_portfolio_state.json"
+    notes: |
+      1 strat paper_only (us_stocks_daily). Doctrine paper d'abord, capital
+      reel non requis tant que paper sans divergence > 30j.
+
+# -----------------------------------------------------------------------------
+# Schema validation
+# -----------------------------------------------------------------------------
+# Chaque book DOIT avoir:
+#   - book_id (unique)
+#   - broker (binance | ibkr | alpaca)
+#   - mode_authorized (disabled | paper_only | live_allowed)
+#   - capital_budget_usd (>= 0)
+#   - allowed_strategies_source (path vers fichier source)
+#   - kill_switch_scope (string identifiant scope)
+#
+# Validation enforce par core/governance/registry_loader.py au boot.
+# Boot fail-closed si schema invalide.
