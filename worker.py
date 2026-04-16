@@ -3966,9 +3966,14 @@ def run_crypto_cycle():
                 name for name, c in risk_result["checks"].items()
                 if not c["passed"]
             ]
+            # Log DETAILED messages so operator can diagnose without CLI repro
+            failed_detail = [
+                f"{name}: {risk_result['checks'][name].get('message', '?')}"
+                for name in failed_checks
+            ]
             logger.warning(
                 f"CRYPTO RISK CHECK FAILED ({len(failed_checks)} checks): "
-                f"{failed_checks}"
+                f"{failed_detail}"
             )
 
         # --- Boucle sur les 8 strategies ---
