@@ -6,14 +6,14 @@ tends to rally during flight-to-quality (2020/2022 crisis periods) AND
 during inflation expectations (2023-2025).
 
 Backtest 5Y daily:
-  - n=145 trades, +\$28,951 total, Sharpe 4.75
+  - n=145 trades, +$28,951 total, Sharpe 4.75
   - Positive EVERY year:
-    2021 (bull equity): +\$ (data dependent)
-    2022 (BEAR equity -19%): +\$249 (positive while equities crash)
-    2023: +\$2,347
-    2024: +\$5,430
-    2025: +\$11,550
-    2026 YTD bear: +\$8,775 (strong)
+    2021 (bull equity): +$ (data dependent)
+    2022 (BEAR equity -19%): +$249 (positive while equities crash)
+    2023: +$2,347
+    2024: +$5,430
+    2025: +$11,550
+    2026 YTD bear: +$8,775 (strong)
   - bear_ok = True (unique among tested strategies)
 
 Key: gold doesn't behave like equities. Long-only gold trend captures

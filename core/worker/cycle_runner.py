@@ -81,15 +81,42 @@ class CycleRunner:
         self._last_error: Optional[str] = None
 
     def run(self, *args, **kwargs) -> CycleMetrics:
-        """Execute the cycle with error boundary. Never raises."""
+        """Execute the cycle with error boundary + timeout. Never raises.
+
+        Phase 4.3 fix 2026-04-16: timeout_seconds est maintenant ENFORCED
+        via thread + watchdog timer (avant: stocke mais jamais applique).
+        Si timeout depasse, on log warn + count comme failure.
+        Note: le thread continue en background (pas de kill possible en pure
+        Python). C'est une protection "soft" qui empeche le scheduler de
+        bloquer mais pas le thread runaway. Future Phase 4 = process per book.
+        """
+        import threading
+
         start = time.monotonic()
         self._total_runs += 1
         self._last_run_at = start
         success = False
         error_str = None
+        result_holder: dict = {"err": None}
+
+        def _wrapped():
+            try:
+                self._callable(*args, **kwargs)
+            except Exception as _e:
+                result_holder["err"] = _e
 
         try:
-            self._callable(*args, **kwargs)
+            t = threading.Thread(target=_wrapped, daemon=True, name=f"cycle_{self.name}")
+            t.start()
+            t.join(timeout=self._timeout)
+            if t.is_alive():
+                # Timeout depasse, le thread continue mais on raise pour metric
+                raise TimeoutError(
+                    f"cycle {self.name} timeout > {self._timeout}s "
+                    f"(thread continue en background, scheduler debloque)"
+                )
+            if result_holder["err"] is not None:
+                raise result_holder["err"]
             success = True
             self._consecutive_failures = 0
             self._health = CycleHealth.HEALTHY

@@ -5237,6 +5237,16 @@ def run_v10_portfolio_cycle():
                         f"SAFETY MODE: Trading disabled — {anomaly['details']}",
                         level="critical",
                     )
+                    # Phase 2.2 fix: ecrit le flag file pour que pre_order_guard
+                    # bloque tous les ordres suivants (avant: log only).
+                    try:
+                        from core.governance.safety_mode_flag import activate_safety_mode
+                        activate_safety_mode(
+                            reason=str(anomaly.get("details", "DISABLE_TRADING"))[:200],
+                            activated_by="v10_safety_anomaly",
+                        )
+                    except Exception as _sme:
+                        logger.error(f"safety_mode_flag write failed: {_sme}")
             except Exception as e:
                 logger.debug(f"V10 safety check skip: {e}")
 

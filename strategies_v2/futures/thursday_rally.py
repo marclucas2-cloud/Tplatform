@@ -5,11 +5,11 @@ by a positive drift over the subsequent days (pre-weekend positioning).
 Captured both on MES and MNQ with consistent results.
 
 Backtest 5Y daily (MES):
-  - n=264 trades, WR 57%, +\$8,635, Sharpe 1.31
+  - n=264 trades, WR 57%, +$8,635, Sharpe 1.31
   - WF 3/5 profitable, IS 1.21 -> OOS 1.61 (ratio 1.33)
 
 Backtest 5Y daily (MNQ):
-  - n=264 trades, WR 54%, +\$11,459, Sharpe 0.99
+  - n=264 trades, WR 54%, +$11,459, Sharpe 0.99
   - WF 3/5 profitable, IS 1.18 -> OOS 0.92 (ratio 0.78)
 
 Params: SL 2.5%, TP 4%, hold 3 days.

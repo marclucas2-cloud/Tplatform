@@ -12,7 +12,7 @@ that assets with positive recent returns continue to outperform on
 Each month, pick the asset with the best 20-day return and hold 20 days.
 
 Backtest 5Y daily:
-  - n=63 trades, WR 63%, +\$43,567 total, **Sharpe 7.87**
+  - n=63 trades, WR 63%, +$43,567 total, **Sharpe 7.87**
   - WF **5/5 profitable** (best of session), IS 7.90 -> OOS 9.92 (OOS > IS)
   - Ratio 1.26 = ultra robuste, not overfitting
   - 2% min momentum threshold to avoid entering on flat moves

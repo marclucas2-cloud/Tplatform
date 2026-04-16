@@ -5,7 +5,7 @@ with short-term trigger (10-day daily momentum > 1%). Only take LONG
 when both align — filters noise efficiently.
 
 Backtest 5Y daily:
-  - n=58 trades (small sample), WR 48%, +\$3240 total, Sharpe 2.01
+  - n=58 trades (small sample), WR 48%, +$3240 total, Sharpe 2.01
   - WF 3/5 profitable, OOS 2.85 (IS 3.02, ratio 0.94)
   - Small n but consistent (low overfitting)
 

@@ -5,7 +5,7 @@ historically different from other days (Cross, French 1980). On MNQ,
 buying Friday close and selling Monday close captures a long-biased drift.
 
 Backtest 5Y daily:
-  - n=266 trades, WR 54%, +\$14,913 total, Sharpe 1.76
+  - n=266 trades, WR 54%, +$14,913 total, Sharpe 1.76
   - WF 4/5 profitable, OOS avg Sharpe 1.86
   - Rare config where IS < OOS (OOS overperforms)
 

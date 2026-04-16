@@ -159,14 +159,36 @@ def pre_order_guard(
                 book=book, strategy_id=strategy_id,
             )
 
-    # 5. (Future Phase 2.2) book health check
-    # try:
-    #     from core.governance.book_health import get_book_health
-    #     health = get_book_health(book)
-    #     if health.status == HealthStatus.BLOCKED:
-    #         raise GuardError(...)
-    # except ImportError:
-    #     pass
+    # 5. Safety mode flag check (Phase 2.2 audit fix).
+    # Si DISABLE_TRADING actif, bloquer tout ordre live (paper toujours OK).
+    if not paper_mode:
+        try:
+            from core.governance.safety_mode_flag import is_safety_mode_active
+            active, details = is_safety_mode_active()
+            if active:
+                raise GuardError(
+                    f"safety_mode active: {details.get('reason', 'unknown')}",
+                    book=book, strategy_id=strategy_id,
+                )
+        except GuardError:
+            raise
+        except Exception as e:
+            logger.warning(f"safety_mode_flag check error: {e}")
+
+    # 6. Kill switches scoped check (Phase 2.4 audit).
+    # Hierarchy global > broker > book > strategy.
+    try:
+        from core.governance.kill_switches_scoped import is_killed
+        killed, reason = is_killed(book_id=book, strategy_id=strategy_id)
+        if killed:
+            raise GuardError(
+                f"kill_switch active: {reason}",
+                book=book, strategy_id=strategy_id,
+            )
+    except GuardError:
+        raise
+    except Exception as e:
+        logger.warning(f"kill_switches_scoped check error: {e}")
 
     # All checks passed — log debug only (no spam)
     logger.debug(
