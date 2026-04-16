@@ -1843,6 +1843,27 @@ def _run_futures_cycle(live: bool = False):
             except Exception as e:
                 logger.error(f"    MES 3-Day Stretch error: {e}")
 
+            # 3a-bis. MES calendar paper strats (T1-A INT-C promotion 2026-04-16)
+            # Promus en paper_only via INT-A WF/MC validation (cf docs/research/wf_reports/INT-A_tier1_validation.md).
+            # Transition paper -> live_probation apres 30j sans divergence > 2 sigma.
+            try:
+                from strategies_v2.futures.mes_calendar_paper import (
+                    MESMondayLong, MESWednesdayLong, MESPreHolidayLong,
+                )
+                for _cal_cls in (MESMondayLong, MESWednesdayLong, MESPreHolidayLong):
+                    _cal = _cal_cls()
+                    _cal.set_data_feed(feed)
+                    bar = feed.get_latest_bar("MES")
+                    if bar:
+                        sig = _cal.on_bar(bar, portfolio_state)
+                        if sig:
+                            signals.append((_cal.name, sig))
+                            logger.info(f"    {_cal.name} (paper): BUY @ {bar.close:.2f}")
+                        else:
+                            logger.info(f"    {_cal.name} (paper): pas un jour pattern")
+            except Exception as e:
+                logger.error(f"    MES calendar paper error: {e}")
+
             # 3b. Overnight MES V2 — params validates par sweep V2 (640 combos) + WF 3/3
             #     SL=60 TP=120 EMA=50 none → Sharpe 1.69, +$7,272, 163 trades 5Y
             #     WF 4/5 profitable, IS 1.41 → OOS 1.68 (OOS > IS, robuste)
@@ -2533,6 +2554,10 @@ def _run_futures_cycle(live: bool = False):
             "Cross-Asset Mom":   "cross_asset_momentum",
             "Gold Trend MGC":    "gold_trend_mgc",
             "Gold-Oil Rotation": "gold_oil_rotation",
+            # T1-A INT-C 2026-04-16 paper promotions (canonical_id == display name)
+            "mes_monday_long_oc":     "mes_monday_long_oc",
+            "mes_wednesday_long_oc":  "mes_wednesday_long_oc",
+            "mes_pre_holiday_long":   "mes_pre_holiday_long",
         }
 
         for name, sig in signals:
