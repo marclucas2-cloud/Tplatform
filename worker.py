@@ -1688,10 +1688,11 @@ def _run_futures_cycle(live: bool = False):
                     df.index = pd.to_datetime(df["datetime"])
                 elif not isinstance(df.index, pd.DatetimeIndex):
                     df.index = pd.to_datetime(df.index)
-                # Cron data_refresh peut introduire doublons/disorder.
-                # Dedupe (keep last) + sort obligatoires avant DataFeed validation.
+                # Cron data_refresh peut introduire doublons/NaT/disorder.
+                # Drop NaT, dedupe (keep last), sort, strip tz — obligatoire avant
+                # DataFeed validation (is_monotonic_increasing) sinon cycle KO.
+                df = df[df.index.notna()]
                 df = df[~df.index.duplicated(keep="last")].sort_index()
-                # Strip tz pour compatibility DataFeed (toutes les data backtests sont naive)
                 if df.index.tz is not None:
                     df.index = df.index.tz_localize(None)
                 data_sources[sym] = df
