@@ -228,7 +228,10 @@ binance_crypto:
 
   - strategy_id: btc_dominance_rotation_v2
     book: binance_crypto
-    status: live_core
+    status: disabled   # P0 FIX 2026-04-16 (audit ChatGPT): implementation cassee
+                       # dominance_series=constante 30 points + returns_data scalaires
+                       # vs series attendues -> regime toujours NEUTRAL, signal cassse.
+                       # Voir btc_dominance_v2.py:91. A reactiver apres fix logique.
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-005)"
     runtime_module: "strategies.crypto.btc_dominance_rotation_v2"
     wf_source: "data/crypto/wf_results.json"
@@ -236,12 +239,18 @@ binance_crypto:
 
   - strategy_id: borrow_rate_carry
     book: binance_crypto
-    status: live_core
+    status: paper_only   # P0 FIX 2026-04-16 (audit ChatGPT): doc dit "NO directional
+                         # risk" mais scenario DIVERSIFIED alloue 40% BTC + 40% ETH
+                         # = beta crypto cache. Demote a paper_only jusqu'a clarification
+                         # these (rename ou supprimer exposition directionnelle).
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-006)"
     runtime_module: "strategies.crypto.borrow_rate_carry"
     wf_source: "data/crypto/wf_results.json"
     sizing_policy: "earn_rebalance (pas de position trading directe)"
-    notes: "Rebalance earn BTC/ETH/USDT selon yields, pas de risk live"
+    notes: |
+      Rebalance earn BTC/ETH/USDT selon yields. Audit ChatGPT 2026-04-16
+      revele beta crypto cache via 40/40/20 BTC/ETH/USDT split.
+      A clarifier: marketing as carry pure ou ajouter "with BTC/ETH beta" disclaimer.
 
   - strategy_id: liquidation_momentum
     book: binance_crypto

@@ -373,6 +373,21 @@ def run_intraday(market: str = "US"):
         _log_event("cycle_start", f"intraday_{market}")
 
         if market == "EU":
+            # P0 FIX 2026-04-16: ibkr_eu = paper_only en whitelist (cf
+            # config/live_whitelist.yaml). Le script live_portfolio_eu.py n'est
+            # PAS whitelist-aware (audit ChatGPT bypass critique #1). On bloque
+            # l'execution live tant que le script n'enforce pas la whitelist.
+            # Pour reactiver: refacto live_portfolio_eu.py pour appeler
+            # is_strategy_live_allowed(...) sur chaque strat avant execution.
+            from core.governance import list_live_strategies
+            _eu_live = [e for e in list_live_strategies("ibkr_eu")]
+            if not _eu_live:
+                logger.warning(
+                    "INTRADAY EU SKIP — book ibkr_eu = paper_only en whitelist "
+                    "(audit P0). Aucune strategie EU autorisee live. "
+                    "Pour reactiver: rendre live_portfolio_eu.py whitelist-aware."
+                )
+                return
             from scripts.live_portfolio_eu import run_intraday_eu
             run_intraday_eu(dry_run=False)
         else:
@@ -4338,6 +4353,26 @@ def run_crypto_cycle():
                         f"  [{strat_id}] Signal SANS stop_loss — SL par defaut "
                         f"applique a {default_sl_pct*100:.0f}%: ${stop_loss:.2f}"
                     )
+
+                # P0 FIX 2026-04-16: whitelist enforcement crypto (audit ChatGPT
+                # vulnerabilite critique - 28/28 entrypoints LIVE etaient sans
+                # check whitelist). Une strat crypto en status disabled ou
+                # paper_only ne peut PAS placer d'ordre live.
+                try:
+                    from core.governance import is_strategy_live_allowed
+                    if not is_strategy_live_allowed(strat_id, "binance_crypto"):
+                        logger.warning(
+                            f"  [{strat_id}] Ordre BLOQUE par whitelist: "
+                            f"strategy non autorisee live sur binance_crypto"
+                        )
+                        continue
+                except Exception as wl_err:
+                    # FAIL-CLOSED: si whitelist illisible, on bloque
+                    logger.error(
+                        f"  [{strat_id}] Whitelist check ERREUR (fail-closed): "
+                        f"{wl_err}"
+                    )
+                    continue
 
                 # CRO C-3 FIX: validate_order AVANT create_position
                 try:

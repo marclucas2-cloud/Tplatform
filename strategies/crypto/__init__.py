@@ -155,14 +155,28 @@ _RAW_ALLOCATION = sum(
     s["config"]["allocation_pct"] for s in CRYPTO_STRATEGIES.values()
 ) if CRYPTO_STRATEGIES else 0
 
-# Normalize to 100% if total exceeds — prevents overexposure
+# P0 FIX 2026-04-16 (audit ChatGPT): la normalisation silencieuse rendait
+# le sizing dependant des imports reussis/echoues -> non-deterministe.
+# Au-dessus de 100%, on RENORMALISE EXPLICITEMENT mais avec WARNING ECLATANT
+# pour forcer revue. En env strict (CRYPTO_ALLOC_FAIL_CLOSED=true), on RAISE
+# pour interdire le boot.
+import os as _os
 if _RAW_ALLOCATION > 1.0 and CRYPTO_STRATEGIES:
+    if _os.environ.get("CRYPTO_ALLOC_FAIL_CLOSED", "").lower() == "true":
+        raise ValueError(
+            f"FAIL-CLOSED: crypto allocation {_RAW_ALLOCATION*100:.0f}% > 100%. "
+            f"Reduire allocation_pct dans les strats individuelles ou desactiver "
+            f"strats. Boot refuse pour eviter sizing non-deterministe. "
+            f"Strats actives: {list(CRYPTO_STRATEGIES.keys())}"
+        )
     scale_factor = 1.0 / _RAW_ALLOCATION
     for strat_data in CRYPTO_STRATEGIES.values():
         strat_data["config"]["allocation_pct"] *= scale_factor
-    logger.warning(
-        f"Crypto allocation normalized: {_RAW_ALLOCATION*100:.0f}% -> 100% "
-        f"(scale factor {scale_factor:.3f})"
+    logger.error(  # ERROR pas warning -> visible dans alertes
+        f"!!! CRYPTO ALLOCATION DRIFT: {_RAW_ALLOCATION*100:.0f}% > 100%, "
+        f"renormalise a 100% (scale factor {scale_factor:.3f}). "
+        f"NON-DETERMINISTE selon imports, FIX REQUIS. "
+        f"Strats actives: {list(CRYPTO_STRATEGIES.keys())}"
     )
 
 TOTAL_ALLOCATION = sum(

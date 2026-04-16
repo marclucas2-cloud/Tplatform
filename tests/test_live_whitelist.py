@@ -94,8 +94,11 @@ def test_list_live_strategies_futures():
 
 def test_list_live_strategies_all_books():
     live = list_live_strategies()
-    # 3 futures + 11 crypto live = 14 expected
-    assert len(live) >= 14
+    # 2026-04-16: 2 futures live (CAM + GoldOilRotation, gold_trend_mgc demote
+    # paper_only) + 10 crypto live (btc_dominance_v2 disabled, borrow_rate_carry
+    # paper_only). gold_trend_mgc, btc_dominance et borrow_rate_carry sont
+    # demotes via P0 fix audit.
+    assert len(live) >= 10
     fx_entries = [e for e in live if e["_book"] == "ibkr_fx"]
     assert len(fx_entries) == 0  # FX disabled
     eu_entries = [e for e in live if e["_book"] == "ibkr_eu"]

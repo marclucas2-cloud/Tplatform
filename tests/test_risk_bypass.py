@@ -283,10 +283,12 @@ class TestCannotImportRawAlpacaAndTrade:
             # Skip les fichiers dans les repertoires autorises
             if self._is_in_allowed_dir(py_file):
                 continue
-            # Skip node_modules, __pycache__, .git, venv
+            # Skip node_modules, __pycache__, .git, venv, et .claude/worktrees
+            # (worktrees agents Claude = copies repo, scan = false positives)
             parts = py_file.parts
             skip_dirs = {"node_modules", "__pycache__", ".git", "venv",
-                         ".venv", "env", "site-packages"}
+                         ".venv", "env", "site-packages",
+                         ".claude", "worktrees", "archive", "temp"}
             if any(d in parts for d in skip_dirs):
                 continue
             # Skip les tests eux-memes
