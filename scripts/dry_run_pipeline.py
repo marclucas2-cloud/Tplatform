@@ -107,6 +107,15 @@ def dry_run_crypto(filter_strat: str | None = None) -> list[dict]:
         strat_name = config.get("name", strat_id)
         r = {"strat_id": strat_id, "name": strat_name, "steps": {}, "passed": True}
 
+        # Skip earn strategies: they don't trade pairs, they rebalance Binance
+        # Flexible Earn products. fetch_prices() + qty calc are inapplicable.
+        # The real cycle calls them via EARN_REBALANCE path (see worker.py crypto cycle).
+        if config.get("market_type") == "earn":
+            r["steps"]["skip"] = f"SKIP: market_type=earn (symbols={config.get('symbols', [])})"
+            r["passed"] = True
+            results.append(r)
+            continue
+
         # Step 1: Fetch prices
         primary_symbol = config.get("symbols", ["BTCUSDT"])[0]
         trade_symbol = primary_symbol.replace("USDT", "USDC") if primary_symbol.endswith("USDT") else primary_symbol
