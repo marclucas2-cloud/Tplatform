@@ -28,10 +28,12 @@ def test_whitelist_version_string():
 
 
 def test_ibkr_futures_live_strats_allowed():
-    """3 strats alpha pur doivent etre live_core autorisees."""
+    """2 strats alpha pur encore en live_core (gold_trend_mgc downgrade
+    paper_only le 2026-04-16 pour V1 SL/TP recalibration)."""
     assert is_strategy_live_allowed("cross_asset_momentum", "ibkr_futures") is True
-    assert is_strategy_live_allowed("gold_trend_mgc", "ibkr_futures") is True
     assert is_strategy_live_allowed("gold_oil_rotation", "ibkr_futures") is True
+    # gold_trend_mgc transitionne en paper_only -> bloque en live
+    assert is_strategy_live_allowed("gold_trend_mgc", "ibkr_futures") is False
 
 
 def test_fx_carry_is_disabled():
@@ -85,8 +87,9 @@ def test_list_live_strategies_futures():
     live = list_live_strategies("ibkr_futures")
     ids = {e["strategy_id"] for e in live}
     assert "cross_asset_momentum" in ids
-    assert "gold_trend_mgc" in ids
     assert "gold_oil_rotation" in ids
+    # gold_trend_mgc downgrade en paper_only le 2026-04-16, plus dans live
+    assert "gold_trend_mgc" not in ids
 
 
 def test_list_live_strategies_all_books():

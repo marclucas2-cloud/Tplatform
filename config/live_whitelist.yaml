@@ -28,15 +28,21 @@
 # =============================================================================
 
 metadata:
-  version: 2
+  version: 3
   updated_at: "2026-04-16"
-  updated_by: "int_c_promotion_committee"
+  updated_by: "gold_trend_mgc_recalibration_V1_option_B"
   review_cadence: "hebdomadaire"
   notes: |
     v2 2026-04-16: +3 candidates ibkr_futures paper_only (INT-C promotion
     committee). T1-A calendaires MES: monday_long_oc, wednesday_long_oc,
-    pre_holiday_long. Transition paper -> live_probation apres 30 jours sans
-    divergence backtest/live > 2 sigma.
+    pre_holiday_long.
+
+    v3 2026-04-16: gold_trend_mgc downgrade live_core -> paper_only pour
+    recalibration V1 (SL 0.4% / TP 0.8%, aligne deleveraging level_3 -1.8% NAV).
+    Le trade live ouvert sous V0 (SL 1.5% TP 3%) reste actif pour ne pas
+    casser le setup en cours; nouveaux signaux respecteront V1.
+    Transition paper_only -> live_core apres WF + MC + 30j paper sans
+    divergence > 2 sigma.
 
 # -----------------------------------------------------------------------------
 # IBKR FUTURES — 3 strats alpha pur validees 10Y + WF + MC
@@ -73,17 +79,17 @@ ibkr_futures:
 
   - strategy_id: gold_trend_mgc
     book: ibkr_futures
-    status: live_core
+    status: paper_only   # 2026-04-16 TRANSITION live_core -> paper_only pour V1 recalibration
     runtime_entrypoint: "worker.py:_run_futures_cycle (bloc STRATS LIVE CAPABLE)"
     runtime_module: "strategies_v2.futures.gold_trend_mgc.GoldTrendMGC"
-    wf_source: "scripts/wf_ib_portfolio.py"
+    wf_source: "scripts/research/backtest_gold_trend_sl_variants.py + WF/MC pending (INT-A T1-A pattern)"
     sizing_policy: "risk_budget_5pct"
     max_risk_usd: 500
     priority: "secondary_to_cross_asset"
     universe: [MGC]
     ema_period: 20
-    sl_pct: 0.015
-    tp_pct: 0.03
+    sl_pct: 0.004     # V1 Option B (2026-04-16): aligne deleveraging level_3 -1.8% NAV
+    tp_pct: 0.008     # V1 Option B: R/R 2:1 maintenu
     max_hold_days: 10
     kill_criteria:
       - "5 consecutive losses"
@@ -92,6 +98,18 @@ ibkr_futures:
       Long MGC si close > EMA20. Capture les rallies gold co-occurents
       avec oil rally (spread faible -> gold_oil silencieux, gold_trend
       seul actif). Essentiel pour 2020 COVID, 2024.
+
+      RECALIBRATION 2026-04-16 (V1 Option B):
+      - Anciens defaults SL 1.5% TP 3% -> backtest +$26K Sharpe 0.73 mais
+        en prod sabote par deleveraging level_3 -1.8% NAV (= MGC -0.4%) ->
+        backtest emule +$11.7K MaxDD -32.7%.
+      - Nouveaux defaults SL 0.4% TP 0.8% -> backtest +$23.8K Sharpe 1.58
+        MaxDD -7.1% WR 47.6% sur 5Y MGC daily.
+      - Status downgrade live_core -> paper_only en attente WF + MC.
+      - Trade live ouvert 2026-04-16 17:54 UTC (parent SL 1.5% TP 3%) reste
+        actif sous old params pour ne pas casser le setup en cours; nouveaux
+        signaux V1 a partir du prochain cycle.
+      - Cf docs/research/gold_trend_sl_recalibration.md.
 
   - strategy_id: gold_oil_rotation
     book: ibkr_futures
