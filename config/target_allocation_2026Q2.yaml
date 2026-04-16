@@ -1,0 +1,22 @@
+target_allocation_2026Q2:
+  run_date: '2026-04-16'
+  method: inverse_volatility
+  calmar: 2.133
+  sharpe: 4.14
+  max_dd_pct: -1.2
+  cagr_pct: 2.56
+  notes: Allocation IS 2015-2026. A valider par INT-A WF/MC sur meta-portfolio complet
+    avant tout rebalancement real.
+  weights:
+    cross_asset_momentum: 0.015
+    gold_oil_rotation: 0.0171
+    gold_trend_mgc: 0.0096
+    btc_trend_sma50: 0.0109
+    eth_trend_sma50: 0.0083
+    crypto_dual_momentum: 0.0079
+    btc_mean_reversion_rsi: 0.0152
+    long_mon_oc: 0.0145
+    long_wed_oc: 0.013
+    pre_holiday_drift: 0.0481
+    basis_carry_always: 0.4202
+    basis_carry_funding_gt_5pct: 0.4202

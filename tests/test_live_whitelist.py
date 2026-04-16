@@ -18,7 +18,7 @@ def test_whitelist_loads():
     data = load_live_whitelist()
     assert data is not None
     assert "metadata" in data
-    assert data["metadata"]["version"] == 1
+    assert data["metadata"]["version"] >= 1
 
 
 def test_whitelist_version_string():

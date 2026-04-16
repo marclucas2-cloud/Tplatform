@@ -28,10 +28,15 @@
 # =============================================================================
 
 metadata:
-  version: 1
-  updated_at: "2026-04-15"
-  updated_by: "live_hardening_p1"
+  version: 2
+  updated_at: "2026-04-16"
+  updated_by: "int_c_promotion_committee"
   review_cadence: "hebdomadaire"
+  notes: |
+    v2 2026-04-16: +3 candidates ibkr_futures paper_only (INT-C promotion
+    committee). T1-A calendaires MES: monday_long_oc, wednesday_long_oc,
+    pre_holiday_long. Transition paper -> live_probation apres 30 jours sans
+    divergence backtest/live > 2 sigma.
 
 # -----------------------------------------------------------------------------
 # IBKR FUTURES — 3 strats alpha pur validees 10Y + WF + MC
@@ -111,6 +116,70 @@ ibkr_futures:
       Rotate long MGC vs MCL selon 20d momentum spread. Positive chaque
       annee 2021-2026 (backtest 5Y). Sharpe 6.44 solo, 0.87 en portefeuille
       (dilute par interactions avec gold_trend).
+
+  # ---------------------------------------------------------------------------
+  # Paper probation candidates (INT-C 2026-04-16 promotion committee)
+  # Source: sessions T1-A / INT-A / INT-B
+  # WF 5-windows, MC 1000 sims bootstrap, stress tests 2018/2020/2022/2024/2025
+  # Kill criteria standard: DD_abs>10%, DD_90d>8%, divergence>2std, corr>0.70
+  # Transition paper -> live_probation apres 30 jours de paper sans divergence.
+  # ---------------------------------------------------------------------------
+
+  - strategy_id: mes_monday_long_oc
+    book: ibkr_futures
+    status: paper_only
+    runtime_entrypoint: "scripts/research/backtest_futures_calendar.py:variant_dow_long dow=0"
+    runtime_module: "research.backtest_futures_calendar"
+    wf_source: "docs/research/wf_reports/INT-A_tier1_validation.md"
+    sizing_policy: fixed_1_contract
+    max_risk_usd: 300
+    kill_criteria:
+      drawdown_absolute: -10%
+      drawdown_rolling_90d: -8%
+      sharpe_rolling_60d: -0.5
+      divergence_vs_backtest: "2x_std"
+      correlation_drift: ">0.70"
+    notes: |
+      T1-A PROMOTE_LIVE in-sample (score +1.21, dSharpe +0.22). WF 3/5 OOS PASS,
+      MC P(DD>30%) 9.8%. Session INT-A VALIDATED. Start date paper: 2026-04-16.
+      Goto live_probation apres 30 jours sans divergence > 2 sigma.
+
+  - strategy_id: mes_wednesday_long_oc
+    book: ibkr_futures
+    status: paper_only
+    runtime_entrypoint: "scripts/research/backtest_futures_calendar.py:variant_dow_long dow=2"
+    runtime_module: "research.backtest_futures_calendar"
+    wf_source: "docs/research/wf_reports/INT-A_tier1_validation.md"
+    sizing_policy: fixed_1_contract
+    max_risk_usd: 300
+    kill_criteria:
+      drawdown_absolute: -10%
+      drawdown_rolling_90d: -8%
+      sharpe_rolling_60d: -0.5
+      divergence_vs_backtest: "2x_std"
+      correlation_drift: ">0.70"
+    notes: |
+      T1-A PROMOTE_LIVE in-sample (score +0.60, dSharpe +0.08). WF 4/5 OOS PASS,
+      MC P(DD>30%) 28.3% (tres limite, a surveiller). Start paper: 2026-04-16.
+
+  - strategy_id: mes_pre_holiday_long
+    book: ibkr_futures
+    status: paper_only
+    runtime_entrypoint: "scripts/research/backtest_futures_calendar.py:variant_pre_holiday"
+    runtime_module: "research.backtest_futures_calendar"
+    wf_source: "docs/research/wf_reports/INT-A_tier1_validation.md"
+    sizing_policy: fixed_1_contract
+    max_risk_usd: 300
+    kill_criteria:
+      drawdown_absolute: -10%
+      drawdown_rolling_90d: -8%
+      sharpe_rolling_60d: -0.5
+      divergence_vs_backtest: "2x_std"
+      correlation_drift: ">0.70"
+    notes: |
+      T1-A PROMOTE_LIVE in-sample (score +0.32, dSharpe +0.07, WR 61.3%).
+      WF 5/5 OOS PASS, MC P(DD>30%) 0%. Best risk/reward de la cohorte T1-A.
+      Trigger: veille de jour ferie NYSE. Start paper: 2026-04-16.
 
 # -----------------------------------------------------------------------------
 # BINANCE CRYPTO — 11 strats live (core + probation)
