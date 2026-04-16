@@ -129,20 +129,27 @@ class MacroECB(StrategyBase):
             ts = ts.replace(tzinfo=UTC_TZ)
         local = ts.astimezone(PARIS_TZ)
         local_date = local.date()
-        local_time = local.time()
 
         # Filter 1 : must be ECB day
         if local_date not in get_bce_dates():
             return None
 
-        # Filter 2 : must be after announcement window (14:15 + obs_minutes)
-        # Earliest valid : 14:45 (30min after 14:15)
-        # Latest valid : 17:00 (avoid late session noise)
+        # Filter 2 : must be after announcement window (14:15 + obs_minutes).
+        # Bug fix 2026-04-16: utiliser l'heure courante pour le filter, pas le
+        # timestamp du dernier bar (les bars 5min IBKR EU ont ~15-20min de lag,
+        # donc bar.timestamp peut etre encore < 14:45 quand on est a 15:10).
+        # On garde local_date du bar (= date du marche EU pour ECB day check),
+        # mais on filtre sur l'heure d'evaluation reelle.
         decision_time = time(14, 15)
         earliest_signal_time = time(14, 45)
         latest_signal_time = time(17, 0)
-        if local_time < earliest_signal_time or local_time > latest_signal_time:
+        now_paris = datetime.now(PARIS_TZ)
+        if now_paris.date() != local_date:
+            return None  # bar et eval doivent etre le meme jour
+        eval_time = now_paris.time()
+        if eval_time < earliest_signal_time or eval_time > latest_signal_time:
             return None
+        local_time = eval_time  # used downstream
 
         # Filter 3 : already fired today
         if local_date in self._fired_dates:

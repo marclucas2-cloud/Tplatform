@@ -5686,12 +5686,14 @@ def main():
 
         # === MACRO ECB EVENT DRIVEN (lun-ven, 14h50 Paris, jours BCE only) ===
         # Le module skip lui-meme les jours non-BCE; on declenche tous les jours
-        # de semaine a 14h50 par securite. V15.4: bascule LIVE si env
-        # MACRO_ECB_LIVE_ENABLED=true, sinon PAPER dry_run.
-        if is_weekday() and now_paris.hour == 14 and now_paris.minute >= 50 and not getattr(run_macro_ecb_live_cycle, '_done_today', False):
+        # de semaine a 15h10 (laisse 25min apres 14:45 pour que les bars 5min
+        # IBKR EU soient dispo, lag ~15-20min constate). V15.4: bascule LIVE
+        # si env MACRO_ECB_LIVE_ENABLED=true, sinon PAPER dry_run.
+        # Bug fix 2026-04-16 : trigger 14:50 -> 15:10 (data IBKR lag).
+        if is_weekday() and now_paris.hour == 15 and now_paris.minute >= 10 and not getattr(run_macro_ecb_live_cycle, '_done_today', False):
             _runners["macro_ecb"].run()
             run_macro_ecb_live_cycle._done_today = True
-        if is_weekday() and now_paris.hour < 14:
+        if is_weekday() and now_paris.hour < 15:
             run_macro_ecb_live_cycle._done_today = False
 
         # === HEARTBEAT toutes les 30 min (local log only, y compris weekends) ===
