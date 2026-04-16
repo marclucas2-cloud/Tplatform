@@ -348,7 +348,11 @@ class BinanceBroker(BaseBroker):
         if qty:
             params["quantity"] = str(qty)
         elif notional and side == "BUY":
-            params["quoteOrderQty"] = str(notional)
+            # Binance USDC pairs accept max 2 decimals on quoteOrderQty.
+            # Round DOWN to avoid "has too much precision" rejection (-1111).
+            import math as _m
+            _notional_2dec = _m.floor(float(notional) * 100) / 100
+            params["quoteOrderQty"] = f"{_notional_2dec:.2f}"
         else:
             raise BrokerError("qty or notional required for spot orders")
         result = self._post("/api/v3/order", params)
