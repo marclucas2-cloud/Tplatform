@@ -82,6 +82,20 @@ turn of month, FOMC/NFP days. Independants de la tendance.
 **Reponse a un gap** : `calendar_seasonal` totalement absent
 **Priority** : **medium-high**
 
+**STATUS 2026-04-16** : **backtested (session T1-A)**
+- Script : `scripts/research/backtest_futures_calendar.py`
+- Rapport : `output/research/wf_reports/T1-04_futures_calendar.md`
+- 11 variantes testees sur MES 10Y daily (2015-2026)
+- **4 PROMOTE_LIVE en in-sample** (necessite WF/MC avant live reel):
+  - `long_mon_oc` : score +1.212, dSharpe +0.216, $10.8K PnL, WR 57.2%, corr 0.02
+  - `long_wed_oc` : score +0.596, dSharpe +0.083
+  - `turn_of_month` : score +0.463, dSharpe +0.007 (faible, surtout cap util)
+  - `pre_holiday_drift` : score +0.315, dSharpe +0.070, WR 61.3% sur 106 trades
+- **4 DROP confirmes** : `long_thu_oc` (dMaxDD -7.23pp), `short_fri_oc` (dMaxDD -15.92pp), `long_fri_oc`, `monday_reversal`
+- **3 KEEP_FOR_RESEARCH** : `long_tue_oc`, `fomc_day_long`, `fomc_overnight_drift`
+- **Next gate** : session INT-A WF/MC 5 windows obligatoire avant ajout whitelist en `live_probation`
+- **Recommandation** : demarrage en `paper_only` sur Alpaca paper ou log-only sur IBKR, pas LIVE direct
+
 ### T1-05 — Crypto long/short cross-sectional (alts vs majors)
 
 **Book cible** : `binance_crypto`
