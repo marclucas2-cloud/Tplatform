@@ -1688,7 +1688,12 @@ def _run_futures_cycle(live: bool = False):
                     df.index = pd.to_datetime(df["datetime"])
                 elif not isinstance(df.index, pd.DatetimeIndex):
                     df.index = pd.to_datetime(df.index)
-                df = df.sort_index()
+                # Cron data_refresh peut introduire doublons/disorder.
+                # Dedupe (keep last) + sort obligatoires avant DataFeed validation.
+                df = df[~df.index.duplicated(keep="last")].sort_index()
+                # Strip tz pour compatibility DataFeed (toutes les data backtests sont naive)
+                if df.index.tz is not None:
+                    df.index = df.index.tz_localize(None)
                 data_sources[sym] = df
 
         if "MES" not in data_sources:
