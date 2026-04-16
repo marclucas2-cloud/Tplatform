@@ -192,70 +192,103 @@ _global_nav_cache = {"nav": 0.0, "ts": 0.0}
 
 
 def _get_global_nav() -> float:
-    """Get total NAV across all brokers. Cached 5 min.
+    """Get total NAV across LIVE brokers (Binance + IBKR live). Cached 5 min.
 
-    FAIL-CLOSED: returns 0.0 if ANY broker equity source is unknown.
-    Rule: absence de capital confirme = reduction de risque, jamais
-    augmentation. Callers doivent traiter 0.0 comme "NAV indisponible"
-    et fallback sur broker-local confirme, jamais injecter de nominal.
+    EXCLUSIONS critiques:
+      - Alpaca PAPER ($100K paper money) : exclu si PAPER_TRADING=true
+        sinon contamine le sizing crypto/futures live.
+      - IBKR PAPER (port 4003) : exclu, on ne query QUE 4002 live.
+
+    FAIL-CLOSED: returns 0.0 si AUCUNE source live confirmee.
+    Callers doivent traiter 0.0 comme NAV indisponible et fallback
+    sur broker-local, jamais injecter de nominal.
+
+    Sources prioritaires (live only):
+      1. Binance API (BinanceBroker) — fallback file state
+      2. IBKR live API (port 4002) — fallback file state
+      3. Alpaca API — UNIQUEMENT si PAPER_TRADING=false
     """
     import time as _t
     if _t.time() - _global_nav_cache["ts"] < 300 and _global_nav_cache["nav"] > 0:
         return _global_nav_cache["nav"]
 
     components = {}
+    _is_paper = os.getenv("PAPER_TRADING", "true").lower() == "true"
 
-    # Binance equity — real source only
+    # 1) Binance equity — API direct, fallback file state
     try:
-        bnb_state = Path(__file__).resolve().parent / "data" / "crypto_equity_state.json"
-        if bnb_state.exists():
-            import json as _json
-            with open(bnb_state) as f:
-                v = float(_json.load(f).get("total_equity_usd", 0) or 0)
-                if v > 0:
-                    components["binance"] = v
-    except Exception as _e:
-        logger.warning(f"_get_global_nav: binance state unreadable — {_e}")
+        from core.broker.binance_broker import BinanceBroker
+        _bnb = BinanceBroker()
+        _info = _bnb.get_account_info()
+        _eq = float(_info.get("equity", 0) or 0)
+        if _eq > 0:
+            components["binance"] = _eq
+    except Exception as _be:
+        logger.warning(f"_get_global_nav: binance API failed — {_be}; trying file state")
+        try:
+            bnb_state = Path(__file__).resolve().parent / "data" / "crypto_equity_state.json"
+            if bnb_state.exists():
+                import json as _json
+                with open(bnb_state) as f:
+                    v = float(_json.load(f).get("total_equity_usd", 0) or 0)
+                    if v > 0:
+                        components["binance"] = v
+        except Exception as _e:
+            logger.warning(f"_get_global_nav: binance state unreadable — {_e}")
 
-    # IBKR equity — real source only
-    try:
-        ibkr_state = Path(__file__).resolve().parent / "data" / "state" / "ibkr_equity.json"
-        if ibkr_state.exists():
-            import json as _json
-            with open(ibkr_state) as f:
-                v = float(_json.load(f).get("equity", 0) or 0)
-                if v > 0:
-                    components["ibkr"] = v
-    except Exception as _e:
-        logger.warning(f"_get_global_nav: ibkr state unreadable — {_e}")
-
-    # Alpaca equity — real API query only (no hardcoded nominal)
-    try:
-        alp_key = os.getenv("ALPACA_API_KEY", "")
-        alp_secret = os.getenv("ALPACA_SECRET_KEY", "")
-        if alp_key and alp_secret:
+    # 2) IBKR LIVE equity — API direct sur port 4002, fallback file state
+    # Skip if running in IBKR paper mode (port 4003) to avoid mixing
+    _ibkr_paper = os.getenv("IBKR_PAPER", "true").lower() == "true"
+    if not _ibkr_paper:
+        try:
+            from core.broker.ibkr_adapter import IBKRBroker
+            # Dedicated clientId reserve pour _get_global_nav (cache 5min)
+            _ib = IBKRBroker(client_id=77)
             try:
+                _info = _ib.get_account_info()
+                _eq = float(_info.get("equity", 0) or 0)
+                if _eq > 0:
+                    components["ibkr_live"] = _eq
+            finally:
+                _ib.disconnect()
+        except Exception as _ie:
+            logger.warning(f"_get_global_nav: ibkr live API failed — {_ie}; trying file state")
+            try:
+                ibkr_state = Path(__file__).resolve().parent / "data" / "state" / "ibkr_equity.json"
+                if ibkr_state.exists():
+                    import json as _json
+                    with open(ibkr_state) as f:
+                        v = float(_json.load(f).get("equity", 0) or 0)
+                        if v > 0:
+                            components["ibkr_live"] = v
+            except Exception as _e:
+                logger.warning(f"_get_global_nav: ibkr state unreadable — {_e}")
+
+    # 3) Alpaca equity — UNIQUEMENT si on est en mode LIVE (pas paper)
+    # Sinon Alpaca paper $100K contamine le sizing crypto live
+    if not _is_paper:
+        try:
+            alp_key = os.getenv("ALPACA_API_KEY", "")
+            alp_secret = os.getenv("ALPACA_SECRET_KEY", "")
+            if alp_key and alp_secret:
                 from core.alpaca_client.client import AlpacaClient
-                _paper = os.getenv("PAPER_TRADING", "true").lower() == "true"
-                _alp = AlpacaClient(api_key=alp_key, secret_key=alp_secret, paper=_paper)
+                _alp = AlpacaClient(api_key=alp_key, secret_key=alp_secret, paper=False)
                 _info = _alp.get_account_info()
                 _eq = float(_info.get("equity", 0) or 0)
                 if _eq > 0:
-                    components["alpaca"] = _eq
-            except Exception as _ae:
-                logger.warning(f"_get_global_nav: alpaca query failed — {_ae}")
-    except Exception:
-        pass
+                    components["alpaca_live"] = _eq
+        except Exception as _ae:
+            logger.warning(f"_get_global_nav: alpaca live query failed — {_ae}")
 
     nav = sum(components.values())
     # Fail-closed: if no broker returned a valid equity, return 0.0 (NOT a fallback)
     if nav <= 0:
-        logger.warning("_get_global_nav: NO broker equity available — returning 0.0 (fail-closed)")
+        logger.warning("_get_global_nav: NO live broker equity available — returning 0.0 (fail-closed)")
         return 0.0
 
     _global_nav_cache["nav"] = nav
     _global_nav_cache["ts"] = _t.time()
-    logger.info(f"_get_global_nav: ${nav:,.0f} from {list(components.keys())}")
+    logger.info(f"_get_global_nav: ${nav:,.0f} from {list(components.keys())} (PAPER={_is_paper}, IBKR_PAPER={_ibkr_paper})")
     return nav
 
 
