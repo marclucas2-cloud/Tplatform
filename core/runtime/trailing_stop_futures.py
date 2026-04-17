@@ -173,6 +173,8 @@ def apply_modifications_ibkr(
             continue
 
         try:
+            from ib_insync import Future as IbFuture, Order as IbOrder
+
             # Find the existing STP order on IBKR
             all_orders = ib.reqAllOpenOrders()
             stp_order = None
@@ -188,10 +190,24 @@ def apply_modifications_ibkr(
                 logger.warning(f"TRAILING: {sym} STP order not found on IBKR (OCA={oca_group})")
                 continue
 
-            # Modify the STP order price
             old_aux = stp_order.order.auxPrice
-            stp_order.order.auxPrice = mod["new_sl"]
-            ib.placeOrder(stp_order.contract, stp_order.order)
+
+            # Cancel old STP then place new one (works across clientIds)
+            ib.cancelOrder(stp_order.order)
+            time.sleep(1)
+
+            # Place new STP with same OCA
+            from ib_insync import StopOrder
+            new_stp = StopOrder(
+                stp_order.order.action,
+                int(stp_order.order.totalQuantity),
+                mod["new_sl"],
+            )
+            new_stp.tif = "GTC"
+            new_stp.ocaGroup = oca_group
+            new_stp.ocaType = 1
+            new_stp.outsideRth = True
+            ib.placeOrder(stp_order.contract, new_stp)
             time.sleep(1)
 
             logger.info(
