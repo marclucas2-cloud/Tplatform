@@ -1199,8 +1199,18 @@ def run_bracket_watchdog_cycle():
                 return
 
             _open_trades = _ib.reqAllOpenOrders()
-            _ordered_syms = {t.contract.symbol for t in _open_trades
-                             if t.orderStatus.status not in ("Cancelled", "Filled", "Inactive")}
+            _active_orders = [t for t in _open_trades
+                              if t.orderStatus.status not in ("Cancelled", "Filled", "Inactive")]
+
+            # Build per-symbol order map: need BOTH STP and LMT to be protected
+            _sym_has_stp: dict[str, list] = {}
+            _sym_has_lmt: dict[str, list] = {}
+            for t in _active_orders:
+                s = t.contract.symbol
+                if t.order.orderType in ("STP", "STOP"):
+                    _sym_has_stp.setdefault(s, []).append(t)
+                elif t.order.orderType in ("LMT", "LIMIT"):
+                    _sym_has_lmt.setdefault(s, []).append(t)
 
             _state_file = ROOT / "data" / "state" / "futures_positions_live.json"
             _state = {}
@@ -1214,18 +1224,45 @@ def run_bracket_watchdog_cycle():
             _STRAT_DEFAULTS = {
                 "MES": {"sl_points": 30, "tp_points": 50},
                 "MNQ": {"sl_points": 30, "tp_points": 50},
+                "MGC": {"sl_pct": 0.004, "tp_pct": 0.008},
             }
 
             _unprotected = 0
             for pos in _live_positions:
                 _sym = pos.contract.symbol
-                if _sym in _ordered_syms:
-                    continue  # has at least one open order — OK
+                _has_sl = len(_sym_has_stp.get(_sym, [])) > 0
+                _has_tp = len(_sym_has_lmt.get(_sym, [])) > 0
 
-                # UNPROTECTED — try to repose
+                # Detect duplicates: >1 STP or >1 LMT on same symbol
+                if len(_sym_has_stp.get(_sym, [])) > 1:
+                    _dupes = _sym_has_stp[_sym][1:]
+                    for _d in _dupes:
+                        logger.warning(f"BRACKET WATCHDOG: cancelling duplicate STP on {_sym} orderId={_d.order.orderId}")
+                        try:
+                            _ib.cancelOrder(_d.order)
+                        except Exception:
+                            pass
+                if len(_sym_has_lmt.get(_sym, [])) > 1:
+                    _dupes = _sym_has_lmt[_sym][1:]
+                    for _d in _dupes:
+                        logger.warning(f"BRACKET WATCHDOG: cancelling duplicate LMT on {_sym} orderId={_d.order.orderId}")
+                        try:
+                            _ib.cancelOrder(_d.order)
+                        except Exception:
+                            pass
+
+                if _has_sl and _has_tp:
+                    continue  # properly protected with both SL and TP
+
+                # MISSING SL and/or TP — try to repose what's missing
+                _missing = []
+                if not _has_sl:
+                    _missing.append("SL")
+                if not _has_tp:
+                    _missing.append("TP")
                 _unprotected += 1
                 logger.critical(
-                    f"BRACKET WATCHDOG: {_sym} position {pos.position} UNPROTECTED — attempting repose"
+                    f"BRACKET WATCHDOG: {_sym} position {pos.position} MISSING {'+'.join(_missing)} — attempting repose"
                 )
 
                 _mult = int(getattr(pos.contract, "multiplier", 1) or 1)
@@ -1245,12 +1282,22 @@ def run_bracket_watchdog_cycle():
                 # Tier 2: strategy defaults from entry price
                 if (_sl == 0 or _tp == 0) and _sym in _STRAT_DEFAULTS and _entry_px > 0:
                     _d = _STRAT_DEFAULTS[_sym]
-                    if pos.position > 0:
-                        _sl = round(_entry_px - _d["sl_points"], 2)
-                        _tp = round(_entry_px + _d["tp_points"], 2)
+                    if "sl_pct" in _d:
+                        # Percent-based (MGC, etc.)
+                        if pos.position > 0:
+                            _sl = _sl or round(_entry_px * (1 - _d["sl_pct"]), 2)
+                            _tp = _tp or round(_entry_px * (1 + _d["tp_pct"]), 2)
+                        else:
+                            _sl = _sl or round(_entry_px * (1 + _d["sl_pct"]), 2)
+                            _tp = _tp or round(_entry_px * (1 - _d["tp_pct"]), 2)
                     else:
-                        _sl = round(_entry_px + _d["sl_points"], 2)
-                        _tp = round(_entry_px - _d["tp_points"], 2)
+                        # Points-based (MES, MNQ, etc.)
+                        if pos.position > 0:
+                            _sl = _sl or round(_entry_px - _d["sl_points"], 2)
+                            _tp = _tp or round(_entry_px + _d["tp_points"], 2)
+                        else:
+                            _sl = _sl or round(_entry_px + _d["sl_points"], 2)
+                            _tp = _tp or round(_entry_px - _d["tp_points"], 2)
                     _source = "strat_defaults"
 
                 # Tier 3: synthesize from current market price (-1%/+1.5% for longs)
@@ -1299,11 +1346,24 @@ def run_bracket_watchdog_cycle():
                         f"BRACKET WATCHDOG: {_sym} repose attempt "
                         f"SL={_sl} TP={_tp} source={_source}"
                     )
+                    # Reuse existing OCA group if one leg exists, else create new
+                    _existing_oca = ""
+                    for _leg in (_sym_has_stp.get(_sym, []) + _sym_has_lmt.get(_sym, [])):
+                        if _leg.order.ocaGroup:
+                            _existing_oca = _leg.order.ocaGroup
+                            break
+                    _oca = _existing_oca or f"WATCHDOG_{_sym}_{_wd_uuid.uuid4().hex[:8]}"
+
+                    # Only place what's missing
+                    _need_sl = not _has_sl
+                    _need_tp = not _has_tp
+
                     # Try repose up to 3 times to handle transient IBKR errors
                     for _attempt in range(1, 4):
                         try:
+                            _exchange = "COMEX" if _sym in ("MGC", "GC", "SI", "HG") else "CME"
                             _fut = _WdFuture(
-                                _sym, exchange="CME", currency="USD",
+                                _sym, exchange=_exchange, currency="USD",
                                 lastTradeDateOrContractMonth=pos.contract.lastTradeDateOrContractMonth,
                             )
                             _details = _ib.reqContractDetails(_fut)
@@ -1312,17 +1372,29 @@ def run_bracket_watchdog_cycle():
                                 _wdt.sleep(2)
                                 continue
                             _contract = _details[0].contract
-                            _oca = f"WATCHDOG_{_sym}_{_wd_uuid.uuid4().hex[:8]}"
-                            _sl_o = _WdStop(_side_exit, _qty, _sl)
-                            _sl_o.tif = "GTC"; _sl_o.ocaGroup = _oca; _sl_o.ocaType = 1; _sl_o.outsideRth = True
-                            _tp_o = _WdLimit(_side_exit, _qty, _tp)
-                            _tp_o.tif = "GTC"; _tp_o.ocaGroup = _oca; _tp_o.ocaType = 1; _tp_o.outsideRth = True
-                            _ib.placeOrder(_contract, _sl_o)
-                            _wdt.sleep(1)
-                            _ib.placeOrder(_contract, _tp_o)
+
+                            if _need_sl and _sl > 0:
+                                _sl_o = _WdStop(_side_exit, _qty, _sl)
+                                _sl_o.tif = "GTC"; _sl_o.ocaGroup = _oca; _sl_o.ocaType = 1
+                                _sl_o.outsideRth = True
+                                _ib.placeOrder(_contract, _sl_o)
+                                _wdt.sleep(1)
+                                logger.info(f"BRACKET WATCHDOG: placed SL {_sl} on {_sym}")
+
+                            if _need_tp and _tp > 0:
+                                _tp_o = _WdLimit(_side_exit, _qty, _tp)
+                                _tp_o.tif = "GTC"; _tp_o.ocaGroup = _oca; _tp_o.ocaType = 1
+                                _tp_o.outsideRth = True
+                                _ib.placeOrder(_contract, _tp_o)
+                                _wdt.sleep(1)
+                                logger.info(f"BRACKET WATCHDOG: placed TP {_tp} on {_sym}")
+
                             _wdt.sleep(2); _ib.sleep(1)
+                            _placed = []
+                            if _need_sl: _placed.append(f"SL={_sl}")
+                            if _need_tp: _placed.append(f"TP={_tp}")
                             logger.critical(
-                                f"BRACKET WATCHDOG REPOSED: {_sym} SL={_sl} TP={_tp} "
+                                f"BRACKET WATCHDOG REPOSED: {_sym} {' '.join(_placed)} "
                                 f"OCA={_oca} source={_source} attempt={_attempt}"
                             )
                             _repose_ok = True
