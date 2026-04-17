@@ -226,15 +226,23 @@ def _get_global_nav() -> float:
     except Exception as _be:
         logger.warning(f"_get_global_nav: binance API failed — {_be}; trying file state")
         try:
-            bnb_state = Path(__file__).resolve().parent / "data" / "crypto_equity_state.json"
-            if bnb_state.exists():
-                import json as _json
-                with open(bnb_state) as f:
-                    v = float(_json.load(f).get("total_equity_usd", 0) or 0)
-                    if v > 0:
-                        components["binance"] = v
+            _bnb_state_paths = [
+                Path(__file__).resolve().parent / "data" / "state" / "binance_crypto" / "equity_state.json",
+                Path(__file__).resolve().parent / "data" / "crypto_equity_state.json",
+            ]
+            for bnb_state in _bnb_state_paths:
+                if bnb_state.exists():
+                    import json as _json
+                    with open(bnb_state) as f:
+                        payload = _json.load(f)
+                        v = float(
+                            payload.get("equity", payload.get("total_equity_usd", 0)) or 0
+                        )
+                        if v > 0:
+                            components["binance"] = v
+                            break
         except Exception as _e:
-            logger.warning(f"_get_global_nav: binance state unreadable — {_e}")
+            logger.warning(f"_get_global_nav: binance state unreadable - {_e}")
 
     # 2) IBKR LIVE equity — API direct sur port 4002, fallback file state
     # Skip if running in IBKR paper mode (port 4003) to avoid mixing
@@ -254,15 +262,20 @@ def _get_global_nav() -> float:
         except Exception as _ie:
             logger.warning(f"_get_global_nav: ibkr live API failed — {_ie}; trying file state")
             try:
-                ibkr_state = Path(__file__).resolve().parent / "data" / "state" / "ibkr_equity.json"
-                if ibkr_state.exists():
-                    import json as _json
-                    with open(ibkr_state) as f:
-                        v = float(_json.load(f).get("equity", 0) or 0)
-                        if v > 0:
-                            components["ibkr_live"] = v
+                _ibkr_state_paths = [
+                    Path(__file__).resolve().parent / "data" / "state" / "ibkr_futures" / "equity_state.json",
+                    Path(__file__).resolve().parent / "data" / "state" / "ibkr_equity.json",
+                ]
+                for ibkr_state in _ibkr_state_paths:
+                    if ibkr_state.exists():
+                        import json as _json
+                        with open(ibkr_state) as f:
+                            v = float(_json.load(f).get("equity", 0) or 0)
+                            if v > 0:
+                                components["ibkr_live"] = v
+                                break
             except Exception as _e:
-                logger.warning(f"_get_global_nav: ibkr state unreadable — {_e}")
+                logger.warning(f"_get_global_nav: ibkr state unreadable - {_e}")
 
     # 3) Alpaca equity — UNIQUEMENT si on est en mode LIVE (pas paper)
     # Sinon Alpaca paper $100K contamine le sizing crypto live
@@ -715,16 +728,38 @@ def run_always_on_carry_cycle():
 
         from core.strategies.always_on_carrier import AlwaysOnCarrier
 
-        # Get IBKR equity
-        ibkr_equity = 10_000  # Default
+        # Get IBKR equity â€” fail-closed, never inject nominal capital.
+        ibkr_equity = 0.0
         try:
             from core.broker.ibkr_adapter import IBKRBroker
             _ibkr = IBKRBroker(client_id=10)
             ibkr_info = _ibkr.get_account_info()
-            ibkr_equity = ibkr_info.get("equity", 10_000)
+            ibkr_equity = float(ibkr_info.get("equity", 0) or 0)
             _ibkr.disconnect()
         except Exception as e:
-            logger.warning(f"  CARRY: IBKR equity fetch failed: {e}, using ${ibkr_equity}")
+            logger.warning(f"  CARRY: IBKR equity fetch failed: {e}, trying state snapshot")
+            try:
+                _state_candidates = [
+                    Path(__file__).resolve().parent / "data" / "state" / "ibkr_futures" / "equity_state.json",
+                    Path(__file__).resolve().parent / "data" / "state" / "ibkr_equity.json",
+                ]
+                for _state_path in _state_candidates:
+                    if not _state_path.exists():
+                        continue
+                    with open(_state_path, encoding="utf-8") as f:
+                        _payload = json.load(f)
+                    ibkr_equity = float(_payload.get("equity", 0) or 0)
+                    if ibkr_equity > 0:
+                        logger.info(
+                            f"  CARRY: IBKR equity recovered from {_state_path.name} = ${ibkr_equity:,.2f}"
+                        )
+                        break
+            except Exception as _state_err:
+                logger.warning(f"  CARRY: IBKR equity state unreadable: {_state_err}")
+
+        if ibkr_equity <= 0:
+            logger.critical("  ALWAYS-ON CARRY ABORT â€” no confirmed IBKR live equity")
+            return
 
         # Get current regime
         current_regime = "UNKNOWN"
@@ -808,16 +843,21 @@ def run_always_on_carry_cycle():
 
         # Save state
         import json as _json
-        state_path = Path(__file__).resolve().parent / "data" / "state" / "always_on_carry.json"
-        state_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(state_path, "w") as f:
-            _json.dump({
-                "timestamp": datetime.now(PARIS).isoformat(),
-                "regime": current_regime,
-                "ibkr_equity": ibkr_equity,
-                "targets": [t.to_dict() for t in targets],
-                "total_deployed": total_deployed,
-            }, f, indent=2)
+        _carry_snapshot = {
+            "timestamp": datetime.now(PARIS).isoformat(),
+            "regime": current_regime,
+            "ibkr_equity": ibkr_equity,
+            "targets": [t.to_dict() for t in targets],
+            "total_deployed": total_deployed,
+        }
+        _state_paths = [
+            Path(__file__).resolve().parent / "data" / "state" / "global" / "always_on_carry.json",
+            Path(__file__).resolve().parent / "data" / "state" / "always_on_carry.json",
+        ]
+        for state_path in _state_paths:
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(state_path, "w", encoding="utf-8") as f:
+                _json.dump(_carry_snapshot, f, indent=2)
 
         _log_event("always_on_carry", details={
             "regime": current_regime, "total_deployed": total_deployed,
@@ -1212,7 +1252,11 @@ def run_bracket_watchdog_cycle():
                 elif t.order.orderType in ("LMT", "LIMIT"):
                     _sym_has_lmt.setdefault(s, []).append(t)
 
-            _state_file = ROOT / "data" / "state" / "futures_positions_live.json"
+            _state_candidates = [
+                ROOT / "data" / "state" / "ibkr_futures" / "positions_live.json",
+                ROOT / "data" / "state" / "futures_positions_live.json",
+            ]
+            _state_file = next((p for p in _state_candidates if p.exists()), _state_candidates[0])
             _state = {}
             if _state_file.exists():
                 try:
@@ -4016,6 +4060,23 @@ def run_crypto_cycle():
                 risk_mgr._last_hourly_reset = _dd.get("last_hourly_reset", time.time())
                 risk_mgr._check_count = _dd.get("warmup_count", 0)
 
+                # FIX: detect spot<->earn transfer (not a real loss).
+                # If dd_equity dropped >5% from baseline BUT total_equity is stable
+                # (<2% change), it's a classification shift, not a real DD.
+                _prev_total = _dd.get("total_equity", 0)
+                _prev_daily = _dd.get("daily_start", dd_equity)
+                if _prev_total > 0 and _prev_daily > 0:
+                    _dd_pct = (dd_equity - _prev_daily) / _prev_daily
+                    _total_pct = (current_equity - _prev_total) / _prev_total
+                    if _dd_pct < -0.05 and abs(_total_pct) < 0.02:
+                        logger.warning(
+                            f"  SPOT<->EARN TRANSFER DETECTED: dd_equity {_dd_pct:.1%} "
+                            f"but total_equity {_total_pct:.1%}. Rebaselining dd_equity."
+                        )
+                        risk_mgr._daily_start_equity = dd_equity
+                        risk_mgr._hourly_start_equity = dd_equity
+                        risk_mgr._peak_equity = max(risk_mgr._peak_equity, dd_equity)
+
                 # Auto-reset daily/weekly/monthly si le jour/semaine/mois a change
                 last_date = _dd.get("last_date", "")
                 today_str = datetime.now(UTC).strftime("%Y-%m-%d")
@@ -4102,6 +4163,8 @@ def run_crypto_cycle():
                 "monthly_start": risk_mgr._monthly_start_equity,
                 "last_hourly_reset": risk_mgr._last_hourly_reset,
                 "warmup_count": risk_mgr._check_count,
+                "total_equity": current_equity,
+                "dd_equity": dd_equity,
                 "last_date": _now_utc.strftime("%Y-%m-%d"),
                 "last_week": _now_utc.strftime("%Y-W%W"),
                 "last_month": _now_utc.strftime("%Y-%m"),
@@ -5551,14 +5614,18 @@ def main():
             "MNQ": {"sl_points": 30, "tp_points": 50, "multiplier": 2},
         }
 
-        _state_file = ROOT / "data" / "state" / "futures_positions_live.json"
+        _canonical_state_file = ROOT / "data" / "state" / "ibkr_futures" / "positions_live.json"
+        _legacy_state_file = ROOT / "data" / "state" / "futures_positions_live.json"
+        _state_file = _canonical_state_file
         _state_file.parent.mkdir(parents=True, exist_ok=True)
         _existing = {}
-        if _state_file.exists():
-            try:
-                _existing = json.loads(_state_file.read_text(encoding="utf-8"))
-            except Exception:
-                pass
+        for _candidate in (_canonical_state_file, _legacy_state_file):
+            if _candidate.exists():
+                try:
+                    _existing = json.loads(_candidate.read_text(encoding="utf-8"))
+                    break
+                except Exception:
+                    pass
 
         # Add / refresh broker positions
         _added = 0
@@ -5636,8 +5703,13 @@ def main():
 
         if _added or _removed or _refreshed:
             _state_file.write_text(json.dumps(_existing, indent=2))
+            try:
+                _legacy_state_file.parent.mkdir(parents=True, exist_ok=True)
+                _legacy_state_file.write_text(json.dumps(_existing, indent=2))
+            except Exception as _lse:
+                logger.warning(f"FUTURES BOOT RECONCILE: legacy state mirror skipped: {_lse}")
             logger.warning(
-                f"FUTURES BOOT RECONCILE: state updated — added {_added}, refreshed {_refreshed}, "
+                f"FUTURES BOOT RECONCILE: state updated - added {_added}, refreshed {_refreshed}, "
                 f"removed {_removed} (broker={list(_live_pos.keys())})"
             )
         else:
