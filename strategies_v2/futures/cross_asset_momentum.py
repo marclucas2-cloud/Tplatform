@@ -123,8 +123,8 @@ class CrossAssetMomentum(StrategyBase):
             symbol=winner,
             side="BUY",
             strategy_name=self.name,
-            stop_loss=winner_close * 0.95,
-            take_profit=winner_close * 1.10,
+            stop_loss=winner_close * 0.97,   # 3% SL (was 5%, resized for risk budget)
+            take_profit=winner_close * 1.08,  # 8% TP (was 10%, Sharpe 1.24 vs 0.81)
             strength=min(returns[winner] * 5, 1.0),
         )
 

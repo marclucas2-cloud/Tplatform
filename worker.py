@@ -2720,8 +2720,15 @@ def _run_futures_cycle(live: bool = False):
             _ps = float(_pos_info.get("sl", 0) or 0)
             _pq = abs(int(_pos_info.get("qty", 1) or 1))
             _pmult = _FUT_MULT.get(_pos_sym, 1)
+            _side = _pos_info.get("side", "BUY")
             if _pe > 0 and _ps > 0:
-                _current_risk += abs(_pe - _ps) * _pmult * _pq
+                # Trailing SL above entry = locked-in gain, risk = $0
+                if _side == "BUY" and _ps >= _pe:
+                    pass  # no risk, SL guarantees profit
+                elif _side == "SELL" and _ps <= _pe:
+                    pass  # no risk for short
+                else:
+                    _current_risk += abs(_pe - _ps) * _pmult * _pq
 
         _total_existing = sum(abs(int(v)) for v in _ibkr_real_pos.values())
         logger.info(
