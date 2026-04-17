@@ -5957,8 +5957,15 @@ def main():
 
         # === FUTURES DAILY (lun-ven, 16h Paris = ouverture US) ===
         if is_weekday() and now_paris.hour == 16 and not getattr(run_futures_paper_cycle, '_done_today', False):
-            _runners["futures"].run()       # paper (port 4003)
-            _runners["futures_live"].run()  # live (port 4002)
+            # IBKR cycles need event loop — run directly, not via CycleRunner thread
+            try:
+                run_futures_paper_cycle()
+            except Exception as _fp_err:
+                logger.warning(f"FUTURES PAPER error: {_fp_err}")
+            try:
+                run_futures_live_cycle()
+            except Exception as _fl_err:
+                logger.warning(f"FUTURES LIVE error: {_fl_err}")
             run_futures_paper_cycle._done_today = True
         if is_weekday() and now_paris.hour < 16:
             run_futures_paper_cycle._done_today = False
@@ -5975,13 +5982,17 @@ def main():
         # Si manquant: tente repose from state, sinon fail-safe close.
         # Protege contre les brackets qui disparaissent entre les cycles futures.
         if time.time() - last_bracket_watchdog >= 300:  # 5 min
-            _runners["bracket_watchdog"].run()
+            # IBKR cycles need event loop — run directly, not via CycleRunner thread
+            try:
+                run_bracket_watchdog_cycle()
+            except Exception as _bw_err:
+                logger.warning(f"BRACKET WATCHDOG error: {_bw_err}")
+            # Trailing stop ratchet (gold_trend_mgc V2)
+            try:
+                run_trailing_stop_cycle()
+            except Exception as _ts_err:
+                logger.warning(f"TRAILING STOP error: {_ts_err}")
             last_bracket_watchdog = time.time()
-
-        # === TRAILING STOP toutes les 5 minutes (24/7) ===
-        # Ratchet SL pour les strats trailing (gold_trend_mgc V2).
-        if time.time() - last_bracket_watchdog >= 300:  # piggyback on watchdog interval
-            _runners["trailing_stop"].run()
 
         # === CRYPTO WATCHDOG toutes les 5 minutes (24/7) ===
         # Equivalent Binance: verifie que chaque position crypto live a un
