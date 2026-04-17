@@ -4567,10 +4567,12 @@ def run_crypto_cycle():
                 # paper_only ne peut PAS placer d'ordre live.
                 try:
                     from core.governance import is_strategy_live_allowed
-                    if not is_strategy_live_allowed(strat_id, "binance_crypto"):
+                    from core.broker.binance_broker import _CRYPTO_STRAT_ID_MAP
+                    _canonical = _CRYPTO_STRAT_ID_MAP.get(strat_id, strat_id)
+                    if not is_strategy_live_allowed(_canonical, "binance_crypto"):
                         logger.warning(
                             f"  [{strat_id}] Ordre BLOQUE par whitelist: "
-                            f"strategy non autorisee live sur binance_crypto"
+                            f"{_canonical} non autorisee live sur binance_crypto"
                         )
                         continue
                 except Exception as wl_err:
