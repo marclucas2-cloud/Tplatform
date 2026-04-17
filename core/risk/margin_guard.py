@@ -15,7 +15,7 @@ Usage:
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
@@ -344,7 +344,7 @@ class MarginGuard:
             "total_utilization_pct": round(total_pct, 4),
             "by_asset_class": by_class,
             "level": level,
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
     # ------------------------------------------------------------------

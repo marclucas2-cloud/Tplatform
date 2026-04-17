@@ -21,7 +21,7 @@ from __future__ import annotations
 
 import sys
 import os
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -66,7 +66,7 @@ def fetch_yf(ticker: str, days_back: int = 45) -> pd.DataFrame | None:
     except ImportError:
         print("[err] yfinance not installed in venv — pip install yfinance")
         return None
-    end = datetime.utcnow().date()
+    end = datetime.now(timezone.utc).date()
     start = end - timedelta(days=days_back)
     try:
         df = yf.download(ticker, start=start.isoformat(), end=(end + timedelta(days=1)).isoformat(),

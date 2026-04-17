@@ -6,7 +6,7 @@ correlation heatmap, and formatted alerts.
 from __future__ import annotations
 
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -124,7 +124,7 @@ class AllocationReport:
         kelly_report = self.generate_kelly_report(kelly)
 
         return {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
             "n_strategies": len(strategies),
             "allocation": {
                 "method": "HRP",

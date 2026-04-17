@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -166,7 +166,7 @@ def main():
 
     # === Markdown report ===
     lines = [
-        f"# Diversification Gap Map — {datetime.utcnow().strftime('%Y-%m-%d')}",
+        f"# Diversification Gap Map — {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
         "",
         "**WP-04 decorrelation research** — cartographie des trous du portefeuille.",
         "",

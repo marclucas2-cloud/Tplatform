@@ -17,7 +17,7 @@ import logging
 import time
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 
@@ -93,7 +93,7 @@ class LiveCorrelationEngine:
         self, strategy: str, pnl: float, timestamp: datetime | None = None
     ) -> None:
         """Record a trade PnL for a strategy."""
-        ts = timestamp or datetime.utcnow()
+        ts = timestamp or datetime.now(timezone.utc)
         self._pnl_history[strategy].append((ts, pnl))
 
         # Keep only last window_long * 3 entries (buffer)
@@ -264,7 +264,7 @@ class LiveCorrelationEngine:
 
         matrix = self._compute_matrix(strategies, self.window_short)
         alerts = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         for i in range(len(strategies)):
             for j in range(i + 1, len(strategies)):
@@ -293,7 +293,7 @@ class LiveCorrelationEngine:
         clusters = self.detect_clusters()
 
         return CorrelationSnapshot(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             n_strategies=len(strategies),
             global_score=self.get_global_score(),
             n_clusters=len(clusters),

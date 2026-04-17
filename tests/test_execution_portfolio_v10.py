@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, Dict, List
@@ -405,7 +405,7 @@ class TestExecutionMonitorPeriodFilter:
         _record_filled_order(monitor, trade_id="recent")
 
         # Manually insert an old order (3 days ago)
-        old_ts = (datetime.utcnow() - timedelta(days=3)).isoformat()
+        old_ts = (datetime.now(timezone.utc) - timedelta(days=3)).isoformat()
         conn = sqlite3.connect(str(tmp_path / "execution_monitor.db"))
         conn.execute(
             """INSERT INTO execution_events
@@ -761,7 +761,7 @@ class TestLiveSnapshotLoggerRotation:
         log = LiveSnapshotLogger(log_dir=str(tmp_path))
         path = log._current_path()
 
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         assert path.name == f"live_portfolio_{today}.jsonl"
 
 

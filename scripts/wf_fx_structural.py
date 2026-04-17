@@ -11,7 +11,7 @@ Uses daily data (5 years, sufficient for 10+ WF windows).
 """
 import json
 import sys
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 
 import numpy as np
@@ -415,7 +415,7 @@ if __name__ == "__main__":
     # Save results
     output_path = ROOT / "data" / "fx" / "wf_structural_results.json"
     with open(output_path, "w") as f:
-        json.dump({"results": results, "timestamp": datetime.utcnow().isoformat()}, f, indent=2)
+        json.dump({"results": results, "timestamp": datetime.now(timezone.utc).isoformat()}, f, indent=2)
     print(f"\nResults saved to {output_path}")
 
     validated = sum(1 for r in results if r["verdict"] == "VALIDATED")

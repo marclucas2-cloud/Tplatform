@@ -13,7 +13,7 @@ import logging
 import os
 import time
 from dataclasses import dataclass, field, asdict
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from enum import Enum
 from pathlib import Path
 from typing import Any
@@ -164,7 +164,7 @@ def check_ibkr_futures() -> BookHealth:
         book="ibkr_futures",
         status=_aggregate(checks),
         checks=checks,
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=datetime.now(timezone.utc).isoformat() + "Z",
     )
 
 
@@ -212,7 +212,7 @@ def check_binance_crypto() -> BookHealth:
         book="binance_crypto",
         status=_aggregate(checks),
         checks=checks,
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=datetime.now(timezone.utc).isoformat() + "Z",
     )
 
 
@@ -239,7 +239,7 @@ def check_alpaca_us() -> BookHealth:
         book="alpaca_us",
         status=_aggregate(checks),
         checks=checks,
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=datetime.now(timezone.utc).isoformat() + "Z",
     )
 
 
@@ -259,7 +259,7 @@ def check_ibkr_fx() -> BookHealth:
         book="ibkr_fx",
         status=_aggregate(checks),
         checks=checks,
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=datetime.now(timezone.utc).isoformat() + "Z",
     )
 
 
@@ -273,7 +273,7 @@ def check_ibkr_eu() -> BookHealth:
         book="ibkr_eu",
         status=_aggregate(checks),
         checks=checks,
-        timestamp=datetime.utcnow().isoformat() + "Z",
+        timestamp=datetime.now(timezone.utc).isoformat() + "Z",
     )
 
 
@@ -300,7 +300,7 @@ def get_book_health(book: str, use_cache: bool = True) -> BookHealth:
             book=book,
             status=HealthStatus.UNKNOWN,
             checks=[HealthCheck("unknown_book", HealthStatus.UNKNOWN, f"no checker for {book}")],
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=datetime.now(timezone.utc).isoformat() + "Z",
         )
 
     try:
@@ -311,7 +311,7 @@ def get_book_health(book: str, use_cache: bool = True) -> BookHealth:
             book=book,
             status=HealthStatus.UNKNOWN,
             checks=[HealthCheck("checker_error", HealthStatus.UNKNOWN, str(e))],
-            timestamp=datetime.utcnow().isoformat() + "Z",
+            timestamp=datetime.now(timezone.utc).isoformat() + "Z",
         )
 
     _cache[book] = (now, result)

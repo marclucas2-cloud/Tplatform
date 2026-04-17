@@ -18,7 +18,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -140,7 +140,7 @@ class SafetyMode:
         if details:
             self._anomaly_count += 1
             self._disabled_reason = "; ".join(details)
-            self._disabled_at = datetime.utcnow()
+            self._disabled_at = datetime.now(timezone.utc)
             self._save_state()
 
             action = "ALERT"
@@ -207,7 +207,7 @@ class SafetyMode:
                 "anomaly_count": self._anomaly_count,
                 "disabled_reason": self._disabled_reason,
                 "disabled_at": self._disabled_at.isoformat() if self._disabled_at else None,
-                "updated_at": datetime.utcnow().isoformat(),
+                "updated_at": datetime.now(timezone.utc).isoformat(),
             }
             self._state_path.write_text(
                 json.dumps(state, indent=2), encoding="utf-8"

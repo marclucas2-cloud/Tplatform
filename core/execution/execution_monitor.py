@@ -20,7 +20,7 @@ from __future__ import annotations
 import logging
 import sqlite3
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -155,7 +155,7 @@ class ExecutionMonitor:
         quantity: float = 0.0,
     ) -> None:
         """Record an order execution event."""
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
 
         slippage_bps = 0.0
         if filled_price and requested_price and requested_price > 0:
@@ -182,7 +182,7 @@ class ExecutionMonitor:
     def get_metrics(self, period: str = "24h") -> ExecutionMetrics:
         """Get execution metrics for a given period."""
         hours = {"1h": 1, "24h": 24, "7d": 168, "30d": 720}.get(period, 24)
-        cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
         conn = sqlite3.connect(str(self._db_path))
         try:
@@ -247,7 +247,7 @@ class ExecutionMonitor:
         level = self._compute_level(slip_ratio, fill_rate, p95_lat, sl_rate, avg_cost)
 
         return ExecutionMetrics(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             period=period,
             avg_slippage_bps=avg_slip,
             backtest_slippage_bps=backtest_slip,
@@ -274,7 +274,7 @@ class ExecutionMonitor:
         """Check all execution thresholds and return alerts."""
         metrics = self.get_metrics(period)
         alerts = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         # Slippage
         if metrics.slippage_ratio >= self.SLIPPAGE_CRITICAL:
@@ -364,7 +364,7 @@ class ExecutionMonitor:
     ) -> Dict[str, Dict[str, Any]]:
         """Get execution metrics broken down by strategy."""
         hours = {"1h": 1, "24h": 24, "7d": 168, "30d": 720}.get(period, 24)
-        cutoff = (datetime.utcnow() - timedelta(hours=hours)).isoformat()
+        cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
 
         conn = sqlite3.connect(str(self._db_path))
         try:
@@ -436,7 +436,7 @@ class ExecutionMonitor:
 
     def _empty_metrics(self, period: str) -> ExecutionMetrics:
         return ExecutionMetrics(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             period=period,
             avg_slippage_bps=0.0,
             backtest_slippage_bps=2.0,

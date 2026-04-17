@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import logging
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
 
@@ -173,7 +173,7 @@ class PortfolioStateEngine:
         # to (a) stay consistent with circuit breaker semantics (3% daily) and
         # (b) avoid false alarms after cash flow events (rebalance, deposit,
         # withdrawal) which the V10 engine cannot distinguish from PnL.
-        today = datetime.utcnow().strftime("%Y-%m-%d")
+        today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         if self._last_reset_date != today:
             self._daily_start_equity = total_equity
             self._peak_equity = total_equity  # DAILY RESET — intraday peak only
@@ -248,7 +248,7 @@ class PortfolioStateEngine:
         n_strats = len(active_strategies) if active_strategies else 0
 
         state = PortfolioState(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             total_capital=total_equity,
             total_cash=total_cash,
             total_invested=total_invested,

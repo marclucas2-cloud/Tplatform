@@ -17,7 +17,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
@@ -284,7 +284,7 @@ class EUFXRiskCalibrator:
         Returns:
             CrossMarketExposureResult with correlated/hedged exposure and alerts.
         """
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         if len(positions) < 2:
             return CrossMarketExposureResult(
                 correlated_exposure=0.0,

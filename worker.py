@@ -5592,6 +5592,7 @@ def main():
     _dry_run_done_today = False
     _smoke_test_done_this_week = False
     _ror_done_today = False
+    _backup_done_today = False
 
     # ── R1/R2/R5: Initialisation robustesse ─────────────────────────────
     _event_logger = get_event_logger()
@@ -5602,6 +5603,44 @@ def main():
     _broker_health.register("binance")
     _broker_health.register("ibkr")
     _broker_health.register("alpaca")
+
+    # ── Phase 4: BookSupervisor — per-book isolation layer ──────────────
+    from core.runtime.book_factory import build_runtimes_from_registry
+    from core.runtime.supervisor import BookSupervisor
+
+    _book_supervisor = BookSupervisor()
+    try:
+        _book_cycles = {
+            "binance_crypto": {
+                "crypto": run_crypto_cycle,
+                "watchdog": run_crypto_watchdog_cycle,
+            },
+            "ibkr_futures": {
+                "futures_paper": run_futures_paper_cycle,
+                "futures_live": run_futures_live_cycle,
+                "bracket_watchdog": run_bracket_watchdog_cycle,
+                "macro_ecb": run_macro_ecb_live_cycle,
+                "xmomentum": run_cross_asset_momentum_cycle,
+            },
+            "ibkr_fx": {
+                "fx_carry": run_fx_carry_cycle,
+                "fx_paper": run_fx_paper_cycle,
+                "always_on_carry": run_always_on_carry_cycle,
+            },
+            "alpaca_us": {
+                "us_stocks_daily": run_us_stocks_daily_cycle,
+            },
+        }
+        _book_runtimes = build_runtimes_from_registry(
+            cycle_registry=_book_cycles,
+            alert_fn=lambda level, msg: _send_alert(msg, level=level.lower()),
+        )
+        for rt in _book_runtimes.values():
+            _book_supervisor.register(rt)
+        _sv_results = _book_supervisor.start_all()
+        logger.info("BookSupervisor: %s", {k: v for k, v in _sv_results.items()})
+    except Exception as _sv_err:
+        logger.warning("BookSupervisor init failed (non-blocking): %s", _sv_err)
 
     def _cycle_alert(msg):
         _send_alert(msg, level="warning")
@@ -5797,6 +5836,13 @@ def main():
                 except Exception:
                     pass
 
+        # === BOOK SUPERVISOR HEALTH CHECK (every heartbeat) ===
+        try:
+            if time.time() - last_heartbeat <= 60:
+                _book_supervisor.check_health()
+        except Exception:
+            pass
+
         # === CRO #4: AUTOMATED DRY-RUN (06:00 CET daily) ===
         if now_paris.hour == 6 and not _dry_run_done_today:
             _dry_run_done_today = True
@@ -5813,6 +5859,20 @@ def main():
                 logger.warning(f"DRY-RUN error: {_dr_err}")
         if now_paris.hour < 6:
             _dry_run_done_today = False
+
+        # === STATE BACKUP (03:00 CET daily) ===
+        if now_paris.hour == 3 and not _backup_done_today:
+            _backup_done_today = True
+            try:
+                from scripts.backup_state import run_backup
+                _bk = run_backup()
+                logger.info(f"STATE BACKUP: {_bk['copied']} files, {len(_bk['errors'])} errors")
+                if _bk["errors"]:
+                    _send_alert(f"STATE BACKUP ERRORS: {_bk['errors'][:3]}", level="warning")
+            except Exception as _bk_err:
+                logger.warning(f"STATE BACKUP error: {_bk_err}")
+        if now_paris.hour < 3:
+            _backup_done_today = False
 
         # === #8 WF WEEKLY REVIEW (dimanche 04:30 CET) ===
         # Re-run walk-forward validation on last months of data. Auto-pause
@@ -5849,6 +5909,17 @@ def main():
                 logger.warning(f"SMOKE TEST error: {_sm_err}")
         if now_paris.weekday() == 0:
             _smoke_test_done_this_week = False
+
+        # === DAILY GOVERNANCE SUMMARY (07:00 CET) ===
+        if now_paris.hour == 7 and not getattr(main, '_gov_summary_done_today', False):
+            main._gov_summary_done_today = True
+            try:
+                from core.governance.daily_summary import send_daily_summary
+                send_daily_summary()
+            except Exception as _gov_err:
+                logger.warning(f"Governance daily summary error: {_gov_err}")
+        if now_paris.hour < 7:
+            main._gov_summary_done_today = False
 
         # === CRO #7: MONTE CARLO RoR CHECK (07:00 CET daily) ===
         if now_paris.hour == 7 and not _ror_done_today:

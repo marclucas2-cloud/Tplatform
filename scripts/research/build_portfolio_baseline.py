@@ -23,7 +23,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -201,7 +201,7 @@ def main():
         "**WP-01 decorrelation research** — snapshot canonique du portefeuille actuel.",
         "",
         f"Source de verite: `config/live_whitelist.yaml` v{wl['metadata']['version']}",
-        f"Genere le: {datetime.utcnow().isoformat()}Z",
+        f"Genere le: {datetime.now(timezone.utc).isoformat()}Z",
         "",
         "## Inventaire par book",
         "",

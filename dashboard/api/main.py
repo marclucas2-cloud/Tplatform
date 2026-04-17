@@ -1359,6 +1359,36 @@ def api_live_whitelist():
         return {"error": str(e)}
 
 
+@app.get("/api/governance/supervisor")
+def api_supervisor_status():
+    """BookSupervisor status — per-book state machine, cycles, errors."""
+    try:
+        from core.runtime.supervisor import BookSupervisor
+        from core.runtime.book_factory import build_runtimes_from_registry
+        runtimes = build_runtimes_from_registry(cycle_registry={
+            "binance_crypto": {}, "ibkr_futures": {}, "ibkr_fx": {},
+            "ibkr_eu": {}, "alpaca_us": {},
+        })
+        sv = BookSupervisor()
+        for rt in runtimes.values():
+            sv.register(rt)
+        return sv.get_global_status()
+    except Exception as e:
+        logger.error(f"/api/governance/supervisor error: {e}")
+        return {"error": str(e)}
+
+
+@app.get("/api/governance/desk-status")
+def api_desk_status():
+    """Compact desk status from desk_status.py (CLI)."""
+    try:
+        from scripts.desk_status import get_global_status
+        return get_global_status()
+    except Exception as e:
+        logger.error(f"/api/governance/desk-status error: {e}")
+        return {"error": str(e)}
+
+
 @app.on_event("startup")
 async def startup():
     logger.info("Trading Dashboard API v2.0 — Auth + Multi-Broker + SPA")

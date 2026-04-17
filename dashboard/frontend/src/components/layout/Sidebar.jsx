@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { Link, useLocation } from 'react-router-dom'
 import {
   BarChart3, Activity, Target, Shield, BookOpen, GitCompare,
-  TrendingUp, Server, Receipt, Network, Menu, X, Bitcoin, LogOut
+  TrendingUp, Server, Receipt, Network, Menu, X, Bitcoin, LogOut, ShieldCheck
 } from 'lucide-react'
 import { useApi } from '../../hooks/useApi'
 import { useAuth } from '../../context/AuthContext'
@@ -19,6 +19,7 @@ const NAV_ITEMS = [
   { path: '/system', label: 'Systeme', icon: Server },
   { path: '/tax', label: 'Fiscalite', icon: Receipt },
   { path: '/cross', label: 'Cross-Portfolio', icon: Network },
+  { path: '/governance', label: 'Governance', icon: ShieldCheck },
 ]
 
 export default function Sidebar() {

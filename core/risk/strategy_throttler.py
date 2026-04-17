@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
@@ -94,7 +94,7 @@ class StrategyThrottler:
             drawdown_pct: Portfolio-level drawdown (positive fraction).
         """
         actions = []
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
 
         for strat in strategies:
             action = self._evaluate_single(strat, drawdown_pct, now)
@@ -127,11 +127,11 @@ class StrategyThrottler:
         """Check if a strategy is currently paused."""
         if strategy not in self._pause_until:
             return False
-        return datetime.utcnow() < self._pause_until[strategy]
+        return datetime.now(timezone.utc) < self._pause_until[strategy]
 
     def pause(self, strategy: str, minutes: int = 60) -> None:
         """Manually pause a strategy."""
-        self._pause_until[strategy] = datetime.utcnow() + timedelta(minutes=minutes)
+        self._pause_until[strategy] = datetime.now(timezone.utc) + timedelta(minutes=minutes)
         logger.info(f"Strategy {strategy} paused for {minutes}min")
 
     def resume(self, strategy: str) -> None:
@@ -141,7 +141,7 @@ class StrategyThrottler:
 
     def get_throttle_summary(self) -> Dict[str, Any]:
         """Summary of all throttled strategies."""
-        now = datetime.utcnow()
+        now = datetime.now(timezone.utc)
         paused = {
             s: (until - now).total_seconds() / 60
             for s, until in self._pause_until.items()

@@ -13,7 +13,7 @@ Covers:
 from __future__ import annotations
 
 import json
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 import numpy as np
 import pytest
@@ -370,7 +370,7 @@ class TestEffectiveRiskExposure:
     def test_should_reduce_and_should_kill(self):
         ere = EffectiveRiskExposure()
         ok = EREResult(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             capital=10000,
             ere_absolute=1000,
             ere_pct=0.10,  # 10% → OK
@@ -385,7 +385,7 @@ class TestEffectiveRiskExposure:
         assert ere.should_kill(ok) is False
 
         warning = EREResult(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             capital=10000,
             ere_absolute=3000,
             ere_pct=0.30,  # 30% → WARNING
@@ -400,7 +400,7 @@ class TestEffectiveRiskExposure:
         assert ere.should_kill(warning) is False
 
         critical = EREResult(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             capital=10000,
             ere_absolute=4000,
             ere_pct=0.40,  # 40% → CRITICAL

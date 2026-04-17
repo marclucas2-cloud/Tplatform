@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List
 
 import numpy as np
@@ -110,7 +110,7 @@ class EffectiveRiskExposure:
         """
         if not positions or capital <= 0:
             return EREResult(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 capital=capital,
                 ere_absolute=0.0,
                 ere_pct=0.0,
@@ -131,7 +131,7 @@ class EffectiveRiskExposure:
 
         if not pos_risks:
             return EREResult(
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
                 capital=capital,
                 ere_absolute=0.0,
                 ere_pct=0.0,
@@ -165,7 +165,7 @@ class EffectiveRiskExposure:
             level = "WARNING"
 
         result = EREResult(
-            timestamp=datetime.utcnow(),
+            timestamp=datetime.now(timezone.utc),
             capital=capital,
             ere_absolute=round(ere_absolute, 2),
             ere_pct=round(ere_pct, 4),

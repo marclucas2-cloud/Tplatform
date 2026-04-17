@@ -15,6 +15,7 @@ import System from './pages/System'
 import Tax from './pages/Tax'
 import CrossPortfolio from './pages/CrossPortfolio'
 import Crypto from './pages/Crypto'
+import Governance from './pages/Governance'
 
 function ProtectedRoute({ children }) {
   const { isAuthenticated, loading } = useAuth()
@@ -65,6 +66,7 @@ function AppRoutes() {
                 <Route path="/cross" element={<CrossPortfolio />} />
                 <Route path="/crypto" element={<Crypto />} />
                 <Route path="/allocation" element={<Allocation />} />
+                <Route path="/governance" element={<Governance />} />
               </Routes>
             </Layout>
           </ProtectedRoute>

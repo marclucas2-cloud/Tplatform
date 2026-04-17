@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import json
 import logging
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict
 
@@ -51,7 +51,7 @@ class LiveSnapshotLogger:
             The snapshot dict, or None on failure.
         """
         snapshot: Dict[str, Any] = {
-            "timestamp": datetime.utcnow().isoformat(),
+            "timestamp": datetime.now(timezone.utc).isoformat(),
         }
 
         # Portfolio state
@@ -114,7 +114,7 @@ class LiveSnapshotLogger:
 
     def _current_path(self) -> Path:
         """Current log file path (daily rotation)."""
-        date_str = datetime.utcnow().strftime("%Y-%m-%d")
+        date_str = datetime.now(timezone.utc).strftime("%Y-%m-%d")
         return self._log_dir / f"live_portfolio_{date_str}.jsonl"
 
     def _write(self, snapshot: Dict[str, Any]) -> None:
@@ -122,7 +122,7 @@ class LiveSnapshotLogger:
 
         # Rotate if file too large
         if path.exists() and path.stat().st_size > self._max_bytes:
-            rotated = path.with_suffix(f".{datetime.utcnow().strftime('%H%M%S')}.jsonl")
+            rotated = path.with_suffix(f".{datetime.now(timezone.utc).strftime('%H%M%S')}.jsonl")
             path.rename(rotated)
             logger.info(f"Rotated log to {rotated.name}")
 

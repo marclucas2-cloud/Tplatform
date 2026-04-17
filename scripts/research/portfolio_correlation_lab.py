@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import sys
 from pathlib import Path
-from datetime import datetime
+from datetime import datetime, timezone
 
 import numpy as np
 import pandas as pd
@@ -187,7 +187,7 @@ def main():
         "",
         f"Scope: {returns.shape[1]} strategies sur {returns.shape[0]} jours",
         f"Source: `data/research/portfolio_baseline_timeseries.parquet`",
-        f"Genere le: {datetime.utcnow().isoformat()}Z",
+        f"Genere le: {datetime.now(timezone.utc).isoformat()}Z",
         "",
         "## Matrice de correlation Pearson",
         "",

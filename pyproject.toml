@@ -60,3 +60,12 @@ norecursedirs = [
     "dashboard/frontend/dist",
 ]
 addopts = "-ra --strict-markers"
+filterwarnings = [
+    "ignore::DeprecationWarning:websockets.*",
+    "ignore::DeprecationWarning:alpaca_trade_api.*",
+    "ignore::DeprecationWarning:binance.*",
+    "ignore::DeprecationWarning:pkg_resources.*",
+    "ignore::DeprecationWarning:google.*",
+    "ignore:datetime\\.datetime\\.utcnow:DeprecationWarning",
+    "ignore:datetime\\.datetime\\.utcfromtimestamp:DeprecationWarning",
+]

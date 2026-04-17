@@ -17,6 +17,7 @@ const PAGE_TITLES = {
   '/tax': 'Fiscalité',
   '/cross': 'Cross-Portfolio',
   '/allocation': 'Allocation',
+  '/governance': 'Governance',
 }
 
 export default function Layout({ children }) {
