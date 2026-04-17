@@ -58,11 +58,14 @@ def test_live_book_strategy_not_whitelisted_rejected():
 
 def test_live_book_live_strategy_allowed():
     """binance_crypto + btc_eth_dual_momentum (live_core) -> allowed."""
-    # Should not raise
-    pre_order_guard(
-        book="binance_crypto", strategy_id="btc_eth_dual_momentum",
-        paper_mode=False,
-    )
+    from unittest.mock import patch, MagicMock
+    mock_health = MagicMock()
+    mock_health.status.value = "GREEN"
+    with patch("core.governance.book_health.get_book_health", return_value=mock_health):
+        pre_order_guard(
+            book="binance_crypto", strategy_id="btc_eth_dual_momentum",
+            paper_mode=False,
+        )
 
 
 def test_paper_only_strategy_in_live_mode_rejected():

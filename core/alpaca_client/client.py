@@ -404,6 +404,28 @@ class AlpacaClient:
                 f"_authorized_by. Tout ordre doit passer par le pipeline "
                 f"d'allocation (paper_portfolio.py ou ExecutionAgent)."
             )
+
+        # Pre-order guard — ALWAYS ON (audit 2026-04-17).
+        _SYSTEM_CALLERS = (
+            "kill_switch", "sigterm", "auto_deleverage", "close_all",
+            "marc_explicit_confirm", "boot_reconciliation", "test_",
+        )
+        _is_system = any(_authorized_by.startswith(p) for p in _SYSTEM_CALLERS)
+        if not _is_system:
+            try:
+                from core.governance.pre_order_guard import pre_order_guard, GuardError
+                pre_order_guard(
+                    book="alpaca_us",
+                    strategy_id=_authorized_by,
+                    symbol=symbol,
+                    paper_mode=self._paper,
+                )
+            except GuardError as ge:
+                raise AlpacaAPIError(f"pre_order_guard reject: {ge.reason}")
+            except ImportError:
+                logger.warning("pre_order_guard unavailable — BLOCKING order")
+                raise AlpacaAPIError("pre_order_guard unavailable, fail-closed")
+
         try:
             from alpaca.trading.enums import OrderClass, OrderSide, TimeInForce
             from alpaca.trading.requests import (

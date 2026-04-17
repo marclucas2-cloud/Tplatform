@@ -190,6 +190,32 @@ def pre_order_guard(
     except Exception as e:
         logger.warning(f"kill_switches_scoped check error: {e}")
 
+    # 7. Book health check (B1 audit 2026-04-17).
+    # BLOCKED = refuse. DEGRADED = warn but allow. UNKNOWN = refuse in live.
+    if not paper_mode:
+        try:
+            from core.governance.book_health import get_book_health, HealthStatus
+            health = get_book_health(book)
+            health_status = health.status.value if hasattr(health.status, "value") else str(health.status)
+            if health_status == "BLOCKED":
+                raise GuardError(
+                    f"book health BLOCKED: {getattr(health, 'reason', 'unknown')}",
+                    book=book, strategy_id=strategy_id,
+                )
+            if health_status == "UNKNOWN":
+                raise GuardError(
+                    f"book health UNKNOWN (fail-closed in live)",
+                    book=book, strategy_id=strategy_id,
+                )
+            if health_status == "DEGRADED":
+                logger.warning(
+                    f"pre_order_guard: book {book} DEGRADED — order allowed with warning"
+                )
+        except GuardError:
+            raise
+        except Exception as e:
+            logger.warning(f"book_health check error (non-blocking): {e}")
+
     # All checks passed — log debug only (no spam)
     logger.debug(
         f"pre_order_guard PASS book={book} strat={strategy_id} sym={symbol} paper={paper_mode}"

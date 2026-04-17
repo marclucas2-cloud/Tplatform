@@ -395,21 +395,21 @@ class BinanceBroker(BaseBroker):
         if not _authorized_by:
             raise BrokerError("_authorized_by is required for all orders")
 
-        # Phase 2.1 enforcement: pre_order_guard (defense in depth).
-        # Le worker.py crypto cycle deja appelle is_strategy_live_allowed avant
-        # cet appel (post-P0 fix commit ed976ff). Ce guard est un FILET 2nd niveau
-        # contre les appels broker direct (CLI scripts, tests, code futur).
-        # Active opt-in via env BINANCE_PRE_ORDER_GUARD=true pour rollout progressif.
-        if os.getenv("BINANCE_PRE_ORDER_GUARD", "").lower() == "true":
+        # Phase 2.1 enforcement: pre_order_guard — ALWAYS ON (audit 2026-04-17).
+        # Bypass only for system callers (kill_switch, sigterm, watchdog) and tests.
+        _SYSTEM_CALLERS = (
+            "kill_switch", "sigterm", "auto_deleverage", "bracket_watchdog",
+            "crypto_watchdog", "double_fill", "marc_explicit_confirm",
+            "boot_reconciliation", "test_",
+        )
+        _is_system = any(_authorized_by.startswith(p) for p in _SYSTEM_CALLERS)
+        if not _is_system:
             try:
                 from core.governance.pre_order_guard import pre_order_guard, GuardError
                 _strat_id = _extract_strategy_from_authorized_by(_authorized_by)
-                if _strat_id is None:
-                    # System caller (bracket_watchdog, kill_switch, sigterm) -> bypass
-                    pass
-                else:
+                if _strat_id:
                     _is_paper = (
-                        self.testnet
+                        self._testnet
                         or os.getenv("BINANCE_TESTNET", "").lower() == "true"
                     )
                     pre_order_guard(
@@ -421,7 +421,8 @@ class BinanceBroker(BaseBroker):
             except GuardError as ge:
                 raise BrokerError(f"pre_order_guard reject: {ge.reason}")
             except ImportError:
-                logger.warning("pre_order_guard module not available, bypass")
+                logger.warning("pre_order_guard module not available — BLOCKING order")
+                raise BrokerError("pre_order_guard unavailable, fail-closed")
 
         if market_type == "margin":
             return self._create_margin_position(symbol, direction, qty, stop_loss, take_profit, _authorized_by, **kwargs)

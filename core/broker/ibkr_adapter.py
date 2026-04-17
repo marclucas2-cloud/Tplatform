@@ -294,39 +294,29 @@ class IBKRBroker(BaseBroker):
                 )
             logger.info(f"IBKR LIVE order authorized by: {_authorized_by}")
 
-            # Phase 2.1 enforcement: pre_order_guard (defense in depth, opt-in).
-            # Active opt-in via env IBKR_PRE_ORDER_GUARD=true pour rollout progressif.
-            # Le worker.py futures cycle a deja un check whitelist GUARD 3bis (ligne 2602).
-            # Ce guard cible les appels broker direct hors worker (CLI, scripts).
-            if os.getenv("IBKR_PRE_ORDER_GUARD", "").lower() == "true":
+            # Phase 2.1 enforcement: pre_order_guard — ALWAYS ON (audit 2026-04-17).
+            # Bypass only for system callers (kill_switch, sigterm, watchdog) and tests.
+            _SYSTEM_CALLERS = (
+                "kill_switch", "sigterm", "auto_deleverage",
+                "bracket_watchdog", "macro_ecb_executor", "double_fill",
+                "marc_explicit_confirm", "boot_reconciliation", "test_",
+            )
+            _is_system = any(_authorized_by.startswith(p) for p in _SYSTEM_CALLERS)
+            if not _is_system:
                 try:
                     from core.governance.pre_order_guard import (
                         pre_order_guard, GuardError,
                     )
-                    # _authorized_by patterns: "fx_carry_momentum_live", "always_on_carry",
-                    # "macro_ecb_executor", "marc_explicit_confirm_*", system internals.
-                    # System callers bypass.
-                    _system_prefixes = (
-                        "kill_switch", "sigterm", "auto_deleverage",
-                        "bracket_watchdog", "macro_ecb_executor", "double_fill",
-                        "marc_explicit_confirm",  # operator manual override
+                    _strat_id = _authorized_by
+                    _book = "ibkr_futures"
+                    if "JPY" in symbol or "USD" in symbol[:3]:
+                        _book = "ibkr_fx"
+                    elif symbol in ("DAX", "CAC40", "ESTX50", "MIB"):
+                        _book = "ibkr_eu"
+                    pre_order_guard(
+                        book=_book, strategy_id=_strat_id,
+                        symbol=symbol, paper_mode=False,
                     )
-                    _is_system = any(_authorized_by.startswith(p) for p in _system_prefixes)
-                    if not _is_system:
-                        # Try to map _authorized_by to a known live strategy_id.
-                        # Default: use _authorized_by as-is.
-                        _strat_id = _authorized_by
-                        # Determine book from symbol (heuristic: futures vs FX vs EU).
-                        # Default to ibkr_futures (most common live path).
-                        _book = "ibkr_futures"
-                        if "JPY" in symbol or "USD" in symbol[:3]:
-                            _book = "ibkr_fx"
-                        elif symbol in ("DAX", "CAC40", "ESTX50", "MIB"):
-                            _book = "ibkr_eu"
-                        pre_order_guard(
-                            book=_book, strategy_id=_strat_id,
-                            symbol=symbol, paper_mode=False,
-                        )
                 except GuardError as ge:
                     raise BrokerError(f"pre_order_guard reject: {ge.reason}")
                 except ImportError:

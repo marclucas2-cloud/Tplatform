@@ -344,10 +344,10 @@ class TestKillSwitchWarmup:
 class TestKillSwitchNoRetrigger:
     """BUG #11: Kill switch re-triggers in a loop when already active."""
 
-    def test_check_returns_cached_when_already_active(self):
+    def test_check_returns_cached_when_already_active(self, tmp_path):
         """check() should return cached reason when already active, not re-activate."""
         from core.crypto.risk_manager_crypto import CryptoKillSwitch
-        ks = CryptoKillSwitch()
+        ks = CryptoKillSwitch(state_path=tmp_path / "test_ks.json")
         # Activate with a known reason
         ks._activate("test_reason_123")
         assert ks._active

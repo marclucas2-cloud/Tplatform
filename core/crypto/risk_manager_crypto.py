@@ -207,7 +207,9 @@ class CryptoKillSwitch:
 
     _STATE_PATH = ROOT / "data" / "crypto_kill_switch_state.json"
 
-    def __init__(self, config_path: str | Path | None = None):
+    def __init__(self, config_path: str | Path | None = None, state_path: Path | None = None):
+        if state_path is not None:
+            self._STATE_PATH = state_path
         self._config = self._load_config(config_path)
         self._active = False
         self._trigger_reason = ""
@@ -473,10 +475,11 @@ class CryptoRiskManager:
         self,
         capital: float = 10_000,
         limits: CryptoRiskLimits | None = None,
+        ks_state_path: Path | None = None,
     ):
         self.capital = capital
         self.limits = limits or CryptoRiskLimits()
-        self.kill_switch = CryptoKillSwitch()
+        self.kill_switch = CryptoKillSwitch(state_path=ks_state_path)
         self._peak_equity = capital
         self._daily_start_equity = capital
         self._hourly_start_equity = capital

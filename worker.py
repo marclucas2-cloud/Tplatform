@@ -5454,10 +5454,20 @@ def main():
         raise  # propagate sys.exit from fail-closed path
     except Exception as _pf_err:
         logger.critical(f"  Pre-flight check RAISED — unable to verify state: {_pf_err}")
-        _send_alert(
-            f"PRE-FLIGHT RAISED: {_pf_err}\nWorker starting WITHOUT preflight verification",
-            level="critical",
-        )
+        _is_live_mode = os.getenv("PAPER_TRADING", "true").lower() != "true"
+        if _is_live_mode:
+            _send_alert(
+                f"PRE-FLIGHT RAISED IN LIVE MODE: {_pf_err}\n"
+                f"Worker REFUSING to start — fix preflight and restart.",
+                level="critical",
+            )
+            logger.critical("WORKER EXITING — preflight raised in live mode (fail-closed)")
+            sys.exit(3)
+        else:
+            _send_alert(
+                f"PRE-FLIGHT RAISED: {_pf_err}\nWorker starting in PAPER mode without preflight",
+                level="critical",
+            )
 
     # === RECONCILIATION AU DEMARRAGE ===
     logger.info("  Reconciliation des positions au demarrage...")
