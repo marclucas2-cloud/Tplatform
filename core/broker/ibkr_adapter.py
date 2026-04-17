@@ -9,9 +9,12 @@ Installation : pip install ib_insync
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import time
+from datetime import datetime, timezone
+from pathlib import Path
 
 from core.broker.base import BaseBroker, BrokerError
 
@@ -107,6 +110,24 @@ class IBKRBroker(BaseBroker):
         self._permanently_down = False
         self._permanently_down_at: float = 0
         self._reconnect_attempts = 0
+
+    def _persist_equity_state(self, payload: dict) -> None:
+        """Persist IBKR equity snapshot to canonical and legacy paths."""
+        state_paths = [
+            Path(__file__).resolve().parent.parent.parent / "data" / "state" / "ibkr_futures" / "equity_state.json",
+            Path(__file__).resolve().parent.parent.parent / "data" / "state" / "ibkr_equity.json",
+        ]
+        snapshot = {
+            **payload,
+            "source": "ibkr_adapter.authenticate",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+        }
+        for path in state_paths:
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
+            except Exception as e:
+                logger.debug(f"IBKR equity snapshot persist skipped for {path}: {e}")
 
     def _ensure_connected(self):
         """Connexion lazy avec retry backoff exponentiel.
@@ -218,7 +239,7 @@ class IBKRBroker(BaseBroker):
         mode = "PAPER" if self._paper else "LIVE"
         logger.info(f"IBKR authentifie ({mode}) — equity={equity}, cash={cash}")
 
-        return {
+        result = {
             "status": "ACTIVE",
             "equity": equity,
             "cash": cash,
@@ -227,6 +248,8 @@ class IBKRBroker(BaseBroker):
             "paper": self._paper,
             "account_number": account_id,
         }
+        self._persist_equity_state(result)
+        return result
 
     def get_account_info(self) -> dict:
         return self.authenticate()
@@ -305,8 +328,12 @@ class IBKRBroker(BaseBroker):
             if not _is_system:
                 try:
                     from core.governance.pre_order_guard import (
-                        pre_order_guard, GuardError,
+                        pre_order_guard, GuardError as _GuardError,
                     )
+                except ImportError:
+                    logger.warning("pre_order_guard unavailable - BLOCKING order")
+                    raise BrokerError("pre_order_guard unavailable, fail-closed")
+                try:
                     _strat_id = _authorized_by
                     _book = "ibkr_futures"
                     if "JPY" in symbol or "USD" in symbol[:3]:
@@ -317,10 +344,8 @@ class IBKRBroker(BaseBroker):
                         book=_book, strategy_id=_strat_id,
                         symbol=symbol, paper_mode=False,
                     )
-                except GuardError as ge:
+                except _GuardError as ge:
                     raise BrokerError(f"pre_order_guard reject: {ge.reason}")
-                except ImportError:
-                    logger.warning("pre_order_guard module not available, bypass")
 
         self._ensure_connected()
         from ib_insync import LimitOrder, MarketOrder, StopOrder
@@ -356,6 +381,7 @@ class IBKRBroker(BaseBroker):
             sl_order = StopOrder(sl_action, qty, round(stop_loss, 2))
             sl_order.parentId = parent_order.orderId
             sl_order.transmit = take_profit is None
+            sl_order.outsideRth = True
             self._ib.placeOrder(contract, sl_order)
 
         # Bracket : take profit

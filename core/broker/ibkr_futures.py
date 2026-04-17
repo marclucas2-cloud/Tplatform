@@ -435,6 +435,7 @@ class IBKRFuturesClient:
             sl_order = StopOrder(sl_action, qty, round(stop_loss, 2))
             sl_order.parentId = parent_order.orderId
             sl_order.transmit = take_profit is None
+            sl_order.outsideRth = True
             self._broker._ib.placeOrder(contract, sl_order)
 
         # Bracket TP

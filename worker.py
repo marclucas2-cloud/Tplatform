@@ -1507,6 +1507,78 @@ def run_bracket_watchdog_cycle():
         _ibkr_lock.release()
 
 
+def run_trailing_stop_cycle():
+    """Trailing stop ratchet for futures — runs every 5 min.
+
+    For positions with trailing config (e.g. gold_trend_mgc V2),
+    checks current price and ratchets SL upward. Uses the same
+    IBKR connection pattern as bracket watchdog.
+    """
+    if not _ibkr_lock.acquire(blocking=False):
+        logger.debug("TRAILING STOP skip — IBKR lock held")
+        return
+    try:
+        from core.runtime.trailing_stop_futures import (
+            update_trailing_stops, apply_modifications_ibkr,
+        )
+        from ib_insync import IB as _TsIB
+        import random as _ts_rng
+
+        _state_file = ROOT / "data" / "state" / "futures_positions_live.json"
+        if not _state_file.exists():
+            return
+
+        _state = json.loads(_state_file.read_text(encoding="utf-8"))
+        if not _state:
+            return
+
+        _host = os.environ.get("IBKR_HOST", "127.0.0.1")
+        _port = int(os.environ.get("IBKR_PORT", "4002"))
+        _ib = _TsIB()
+        _ib.RequestTimeout = 15
+        try:
+            _ib.connect(_host, _port, clientId=_ts_rng.randint(320, 329), timeout=10)
+        except Exception as e:
+            logger.debug(f"TRAILING STOP: connect failed: {e}")
+            return
+
+        try:
+            time.sleep(2)
+
+            # Get current prices from IBKR portfolio
+            _prices = {}
+            for p in _ib.portfolio():
+                if abs(p.position) > 0 and p.marketPrice > 0:
+                    _prices[p.contract.symbol] = float(p.marketPrice)
+
+            if not _prices:
+                return
+
+            # Compute modifications
+            mods = update_trailing_stops(_state, _prices)
+            if mods:
+                applied = apply_modifications_ibkr(mods, _ib, _state, _state_file)
+                if applied > 0:
+                    logger.info(f"TRAILING STOP: {applied} SL modification(s) applied")
+                    for m in mods:
+                        _send_alert(
+                            f"TRAILING SL: {m['symbol']} {m['old_sl']:.2f} -> {m['new_sl']:.2f}\n"
+                            f"High={m['highest']:.2f}, entry={m['entry']:.2f}",
+                            level="info",
+                        )
+        finally:
+            try:
+                _ib.disconnect()
+            except Exception:
+                pass
+    except ImportError as ie:
+        logger.warning(f"TRAILING STOP: module not available: {ie}")
+    except Exception as e:
+        logger.warning(f"TRAILING STOP cycle error: {e}")
+    finally:
+        _ibkr_lock.release()
+
+
 def _make_macro_ecb_executor(mode: str):
     """Factory for MacroECB futures executor — places bracket orders on IBKR.
 
@@ -2498,9 +2570,9 @@ def _run_futures_cycle(live: bool = False):
                                 _rb_contract = _rb_details[0].contract
                                 _rb_oca = f"REBRACKET_{pos_sym}_{_uuid.uuid4().hex[:8]}"
                                 _sl_ord = StopOrder(_rb_side, _rb_qty, _rb_sl)
-                                _sl_ord.tif = "GTC"; _sl_ord.ocaGroup = _rb_oca; _sl_ord.ocaType = 1
+                                _sl_ord.tif = "GTC"; _sl_ord.ocaGroup = _rb_oca; _sl_ord.ocaType = 1; _sl_ord.outsideRth = True
                                 _tp_ord = LimitOrder(_rb_side, _rb_qty, _rb_tp)
-                                _tp_ord.tif = "GTC"; _tp_ord.ocaGroup = _rb_oca; _tp_ord.ocaType = 1
+                                _tp_ord.tif = "GTC"; _tp_ord.ocaGroup = _rb_oca; _tp_ord.ocaType = 1; _tp_ord.outsideRth = True
                                 ibkr._ib.placeOrder(_rb_contract, _sl_ord)
                                 time.sleep(0.5)
                                 ibkr._ib.placeOrder(_rb_contract, _tp_ord)
@@ -5851,6 +5923,9 @@ def main():
         "crypto_watchdog": CycleRunner("crypto_watchdog", run_crypto_watchdog_cycle,
                                         alert_callback=_cycle_alert,
                                         metrics_callback=_cycle_metrics_cb),
+        "trailing_stop": CycleRunner("trailing_stop", run_trailing_stop_cycle,
+                                      alert_callback=_cycle_alert,
+                                      metrics_callback=_cycle_metrics_cb),
         "us_stocks_daily": CycleRunner("us_stocks_daily", run_us_stocks_daily_cycle,
                                          alert_callback=_cycle_alert,
                                          metrics_callback=_cycle_metrics_cb,
@@ -5902,6 +5977,11 @@ def main():
         if time.time() - last_bracket_watchdog >= 300:  # 5 min
             _runners["bracket_watchdog"].run()
             last_bracket_watchdog = time.time()
+
+        # === TRAILING STOP toutes les 5 minutes (24/7) ===
+        # Ratchet SL pour les strats trailing (gold_trend_mgc V2).
+        if time.time() - last_bracket_watchdog >= 300:  # piggyback on watchdog interval
+            _runners["trailing_stop"].run()
 
         # === CRYPTO WATCHDOG toutes les 5 minutes (24/7) ===
         # Equivalent Binance: verifie que chaque position crypto live a un

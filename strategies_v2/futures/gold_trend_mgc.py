@@ -19,16 +19,18 @@ Backtest 5Y daily:
 Key: gold doesn't behave like equities. Long-only gold trend captures
 a real, uncorrelated return stream.
 
-Params: EMA20, SL 0.4%, TP 0.8%, max hold 10 days (V1 Option B 2026-04-16).
+Params: EMA20, trailing SL 0.4%, TP 0.8%, max hold 10 days (V2 2026-04-17).
 
 PARAMS HISTORY:
   V0 (2026-04-09 a 2026-04-16): SL 1.5% TP 3% — etouffe par deleveraging level_3
                                  -1.8% NAV (~ MGC -0.4%). Backtest +$26K Sharpe 0.73
                                  mais en prod -56% PnL et MaxDD -32.7%.
-  V1 (2026-04-16 a aujourd'hui): SL 0.4% TP 0.8% — aligne sur deleveraging.
-                                 Backtest +$23.8K Sharpe 1.58 MaxDD -7.1% WR 47.6%
-                                 sur 5Y MGC daily. Voir backtest_gold_trend_sl_variants.py
-                                 et docs/research/gold_trend_sl_recalibration.md.
+  V1 (2026-04-16 a 2026-04-17): SL 0.4% TP 0.8% fixe — aligne sur deleveraging.
+                                 Backtest +$23.8K Sharpe 1.58 MaxDD -7.1% WR 47.6%.
+  V2 (2026-04-17 a aujourd'hui): trailing SL 0.4% TP 0.8% — SL ratchet depuis le high.
+                                 Backtest 11Y: +$30.5K Sharpe 2.13 MaxDD -4.4% WR 52.8%
+                                 vs V1: +28% PnL, +35% Sharpe, MaxDD divise par 2.
+                                 Voir backtest_mgc_trailing.py.
 """
 from __future__ import annotations
 
@@ -40,10 +42,11 @@ from core.backtester_v2.types import Bar, PortfolioState, Signal
 class GoldTrendMGC(StrategyBase):
     """Gold trend follow on MGC.
 
-    SL/TP recalibres 2026-04-16 (V1 Option B) pour aligner avec
-    deleveraging level_3_dd_pct (-1.8% NAV ≈ -0.4% MGC sur 1 contrat).
-    Anciens defaults (1.5% / 3%) garde pour backtest historique en
-    passant explicitement sl_pct=0.015, tp_pct=0.03.
+    V2 (2026-04-17): trailing SL 0.4% from high + TP 0.8% fixed.
+    Le SL initial est fixe a 0.4% sous l'entree. Quand le prix monte,
+    le SL ratchet a 0.4% sous le plus haut (trailing). Le TP reste fixe.
+    Le trailing est gere par core/runtime/trailing_stop_futures.py dans
+    le worker (cycle toutes les 5 min), pas dans la strategie elle-meme.
     """
 
     SYMBOL = "MGC"

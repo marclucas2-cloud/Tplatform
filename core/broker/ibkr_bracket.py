@@ -253,6 +253,7 @@ class BracketOrderManager:
         sl_order.ocaType = 1  # Cancel remaining when one fills
         sl_order.tif = tif
         sl_order.transmit = False  # Wait for TP to be submitted
+        sl_order.outsideRth = True
 
         try:
             self._ib.placeOrder(contract, sl_order)
@@ -983,6 +984,7 @@ class FXBracketHandler:
             sl_order.ocaType = 1
             sl_order.tif = "GTC"
             sl_order.transmit = False
+            sl_order.outsideRth = True
 
             try:
                 self._bm._ib.placeOrder(contract, sl_order)
@@ -1240,6 +1242,7 @@ class FuturesBracketHandler:
             sl_order.ocaType = 1
             sl_order.tif = "GTC"
             sl_order.transmit = False
+            sl_order.outsideRth = True
 
             try:
                 self._bm._ib.placeOrder(contract, sl_order)
