@@ -19,10 +19,12 @@ from __future__ import annotations
 
 import hashlib
 import hmac
+import json
 import logging
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 from urllib.parse import urlencode
 
@@ -41,22 +43,31 @@ FUTURES_BASE = "https://fapi.binance.com"
 # Phase 2.1 — STRAT_ID -> canonical strategy_id mapping for pre_order_guard.
 # Le crypto cycle passe `_authorized_by="crypto_worker_STRAT-XXX"`. La whitelist
 # utilise les canonical names (ex: btc_eth_dual_momentum). Mapping ici.
+#
+# AUDIT 2026-04-18 (P0.3): le systeme STRAT-XXX est DEPRECATED. Les docstrings
+# des fichiers strats avaient plusieurs collisions (STRAT-009 dans
+# funding_rate_divergence ET trend_short_v1, etc.) et plusieurs mismatches
+# avec le map ci-dessous (STRAT-002=vol_breakout dans le map mais
+# vol_breakout.STRATEGY_CONFIG.id="STRAT-004"). Le mapping ci-dessous a ete
+# realigne pour matcher EXACTEMENT live_whitelist.yaml::strategy_id.
+# Si tu lances une nouvelle strat: utilise le canonical name directement
+# dans _authorized_by, sans passer par STRAT-XXX.
 _CRYPTO_STRAT_ID_MAP = {
-    "STRAT-001": "btc_eth_dual_momentum",
-    "STRAT-002": "vol_breakout",
-    "STRAT-003": "altcoin_relative_strength",
-    "STRAT-004": "stablecoin_supply_flow",
+    "STRAT-001": "btc_eth_dual_momentum",         # whitelist canonical
+    "STRAT-002": "altcoin_relative_strength",     # fix: file STRAT-002 = altcoin
+    "STRAT-003": "btc_mean_reversion",            # fix: file STRAT-003 = btc_mr
+    "STRAT-004": "volatility_breakout",           # fix: matche whitelist canonical
     "STRAT-005": "btc_dominance_rotation_v2",
     "STRAT-006": "borrow_rate_carry",
     "STRAT-007": "liquidation_momentum",
-    "STRAT-008": "weekend_gap_reversal",
-    "STRAT-009": "trend_short_v1",
-    "STRAT-010": "mr_scalp_v1",
-    "STRAT-011": "liquidation_spike_v1",
+    "STRAT-008": "weekend_gap_reversal",          # whitelist canonical
+    "STRAT-009": "trend_short_btc",               # whitelist canonical (file: trend_short_v1)
+    "STRAT-010": "mr_scalp_btc",                  # whitelist canonical (file: mr_scalp_v1)
+    "STRAT-011": "liquidation_spike",             # whitelist canonical (file: liquidation_spike_v1)
     "STRAT-012": "vol_expansion_bear",
     "STRAT-013": "monthly_turn_of_month",
     "STRAT-014": "range_bb_harvest",
-    "STRAT-015": "bb_mr_short",
+    "STRAT-015": "bb_mean_reversion_short",       # whitelist canonical (file: bb_mr_short)
 }
 
 # System callers that bypass pre_order_guard (internal protection mechanisms)
@@ -139,12 +150,23 @@ class BinanceBroker(BaseBroker):
         if testnet is None:
             testnet = os.getenv("BINANCE_TESTNET", "true").lower() == "true"
         self._testnet = testnet
-        # CRO SECURITY: guard explicite pour le mode LIVE
+        # CRO SECURITY (P1.2 audit 2026-04-18): fail-closed si LIVE_CONFIRMED absent.
+        # Avant: log critical mais continuait -> le broker tradait en live sans
+        # confirmation explicite, l'audit deep flagait ca comme faux sentiment de
+        # securite. Maintenant: raise si live sans confirmation. Pour bypass legitime
+        # (e.g. tests), set BINANCE_LIVE_BYPASS_CONFIRM=true (test-only flag).
         if not testnet:
             live_confirmed = os.getenv("BINANCE_LIVE_CONFIRMED", "").lower() == "true"
-            if not live_confirmed:
+            bypass = os.getenv("BINANCE_LIVE_BYPASS_CONFIRM", "").lower() == "true"
+            if not live_confirmed and not bypass:
                 logger.critical(
-                    "BINANCE LIVE MODE — set BINANCE_LIVE_CONFIRMED=true to confirm"
+                    "BINANCE LIVE MODE refused: BINANCE_LIVE_CONFIRMED not set. "
+                    "To trade live, explicitly set BINANCE_LIVE_CONFIRMED=true in env. "
+                    "Boot refuse for safety."
+                )
+                raise RuntimeError(
+                    "BinanceBroker LIVE refused: set BINANCE_LIVE_CONFIRMED=true to confirm. "
+                    "(testnet=False but no explicit live confirmation)"
                 )
             logger.warning("BinanceBroker initialise en mode LIVE (pas testnet)")
         self._spot_base = SPOT_TESTNET if testnet else SPOT_BASE
@@ -153,6 +175,25 @@ class BinanceBroker(BaseBroker):
         self._session.headers.update({"X-MBX-APIKEY": self._api_key})
         # Track avg_price from fills (symbol -> avg_price)
         self._fill_prices: dict[str, float] = {}
+
+    def _persist_equity_state(self, payload: dict[str, Any]) -> None:
+        """Persist a broker equity snapshot to canonical and legacy paths."""
+        state_paths = [
+            Path(__file__).resolve().parent.parent.parent / "data" / "state" / "binance_crypto" / "equity_state.json",
+            Path(__file__).resolve().parent.parent.parent / "data" / "crypto_equity_state.json",
+        ]
+        snapshot = {
+            **payload,
+            "source": "binance_broker.get_account_info",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "paper": self._testnet,
+        }
+        for path in state_paths:
+            try:
+                path.parent.mkdir(parents=True, exist_ok=True)
+                path.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
+            except Exception as e:
+                logger.debug(f"Binance equity snapshot persist skipped for {path}: {e}")
 
     # ------------------------------------------------------------------
     # HTTP helpers
@@ -312,7 +353,7 @@ class BinanceBroker(BaseBroker):
             pass
 
         equity = spot_total_usd + earn_total_usd
-        return {
+        result = {
             "equity": round(equity, 2),
             "cash": round(spot_stablecoin, 2),
             "buying_power": round(spot_stablecoin, 2),
@@ -323,6 +364,8 @@ class BinanceBroker(BaseBroker):
             "margin_borrowed_btc": margin_borrowed,
             "margin_interest_btc": margin_interest,
         }
+        self._persist_equity_state(result)
+        return result
 
     def get_positions(self) -> list[dict]:
         positions = []
@@ -404,8 +447,9 @@ class BinanceBroker(BaseBroker):
         )
         _is_system = any(_authorized_by.startswith(p) for p in _SYSTEM_CALLERS)
         if not _is_system:
+            _GuardError = type("_DummyGuardError", (Exception,), {})
             try:
-                from core.governance.pre_order_guard import pre_order_guard, GuardError
+                from core.governance.pre_order_guard import pre_order_guard, GuardError as _GuardError
                 _strat_id = _extract_strategy_from_authorized_by(_authorized_by)
                 if _strat_id:
                     _is_paper = (
@@ -418,7 +462,7 @@ class BinanceBroker(BaseBroker):
                         symbol=symbol,
                         paper_mode=_is_paper,
                     )
-            except GuardError as ge:
+            except _GuardError as ge:
                 raise BrokerError(f"pre_order_guard reject: {ge.reason}")
             except ImportError:
                 logger.warning("pre_order_guard module not available — BLOCKING order")

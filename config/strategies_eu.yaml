@@ -36,10 +36,10 @@ strategies:
 
   auto_sector_german:
     name: "Auto Sector German"
-    enabled: true
+    enabled: false  # P1.4 audit 2026-04-18: WF officiel rejected, no .py runtime impl
     sharpe: 13.43
     trades: 97
-    wf_status: "VALIDATED"
+    wf_status: "REJECTED_OOS_2026-03-31"  # was "VALIDATED" - corrected per output/wf_eu_results/wf_eu_summary.json
     edge_type: "event"
     market_hours: {start: "09:00", end: "17:30", tz: "Europe/Paris"}
     tickers: ["CON.DE", "SHA.DE"]  # 2 plus liquides (ZIL retire = trop petit)
@@ -50,10 +50,10 @@ strategies:
 
   brent_lag_play:
     name: "Brent Lag Play"
-    enabled: true
+    enabled: false  # P1.4 audit 2026-04-18: legacy spot equity, IBKR EU live impossible
     sharpe: 4.08
     trades: 729
-    wf_status: "VALIDATED"
+    wf_status: "LEGACY_PAPER_VALIDATED_NOT_LIVE_READY"  # was VALIDATED - spot leverage unavailable
     edge_type: "momentum"
     market_hours: {start: "15:30", end: "20:00", tz: "Europe/Paris"}
     tickers: ["TTE.PA", "BP.L"]  # 2 plus liquides (SHEL retire)
@@ -79,10 +79,10 @@ strategies:
 
   eu_gap_open:
     name: "EU Gap Open"
-    enabled: true
+    enabled: false  # P1.4 audit 2026-04-18: WF officiel REJECTED (Sharpe -0.11, commission burn 109%)
     sharpe: 8.56
     trades: 150
-    wf_status: "VALIDATED"
+    wf_status: "REJECTED_OOS_2026-03-31"  # was VALIDATED - per output/wf_eu_results/wf_eu_summary.json
     edge_type: "gap"
     market_hours: {start: "09:05", end: "12:00", tz: "Europe/Paris"}
     tickers: ["SAP.DE", "ASML.AS"]  # 2 plus liquides (6 retires = positions trop petites)

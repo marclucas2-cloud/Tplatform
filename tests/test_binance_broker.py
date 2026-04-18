@@ -30,9 +30,19 @@ class TestBinanceBrokerInit:
         assert "testnet" in broker._spot_base
 
     def test_live_mode(self):
-        broker = BinanceBroker(api_key="k", api_secret="s", testnet=False)
-        assert broker.is_paper is False
-        assert "api.binance.com" in broker._spot_base
+        # P1.2 audit 2026-04-18: live mode requires BINANCE_LIVE_CONFIRMED=true OR
+        # BINANCE_LIVE_BYPASS_CONFIRM=true (test bypass).
+        with patch.dict("os.environ", {"BINANCE_LIVE_BYPASS_CONFIRM": "true"}):
+            broker = BinanceBroker(api_key="k", api_secret="s", testnet=False)
+            assert broker.is_paper is False
+            assert "api.binance.com" in broker._spot_base
+
+    def test_live_mode_refused_without_confirmation(self):
+        # P1.2 audit 2026-04-18: fail-closed if LIVE_CONFIRMED not set.
+        import pytest
+        with patch.dict("os.environ", {"BINANCE_LIVE_CONFIRMED": "", "BINANCE_LIVE_BYPASS_CONFIRM": ""}, clear=False):
+            with pytest.raises(RuntimeError, match="BINANCE_LIVE_CONFIRMED"):
+                BinanceBroker(api_key="k", api_secret="s", testnet=False)
 
     def test_env_vars(self):
         with patch.dict("os.environ", {"BINANCE_API_KEY": "env_key", "BINANCE_API_SECRET": "env_sec"}):

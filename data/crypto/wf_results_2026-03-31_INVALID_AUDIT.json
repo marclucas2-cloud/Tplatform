@@ -1,13 +1,8 @@
 {
-  "_INVALIDATED_BY_AUDIT": true,
-  "_invalidation_date": "2026-04-18",
-  "_invalidation_reason": "Audit 2026-04-18 P0.2: scripts/wf_crypto_all.py:411-444 ne backteste pas les strategies. daily_returns = closes BTCUSDT, soustraction cost_per_trade*trade_freq*2. Les Sharpe sont B&H BTC ajustes par couts, pas Sharpe strats. Identique trade_freq -> identique resultat (vol_breakout==liquidation_momentum sharpe 0.939, btc_dominance==weekend_gap sharpe 1.241). Aucune strategy_id VALIDATED ici n a de preuve quant valide. Re-WF event-driven necessaire avant toute decision de promotion. Backup historique dans wf_results_2026-03-31_INVALID_AUDIT.json.",
-  "_required_action": "Re-WF event-driven per strat avant promotion live future",
-  "_audited_at": "2026-04-18T07:23:51.743467+00:00",
   "btc_eth_dual_momentum": {
     "strategy_name": "btc_eth_dual_momentum",
     "tier": "TIER_1",
-    "verdict": "INVALID_AUDIT_2026-04-18",
+    "verdict": "BORDERLINE",
     "avg_oos_sharpe": 0.435,
     "avg_is_sharpe": 0.244,
     "oos_is_ratio": 1.783,
@@ -15,7 +10,7 @@
     "total_windows": 10,
     "profitable_ratio": 0.5,
     "total_oos_trades": 90,
-    "error": "INVALID PROOF: backtest factice (B&H BTC ajuste couts)",
+    "error": "",
     "timestamp": "2026-03-31T13:50:43.456303+00:00",
     "windows": [
       {
@@ -108,13 +103,12 @@
         "oos_profitable": true,
         "oos_max_drawdown": -0.02048
       }
-    ],
-    "original_verdict": "BORDERLINE"
+    ]
   },
   "btc_mean_reversion": {
     "strategy_name": "btc_mean_reversion",
     "tier": "TIER_1",
-    "verdict": "INVALID_AUDIT_2026-04-18",
+    "verdict": "REJECTED",
     "avg_oos_sharpe": -0.069,
     "avg_is_sharpe": -0.355,
     "oos_is_ratio": 0.193,
@@ -122,7 +116,7 @@
     "total_windows": 10,
     "profitable_ratio": 0.5,
     "total_oos_trades": 120,
-    "error": "INVALID PROOF: backtest factice (B&H BTC ajuste couts)",
+    "error": "",
     "timestamp": "2026-03-31T13:50:43.777057+00:00",
     "windows": [
       {
@@ -215,13 +209,12 @@
         "oos_profitable": true,
         "oos_max_drawdown": -0.02174
       }
-    ],
-    "original_verdict": "REJECTED"
+    ]
   },
   "vol_breakout": {
     "strategy_name": "vol_breakout",
     "tier": "TIER_1",
-    "verdict": "INVALID_AUDIT_2026-04-18",
+    "verdict": "VALIDATED",
     "avg_oos_sharpe": 0.939,
     "avg_is_sharpe": 0.843,
     "oos_is_ratio": 1.113,
@@ -229,7 +222,7 @@
     "total_windows": 10,
     "profitable_ratio": 0.7,
     "total_oos_trades": 60,
-    "error": "INVALID PROOF: backtest factice (B&H BTC ajuste couts)",
+    "error": "",
     "timestamp": "2026-03-31T13:50:43.782706+00:00",
     "windows": [
       {
@@ -322,13 +315,12 @@
         "oos_profitable": true,
         "oos_max_drawdown": -0.0193
       }
-    ],
-    "original_verdict": "VALIDATED"
+    ]
   },
   "btc_dominance": {
     "strategy_name": "btc_dominance",
     "tier": "TIER_1",
-    "verdict": "INVALID_AUDIT_2026-04-18",
+    "verdict": "VALIDATED",
     "avg_oos_sharpe": 1.241,
     "avg_is_sharpe": 1.202,
     "oos_is_ratio": 1.032,
@@ -336,7 +328,7 @@
     "total_windows": 10,
     "profitable_ratio": 0.8,
     "total_oos_trades": 40,
-    "error": "INVALID PROOF: backtest factice (B&H BTC ajuste couts)",
+    "error": "",
     "timestamp": "2026-03-31T13:50:43.788043+00:00",
     "windows": [
       {
@@ -429,13 +421,12 @@
         "oos_profitable": true,
         "oos_max_drawdown": -0.01859
       }
-    ],
-    "original_verdict": "VALIDATED"
+    ]
   },
   "altcoin_relative_strength": {
     "strategy_name": "altcoin_relative_strength",
     "tier": "TIER_2",
-    "verdict": "INVALID_AUDIT_2026-04-18",
+    "verdict": "NO_DATA",
     "avg_oos_sharpe": 0.0,
     "avg_is_sharpe": 0.0,
     "oos_is_ratio": 0.0,
@@ -443,15 +434,14 @@
     "total_windows": 0,
     "profitable_ratio": 0.0,
     "total_oos_trades": 0,
-    "error": "No data found for SOLUSDT in C:\\Users\\barqu\\trading-platform\\data\\crypto\\candles | INVALID PROOF: backtest factice (B&H BTC ajuste couts)",
+    "error": "No data found for SOLUSDT in C:\\Users\\barqu\\trading-platform\\data\\crypto\\candles",
     "timestamp": "2026-03-31T13:50:43.793722+00:00",
-    "windows": [],
-    "original_verdict": "NO_DATA"
+    "windows": []
   },
   "weekend_gap": {
     "strategy_name": "weekend_gap",
     "tier": "LOW_FREQ",
-    "verdict": "INVALID_AUDIT_2026-04-18",
+    "verdict": "VALIDATED",
     "avg_oos_sharpe": 1.241,
     "avg_is_sharpe": 1.202,
     "oos_is_ratio": 1.032,
@@ -459,7 +449,7 @@
     "total_windows": 10,
     "profitable_ratio": 0.8,
     "total_oos_trades": 40,
-    "error": "INVALID PROOF: backtest factice (B&H BTC ajuste couts)",
+    "error": "",
     "timestamp": "2026-03-31T13:50:43.793958+00:00",
     "windows": [
       {
@@ -552,13 +542,12 @@
         "oos_profitable": true,
         "oos_max_drawdown": -0.01859
       }
-    ],
-    "original_verdict": "VALIDATED"
+    ]
   },
   "liquidation_momentum": {
     "strategy_name": "liquidation_momentum",
     "tier": "LOW_FREQ",
-    "verdict": "INVALID_AUDIT_2026-04-18",
+    "verdict": "VALIDATED",
     "avg_oos_sharpe": 0.939,
     "avg_is_sharpe": 0.843,
     "oos_is_ratio": 1.113,
@@ -566,7 +555,7 @@
     "total_windows": 10,
     "profitable_ratio": 0.7,
     "total_oos_trades": 60,
-    "error": "INVALID PROOF: backtest factice (B&H BTC ajuste couts)",
+    "error": "",
     "timestamp": "2026-03-31T13:50:43.945767+00:00",
     "windows": [
       {
@@ -659,13 +648,12 @@
         "oos_profitable": true,
         "oos_max_drawdown": -0.0193
       }
-    ],
-    "original_verdict": "VALIDATED"
+    ]
   },
   "borrow_rate_carry": {
     "strategy_name": "borrow_rate_carry",
     "tier": "PASSIVE",
-    "verdict": "INVALID_AUDIT_2026-04-18",
+    "verdict": "SKIPPED",
     "avg_oos_sharpe": 0.0,
     "avg_is_sharpe": 0.0,
     "oos_is_ratio": 0.0,
@@ -673,9 +661,8 @@
     "total_windows": 0,
     "profitable_ratio": 0.0,
     "total_oos_trades": 0,
-    "error": "Passive earn strategy \u2014 no directional signal to walk-forward | INVALID PROOF: backtest factice (B&H BTC ajuste couts)",
+    "error": "Passive earn strategy — no directional signal to walk-forward",
     "timestamp": "2026-03-31T13:50:44.092796+00:00",
-    "windows": [],
-    "original_verdict": "SKIPPED"
+    "windows": []
   }
 }

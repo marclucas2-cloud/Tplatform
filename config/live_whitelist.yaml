@@ -143,7 +143,7 @@ ibkr_futures:
     book: ibkr_futures
     status: paper_only
     runtime_entrypoint: "scripts/research/backtest_futures_calendar.py:variant_dow_long dow=0"
-    runtime_module: "research.backtest_futures_calendar"
+    runtime_module: "scripts.research.backtest_futures_calendar"  # P0.3 fix: path correct
     wf_source: "docs/research/wf_reports/INT-A_tier1_validation.md"
     sizing_policy: fixed_1_contract
     max_risk_usd: 300
@@ -162,7 +162,7 @@ ibkr_futures:
     book: ibkr_futures
     status: paper_only
     runtime_entrypoint: "scripts/research/backtest_futures_calendar.py:variant_dow_long dow=2"
-    runtime_module: "research.backtest_futures_calendar"
+    runtime_module: "scripts.research.backtest_futures_calendar"  # P0.3 fix: path correct
     wf_source: "docs/research/wf_reports/INT-A_tier1_validation.md"
     sizing_policy: fixed_1_contract
     max_risk_usd: 300
@@ -180,7 +180,7 @@ ibkr_futures:
     book: ibkr_futures
     status: paper_only
     runtime_entrypoint: "scripts/research/backtest_futures_calendar.py:variant_pre_holiday"
-    runtime_module: "research.backtest_futures_calendar"
+    runtime_module: "scripts.research.backtest_futures_calendar"  # P0.3 fix: path correct
     wf_source: "docs/research/wf_reports/INT-A_tier1_validation.md"
     sizing_policy: fixed_1_contract
     max_risk_usd: 300
@@ -218,7 +218,7 @@ binance_crypto:
     book: binance_crypto
     status: live_core
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-004)"
-    runtime_module: "strategies.crypto.volatility_breakout"
+    runtime_module: "strategies.crypto.vol_breakout"  # P0.3 fix: file basename != canonical
     wf_source: "data/crypto/wf_results.json"
     sizing_policy: "allocation_pct + kelly_quarter + broker_cap_80pct"
 
@@ -229,7 +229,7 @@ binance_crypto:
                        # vs series attendues -> regime toujours NEUTRAL, signal cassse.
                        # Voir btc_dominance_v2.py:91. A reactiver apres fix logique.
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-005)"
-    runtime_module: "strategies.crypto.btc_dominance_rotation_v2"
+    runtime_module: "strategies.crypto.btc_dominance_v2"  # P0.3 fix: file basename
     wf_source: "data/crypto/wf_results.json"
     sizing_policy: "allocation_pct + kelly_quarter + broker_cap_80pct"
 
@@ -261,7 +261,7 @@ binance_crypto:
     book: binance_crypto
     status: live_probation
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-008)"
-    runtime_module: "strategies.crypto.weekend_gap_reversal"
+    runtime_module: "strategies.crypto.weekend_gap"  # P0.3 fix: file basename
     wf_source: "data/crypto/wf_results.json"
     sizing_policy: "allocation_pct + kelly_quarter"
 
@@ -269,7 +269,7 @@ binance_crypto:
     book: binance_crypto
     status: paper_only   # Phase 3.1 audit 2026-04-16: preuves OOS fragmentees
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-009)"
-    runtime_module: "strategies.crypto.trend_short_btc"
+    runtime_module: "strategies.crypto.trend_short_v1"  # P0.3 fix: file basename
     wf_source: "data/crypto/wf_results.json (validation insuffisante)"
     sizing_policy: "n/a (paper_only)"
     notes: "Demote 2026-04-16 audit Phase 3.1: short bias non valide WF correctement."
@@ -278,7 +278,7 @@ binance_crypto:
     book: binance_crypto
     status: paper_only   # Phase 3.1 audit 2026-04-16: preuves OOS fragmentees
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-010)"
-    runtime_module: "strategies.crypto.mr_scalp_btc"
+    runtime_module: "strategies.crypto.mr_scalp_v1"  # P0.3 fix: file basename
     wf_source: "data/crypto/wf_results.json (validation insuffisante)"
     sizing_policy: "n/a (paper_only)"
     notes: "Demote 2026-04-16 audit Phase 3.1: pas de WF reproductible solide."
@@ -287,7 +287,7 @@ binance_crypto:
     book: binance_crypto
     status: paper_only   # Phase 3.1 audit 2026-04-16: doublon partiel STRAT-007
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-011)"
-    runtime_module: "strategies.crypto.liquidation_spike"
+    runtime_module: "strategies.crypto.liquidation_spike_v1"  # P0.3 fix: file basename
     wf_source: "data/crypto/wf_results.json"
     sizing_policy: "n/a (paper_only)"
     notes: |
@@ -315,7 +315,7 @@ binance_crypto:
     book: binance_crypto
     status: live_probation
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-015)"
-    runtime_module: "strategies.crypto.bb_mean_reversion_short"
+    runtime_module: "strategies.crypto.bb_mr_short"  # P0.3 fix: file basename
     wf_source: "data/crypto/wf_results.json"
     sizing_policy: "allocation_pct + kelly_quarter"
 
@@ -373,7 +373,7 @@ ibkr_eu:
     book: ibkr_eu
     status: paper_only
     runtime_entrypoint: "worker.py:run_mib_estx50_spread_paper_cycle (17h45 Paris)"
-    runtime_module: "core.runtime.spread_paper_runner.SpreadPaperRunner"
+    runtime_module: "core.runtime.spread_paper_runner"  # P0.3 fix: module pas classe
     wf_source: "reports/research/wf_mib_estx50_corrected.json (2026-04-18)"
     sizing_policy: "notional_dollar_neutral (1 FIB + ~3 FESX, hedge ratio recalc per entry)"
     kill_criteria:

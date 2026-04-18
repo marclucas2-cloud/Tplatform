@@ -190,26 +190,61 @@ def pre_order_guard(
     except Exception as e:
         logger.warning(f"kill_switches_scoped check error: {e}")
 
-    # 7. Book health check (B1 audit 2026-04-17).
-    # BLOCKED = refuse. DEGRADED = warn but allow. UNKNOWN = refuse in live.
+    # 7. Book health check (B1 audit 2026-04-17, raffine P1.1 audit 2026-04-18).
+    # BLOCKED = refuse always. UNKNOWN = refuse in live.
+    # DEGRADED = decision par cause (matrice ci-dessous), pas blanket-allow:
+    #   - data_freshness stale (parquet missing/stale)        -> BLOCK (signal sur data ancienne)
+    #   - ibkr_account snapshot transient (timeout, summary)  -> ALLOW (state local OK)
+    #   - whitelist_integrity DEGRADED                         -> BLOCK (rare, indique config corrompue)
+    #   - autres causes inconnues                              -> BLOCK (fail-safe)
     if not paper_mode:
         try:
             from core.governance.book_health import get_book_health, HealthStatus
             health = get_book_health(book)
             health_status = health.status.value if hasattr(health.status, "value") else str(health.status)
+
             if health_status == "BLOCKED":
+                blocked_checks = [c.name for c in getattr(health, "checks", [])
+                                  if hasattr(c, "status") and getattr(c.status, "value", str(c.status)) == "BLOCKED"]
                 raise GuardError(
-                    f"book health BLOCKED: {getattr(health, 'reason', 'unknown')}",
+                    f"book health BLOCKED: {','.join(blocked_checks) or 'unknown'}",
                     book=book, strategy_id=strategy_id,
                 )
+
             if health_status == "UNKNOWN":
                 raise GuardError(
                     f"book health UNKNOWN (fail-closed in live)",
                     book=book, strategy_id=strategy_id,
                 )
+
             if health_status == "DEGRADED":
+                # Inspect WHICH check is DEGRADED to decide
+                degraded_checks = [
+                    c for c in getattr(health, "checks", [])
+                    if hasattr(c, "status") and getattr(c.status, "value", str(c.status)) == "DEGRADED"
+                ]
+                # Categorize: data freshness or whitelist_integrity = block
+                blocking_causes = []
+                allowed_causes = []
+                for c in degraded_checks:
+                    name = getattr(c, "name", "")
+                    if name.startswith("data::") or name == "whitelist_integrity":
+                        blocking_causes.append(name)
+                    elif name in ("ibkr_account", "futures_state", "ibkr_equity", "crypto_equity"):
+                        # Snapshot transient or state slightly stale - tolerable
+                        allowed_causes.append(name)
+                    else:
+                        # Unknown cause -> conservative block
+                        blocking_causes.append(name)
+
+                if blocking_causes:
+                    raise GuardError(
+                        f"book health DEGRADED on critical checks: {','.join(blocking_causes)}",
+                        book=book, strategy_id=strategy_id,
+                    )
                 logger.warning(
-                    f"pre_order_guard: book {book} DEGRADED — order allowed with warning"
+                    f"pre_order_guard: book {book} DEGRADED on tolerated checks "
+                    f"({','.join(allowed_causes)}) — order allowed"
                 )
         except GuardError:
             raise

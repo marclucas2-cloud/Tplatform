@@ -1,23 +1,31 @@
 #!/usr/bin/env python3
 """
-Portfolio EU LIVE — pipeline multi-strategies europeennes sur IBKR live (port 4002).
+Portfolio EU LIVE — pipeline multi-strategies europeennes sur IBKR (port 4002).
 
-4 strats actives sur IBKR live $10K (clientId=11) :
-  - BCE Momentum Drift v2 (Sharpe 14.93, event BCE)
-  - Auto Sector German (Sharpe 13.43, event auto sector)
-  - Brent Lag Play (Sharpe 4.08, momentum oil)
-  - EU Gap Open (Sharpe 8.56, gap opening EU)
-  - EU Close -> US Afternoon : DISABLED (needs Alpaca live)
+ETAT REEL (2026-04-18 audit P1.5):
+  - Book ibkr_eu = paper_only (cf. config/books_registry.yaml#L91, capital_budget=0)
+  - 5 strats whitelistees en `paper_only` (cf. config/live_whitelist.yaml#L351-380)
+  - Le bloc `if not live:` plus bas force dry_run en pratique
+  - WF officiel (output/wf_eu_results/wf_eu_summary.json) REJECTED toutes les
+    strats EU (commission burn, OOS Sharpe insuffisant) au 2026-03-31
+
+LE FICHIER EST GARDE pour:
+  - Collecte data paper sur strats EU (signaux generes, pas executes)
+  - Future migration vers IBKR live IF strats validees a un futur WF
+
+Strats anciennement marquees "live" (BCE Momentum, Auto Sector, Brent Lag,
+EU Gap Open) sont desactivees dans config/strategies_eu.yaml depuis l'audit
+P1.4 (2026-04-18). Les Sharpe legacy 13-14 etaient des artefacts WF buggy.
 
 Usage :
-    python scripts/live_portfolio_eu.py              # execution
-    python scripts/live_portfolio_eu.py --dry-run    # sans ordres
-    python scripts/live_portfolio_eu.py --status     # positions IBKR
-    python scripts/live_portfolio_eu.py --intraday   # mode intraday (cron 5min)
+    python scripts/live_portfolio_eu.py              # paper, dry_run force
+    python scripts/live_portfolio_eu.py --status     # positions IBKR (read only)
+    python scripts/live_portfolio_eu.py --intraday   # mode intraday paper
 
 NOTE: ce fichier etait anciennement nomme `paper_portfolio_eu.py`.
-Rename 2026-04-15 (P0.3 live hardening) car son contenu route effectivement
-du LIVE IBKR port 4002, le nom "paper" etait trompeur et dangereux.
+Rename 2026-04-15 (P0.3 live hardening). Le nom contient "live" pour signaler
+qu'il PEUT router live IBKR si jamais le book passe live, mais dans la config
+actuelle (paper_only) il opere en mode dry_run uniquement.
 Un shim `scripts/paper_portfolio_eu.py` reste pour retrocompatibilite mais
 affiche un DeprecationWarning.
 """
@@ -55,15 +63,19 @@ logger = logging.getLogger("portfolio_eu")
 
 ROOT = Path(__file__).parent.parent
 STRATEGIES_YAML = ROOT / "config" / "strategies_eu.yaml"
-STATE_FILE = ROOT / "paper_portfolio_eu_state.json"
+STATE_FILE = ROOT / "data" / "state" / "ibkr_eu" / "portfolio_state.json"
+LEGACY_STATE_FILES = [
+    ROOT / "paper_portfolio_eu_state.json",
+]
 
 # =============================================================================
 # CONFIGURATION
 # =============================================================================
 
-# Capital initial sert uniquement de fallback si IBKR indisponible au 1er run
-# En fonctionnement normal, l'equity live IBKR est utilisee
-_FALLBACK_CAPITAL_EU = 10_000.0
+# Reference capital sert uniquement de baseline analytique pour le mode paper
+# ou pour un premier boot sans historique. Il ne doit JAMAIS servir de sizing
+# live si IBKR n'est pas disponible.
+_REFERENCE_CAPITAL_EU = 10_000.0
 MAX_DAILY_DRAWDOWN = 0.05            # 5% circuit-breaker
 MAX_POSITION_SIZE = 0.10             # 10% max par position individuelle
 MAX_LIVE_POSITIONS = 10              # Max positions simultanees EU
@@ -145,20 +157,30 @@ except Exception as e:
 # =============================================================================
 
 def load_state() -> dict:
-    """Charge le state depuis le fichier JSON (ou reconstruit depuis IBKR)."""
-    if STATE_FILE.exists():
+    """Charge le state EU depuis le chemin canonique, ou migre le legacy."""
+    candidate_paths = [STATE_FILE, *LEGACY_STATE_FILES]
+    for candidate in candidate_paths:
+        if not candidate.exists():
+            continue
         try:
-            with open(STATE_FILE) as f:
-                return json.load(f)
+            with open(candidate, encoding="utf-8") as f:
+                state = json.load(f)
+            if candidate != STATE_FILE:
+                logger.warning(
+                    "EU state legacy detected at %s - migrating to %s",
+                    candidate, STATE_FILE,
+                )
+                save_state(state)
+            return state
         except (OSError, json.JSONDecodeError):
-            logger.warning("State file corrompu, reconstruction")
+            logger.warning("State file corrompu (%s), reconstruction", candidate)
 
     logger.info("Reconstruction du state EU...")
     state = {
-        "capital": _FALLBACK_CAPITAL_EU,
+        "capital": _REFERENCE_CAPITAL_EU,
         "positions": {},
         "allocations": {},
-        "daily_capital_start": _FALLBACK_CAPITAL_EU,
+        "daily_capital_start": _REFERENCE_CAPITAL_EU,
         "daily_pnl": 0.0,
         "last_run_date": None,
         "history": [],
@@ -190,9 +212,10 @@ def load_state() -> dict:
 
 
 def save_state(state: dict):
-    """Persiste le state dans paper_portfolio_eu_state.json."""
+    """Persiste le state dans le chemin canonique du book EU."""
     try:
-        with open(STATE_FILE, "w") as f:
+        STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        with open(STATE_FILE, "w", encoding="utf-8") as f:
             json.dump(state, f, indent=2, default=str)
     except OSError as e:
         logger.warning("Impossible de sauvegarder le state EU: %s", e)
@@ -1020,7 +1043,7 @@ def run_eu(dry_run: bool = False):
     # Reset daily PnL si nouveau jour
     today = now.strftime("%Y-%m-%d")
     if state.get("last_run_date") != today:
-        state["daily_capital_start"] = state.get("capital", _FALLBACK_CAPITAL_EU)
+        state["daily_capital_start"] = state.get("capital", _REFERENCE_CAPITAL_EU)
         state["daily_pnl"] = 0.0
         state["last_run_date"] = today
 
@@ -1183,11 +1206,11 @@ def show_status():
     state = load_state()
 
     print(f"\n{'='*60}")
-    print("  PAPER PORTFOLIO EU — MULTI-STRATEGY DASHBOARD")
+    print("  LIVE PORTFOLIO EU - MULTI-STRATEGY DASHBOARD")
     print(f"{'='*60}")
 
-    total_capital = state.get("capital", _FALLBACK_CAPITAL_EU)
-    port_return = (total_capital / _FALLBACK_CAPITAL_EU - 1) * 100
+    total_capital = state.get("capital", _REFERENCE_CAPITAL_EU)
+    port_return = (total_capital / _REFERENCE_CAPITAL_EU - 1) * 100
 
     print(f"  Capital  : ${total_capital:,.2f}")
     print(f"  Return   : {port_return:+.2f}%")
@@ -1253,7 +1276,7 @@ def show_status():
 # =============================================================================
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Paper Portfolio EU Multi-Strategy (IBKR)")
+    parser = argparse.ArgumentParser(description="Live Portfolio EU Multi-Strategy (IBKR)")
     parser.add_argument("--dry-run", action="store_true", help="Simuler sans ordres")
     parser.add_argument("--status", action="store_true", help="Dashboard consolide")
     parser.add_argument("--intraday", action="store_true", help="Mode intraday (cron 5min)")

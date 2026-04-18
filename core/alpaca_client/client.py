@@ -14,14 +14,18 @@ Documentation : https://docs.alpaca.markets/reference/
 """
 from __future__ import annotations
 
+import json
 import logging
 import math
 import os
 import time
 from collections import deque
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 logger = logging.getLogger(__name__)
+ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 class _RateLimiter:
@@ -113,16 +117,23 @@ class AlpacaClient:
     def _get_trading_client(self):
         self._rate_limiter.acquire()  # FIX CRO H-1: rate limit avant chaque appel
         if self._trading is None:
-            # GUARD CRITIQUE : empecher tout ordre live par erreur
+            # P1.3 audit 2026-04-18: gouvernance live explicite (avant: hard block).
+            # Si PAPER_TRADING=false, exige ALPACA_LIVE_CONFIRMED=true (parite avec
+            # binance pattern P1.2). Sinon refuse pour eviter live accidentel.
+            # Doctrine actuelle: alpaca paper-only (Marc utilise $100K paper). Si
+            # un jour funded live, set ALPACA_LIVE_CONFIRMED=true explicite.
             if not self._paper:
-                logger.critical(
-                    "ABORT: PAPER_TRADING=false detecte. "
-                    "Le trading live n'est PAS autorise sans validation explicite. "
-                    "Settez PAPER_TRADING=true dans l'environnement."
-                )
-                raise AlpacaAuthError(
-                    "Trading LIVE bloque. Settez PAPER_TRADING=true."
-                )
+                live_confirmed = os.getenv("ALPACA_LIVE_CONFIRMED", "").lower() == "true"
+                if not live_confirmed:
+                    logger.critical(
+                        "ABORT: PAPER_TRADING=false detecte mais ALPACA_LIVE_CONFIRMED!=true. "
+                        "Pour activer live: set ALPACA_LIVE_CONFIRMED=true en env. "
+                        "Sinon set PAPER_TRADING=true (defaut/recommande)."
+                    )
+                    raise AlpacaAuthError(
+                        "Trading LIVE refuse: settez ALPACA_LIVE_CONFIRMED=true ou PAPER_TRADING=true."
+                    )
+                logger.warning("AlpacaClient mode LIVE confirme (ALPACA_LIVE_CONFIRMED=true)")
             try:
                 from alpaca.trading.client import TradingClient
             except ImportError:
@@ -147,6 +158,21 @@ class AlpacaClient:
             )
         return self._data
 
+    def _persist_equity_state(self, payload: dict[str, Any]) -> None:
+        """Persist Alpaca account snapshot for health/audit usage."""
+        state_path = ROOT / "data" / "state" / "alpaca_us" / "equity_state.json"
+        snapshot = {
+            **payload,
+            "source": "alpaca_client.authenticate",
+            "updated_at": datetime.now(timezone.utc).isoformat(),
+            "paper": self._paper,
+        }
+        try:
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            state_path.write_text(json.dumps(snapshot, indent=2), encoding="utf-8")
+        except Exception as e:
+            logger.debug(f"Alpaca equity snapshot persist skipped: {e}")
+
     # ─── Authentification ────────────────────────────────────────────────────
 
     def authenticate(self) -> dict:
@@ -162,7 +188,7 @@ class AlpacaClient:
                 f"Alpaca authentifié ({mode}) — "
                 f"equity={account.equity}, buying_power={account.buying_power}"
             )
-            return {
+            result = {
                 "status":        account.status,
                 "equity":        float(account.equity),
                 "cash":          float(account.cash),
@@ -171,6 +197,8 @@ class AlpacaClient:
                 "paper":         self._paper,
                 "account_number": account.account_number,
             }
+            self._persist_equity_state(result)
+            return result
         except Exception as e:
             raise AlpacaAuthError(f"Authentification Alpaca échouée : {e}")
 
@@ -412,15 +440,16 @@ class AlpacaClient:
         )
         _is_system = any(_authorized_by.startswith(p) for p in _SYSTEM_CALLERS)
         if not _is_system:
+            _GuardError = type("_DummyGuardError", (Exception,), {})
             try:
-                from core.governance.pre_order_guard import pre_order_guard, GuardError
+                from core.governance.pre_order_guard import pre_order_guard, GuardError as _GuardError
                 pre_order_guard(
                     book="alpaca_us",
                     strategy_id=_authorized_by,
                     symbol=symbol,
                     paper_mode=self._paper,
                 )
-            except GuardError as ge:
+            except _GuardError as ge:
                 raise AlpacaAPIError(f"pre_order_guard reject: {ge.reason}")
             except ImportError:
                 logger.warning("pre_order_guard unavailable — BLOCKING order")

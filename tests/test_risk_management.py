@@ -233,16 +233,20 @@ class TestPaperOnlyGuard:
     """Le guard paper-only doit empecher tout ordre en mode live."""
 
     def test_paper_only_guard(self):
-        """Avec PAPER_TRADING=false, le client Alpaca doit refuser les ordres."""
+        """Avec PAPER_TRADING=false ET ALPACA_LIVE_CONFIRMED!=true, le client refuse les ordres.
+
+        P1.3 audit 2026-04-18: passage de hard-block vers gouvernance live explicite
+        (parite avec binance pattern P1.2). Message d'erreur change.
+        """
         from core.alpaca_client.client import AlpacaAuthError, AlpacaClient
 
-        with patch.dict(os.environ, {"PAPER_TRADING": "false"}):
+        with patch.dict(os.environ, {"PAPER_TRADING": "false", "ALPACA_LIVE_CONFIRMED": ""}):
             client = AlpacaClient(
                 api_key="test",
                 secret_key="test",
                 paper=False,
             )
-            with pytest.raises(AlpacaAuthError, match="Trading LIVE bloque"):
+            with pytest.raises(AlpacaAuthError, match="ALPACA_LIVE_CONFIRMED"):
                 client._get_trading_client()
 
 

@@ -113,8 +113,13 @@ def reconcile_ibkr_futures(paper: bool = False) -> dict:
         result["error"] = f"ibkr query failed: {e}"
         return result
 
-    state_path = (ROOT / "data" / "state" /
-                  ("futures_positions_paper.json" if paper else "futures_positions_live.json"))
+    state_paths = [
+        ROOT / "data" / "state" / "ibkr_futures" /
+        ("positions_paper.json" if paper else "positions_live.json"),
+        ROOT / "data" / "state" /
+        ("futures_positions_paper.json" if paper else "futures_positions_live.json"),
+    ]
+    state_path = next((p for p in state_paths if p.exists()), state_paths[0])
     if state_path.exists():
         try:
             local = json.loads(state_path.read_text(encoding="utf-8"))
@@ -135,12 +140,99 @@ def reconcile_ibkr_futures(paper: bool = False) -> dict:
     return result
 
 
+def reconcile_alpaca_us() -> dict:
+    """Reconcile Alpaca: positions broker vs state file. Paper-only par doctrine."""
+    result = {
+        "book": "alpaca_us", "ts": datetime.now(timezone.utc).isoformat(),
+        "divergences": [], "broker_positions": [], "local_positions": [],
+        "broker_equity": None,
+    }
+    try:
+        from core.alpaca_client.client import AlpacaClient
+        client = AlpacaClient.from_env()
+        info = client.get_account_info()
+        result["broker_equity"] = info.get("equity")
+        broker_pos = client.get_positions()
+        result["broker_positions"] = [
+            {"symbol": p.get("symbol"), "qty": float(p.get("qty", 0)),
+             "market_val": float(p.get("market_val", 0))}
+            for p in broker_pos
+            if abs(float(p.get("market_val", 0))) > 1
+        ]
+    except Exception as e:
+        result["error"] = f"alpaca broker query failed: {e}"
+        return result
+
+    # Local state files (alpaca paper portfolio)
+    local_paths = [
+        ROOT / "data" / "state" / "alpaca_us" / "positions.json",
+        ROOT / "data" / "state" / "paper_portfolio_state.json",  # legacy
+    ]
+    local_syms: set[str] = set()
+    for p in local_paths:
+        if p.exists():
+            try:
+                data = json.loads(p.read_text(encoding="utf-8"))
+                if isinstance(data, dict) and "positions" in data:
+                    local_syms.update(data["positions"].keys())
+                elif isinstance(data, list):
+                    local_syms.update(item.get("symbol") for item in data if "symbol" in item)
+                break
+            except Exception as e:
+                logger.debug(f"reconcile_alpaca_us: local state read error {p}: {e}")
+    result["local_positions"] = sorted(local_syms)
+
+    broker_syms = {p["symbol"] for p in result["broker_positions"]}
+    only_broker = broker_syms - local_syms
+    only_local = local_syms - broker_syms
+    if only_broker:
+        result["divergences"].append({"type": "only_in_broker", "symbols": list(only_broker)})
+    if only_local:
+        result["divergences"].append({"type": "only_in_local", "symbols": list(only_local)})
+
+    return result
+
+
+def reconcile_ibkr_eu() -> dict:
+    """Reconcile IBKR EU: actuellement paper_only (capital_budget=0).
+
+    Le book est paper_only par doctrine (config/books_registry.yaml). Le seul
+    runtime actif est mib_estx50_spread (paper runner isole, journal JSONL).
+    Pas de positions broker IBKR EU live a reconcilier (capital live = 0 EUR).
+    """
+    result = {
+        "book": "ibkr_eu", "ts": datetime.now(timezone.utc).isoformat(),
+        "divergences": [], "broker_positions": [], "local_positions": [],
+        "mode": "paper_only",
+        "note": "Book paper_only, capital_budget_usd=0. mib_estx50_spread paper "
+                "runner journal: data/state/mib_estx50_spread/paper_trades.jsonl",
+    }
+    # mib_estx50_spread spread state (open spread tracking, paper)
+    spread_state = ROOT / "data" / "state" / "mib_estx50_spread" / "spread_state.json"
+    if spread_state.exists():
+        try:
+            data = json.loads(spread_state.read_text(encoding="utf-8"))
+            pos = data.get("position")
+            if pos:
+                result["local_positions"] = [
+                    f"{pos.get('sym_a')}/{pos.get('sym_b')} {pos.get('direction')} "
+                    f"({pos.get('n_a')}+{pos.get('n_b')})"
+                ]
+        except Exception as e:
+            result["error"] = f"spread state read error: {e}"
+    return result
+
+
 def reconcile_book(book_id: str) -> dict:
     """Dispatcher reconciliation par book."""
     if book_id == "binance_crypto":
         return reconcile_binance_crypto()
     if book_id == "ibkr_futures":
         return reconcile_ibkr_futures(paper=False)
+    if book_id == "alpaca_us":
+        return reconcile_alpaca_us()
+    if book_id == "ibkr_eu":
+        return reconcile_ibkr_eu()
     raise ValueError(f"Reconciliation not implemented for book: {book_id}")
 
 
