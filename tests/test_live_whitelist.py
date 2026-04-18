@@ -61,6 +61,16 @@ def test_mcl_overnight_mon_trend10_is_paper_only():
     assert entry["runtime_module"] == "strategies_v2.futures.mcl_overnight_mon_trend.MCLOvernightMonTrend"
 
 
+def test_btc_asia_mes_leadlag_q70_v80_is_paper_only():
+    """T3-A2 INT-B 2026-04-18 promotion: paper_only log-only retrospective.
+    Cross-asset MES->BTC. Ne doit PAS etre live_allowed."""
+    assert is_strategy_live_allowed("btc_asia_mes_leadlag_q70_v80", "binance_crypto") is False
+    entry = get_strategy_entry("btc_asia_mes_leadlag_q70_v80", "binance_crypto")
+    assert entry is not None
+    assert entry["status"] == "paper_only"
+    assert entry["runtime_module"] == "strategies.crypto.btc_asia_mes_leadlag"
+
+
 def test_unknown_strategy_blocked():
     """Une strategie hors whitelist doit etre bloquee."""
     assert is_strategy_live_allowed("fake_strategy_xyz", "ibkr_futures") is False

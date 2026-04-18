@@ -381,6 +381,49 @@ binance_crypto:
       Demote 2026-04-18: re-WF verdict REJECTED. WR 8-40% sur 5 fenetres OOS,
       Sharpe -12.45. Source initiale wf_crypto_all.py etait buggy.
 
+  # ---------------------------------------------------------------------------
+  # T3-A2 INT-B 2026-04-18 discovery batch paper promotion (cross-asset)
+  # ---------------------------------------------------------------------------
+
+  - strategy_id: btc_asia_mes_leadlag_q70_v80
+    book: binance_crypto
+    status: paper_only
+    runtime_entrypoint: "worker.py:run_btc_asia_mes_leadlag_paper_cycle (10h30 Paris)"
+    runtime_module: "strategies.crypto.btc_asia_mes_leadlag"
+    wf_source: "docs/research/wf_reports/T3A-02_mes_btc_asia_leadlag.md + INT-B_discovery_batch.md"
+    sizing_policy: "notional_fixed_10k_usd (paper, log-only)"
+    max_risk_usd: 800  # 8% MaxDD backtest * $10K notional = $770 worst-case
+    kill_criteria:
+      drawdown_absolute: -10%
+      drawdown_rolling_90d: -8%
+      sharpe_rolling_60d: -0.5
+      divergence_vs_backtest: "1x_std"   # resserre car rolling quantile vs fixed
+      correlation_drift: ">0.70"
+    notes: |
+      T3-A2 VALIDATED (Sharpe +1.07, MaxDD -7.7%, WF 4/5 OOS PASS, MC P(DD>30%) 0%).
+      Backtest 489 days 2024-04 -> 2026-03 (scripts/research/backtest_t3a_mes_btc_leadlag.py).
+      Signal: MES US 15-21 UTC return D-1 vs quantile 70 / vol quantile 80 -> trade BTC
+      Asia session 00-08 UTC day D. Cost 0.10% RT sur $10K notional.
+
+      RUNTIME (paper log-only retrospective):
+        - Cycle 10h30 Paris quotidien (weekday) via run_btc_asia_mes_leadlag_paper_cycle
+        - Lit MES_1H_YF2Y.parquet + BTCUSDT_1h.parquet (data_is_fresh guard 3j)
+        - Calcule signal pour session Asia qui vient de fermer (yesterday UTC)
+        - Simule entry at BTC open 00:00 UTC / exit at close 07:59 UTC
+        - Journal: data/state/btc_asia_mes_leadlag/paper_journal.jsonl
+        - ZERO real order, idempotent (1 entree par target_date)
+
+      CAVEATS pour promotion live:
+        1. Mode "both" = long+short. Binance France ne supporte pas facilement
+           le short crypto spot. Variante long_only q80_v80 (Sharpe +1.08) a
+           considerer pour le live.
+        2. Rolling quantile 365j (runtime) vs quantile full-history (backtest).
+           Divergence attendue petite mais a mesurer sur 30j paper.
+        3. BTCUSDT_1h.parquet observe stale ~20j 2026-04-18. Fix data pipeline
+           ops (cron 15min Binance client refresh) requis avant promotion.
+
+      Start paper: 2026-04-18.
+
 # -----------------------------------------------------------------------------
 # IBKR FX — DESACTIVE (IBKR_FX_ENABLED=false sur VPS)
 # -----------------------------------------------------------------------------

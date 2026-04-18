@@ -1651,6 +1651,130 @@ def run_mib_estx50_spread_paper_cycle():
         logger.warning(f"MIB/ESTX50 SPREAD cycle error: {e}", exc_info=True)
 
 
+def run_btc_asia_mes_leadlag_paper_cycle():
+    """BTC/MES Asia session lead-lag — paper retrospective log-only.
+
+    T3-A2 VALIDATED (Sharpe +1.07, WF 4/5, MC P(DD>30%)=0%). Source:
+    scripts/research/backtest_t3a_mes_btc_leadlag.py, docs/research/wf_reports/
+    T3A-02_mes_btc_asia_leadlag.md.
+
+    Tourne 1x/jour vers 10:30 Paris (~08:30 UTC summer) apres close BTC Asia
+    session (08:00 UTC). Calcule retrospectivement le signal pour la session
+    qui vient de se terminer (yesterday UTC), simule entry at open 00:00 UTC /
+    exit at close 07:59 UTC, logge dans paper journal JSONL.
+
+    Pas de broker, pas de capital. Log-only 30j pour valider edge avant
+    transition vers paper reel ou live_probation.
+
+    Caveats:
+      - BTCUSDT_1h parquet doit etre fresh (<3j). Sinon skip + warning.
+      - MES_1H_YF2Y doit etre fresh (<3j).
+      - Rolling quantile window 365j (vs backtest quantile sur toute histoire).
+    """
+    try:
+        from strategies.crypto.btc_asia_mes_leadlag import (
+            build_daily_dataset, compute_signal_for_date, data_is_fresh,
+            simulate_paper_trade,
+        )
+
+        mes_path = ROOT / "data" / "futures" / "MES_1H_YF2Y.parquet"
+        btc_path = ROOT / "data" / "crypto" / "candles" / "BTCUSDT_1h.parquet"
+        journal_path = ROOT / "data" / "state" / "btc_asia_mes_leadlag" / "paper_journal.jsonl"
+        journal_path.parent.mkdir(parents=True, exist_ok=True)
+
+        if not mes_path.exists() or not btc_path.exists():
+            logger.warning("btc_asia_mes_leadlag: data files missing (MES_1H_YF2Y or BTCUSDT_1h)")
+            return
+
+        mes = pd.read_parquet(mes_path)
+        btc = pd.read_parquet(btc_path)
+
+        # Track consecutive stale-data skips for operator visibility
+        stale_counter_path = journal_path.parent / "stale_counter.json"
+        if not data_is_fresh(mes, btc, max_age_days=3):
+            try:
+                counter = json.loads(stale_counter_path.read_text(encoding="utf-8")) if stale_counter_path.exists() else {"count": 0, "last_skip_utc": None}
+            except Exception:
+                counter = {"count": 0, "last_skip_utc": None}
+            counter["count"] = int(counter.get("count", 0)) + 1
+            counter["last_skip_utc"] = pd.Timestamp.utcnow().isoformat()
+            stale_counter_path.write_text(json.dumps(counter), encoding="utf-8")
+            if counter["count"] >= 3:
+                logger.error(
+                    f"btc_asia_mes_leadlag: DATA STALE {counter['count']} cycles consecutifs. "
+                    f"Fix BTCUSDT_1h.parquet + MES_1H_YF2Y cron refresh."
+                )
+            else:
+                logger.warning("btc_asia_mes_leadlag: data stale (>3j), skip")
+            return
+        # Data fresh: reset counter
+        if stale_counter_path.exists():
+            try:
+                stale_counter_path.unlink()
+            except Exception:
+                pass
+
+        daily = build_daily_dataset(mes, btc)
+        # Target: last full UTC day (yesterday)
+        now_utc = pd.Timestamp.utcnow().tz_localize(None)
+        target_date = (now_utc - pd.Timedelta(days=1)).normalize()
+
+        if target_date not in daily.index:
+            logger.info(f"btc_asia_mes_leadlag: target {target_date.date()} not in daily")
+            return
+
+        signal = compute_signal_for_date(daily, target_date, rolling_window=365, mode="both")
+        if signal is None:
+            logger.info(f"btc_asia_mes_leadlag: no signal computable for {target_date.date()}")
+            return
+
+        trade = simulate_paper_trade(daily, signal)
+
+        # Idempotence: skip if already logged for target_date
+        journaled_dates: set[str] = set()
+        if journal_path.exists():
+            for line in journal_path.read_text(encoding="utf-8").splitlines():
+                try:
+                    entry = json.loads(line)
+                    d = entry.get("target_date")
+                    if d:
+                        journaled_dates.add(d)
+                except Exception:
+                    pass
+        if target_date.isoformat() in journaled_dates:
+            logger.debug(f"btc_asia_mes_leadlag: already journaled {target_date.date()}")
+            return
+
+        entry_dict = {
+            "target_date": target_date.isoformat(),
+            "logged_at_utc": now_utc.isoformat(),
+            "side": signal.side,
+            "mes_sig": signal.mes_sig,
+            "mes_vol": signal.mes_vol,
+            "signal_thr": signal.signal_thr,
+            "vol_thr": signal.vol_thr,
+            "rolling_window": signal.rolling_window_used,
+            "entry_price": trade.entry_price,
+            "exit_price": trade.exit_price,
+            "notional_usd": trade.notional_usd,
+            "gross_ret": trade.gross_ret,
+            "cost_pct": trade.cost_pct,
+            "pnl_usd": trade.pnl_usd,
+        }
+        with journal_path.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry_dict) + "\n")
+
+        logger.info(
+            f"btc_asia_mes_leadlag paper: {signal.side} @ {target_date.date()} "
+            f"pnl ${trade.pnl_usd:+.0f} (mes_sig={signal.mes_sig:+.4f}, thr={signal.signal_thr:.4f})"
+        )
+    except ImportError as ie:
+        logger.warning(f"btc_asia_mes_leadlag: missing dep: {ie}")
+    except Exception as e:
+        # Bug inattendu (div par zero, KeyError, ...) -> error level pour visibilite
+        logger.error(f"btc_asia_mes_leadlag cycle error: {e}", exc_info=True)
+
+
 def _make_macro_ecb_executor(mode: str):
     """Factory for MacroECB futures executor — places bracket orders on IBKR.
 
@@ -6105,6 +6229,17 @@ def main():
             run_mib_estx50_spread_paper_cycle._done_today = True
         if is_weekday() and now_paris.hour < 17:
             run_mib_estx50_spread_paper_cycle._done_today = False
+
+        # === BTC/MES ASIA LEADLAG PAPER (7j/7, 10h30 Paris = apres close BTC Asia 08:00 UTC) ===
+        # T3-A2 VALIDATED (Sharpe +1.07, WF 4/5). Log-only retrospective journal.
+        # Ne requiert pas weekday (crypto trade 24/7) mais le MES signal use US weekday data.
+        # Idempotence via journal dedup (target_date) = single source of truth. Pas de
+        # flag _done_today car un purge/rotate de journal doit re-trigger le cycle.
+        if now_paris.hour == 10 and now_paris.minute >= 30:
+            try:
+                run_btc_asia_mes_leadlag_paper_cycle()
+            except Exception as _bl_err:
+                logger.error(f"BTC/MES LEADLAG error: {_bl_err}", exc_info=True)
 
         # === BRACKET WATCHDOG toutes les 5 minutes (24/7) ===
         # Verifie que chaque position futures live a un bracket actif.
