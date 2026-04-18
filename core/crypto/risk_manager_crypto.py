@@ -682,6 +682,10 @@ class CryptoRiskManager:
         # Guard: reset ALL baselines that are wildly different from current equity.
         # This catches config/restart mismatches that would trigger false kill switches.
         # Check each baseline individually (not just daily).
+        # 2026-04-18 fix: threshold 1.5 -> 1.30 pour attraper les transferts
+        # spot<->earn moderes (ex: dd_equity $7.1K -> $5.6K = ratio 1.27, avant
+        # 1.5 threshold) qui echappaient et produisaient des kill switch faux-positifs -21%.
+        _BASELINE_MISMATCH_THRESHOLD = 1.30
         _baselines = {
             "daily": self._daily_start_equity,
             "hourly": self._hourly_start_equity,
@@ -692,12 +696,13 @@ class CryptoRiskManager:
         _reset_needed = False
         for _bl_name, _bl_val in _baselines.items():
             if _bl_val > 0 and (
-                current_equity / _bl_val > 1.5
-                or _bl_val / current_equity > 1.5
+                current_equity / _bl_val > _BASELINE_MISMATCH_THRESHOLD
+                or _bl_val / current_equity > _BASELINE_MISMATCH_THRESHOLD
             ):
                 logger.warning(
                     f"Drawdown baseline mismatch ({_bl_name}): "
-                    f"${_bl_val:,.0f} vs current=${current_equity:,.0f}"
+                    f"${_bl_val:,.0f} vs current=${current_equity:,.0f} "
+                    f"(ratio > {_BASELINE_MISMATCH_THRESHOLD}x)"
                 )
                 _reset_needed = True
 

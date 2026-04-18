@@ -4211,22 +4211,33 @@ def run_crypto_cycle():
                 risk_mgr._last_hourly_reset = _dd.get("last_hourly_reset", time.time())
                 risk_mgr._check_count = _dd.get("warmup_count", 0)
 
-                # FIX: detect spot<->earn transfer (not a real loss).
-                # If dd_equity dropped >5% from baseline BUT total_equity is stable
-                # (<2% change), it's a classification shift, not a real DD.
+                # FIX spot<->earn transfer detection (raffine 2026-04-18):
+                # Si dd_equity a bouge >3% (avant: 5%, trop laxiste -> faux positifs
+                # a -21.4%) MAIS total_equity est stable (<2% change), c'est une
+                # reclassification spot/earn, pas une vraie DD.
+                # Action: REBASELINE TOUS les baselines incluant peak_equity (not
+                # max-merge, qui gardait l'ancienne base superieure et produisait
+                # des faux DD peak -21%).
                 _prev_total = _dd.get("total_equity", 0)
                 _prev_daily = _dd.get("daily_start", dd_equity)
                 if _prev_total > 0 and _prev_daily > 0:
                     _dd_pct = (dd_equity - _prev_daily) / _prev_daily
                     _total_pct = (current_equity - _prev_total) / _prev_total
-                    if _dd_pct < -0.05 and abs(_total_pct) < 0.02:
+                    # Threshold 3% (abaisse de 5%) pour detecter les transferts moderes
+                    if _dd_pct < -0.03 and abs(_total_pct) < 0.02:
                         logger.warning(
                             f"  SPOT<->EARN TRANSFER DETECTED: dd_equity {_dd_pct:.1%} "
-                            f"but total_equity {_total_pct:.1%}. Rebaselining dd_equity."
+                            f"but total_equity {_total_pct:.1%}. "
+                            f"Rebaselining ALL dd baselines (prev_peak=${risk_mgr._peak_equity:,.0f} "
+                            f"-> ${dd_equity:,.0f})."
                         )
                         risk_mgr._daily_start_equity = dd_equity
                         risk_mgr._hourly_start_equity = dd_equity
-                        risk_mgr._peak_equity = max(risk_mgr._peak_equity, dd_equity)
+                        risk_mgr._weekly_start_equity = dd_equity
+                        risk_mgr._monthly_start_equity = dd_equity
+                        # Peak reset complet (pas max) - la vieille peak etait base
+                        # sur une classification differente, non comparable.
+                        risk_mgr._peak_equity = dd_equity
 
                 # Auto-reset daily/weekly/monthly si le jour/semaine/mois a change
                 last_date = _dd.get("last_date", "")

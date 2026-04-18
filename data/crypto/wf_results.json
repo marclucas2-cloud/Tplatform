@@ -1,5 +1,5 @@
 {
-  "_REGENERATED_AT": "2026-04-18T07:46:35.912274+00:00",
+  "_REGENERATED_AT": "2026-04-18T15:31:23.404144+00:00",
   "_REGENERATION_NOTE": "Audit P0.2 2026-04-18: regeneration via wf_crypto_real_backtest.py event-driven (vs original wf_crypto_all.py qui ne backtestait pas). Strats avec compute_indicators pattern: backtest reel. Strats avec kwargs specifiques: marque NEEDS_RE_WF (kwargs simulator a coder). Cost model Binance France realistic (commission 0.10% + slip 3bps).",
   "_PREVIOUS_WAS_INVALID": true,
   "btc_eth_dual_momentum": {
@@ -12,7 +12,7 @@
     "profitable_ratio": 0.2,
     "total_oos_trades": 102,
     "error": "",
-    "timestamp": "2026-04-18T07:46:27.527909+00:00",
+    "timestamp": "2026-04-18T15:29:55.991443+00:00",
     "windows": [
       {
         "window_idx": 0,
@@ -88,7 +88,7 @@
     "profitable_ratio": 0.0,
     "total_oos_trades": 0,
     "error": "",
-    "timestamp": "2026-04-18T07:46:30.020666+00:00",
+    "timestamp": "2026-04-18T15:29:57.639798+00:00",
     "windows": [
       {
         "window_idx": 0,
@@ -164,7 +164,7 @@
     "profitable_ratio": 0.2,
     "total_oos_trades": 51,
     "error": "",
-    "timestamp": "2026-04-18T07:46:35.877808+00:00",
+    "timestamp": "2026-04-18T15:29:59.321893+00:00",
     "windows": [
       {
         "window_idx": 0,
@@ -233,6 +233,234 @@
   "btc_mean_reversion": {
     "strategy_name": "btc_mean_reversion",
     "tier": "TIER_1",
+    "verdict": "REJECTED",
+    "avg_oos_sharpe": -0.119,
+    "profitable_windows": 2,
+    "total_windows": 5,
+    "profitable_ratio": 0.4,
+    "total_oos_trades": 17,
+    "error": "",
+    "timestamp": "2026-04-18T15:30:22.703714+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "oos_start": "2023-06-30",
+        "oos_end": "2023-08-28",
+        "sharpe": 0.0,
+        "n_trades": 1,
+        "total_pnl_pct": 0.0003,
+        "win_rate": 1.0,
+        "profitable": "True",
+        "max_dd_pct": 0.0,
+        "avg_hold": 2.0
+      },
+      {
+        "window_idx": 1,
+        "oos_start": "2023-08-29",
+        "oos_end": "2023-10-27",
+        "sharpe": 0.0,
+        "n_trades": 1,
+        "total_pnl_pct": -0.0032,
+        "win_rate": 0.0,
+        "profitable": "False",
+        "max_dd_pct": 0.0,
+        "avg_hold": 2.0
+      },
+      {
+        "window_idx": 2,
+        "oos_start": "2023-10-28",
+        "oos_end": "2023-12-26",
+        "sharpe": 8.393,
+        "n_trades": 8,
+        "total_pnl_pct": 0.0159,
+        "win_rate": 0.625,
+        "profitable": "True",
+        "max_dd_pct": -0.0034,
+        "avg_hold": 0.9
+      },
+      {
+        "window_idx": 3,
+        "oos_start": "2023-12-27",
+        "oos_end": "2024-02-24",
+        "sharpe": 3.49,
+        "n_trades": 2,
+        "total_pnl_pct": -0.0006,
+        "win_rate": 0.5,
+        "profitable": "False",
+        "max_dd_pct": -0.002,
+        "avg_hold": 1.2
+      },
+      {
+        "window_idx": 4,
+        "oos_start": "2024-02-25",
+        "oos_end": "2024-04-24",
+        "sharpe": -12.478,
+        "n_trades": 5,
+        "total_pnl_pct": -0.0148,
+        "win_rate": 0.2,
+        "profitable": "False",
+        "max_dd_pct": -0.0126,
+        "avg_hold": 0.9
+      }
+    ],
+    "validation_method": "event_driven_real_backtest_v2_2026-04-18",
+    "cost_model": "comm 0.1% + slip 0.03% = 0.26%/RT"
+  },
+  "vol_expansion_bear": {
+    "strategy_name": "vol_expansion_bear",
+    "tier": "TIER_2",
+    "verdict": "REJECTED",
+    "avg_oos_sharpe": -15.727,
+    "profitable_windows": 2,
+    "total_windows": 5,
+    "profitable_ratio": 0.4,
+    "total_oos_trades": 10,
+    "error": "",
+    "timestamp": "2026-04-18T15:30:50.321634+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "oos_start": "2023-06-30",
+        "oos_end": "2023-08-28",
+        "sharpe": -78.062,
+        "n_trades": 3,
+        "total_pnl_pct": -0.0036,
+        "win_rate": 0.0,
+        "profitable": "False",
+        "max_dd_pct": -0.0021,
+        "avg_hold": 1.1
+      },
+      {
+        "window_idx": 1,
+        "oos_start": "2023-08-29",
+        "oos_end": "2023-10-27",
+        "sharpe": 0.0,
+        "n_trades": 1,
+        "total_pnl_pct": -0.0012,
+        "win_rate": 0.0,
+        "profitable": "False",
+        "max_dd_pct": 0.0,
+        "avg_hold": 0.3
+      },
+      {
+        "window_idx": 2,
+        "oos_start": "2023-10-28",
+        "oos_end": "2023-12-26",
+        "sharpe": 0.0,
+        "n_trades": 1,
+        "total_pnl_pct": 0.0038,
+        "win_rate": 1.0,
+        "profitable": "True",
+        "max_dd_pct": 0.0,
+        "avg_hold": 0.7
+      },
+      {
+        "window_idx": 3,
+        "oos_start": "2023-12-27",
+        "oos_end": "2024-02-24",
+        "sharpe": -1.446,
+        "n_trades": 2,
+        "total_pnl_pct": -0.0005,
+        "win_rate": 0.5,
+        "profitable": "False",
+        "max_dd_pct": 0.0,
+        "avg_hold": 0.7
+      },
+      {
+        "window_idx": 4,
+        "oos_start": "2024-02-25",
+        "oos_end": "2024-04-24",
+        "sharpe": 0.874,
+        "n_trades": 3,
+        "total_pnl_pct": 0.0007,
+        "win_rate": 0.333,
+        "profitable": "True",
+        "max_dd_pct": -0.0019,
+        "avg_hold": 0.5
+      }
+    ],
+    "validation_method": "event_driven_real_backtest_v2_2026-04-18",
+    "cost_model": "comm 0.1% + slip 0.03% = 0.26%/RT"
+  },
+  "range_bb_harvest": {
+    "strategy_name": "range_bb_harvest",
+    "tier": "TIER_2",
+    "verdict": "VALIDATED",
+    "avg_oos_sharpe": 8.847,
+    "profitable_windows": 3,
+    "total_windows": 5,
+    "profitable_ratio": 0.6,
+    "total_oos_trades": 20,
+    "error": "",
+    "timestamp": "2026-04-18T15:31:23.202073+00:00",
+    "windows": [
+      {
+        "window_idx": 0,
+        "oos_start": "2023-06-30",
+        "oos_end": "2023-08-28",
+        "sharpe": -0.492,
+        "n_trades": 7,
+        "total_pnl_pct": -0.0002,
+        "win_rate": 0.571,
+        "profitable": "False",
+        "max_dd_pct": -0.0038,
+        "avg_hold": 1.8
+      },
+      {
+        "window_idx": 1,
+        "oos_start": "2023-08-29",
+        "oos_end": "2023-10-27",
+        "sharpe": 36.317,
+        "n_trades": 2,
+        "total_pnl_pct": 0.0066,
+        "win_rate": 1.0,
+        "profitable": "True",
+        "max_dd_pct": 0.0,
+        "avg_hold": 2.7
+      },
+      {
+        "window_idx": 2,
+        "oos_start": "2023-10-28",
+        "oos_end": "2023-12-26",
+        "sharpe": 12.472,
+        "n_trades": 4,
+        "total_pnl_pct": 0.0071,
+        "win_rate": 0.75,
+        "profitable": "True",
+        "max_dd_pct": -0.0022,
+        "avg_hold": 4.3
+      },
+      {
+        "window_idx": 3,
+        "oos_start": "2023-12-27",
+        "oos_end": "2024-02-24",
+        "sharpe": -4.06,
+        "n_trades": 6,
+        "total_pnl_pct": -0.0065,
+        "win_rate": 0.5,
+        "profitable": "False",
+        "max_dd_pct": -0.0111,
+        "avg_hold": 2.6
+      },
+      {
+        "window_idx": 4,
+        "oos_start": "2024-02-25",
+        "oos_end": "2024-04-24",
+        "sharpe": 0.0,
+        "n_trades": 1,
+        "total_pnl_pct": 0.0037,
+        "win_rate": 1.0,
+        "profitable": "True",
+        "max_dd_pct": 0.0,
+        "avg_hold": 0.3
+      }
+    ],
+    "validation_method": "event_driven_real_backtest_v2_2026-04-18",
+    "cost_model": "comm 0.1% + slip 0.03% = 0.26%/RT"
+  },
+  "weekend_gap": {
+    "strategy_name": "weekend_gap",
+    "tier": "LOW_FREQ",
     "verdict": "INSUFFICIENT_TRADES",
     "avg_oos_sharpe": 0.0,
     "profitable_windows": 0,
@@ -240,12 +468,12 @@
     "profitable_ratio": 0.0,
     "total_oos_trades": 0,
     "error": "",
-    "timestamp": "2026-04-18T07:46:35.911445+00:00",
+    "timestamp": "2026-04-18T15:31:23.403841+00:00",
     "windows": [
       {
         "window_idx": 0,
-        "oos_start": "2023-06-30",
-        "oos_end": "2023-08-28",
+        "oos_start": "2023-01-08",
+        "oos_end": "2023-01-10",
         "sharpe": 0.0,
         "n_trades": 0,
         "total_pnl_pct": 0.0,
@@ -256,8 +484,8 @@
       },
       {
         "window_idx": 1,
-        "oos_start": "2023-08-29",
-        "oos_end": "2023-10-27",
+        "oos_start": "2023-01-11",
+        "oos_end": "2023-01-13",
         "sharpe": 0.0,
         "n_trades": 0,
         "total_pnl_pct": 0.0,
@@ -268,8 +496,8 @@
       },
       {
         "window_idx": 2,
-        "oos_start": "2023-10-28",
-        "oos_end": "2023-12-26",
+        "oos_start": "2023-01-13",
+        "oos_end": "2023-01-15",
         "sharpe": 0.0,
         "n_trades": 0,
         "total_pnl_pct": 0.0,
@@ -280,8 +508,8 @@
       },
       {
         "window_idx": 3,
-        "oos_start": "2023-12-27",
-        "oos_end": "2024-02-24",
+        "oos_start": "2023-01-16",
+        "oos_end": "2023-01-18",
         "sharpe": 0.0,
         "n_trades": 0,
         "total_pnl_pct": 0.0,
@@ -292,8 +520,8 @@
       },
       {
         "window_idx": 4,
-        "oos_start": "2024-02-25",
-        "oos_end": "2024-04-24",
+        "oos_start": "2023-01-18",
+        "oos_end": "2023-01-20",
         "sharpe": 0.0,
         "n_trades": 0,
         "total_pnl_pct": 0.0,
@@ -310,35 +538,14 @@
     "strategy_name": "liquidation_momentum",
     "verdict": "NEEDS_RE_WF",
     "error": "Strategy uses kwargs-driven signal (e.g. friday_close_price, is_sunday_evening) -> requires custom kwargs simulator. Out of scope of this re-WF iteration. PAPER ONLY until re-WF.",
-    "timestamp": "2026-04-18T07:46:35.911474+00:00",
-    "validation_method": "needs_kwargs_simulator_2026-04-18"
-  },
-  "weekend_gap": {
-    "strategy_name": "weekend_gap",
-    "verdict": "NEEDS_RE_WF",
-    "error": "Strategy uses kwargs-driven signal (e.g. friday_close_price, is_sunday_evening) -> requires custom kwargs simulator. Out of scope of this re-WF iteration. PAPER ONLY until re-WF.",
-    "timestamp": "2026-04-18T07:46:35.911485+00:00",
-    "validation_method": "needs_kwargs_simulator_2026-04-18"
-  },
-  "vol_expansion_bear": {
-    "strategy_name": "vol_expansion_bear",
-    "verdict": "NEEDS_RE_WF",
-    "error": "Strategy uses kwargs-driven signal (e.g. friday_close_price, is_sunday_evening) -> requires custom kwargs simulator. Out of scope of this re-WF iteration. PAPER ONLY until re-WF.",
-    "timestamp": "2026-04-18T07:46:35.911493+00:00",
-    "validation_method": "needs_kwargs_simulator_2026-04-18"
-  },
-  "range_bb_harvest": {
-    "strategy_name": "range_bb_harvest",
-    "verdict": "NEEDS_RE_WF",
-    "error": "Strategy uses kwargs-driven signal (e.g. friday_close_price, is_sunday_evening) -> requires custom kwargs simulator. Out of scope of this re-WF iteration. PAPER ONLY until re-WF.",
-    "timestamp": "2026-04-18T07:46:35.911498+00:00",
+    "timestamp": "2026-04-18T15:31:23.403852+00:00",
     "validation_method": "needs_kwargs_simulator_2026-04-18"
   },
   "btc_dominance_v2": {
     "strategy_name": "btc_dominance_v2",
     "verdict": "NEEDS_RE_WF",
     "error": "Strategy uses kwargs-driven signal (e.g. friday_close_price, is_sunday_evening) -> requires custom kwargs simulator. Out of scope of this re-WF iteration. PAPER ONLY until re-WF.",
-    "timestamp": "2026-04-18T07:46:35.911502+00:00",
+    "timestamp": "2026-04-18T15:31:23.403857+00:00",
     "validation_method": "needs_kwargs_simulator_2026-04-18"
   }
 }

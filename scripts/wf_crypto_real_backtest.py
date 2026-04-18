@@ -50,7 +50,7 @@ COMMISSION_RATE = 0.0010
 SLIPPAGE_RATE = 0.0003
 COST_RT = 2 * (COMMISSION_RATE + SLIPPAGE_RATE)  # 0.0026 = 0.26%
 
-# Strats avec compute_indicators + df_full pattern (re-WF possible)
+# Strats avec compute_indicators + df_full pattern (re-WF direct)
 STRATS_INDICATORS_PATTERN = [
     {"id": "btc_eth_dual_momentum", "module": "strategies.crypto.btc_eth_dual_momentum",
      "tier": "TIER_1", "primary_symbol": "BTCUSDT", "tf": "4h"},
@@ -60,16 +60,55 @@ STRATS_INDICATORS_PATTERN = [
      "tier": "TIER_2", "primary_symbol": "BTCUSDT", "tf": "4h"},
     {"id": "btc_mean_reversion", "module": "strategies.crypto.btc_mean_reversion",
      "tier": "TIER_1", "primary_symbol": "BTCUSDT", "tf": "4h"},
+    # 2026-04-18 P0.2 extension: strats avec df_full only (pas de kwargs externes)
+    {"id": "vol_expansion_bear", "module": "strategies.crypto.vol_expansion_bear",
+     "tier": "TIER_2", "primary_symbol": "BTCUSDT", "tf": "4h"},
+    {"id": "range_bb_harvest", "module": "strategies.crypto.range_bb_harvest",
+     "tier": "TIER_2", "primary_symbol": "BTCUSDT", "tf": "4h"},
 ]
 
-# Strats avec kwargs specifiques (re-WF necessite coding kwargs simulator)
-STRATS_NEEDS_KWARGS = [
-    "liquidation_momentum",
-    "weekend_gap",
-    "vol_expansion_bear",
-    "range_bb_harvest",
-    "btc_dominance_v2",
+# Strat avec kwargs weekend (simulator integre ci-dessous)
+STRATS_WEEKEND_KWARGS = [
+    {"id": "weekend_gap", "module": "strategies.crypto.weekend_gap",
+     "tier": "LOW_FREQ", "primary_symbol": "BTCUSDT", "tf": "1h"},
 ]
+
+# Strats avec kwargs externes (OI, funding, dominance) - data non disponible
+STRATS_NEEDS_KWARGS = [
+    "liquidation_momentum",  # oi_change_4h, funding_rate, volume_ratio
+    "btc_dominance_v2",  # dominance_series, returns_data, current_asset
+]
+
+
+def _weekend_gap_kwargs(df: pd.DataFrame, i: int) -> dict:
+    """Simulate weekend_gap kwargs from bar index.
+
+    Builds friday_close_price by looking back to last Friday 22:00 UTC close.
+    Sets is_sunday_evening based on current timestamp.
+    """
+    candle = df.iloc[i]
+    ts = candle.get("timestamp")
+    if ts is None or not hasattr(ts, "dayofweek"):
+        return {}
+    # Check if we're in Sunday 21-23h UTC window
+    is_sunday = (ts.dayofweek == 6) and (21 <= ts.hour <= 23)
+    if not is_sunday:
+        return {}
+    # Find last Friday 22:00 UTC close (look back up to 72 bars on 1h)
+    friday_close = 0.0
+    lookback_max = min(80, i)  # ~3-4 days back
+    for back in range(1, lookback_max):
+        prior = df.iloc[i - back]
+        prior_ts = prior.get("timestamp")
+        if prior_ts is not None and hasattr(prior_ts, "dayofweek"):
+            if prior_ts.dayofweek == 4 and prior_ts.hour == 22:  # Friday 22h
+                friday_close = float(prior["close"])
+                break
+    return {
+        "friday_close_price": friday_close,
+        "is_sunday_evening": True,
+        "traded_this_weekend": False,
+    }
 
 
 @dataclass
@@ -191,20 +230,23 @@ def backtest_strategy(strat_info: dict, df: pd.DataFrame,
 
     if not hasattr(mod, "signal_fn"):
         return [], pd.Series(dtype=float)
-    if not hasattr(mod, "compute_indicators"):
-        return [], pd.Series(dtype=float)
 
-    # PRE-COMPUTE indicators ONCE on full df (warmup safe via .iloc[start:i])
-    original_compute = mod.compute_indicators
-    full_indicators = original_compute(df.copy())
-    cache = IndicatorsCache(full_indicators)
+    # Strats avec compute_indicators utilisent monkeypatch cache.
+    # Strats sans compute_indicators (ex: weekend_gap) -> pas de patch.
+    has_compute = hasattr(mod, "compute_indicators")
+    original_compute = None
+    if has_compute:
+        original_compute = mod.compute_indicators
+        full_indicators = original_compute(df.copy())
+        cache = IndicatorsCache(full_indicators)
 
-    def cached_compute(df_slice):
-        # Strats use df_full.iloc[:i] -> len = i. Return cached slice of same len.
-        return cache.get_slice(len(df_slice))
+        def cached_compute(df_slice):
+            return cache.get_slice(len(df_slice))
 
-    # Monkeypatch
-    mod.compute_indicators = cached_compute
+        mod.compute_indicators = cached_compute
+
+    # weekend_gap needs simulated kwargs
+    use_weekend_sim = strat_info["id"] == "weekend_gap"
 
     try:
         signal_fn = mod.signal_fn
@@ -232,11 +274,15 @@ def backtest_strategy(strat_info: dict, df: pd.DataFrame,
                     state["positions"] = []
 
             # Get strategy signal
+            extra_kwargs = {}
+            if use_weekend_sim:
+                extra_kwargs = _weekend_gap_kwargs(df, i)
             try:
                 sig = signal_fn(
                     candle, state,
                     df_full=df.iloc[:i + 1],
                     borrow_rate=0.0003,
+                    **extra_kwargs,
                 )
             except Exception:
                 sig = None
@@ -284,7 +330,8 @@ def backtest_strategy(strat_info: dict, df: pd.DataFrame,
             daily_pnl_pct[date_key] = daily_pnl_pct.get(date_key, 0.0) + trade.pnl_pct
     finally:
         # Restore original compute_indicators (avoid side effect on other tests/imports)
-        mod.compute_indicators = original_compute
+        if original_compute is not None:
+            mod.compute_indicators = original_compute
 
     daily_series = pd.Series(daily_pnl_pct, name="daily_pnl_pct").sort_index()
     return trades, daily_series
@@ -402,7 +449,7 @@ def main():
     parser.add_argument("--output", default=str(REPORT_PATH))
     args = parser.parse_args()
 
-    strats = STRATS_INDICATORS_PATTERN
+    strats = STRATS_INDICATORS_PATTERN + STRATS_WEEKEND_KWARGS
     if args.strat:
         strats = [s for s in strats if s["id"] == args.strat]
         if not strats:
