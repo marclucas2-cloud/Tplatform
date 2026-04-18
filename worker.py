@@ -1651,6 +1651,95 @@ def run_mib_estx50_spread_paper_cycle():
         logger.warning(f"MIB/ESTX50 SPREAD cycle error: {e}", exc_info=True)
 
 
+def run_alt_rel_strength_paper_cycle():
+    """alt_rel_strength_14_60_7 — paper runner atomic 6-leg (T4-A2 VALIDATED).
+
+    T4-A2 VALIDATED bull/bear robust (Sharpe +1.11, WF 3/5, MC 0.5%,
+    bull +$3,591, bear +$515). Source:
+    scripts/research/backtest_t4_crypto_relative_strength.py +
+    docs/research/wf_reports/T4A-02_crypto_relative_strength.md + INT-D.
+
+    Cycle: daily tick (pas weekly) pour check SL + portfolio stop. Le runner
+    interne decide du rebalance (Sunday + >= 7j since last). Atomic 6-leg.
+
+    Paper mode: pas d'ordre reel. State JSON + journal JSONL:
+      data/state/alt_rel_strength/state.json
+      data/state/alt_rel_strength/paper_journal.jsonl
+
+    Pre-flip live_probation (non active cette session):
+      - 30j observation paper sans divergence vs backtest > 1 sigma
+      - Kill switch crypto clean 24h+
+      - Borrow rates pipeline OK + margin isolated setup verified
+      - User manual greenlight
+    """
+    try:
+        from core.runtime.alt_rel_strength_runner import (
+            UNIVERSE, BASE, AltRelStrengthRunner, load_panel,
+        )
+
+        data_dir = ROOT / "data" / "crypto" / "candles"
+        state_dir = ROOT / "data" / "state" / "alt_rel_strength"
+        state_dir.mkdir(parents=True, exist_ok=True)
+
+        panel = load_panel(data_dir, UNIVERSE)
+        if len(panel) < 100:  # warmup: at least beta_window + alpha_window + margin
+            logger.warning(
+                f"alt_rel_strength: insufficient history ({len(panel)} days), skip"
+            )
+            return
+
+        # Data freshness guard (BTCUSDT_1d observed stale ~21j 2026-04-18)
+        last_bar = panel.index[-1]
+        now_utc = pd.Timestamp.utcnow().tz_localize(None).normalize()
+        age_days = (now_utc - last_bar).days
+        if age_days > 7:
+            logger.warning(
+                f"alt_rel_strength: data stale ({age_days}d since {last_bar.date()}), "
+                f"skip tick. Fix parquet refresh cron."
+            )
+            return
+
+        runner = AltRelStrengthRunner(
+            state_path=state_dir / "state.json",
+            journal_path=state_dir / "paper_journal.jsonl",
+            paper=True,
+        )
+        result = runner.tick(last_bar, panel)
+
+        if result.action == "rebalance":
+            closes = result.rotation_plan.get("closes", [])
+            ol = result.rotation_plan.get("opens_long", [])
+            os_ = result.rotation_plan.get("opens_short", [])
+            logger.info(
+                f"alt_rel_strength paper: REBALANCE @ {last_bar.date()} "
+                f"close={len(closes)} open_long={ol} open_short={os_} "
+                f"realized=${result.daily_pnl_usd:+.0f}"
+            )
+        elif result.action == "init":
+            ol = result.rotation_plan.get("opens_long", [])
+            os_ = result.rotation_plan.get("opens_short", [])
+            logger.info(
+                f"alt_rel_strength paper: INIT @ {last_bar.date()} "
+                f"longs={ol} shorts={os_}"
+            )
+        elif result.action in ("cascade_close", "portfolio_stop"):
+            logger.warning(
+                f"alt_rel_strength paper: {result.action.upper()} @ {last_bar.date()} "
+                f"stops={result.stops_triggered} pnl=${result.daily_pnl_usd:+.0f}"
+            )
+        elif result.action == "hold":
+            logger.debug(
+                f"alt_rel_strength paper: hold @ {last_bar.date()} "
+                f"n_pos={len(result.positions_after)} unrealized={result.portfolio_unrealized_pct:+.3%}"
+            )
+        elif result.action == "warmup":
+            logger.debug(f"alt_rel_strength paper: warmup @ {last_bar.date()}")
+    except ImportError as ie:
+        logger.warning(f"alt_rel_strength: missing dep: {ie}")
+    except Exception as e:
+        logger.error(f"alt_rel_strength cycle error: {e}", exc_info=True)
+
+
 def run_btc_asia_mes_leadlag_paper_cycle():
     """BTC/MES Asia session lead-lag — paper retrospective log-only.
 
@@ -6409,6 +6498,18 @@ def main():
             run_mib_estx50_spread_paper_cycle._done_today = True
         if is_weekday() and now_paris.hour < 17:
             run_mib_estx50_spread_paper_cycle._done_today = False
+
+        # === ALT REL STRENGTH 14_60_7 PAPER (7j/7, 03h00 Paris = 01h UTC = apres close daily UTC) ===
+        # T4-A2 VALIDATED bull/bear (Sharpe +1.11). Runner atomic 6-leg.
+        # Daily tick: runner decide si rebalance (dimanche + >=7j) ou hold + SL check.
+        if now_paris.hour == 3 and not getattr(run_alt_rel_strength_paper_cycle, '_done_today', False):
+            try:
+                run_alt_rel_strength_paper_cycle()
+            except Exception as _ar_err:
+                logger.error(f"ALT REL STRENGTH error: {_ar_err}", exc_info=True)
+            run_alt_rel_strength_paper_cycle._done_today = True
+        if now_paris.hour < 3:
+            run_alt_rel_strength_paper_cycle._done_today = False
 
         # === BTC/MES ASIA LEADLAG PAPER (7j/7, 10h30 Paris = apres close BTC Asia 08:00 UTC) ===
         # T3-A2 VALIDATED (Sharpe +1.07, WF 4/5). Log-only retrospective journal.

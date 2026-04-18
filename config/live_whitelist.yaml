@@ -382,6 +382,59 @@ binance_crypto:
       Sharpe -12.45. Source initiale wf_crypto_all.py etait buggy.
 
   # ---------------------------------------------------------------------------
+  # T4-A2 INT-D 2026-04-18 discovery crypto bull/bear batch paper promotion
+  # ---------------------------------------------------------------------------
+
+  - strategy_id: alt_rel_strength_14_60_7
+    book: binance_crypto
+    status: paper_only
+    runtime_entrypoint: "worker.py:run_alt_rel_strength_paper_cycle (03h00 Paris daily)"
+    runtime_module: "core.runtime.alt_rel_strength_runner.AltRelStrengthRunner"
+    wf_source: "docs/research/wf_reports/T4A-02_crypto_relative_strength.md + INT-D_crypto_batch.md"
+    sizing_policy: "conservative_paper_500_per_leg"
+    max_risk_usd: 300  # SL -8% per position * $500 per leg = $40 per position worst-case single
+    kill_criteria:
+      drawdown_absolute: -10%
+      sharpe_rolling_60d: -0.5
+      divergence_vs_backtest: "1x_std"
+      stops_cascade_trigger: "2_of_6_positions"
+    notes: |
+      T4-A2 VALIDATED bull/bear robust (unique parmi le batch):
+        Sharpe +1.11, MaxDD -7.8%, WF 3/5 OOS PASS, MC P(DD>30%) 0.5%
+        Bull regime: +$3,591 (Sharpe +1.42)
+        Bear regime: +$515  (Sharpe +0.29)   <- positif dans les 2 regimes
+        Backtest: 2024-01-01 -> 2026-03-28 (818 days, 10 alts beta-adjusted)
+        Corr portfolio: -0.014 (forte decorrelation)
+
+      Univers: ETH, SOL, BNB, XRP, ADA, LINK, AVAX, DOT, NEAR, SUI (10 alts).
+      Signal: beta-adjusted alpha 14d vs BTC, beta fenetre 60d rolling.
+      Rotation: top 3 long (spot), bottom 3 short (margin isolated).
+      Rebalance: hebdomadaire dimanche 01h UTC (cycle quotidien 03h Paris).
+
+      Runtime = runner atomic core/runtime/alt_rel_strength_runner (pattern
+      spread_paper_runner MIB/ESTX50, pas signal_fn). Atomic 6-leg: close
+      rotation_out + open new longs + open new shorts en 1 tick.
+
+      Paper mode actuel:
+        - Size $500 per leg = $3K gross on ~$10K equity (30% conservative)
+        - State JSON: data/state/alt_rel_strength/state.json
+        - Journal JSONL: data/state/alt_rel_strength/paper_journal.jsonl
+        - Zero real order, PnL simule au close daily UTC
+
+      Pre-flip live_probation:
+        1. 30j observation paper sans divergence > 1 sigma vs backtest
+        2. Kill switch crypto clean 24h+ (reset manuel 2026-04-18 16h40 UTC)
+        3. Borrow rates cron refresh verified
+        4. Margin isolated account preflight OK (verifie via scripts/preflight_check.py)
+        5. User manual greenlight explicit
+
+      Gap infra residuel (a fixer avant live_probation):
+        - BTCUSDT_1d + alts parquets cron refresh (observed stale ~21j 2026-04-18)
+        - `market_caps` kwarg populate via CoinGecko (ou suppression si filter inutile)
+
+      Start paper: 2026-04-18.
+
+  # ---------------------------------------------------------------------------
   # T3-A2 INT-B 2026-04-18 discovery batch paper promotion (cross-asset)
   # ---------------------------------------------------------------------------
 

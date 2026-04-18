@@ -61,6 +61,16 @@ def test_mcl_overnight_mon_trend10_is_paper_only():
     assert entry["runtime_module"] == "strategies_v2.futures.mcl_overnight_mon_trend.MCLOvernightMonTrend"
 
 
+def test_alt_rel_strength_14_60_7_is_paper_only():
+    """T4-A2 INT-D 2026-04-18 promotion: paper_only avec runner atomic 6-leg.
+    Ne doit PAS etre live_allowed tant que 30j paper obs + infra gaps fixed."""
+    assert is_strategy_live_allowed("alt_rel_strength_14_60_7", "binance_crypto") is False
+    entry = get_strategy_entry("alt_rel_strength_14_60_7", "binance_crypto")
+    assert entry is not None
+    assert entry["status"] == "paper_only"
+    assert entry["runtime_module"] == "core.runtime.alt_rel_strength_runner.AltRelStrengthRunner"
+
+
 def test_btc_asia_mes_leadlag_q70_v80_is_paper_only():
     """T3-A2 INT-B 2026-04-18 promotion: paper_only log-only retrospective.
     Cross-asset MES->BTC. Ne doit PAS etre live_allowed."""
