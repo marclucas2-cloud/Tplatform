@@ -26,11 +26,14 @@ FRESHNESS_REQUIREMENTS = {
         ("data/crypto/candles/ETHUSDT_1d.parquet", 36),
     ],
     "ibkr_futures": [
-        ("data/futures/MES_LONG.parquet", 96),    # 4j tolerance (refresh hebdo)
-        ("data/futures/MGC_LONG.parquet", 96),
-        ("data/futures/MCL_LONG.parquet", 96),
-        # MES_1D.parquet trop instable (cron data_refresh bug NaT/duplicates)
-        # -> on s'appuie sur _LONG.parquet uniquement
+        # 2026-04-18 audit P0.1: bascule de *_LONG.parquet (jamais existes
+        # sur VPS, pointaient vers fichiers fantomes -> ibkr_futures DEGRADED
+        # permanent) vers *_1D.parquet (cron data_refresh quotidien actif,
+        # bug NaT/duplicates fixe session 15 avril dans worker data loader).
+        # Tolerance 48h pour couvrir weekend (vendredi -> dimanche).
+        ("data/futures/MES_1D.parquet", 48),
+        ("data/futures/MGC_1D.parquet", 48),
+        ("data/futures/MCL_1D.parquet", 48),
     ],
     "ibkr_eu": [
         ("data/futures/DAX_1D.parquet", 96),
