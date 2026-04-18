@@ -71,6 +71,26 @@ def test_btc_asia_mes_leadlag_q70_v80_is_paper_only():
     assert entry["runtime_module"] == "strategies.crypto.btc_asia_mes_leadlag"
 
 
+def test_us_sector_ls_40_5_is_paper_only():
+    """T3-B1 INT-C 2026-04-18 promotion: paper_only log-only.
+    Book alpaca_us paper-only. Ne doit PAS etre live_allowed."""
+    assert is_strategy_live_allowed("us_sector_ls_40_5", "alpaca_us") is False
+    entry = get_strategy_entry("us_sector_ls_40_5", "alpaca_us")
+    assert entry is not None
+    assert entry["status"] == "paper_only"
+    assert entry["runtime_module"] == "strategies_v2.us.us_sector_ls"
+
+
+def test_eu_relmom_40_3_is_paper_only():
+    """T3-A3 INT-B 2026-04-18 promotion: paper_only log-only.
+    Book ibkr_eu paper-only. Ne doit PAS etre live_allowed."""
+    assert is_strategy_live_allowed("eu_relmom_40_3", "ibkr_eu") is False
+    entry = get_strategy_entry("eu_relmom_40_3", "ibkr_eu")
+    assert entry is not None
+    assert entry["status"] == "paper_only"
+    assert entry["runtime_module"] == "strategies_v2.eu.eu_relmom"
+
+
 def test_unknown_strategy_blocked():
     """Une strategie hors whitelist doit etre bloquee."""
     assert is_strategy_live_allowed("fake_strategy_xyz", "ibkr_futures") is False

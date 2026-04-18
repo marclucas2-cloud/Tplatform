@@ -474,6 +474,33 @@ ibkr_eu:
     status: paper_only
     notes: "Paper only"
 
+  - strategy_id: eu_relmom_40_3
+    book: ibkr_eu
+    status: paper_only
+    runtime_entrypoint: "worker.py:run_eu_relmom_paper_cycle (18h00 Paris)"
+    runtime_module: "strategies_v2.eu.eu_relmom"
+    wf_source: "docs/research/wf_reports/T3A-03_eu_indices_relmom.md + INT-B_discovery_batch.md"
+    sizing_policy: "log_only_paper_1000_per_leg"
+    max_risk_usd: 200  # MaxDD 0.8% * 2 * $1000 per leg = $16 worst-case per trade
+    kill_criteria:
+      drawdown_absolute: -5%
+      sharpe_rolling_60d: -0.5
+      divergence_vs_backtest: "1x_std"
+    notes: |
+      T3-A3 VALIDATED (Sharpe +0.71, MaxDD -0.8%, WF 4/5, MC P(DD>30%) 0%).
+      Backtest 2021-2026 (1346 days) sur DAX/CAC40/ESTX50/MIB closes.
+      Lookback 40j, hold 3j, 1v1 top long + bottom short.
+
+      Runtime: core reutilise (strategies_v2/us/us_sector_ls.tick generic) +
+      wrapper strategies_v2/eu/eu_relmom.py. Log-only retrospective via
+      run_eu_relmom_paper_cycle() 18h00 Paris weekday. Lit
+      data/futures/{DAX,CAC40,ESTX50,MIB}_1D.parquet.
+
+      Caveats promotion live:
+        1. Shorts indices: CFD IBKR ou futures mini requis, pas de plan concret.
+        2. Data freshness EU indices via cron yfinance (cf data_freshness.py).
+      Start paper: 2026-04-18.
+
   - strategy_id: mib_estx50_spread
     book: ibkr_eu
     status: paper_only
@@ -514,3 +541,31 @@ alpaca_us:
     notes: |
       Paper trading sur $100K Alpaca simule. Promotion live conditionnee
       a PDT compat + capital > $25K + 30 jours de paper stable.
+
+  - strategy_id: us_sector_ls_40_5
+    book: alpaca_us
+    status: paper_only
+    runtime_entrypoint: "worker.py:run_us_sector_ls_paper_cycle (22h30 Paris)"
+    runtime_module: "strategies_v2.us.us_sector_ls"
+    wf_source: "docs/research/wf_reports/T3B-01_us_sector_ls.md + INT-C_us_batch.md"
+    sizing_policy: "log_only_paper_1000_per_leg"
+    max_risk_usd: 200
+    kill_criteria:
+      drawdown_absolute: -5%
+      sharpe_rolling_60d: -0.5
+      divergence_vs_backtest: "1x_std"
+    notes: |
+      T3-B1 VALIDATED (Sharpe +0.39, MaxDD -2.1%, WF 3/5, MC P(DD>30%) 0%).
+      Backtest 1274 days sur 11 GICS sectors (moyenne tickers US pass_all=True).
+      Lookback 40j, hold 5j, 1v1 top long + bottom short.
+
+      Runtime: log-only retrospective via run_us_sector_ls_paper_cycle()
+      22h30 Paris weekday (apres close US). Lit data/us_stocks/_metadata.csv
+      + data/us_stocks/*.parquet.
+
+      Caveats promotion live:
+        1. Shorts sectors: PDT rule + short borrow cost. Non trivial en live.
+        2. Sector baskets: probablement implementable via ETFs sectoriels
+           (XLK, XLF, XLV, XLY, XLP, XLI, XLE, XLU, XLB, XLRE, XLC) plutot
+           qu'avec 500 tickers. A re-WF avec ETF data avant live.
+      Start paper: 2026-04-18.

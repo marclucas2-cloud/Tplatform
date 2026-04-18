@@ -1775,6 +1775,186 @@ def run_btc_asia_mes_leadlag_paper_cycle():
         logger.error(f"btc_asia_mes_leadlag cycle error: {e}", exc_info=True)
 
 
+def _run_relmom_paper_tick(
+    name: str,
+    returns: pd.DataFrame,
+    state_path: Path,
+    journal_path: Path,
+    lookback: int,
+    hold_days: int,
+    capital_per_leg: float,
+    rt_cost_pct: float,
+    as_of_date: pd.Timestamp,
+) -> None:
+    """Shared logic for us_sector_ls + eu_relmom paper runners.
+
+    Load state, call tick(), save new state, append journal. Idempotent per
+    (name, as_of_date): skip if journal already has an entry for this date.
+    """
+    from strategies_v2.us.us_sector_ls import SectorLSPositions, tick
+
+    state_path.parent.mkdir(parents=True, exist_ok=True)
+    journal_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Idempotence: skip if already journaled
+    as_of_iso = as_of_date.isoformat()
+    if journal_path.exists():
+        for line in journal_path.read_text(encoding="utf-8").splitlines():
+            try:
+                e = json.loads(line)
+                if e.get("as_of_date") == as_of_iso:
+                    logger.debug(f"{name} paper: already journaled {as_of_date.date()}")
+                    return
+            except Exception:
+                pass
+
+    # Load state
+    state = SectorLSPositions()
+    if state_path.exists():
+        try:
+            raw = json.loads(state_path.read_text(encoding="utf-8"))
+            state.positions = raw.get("positions", {})
+            lr = raw.get("last_rebalance")
+            state.last_rebalance = pd.Timestamp(lr) if lr else None
+        except Exception as e:
+            logger.warning(f"{name}: state reload failed, reset: {e}")
+
+    new_state, result = tick(
+        state, as_of_date, returns,
+        lookback=lookback, hold_days=hold_days,
+        capital_per_leg=capital_per_leg, rt_cost_pct=rt_cost_pct,
+    )
+
+    # Journal entry FIRST (review N2 fix: si crash entre journal et state,
+    # journal aura l'entry -> next run skip via dedup, state mis a jour
+    # plus tard sans double-trade. L'inverse perdrait le journal definitivement.)
+    entry = {
+        "as_of_date": as_of_iso,
+        "logged_at_utc": pd.Timestamp.utcnow().isoformat(),
+        "action": result.action,
+        "long_sector": result.long_sector,
+        "short_sector": result.short_sector,
+        "positions_after": result.positions_after,
+        "day_pnl_usd": result.day_pnl_usd,
+        "turnover_cost_usd": result.turnover_cost_usd,
+        "net_pnl_usd": result.net_pnl_usd,
+    }
+    with journal_path.open("a", encoding="utf-8") as f:
+        f.write(json.dumps(entry) + "\n")
+
+    # Persist state apres journal
+    state_path.write_text(json.dumps({
+        "positions": new_state.positions,
+        "last_rebalance": new_state.last_rebalance.isoformat() if new_state.last_rebalance else None,
+    }), encoding="utf-8")
+
+    logger.info(
+        f"{name} paper: {result.action} @ {as_of_date.date()} "
+        f"pnl ${result.net_pnl_usd:+.2f} "
+        f"(long={result.long_sector or 'hold'}, short={result.short_sector or 'hold'})"
+    )
+
+
+def run_us_sector_ls_paper_cycle():
+    """US sector long/short 40_5 — paper retrospective log-only.
+
+    T3-B1 VALIDATED (Sharpe +0.39, MaxDD -2.1%, WF 3/5, MC P(DD>30%)=0%).
+    Source: scripts/research/backtest_t3b_us_sector_ls.py.
+
+    Cycle 22h30 Paris weekday (apres close US 22h00 ete/21h00 hiver). Calcule
+    tick pour yesterday UTC (dernier trading day US), etat + journal.
+
+    Book: alpaca_us paper_only. ZERO ordre reel.
+    """
+    try:
+        from strategies_v2.us.us_sector_ls import (
+            DEFAULT_CAPITAL_PER_LEG, DEFAULT_HOLD_DAYS, DEFAULT_LOOKBACK,
+            DEFAULT_RT_COST_PCT, load_sector_return_matrix,
+        )
+
+        us_dir = ROOT / "data" / "us_stocks"
+        meta_path = us_dir / "_metadata.csv"
+        if not meta_path.exists():
+            logger.warning("us_sector_ls: _metadata.csv missing")
+            return
+
+        returns = load_sector_return_matrix(us_dir, meta_path)
+        if len(returns) < DEFAULT_LOOKBACK + 1:
+            logger.warning(f"us_sector_ls: insufficient history ({len(returns)} days)")
+            return
+
+        # Target: last day in returns (should be yesterday US calendar)
+        as_of = returns.index[-1]
+        state_path = ROOT / "data" / "state" / "us_sector_ls" / "state.json"
+        journal_path = ROOT / "data" / "state" / "us_sector_ls" / "paper_journal.jsonl"
+
+        _run_relmom_paper_tick(
+            name="us_sector_ls_40_5",
+            returns=returns,
+            state_path=state_path,
+            journal_path=journal_path,
+            lookback=DEFAULT_LOOKBACK,
+            hold_days=DEFAULT_HOLD_DAYS,
+            capital_per_leg=DEFAULT_CAPITAL_PER_LEG,
+            rt_cost_pct=DEFAULT_RT_COST_PCT,
+            as_of_date=as_of,
+        )
+    except ImportError as ie:
+        logger.warning(f"us_sector_ls: missing dep: {ie}")
+    except Exception as e:
+        logger.error(f"us_sector_ls cycle error: {e}", exc_info=True)
+
+
+def run_eu_relmom_paper_cycle():
+    """EU indices relmom 40_3 — paper retrospective log-only.
+
+    T3-A3 VALIDATED (Sharpe +0.71, MaxDD -0.8%, WF 4/5, MC P(DD>30%)=0%).
+    Source: scripts/research/backtest_t3a_eu_indices_relmom.py.
+
+    Cycle 18h00 Paris weekday (apres close EU 17h30). Calcule tick pour today
+    (dernier trading day EU dispo), etat + journal.
+
+    Book: ibkr_eu paper_only. ZERO ordre reel.
+    """
+    try:
+        from strategies_v2.eu.eu_relmom import (
+            DEFAULT_CAPITAL_PER_LEG, DEFAULT_HOLD_DAYS, DEFAULT_LOOKBACK,
+            DEFAULT_RT_COST_PCT, EU_UNIVERSE, load_eu_returns,
+        )
+
+        data_dir = ROOT / "data" / "futures"
+        # Check at least 2 indices have parquet
+        available = [s for s in EU_UNIVERSE if (data_dir / f"{s}_1D.parquet").exists()]
+        if len(available) < 2:
+            logger.warning(f"eu_relmom: insufficient indices ({available})")
+            return
+
+        returns = load_eu_returns(data_dir)
+        if len(returns) < DEFAULT_LOOKBACK + 1:
+            logger.warning(f"eu_relmom: insufficient history ({len(returns)} days)")
+            return
+
+        as_of = returns.index[-1]
+        state_path = ROOT / "data" / "state" / "eu_relmom" / "state.json"
+        journal_path = ROOT / "data" / "state" / "eu_relmom" / "paper_journal.jsonl"
+
+        _run_relmom_paper_tick(
+            name="eu_relmom_40_3",
+            returns=returns,
+            state_path=state_path,
+            journal_path=journal_path,
+            lookback=DEFAULT_LOOKBACK,
+            hold_days=DEFAULT_HOLD_DAYS,
+            capital_per_leg=DEFAULT_CAPITAL_PER_LEG,
+            rt_cost_pct=DEFAULT_RT_COST_PCT,
+            as_of_date=as_of,
+        )
+    except ImportError as ie:
+        logger.warning(f"eu_relmom: missing dep: {ie}")
+    except Exception as e:
+        logger.error(f"eu_relmom cycle error: {e}", exc_info=True)
+
+
 def _make_macro_ecb_executor(mode: str):
     """Factory for MacroECB futures executor — places bracket orders on IBKR.
 
@@ -6240,6 +6420,33 @@ def main():
                 run_btc_asia_mes_leadlag_paper_cycle()
             except Exception as _bl_err:
                 logger.error(f"BTC/MES LEADLAG error: {_bl_err}", exc_info=True)
+
+        # === EU INDICES RELMOM PAPER (lun-ven, 18h00 Paris = apres close EU 17h30) ===
+        # T3-A3 VALIDATED (Sharpe +0.71, WF 4/5). Log-only retrospective.
+        # _done_today flag evite ~120 fires/h pendant l'heure 18h. Dedup journal
+        # reste single source of truth (garde si process redemarre).
+        if is_weekday() and now_paris.hour == 18 and not getattr(run_eu_relmom_paper_cycle, '_done_today', False):
+            try:
+                run_eu_relmom_paper_cycle()
+            except Exception as _eu_err:
+                logger.error(f"EU RELMOM error: {_eu_err}", exc_info=True)
+            run_eu_relmom_paper_cycle._done_today = True
+        if is_weekday() and now_paris.hour < 18:
+            run_eu_relmom_paper_cycle._done_today = False
+
+        # === US SECTOR L/S PAPER (lun-ven, 23h30 Paris = apres close US 22h UTC ete ou 21h UTC hiver) ===
+        # T3-B1 VALIDATED (Sharpe +0.39, WF 3/5). Log-only retrospective.
+        # Timing 23h30 Paris = 21h30 UTC ete / 22h30 UTC hiver -> toujours apres close US.
+        # Attention: le cron yfinance doit rafraichir data/us_stocks avant 23h30 Paris,
+        # sinon as_of_date = J-1 (dedup s'en occupe, mais observation reporte d'1 jour).
+        if is_weekday() and now_paris.hour == 23 and now_paris.minute >= 30 and not getattr(run_us_sector_ls_paper_cycle, '_done_today', False):
+            try:
+                run_us_sector_ls_paper_cycle()
+            except Exception as _us_err:
+                logger.error(f"US SECTOR L/S error: {_us_err}", exc_info=True)
+            run_us_sector_ls_paper_cycle._done_today = True
+        if is_weekday() and now_paris.hour < 23:
+            run_us_sector_ls_paper_cycle._done_today = False
 
         # === BRACKET WATCHDOG toutes les 5 minutes (24/7) ===
         # Verifie que chaque position futures live a un bracket actif.
