@@ -56,16 +56,23 @@ def test_unknown_strategy_blocked():
     assert is_strategy_live_allowed("fake_strategy_xyz") is False
 
 
-def test_binance_core_strats_allowed():
-    """Crypto core strats doivent etre live_core."""
-    assert is_strategy_live_allowed("btc_eth_dual_momentum", "binance_crypto") is True
-    assert is_strategy_live_allowed("volatility_breakout", "binance_crypto") is True
+def test_binance_core_strats_demoted_post_audit_2026_04_18():
+    """P0.2 audit 2026-04-18: TOUTES les crypto live demoted en paper_only
+    apres re-WF event-driven (wf_results.json original etait B&H BTC ajuste
+    couts, pas un vrai backtest). Aucune crypto n'est live_allowed actuellement.
+    """
+    # btc_eth_dual_momentum: re-WF REJECTED Sharpe -6.08
+    assert is_strategy_live_allowed("btc_eth_dual_momentum", "binance_crypto") is False
+    # volatility_breakout: re-WF INSUFFICIENT_TRADES (0 signaux)
+    assert is_strategy_live_allowed("volatility_breakout", "binance_crypto") is False
 
 
-def test_binance_probation_strats_allowed():
-    """Probation est toujours live_allowed (mais traceable)."""
-    assert is_strategy_live_allowed("liquidation_momentum", "binance_crypto") is True
-    assert is_strategy_live_allowed("weekend_gap_reversal", "binance_crypto") is True
+def test_binance_probation_strats_demoted_post_audit_2026_04_18():
+    """P0.2 audit 2026-04-18: probation strats demoted en paper_only.
+    liquidation_momentum/weekend_gap_reversal: NEEDS_RE_WF (kwargs simulator manquant).
+    """
+    assert is_strategy_live_allowed("liquidation_momentum", "binance_crypto") is False
+    assert is_strategy_live_allowed("weekend_gap_reversal", "binance_crypto") is False
 
 
 def test_wrong_book_blocks():
@@ -94,12 +101,12 @@ def test_list_live_strategies_futures():
 
 def test_list_live_strategies_all_books():
     live = list_live_strategies()
-    # 2026-04-16 v4 whitelist Phase 3.1 audit:
-    # 2 futures live_core (CAM + GoldOilRotation)
-    # + 7 crypto live_core+probation (post P0 + Phase 3.1 demotes)
-    # = 9 strats live
-    assert len(live) >= 9
+    # P0.2 audit 2026-04-18: TOUTES les crypto demoted en paper_only post re-WF.
+    # Reste live: 2 futures live_core (CAM + GoldOilRotation). Total = 2.
+    assert len(live) >= 2
     fx_entries = [e for e in live if e["_book"] == "ibkr_fx"]
     assert len(fx_entries) == 0  # FX disabled ESMA
     eu_entries = [e for e in live if e["_book"] == "ibkr_eu"]
     assert len(eu_entries) == 0  # EU paper_only
+    crypto_entries = [e for e in live if e["_book"] == "binance_crypto"]
+    assert len(crypto_entries) == 0  # P0.2 demote: toutes crypto paper_only

@@ -207,20 +207,35 @@ binance_crypto:
 
   - strategy_id: btc_eth_dual_momentum
     book: binance_crypto
-    status: live_core
+    status: paper_only   # P0.2 audit 2026-04-18: re-WF event-driven REJECTED
+                         # (Sharpe -6.08, 102 trades, WR 18-44%, perdu 4/5 fenetres
+                         # OOS sur BTCUSDT 4h 2 ans). Demote live_core -> paper_only.
+                         # Le seul trade live observe (1 BUY BTCUSDT 17 avr) est anecdotique.
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-001)"
     runtime_module: "strategies.crypto.btc_eth_dual_momentum"
-    wf_source: "data/crypto/wf_results.json"
-    sizing_policy: "allocation_pct + kelly_quarter + broker_cap_80pct"
-    notes: "BTC/ETH dual momentum core strat"
+    wf_source: "data/crypto/wf_results.json (re-WF 2026-04-18: REJECTED Sharpe -6.08)"
+    sizing_policy: "n/a (paper_only)"
+    notes: |
+      Demote 2026-04-18: re-WF event-driven (scripts/wf_crypto_real_backtest.py)
+      verdict REJECTED. Source initiale (wf_crypto_all.py) etait buggy = B&H BTC
+      ajuste couts, pas de vrai backtest. Re-promotion live: necessite
+      revision strategie + re-WF Sharpe > 1.0 sur 5 fenetres.
 
   - strategy_id: volatility_breakout
     book: binance_crypto
-    status: live_core
+    status: paper_only   # P0.2 audit 2026-04-18: re-WF event-driven INSUFFICIENT_TRADES
+                         # (0 trades sur 5 fenetres OOS). La strategie est trop
+                         # restrictive (compression vol + breakout volume + ADX cross
+                         # cumules) pour declencher sur 2024-2026 BTC. Demote live_core.
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-004)"
     runtime_module: "strategies.crypto.vol_breakout"  # P0.3 fix: file basename != canonical
-    wf_source: "data/crypto/wf_results.json"
-    sizing_policy: "allocation_pct + kelly_quarter + broker_cap_80pct"
+    wf_source: "data/crypto/wf_results.json (re-WF 2026-04-18: INSUFFICIENT_TRADES 0/5)"
+    sizing_policy: "n/a (paper_only)"
+    notes: |
+      Demote 2026-04-18: re-WF montre 0 signaux generes sur 7K bars BTC 4h
+      (2 ans). Strategie trop restrictive ou conditions de marche incompatibles.
+      Le code import etait casse (volatility_breakout vs vol_breakout) avant
+      P0.3 fix -> n'a probablement jamais trade live de toute facon.
 
   - strategy_id: btc_dominance_rotation_v2
     book: binance_crypto
@@ -250,20 +265,21 @@ binance_crypto:
 
   - strategy_id: liquidation_momentum
     book: binance_crypto
-    status: live_probation
+    status: paper_only   # P0.2 audit 2026-04-18: NEEDS_RE_WF (kwargs simulator necessaire)
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-007)"
     runtime_module: "strategies.crypto.liquidation_momentum"
-    wf_source: "data/crypto/wf_results.json"
-    sizing_policy: "allocation_pct + kelly_quarter"
-    notes: "Probation - a monitorer sur 30j"
+    wf_source: "data/crypto/wf_results.json (re-WF 2026-04-18: NEEDS_RE_WF)"
+    sizing_policy: "n/a (paper_only)"
+    notes: "Demote 2026-04-18: kwargs simulator necessaire pour re-WF, pas teste."
 
   - strategy_id: weekend_gap_reversal
     book: binance_crypto
-    status: live_probation
+    status: paper_only   # P0.2 audit 2026-04-18: NEEDS_RE_WF (kwargs friday_close_price)
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-008)"
     runtime_module: "strategies.crypto.weekend_gap"  # P0.3 fix: file basename
-    wf_source: "data/crypto/wf_results.json"
-    sizing_policy: "allocation_pct + kelly_quarter"
+    wf_source: "data/crypto/wf_results.json (re-WF 2026-04-18: NEEDS_RE_WF)"
+    sizing_policy: "n/a (paper_only)"
+    notes: "Demote 2026-04-18: kwargs simulator necessaire pour re-WF (friday_close_price, is_sunday_evening)."
 
   - strategy_id: trend_short_btc
     book: binance_crypto
@@ -296,28 +312,33 @@ binance_crypto:
 
   - strategy_id: vol_expansion_bear
     book: binance_crypto
-    status: live_probation
+    status: paper_only   # P0.2 audit 2026-04-18: NEEDS_RE_WF
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-012)"
     runtime_module: "strategies.crypto.vol_expansion_bear"
-    wf_source: "data/crypto/wf_results.json"
-    sizing_policy: "allocation_pct + kelly_quarter"
-    notes: "Bear-oriented, probation"
+    wf_source: "data/crypto/wf_results.json (re-WF 2026-04-18: NEEDS_RE_WF)"
+    sizing_policy: "n/a (paper_only)"
+    notes: "Demote 2026-04-18: kwargs simulator necessaire pour re-WF."
 
   - strategy_id: range_bb_harvest
     book: binance_crypto
-    status: live_probation
+    status: paper_only   # P0.2 audit 2026-04-18: NEEDS_RE_WF
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-014)"
     runtime_module: "strategies.crypto.range_bb_harvest"
-    wf_source: "data/crypto/wf_results.json"
-    sizing_policy: "allocation_pct + kelly_quarter"
+    wf_source: "data/crypto/wf_results.json (re-WF 2026-04-18: NEEDS_RE_WF)"
+    sizing_policy: "n/a (paper_only)"
+    notes: "Demote 2026-04-18: kwargs simulator necessaire pour re-WF."
 
   - strategy_id: bb_mean_reversion_short
     book: binance_crypto
-    status: live_probation
+    status: paper_only   # P0.2 audit 2026-04-18: re-WF event-driven REJECTED
+                         # (Sharpe -12.45, 51 trades, perdu 4/5 fenetres OOS).
     runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-015)"
     runtime_module: "strategies.crypto.bb_mr_short"  # P0.3 fix: file basename
-    wf_source: "data/crypto/wf_results.json"
-    sizing_policy: "allocation_pct + kelly_quarter"
+    wf_source: "data/crypto/wf_results.json (re-WF 2026-04-18: REJECTED Sharpe -12.45)"
+    sizing_policy: "n/a (paper_only)"
+    notes: |
+      Demote 2026-04-18: re-WF verdict REJECTED. WR 8-40% sur 5 fenetres OOS,
+      Sharpe -12.45. Source initiale wf_crypto_all.py etait buggy.
 
 # -----------------------------------------------------------------------------
 # IBKR FX — DESACTIVE (IBKR_FX_ENABLED=false sur VPS)

@@ -1,28 +1,25 @@
 """
-RE-WALK-FORWARD CRYPTO REEL — backtester event-driven (PROOF OF CONCEPT).
+RE-WALK-FORWARD CRYPTO REEL — backtester event-driven OPTIMISE.
 
 Remplace le wf_crypto_all.py buggy qui ne backtestait pas les strats
 (daily_returns = closes BTCUSDT, soustraction couts -> tous les Sharpe
 etaient B&H BTC ajustes par cost_per_trade * trade_freq).
 
-STATUS 2026-04-18 (P0.2 audit):
-  Ce script est un proof of concept architectural correct. Mais:
-  - Performance O(n^2): chaque tick recompute compute_indicators sur df.iloc[:i],
-    aucune cache. Pour 7 strats x 5 windows x 7K bars x 168-period rolling,
-    >5 minutes par strat = >35 min total + bufferisation stdout.
-  - Vol_breakout test 1 strat: 0 trades sur 5 fenetres (signal trop strict OU
-    backtester ne reconstruit pas exactement le live behaviour).
-  - A optimiser: pre-compute indicators une fois, passer slice etroit aux strats.
+OPTIMISATION 2026-04-18 (P0.2 audit suite):
+  Pre-compute indicators UNE FOIS par strat (au demarrage du backtest),
+  puis monkeypatch strat.compute_indicators pour retourner un slice du
+  pre-calc au lieu de recompute. Performance O(n) au lieu de O(n^2).
 
-UTILE POUR:
-  Documenter l'architecture event-driven correcte. NE PAS l'utiliser pour
-  decisions live tant que pas valide trade-by-trade vs production.
+Strats supportees (ont compute_indicators + df_full pattern):
+  - btc_eth_dual_momentum (live_core)
+  - vol_breakout (live_core)
+  - bb_mr_short (live_probation)
+  - btc_mean_reversion (REJECTED dans buggy WF)
 
-PROCHAINE ITERATION:
-  - Pre-compute indicators globaux
-  - Strats receivent une vue read-only sur indicators precalcules
-  - Cache compute_indicators
-  - Validation: backtest historique vs trades live IBKR/Binance executes
+Strats avec kwargs specifiques (weekend_gap=friday_close_price, ...):
+  marquees NEEDS_RE_WF dans le rapport.
+
+Cost model Binance France: 0.10%/side commission + 3bps slippage = 0.26%/RT.
 
 Usage:
     python scripts/wf_crypto_real_backtest.py [--strat <name>]
@@ -49,49 +46,46 @@ sys.path.insert(0, str(ROOT))
 DATA_DIR = ROOT / "data" / "crypto" / "candles"
 REPORT_PATH = ROOT / "data" / "crypto" / "wf_results.json"
 
-# Cost model Binance France: 0.10%/side commission + 3bps slippage = 0.23%/RT
 COMMISSION_RATE = 0.0010
 SLIPPAGE_RATE = 0.0003
 COST_RT = 2 * (COMMISSION_RATE + SLIPPAGE_RATE)  # 0.0026 = 0.26%
 
-# Strategies a re-WF (live et live_probation)
-STRATS_TO_TEST = [
+# Strats avec compute_indicators + df_full pattern (re-WF possible)
+STRATS_INDICATORS_PATTERN = [
     {"id": "btc_eth_dual_momentum", "module": "strategies.crypto.btc_eth_dual_momentum",
      "tier": "TIER_1", "primary_symbol": "BTCUSDT", "tf": "4h"},
     {"id": "vol_breakout", "module": "strategies.crypto.vol_breakout",
      "tier": "TIER_1", "primary_symbol": "BTCUSDT", "tf": "4h"},
-    {"id": "liquidation_momentum", "module": "strategies.crypto.liquidation_momentum",
-     "tier": "LOW_FREQ", "primary_symbol": "BTCUSDT", "tf": "4h"},
-    {"id": "weekend_gap", "module": "strategies.crypto.weekend_gap",
-     "tier": "LOW_FREQ", "primary_symbol": "BTCUSDT", "tf": "1d"},
-    {"id": "vol_expansion_bear", "module": "strategies.crypto.vol_expansion_bear",
-     "tier": "TIER_2", "primary_symbol": "BTCUSDT", "tf": "4h"},
-    {"id": "range_bb_harvest", "module": "strategies.crypto.range_bb_harvest",
-     "tier": "TIER_2", "primary_symbol": "BTCUSDT", "tf": "4h"},
     {"id": "bb_mr_short", "module": "strategies.crypto.bb_mr_short",
      "tier": "TIER_2", "primary_symbol": "BTCUSDT", "tf": "4h"},
-    # Reference: strats not live but in wf_results buggy (control)
-    {"id": "btc_dominance", "module": "strategies.crypto.btc_dominance_flight",
-     "tier": "TIER_1", "primary_symbol": "BTCUSDT", "tf": "4h"},
     {"id": "btc_mean_reversion", "module": "strategies.crypto.btc_mean_reversion",
      "tier": "TIER_1", "primary_symbol": "BTCUSDT", "tf": "4h"},
+]
+
+# Strats avec kwargs specifiques (re-WF necessite coding kwargs simulator)
+STRATS_NEEDS_KWARGS = [
+    "liquidation_momentum",
+    "weekend_gap",
+    "vol_expansion_bear",
+    "range_bb_harvest",
+    "btc_dominance_v2",
 ]
 
 
 @dataclass
 class Position:
-    side: str  # "LONG" or "SHORT"
+    side: str
     entry_price: float
     entry_time: pd.Timestamp
     entry_idx: int
-    qty_pct: float          # fraction of capital allocated
+    qty_pct: float
     stop_loss: float
     take_profit: float | None = None
     trailing_atr: float | None = None
-    highest: float = 0.0    # for LONG trailing
-    lowest: float = float("inf")  # for SHORT trailing
+    highest: float = 0.0
+    lowest: float = float("inf")
     max_hold_days: int = 21
-    direction: int = 1      # +1 LONG, -1 SHORT (compat with strats)
+    direction: int = 1
 
 
 @dataclass
@@ -102,7 +96,7 @@ class Trade:
     entry_price: float
     exit_price: float
     qty_pct: float
-    pnl_pct: float       # net (after costs)
+    pnl_pct: float
     holding_days: float
     exit_reason: str
 
@@ -119,8 +113,7 @@ def load_candles(symbol: str, tf: str) -> pd.DataFrame:
 
 
 def _update_position(pos: Position, candle: pd.Series, idx: int,
-                     ts_seconds_per_bar: int = 14400) -> tuple[bool, float, str] | None:
-    """Update trailing stop and check exit. Returns (exit, exit_price, reason) or None."""
+                     bar_seconds: int = 14400) -> tuple[bool, float, str] | None:
     high = candle["high"]
     low = candle["low"]
 
@@ -133,7 +126,7 @@ def _update_position(pos: Position, candle: pd.Series, idx: int,
             return True, pos.stop_loss, "stop_loss"
         if pos.take_profit and high >= pos.take_profit:
             return True, pos.take_profit, "take_profit"
-    else:  # SHORT
+    else:
         pos.lowest = min(pos.lowest, low)
         if pos.trailing_atr:
             new_sl = pos.lowest + pos.trailing_atr
@@ -143,9 +136,7 @@ def _update_position(pos: Position, candle: pd.Series, idx: int,
         if pos.take_profit and low <= pos.take_profit:
             return True, pos.take_profit, "take_profit"
 
-    # Max holding
-    holding_secs = (idx - pos.entry_idx) * ts_seconds_per_bar
-    holding_days = holding_secs / 86400
+    holding_days = (idx - pos.entry_idx) * bar_seconds / 86400
     if holding_days >= pos.max_hold_days:
         return True, candle["close"], "max_hold"
 
@@ -153,16 +144,14 @@ def _update_position(pos: Position, candle: pd.Series, idx: int,
 
 
 def _close_position(pos: Position, exit_price: float, exit_time: pd.Timestamp,
-                    reason: str, idx: int, ts_seconds_per_bar: int = 14400) -> Trade:
-    """Compute trade PnL net of costs."""
+                    reason: str, idx: int, bar_seconds: int = 14400) -> Trade:
     if pos.side == "LONG":
         gross_pct = (exit_price - pos.entry_price) / pos.entry_price
-    else:  # SHORT
+    else:
         gross_pct = (pos.entry_price - exit_price) / pos.entry_price
 
     pnl_pct = (gross_pct - COST_RT) * pos.qty_pct
-
-    holding_days = (idx - pos.entry_idx) * ts_seconds_per_bar / 86400
+    holding_days = (idx - pos.entry_idx) * bar_seconds / 86400
 
     return Trade(
         entry_time=pos.entry_time.isoformat() if hasattr(pos.entry_time, "isoformat") else str(pos.entry_time),
@@ -177,104 +166,125 @@ def _close_position(pos: Position, exit_price: float, exit_time: pd.Timestamp,
     )
 
 
+class IndicatorsCache:
+    """Pre-computed indicators cache. Replaces strat.compute_indicators with
+    a slice lookup (O(1)) instead of recompute (O(n))."""
+
+    def __init__(self, full_indicators: pd.DataFrame):
+        self.full = full_indicators
+
+    def get_slice(self, n: int) -> pd.DataFrame:
+        """Return first n rows (matches df.iloc[:i] semantics)."""
+        return self.full.iloc[:n]
+
+
 def backtest_strategy(strat_info: dict, df: pd.DataFrame,
                       start_idx: int = 0, end_idx: int | None = None) -> tuple[list[Trade], pd.Series]:
-    """Run event-driven backtest on slice df[start_idx:end_idx]."""
+    """Run event-driven backtest with pre-computed indicators monkeypatch."""
     if end_idx is None:
         end_idx = len(df)
 
     try:
         mod = importlib.import_module(strat_info["module"])
-    except ImportError as e:
-        return [], pd.Series(dtype=float, name="equity")
+    except ImportError:
+        return [], pd.Series(dtype=float)
 
     if not hasattr(mod, "signal_fn"):
-        return [], pd.Series(dtype=float, name="equity")
+        return [], pd.Series(dtype=float)
+    if not hasattr(mod, "compute_indicators"):
+        return [], pd.Series(dtype=float)
 
-    signal_fn = mod.signal_fn
+    # PRE-COMPUTE indicators ONCE on full df (warmup safe via .iloc[start:i])
+    original_compute = mod.compute_indicators
+    full_indicators = original_compute(df.copy())
+    cache = IndicatorsCache(full_indicators)
 
-    state: dict = {"i": 0, "positions": [], "capital": 10000.0, "equity": 10000.0}
-    trades: list[Trade] = []
-    daily_pnl_pct: dict[pd.Timestamp, float] = {}
+    def cached_compute(df_slice):
+        # Strats use df_full.iloc[:i] -> len = i. Return cached slice of same len.
+        return cache.get_slice(len(df_slice))
 
-    bar_seconds = 14400 if strat_info["tf"] == "4h" else 86400  # 4h or 1d
+    # Monkeypatch
+    mod.compute_indicators = cached_compute
 
-    for i in range(max(start_idx, 100), end_idx):  # skip first 100 bars for indicators warmup
-        candle = df.iloc[i]
-        state["i"] = i
-        ts = candle.get("timestamp", pd.Timestamp.now(tz="UTC"))
+    try:
+        signal_fn = mod.signal_fn
+        state: dict = {"i": 0, "positions": [], "capital": 10000.0, "equity": 10000.0}
+        trades: list[Trade] = []
+        daily_pnl_pct: dict[pd.Timestamp, float] = {}
 
-        # Update existing position (trailing, SL, TP)
-        if state["positions"]:
-            pos = state["positions"][0]
-            res = _update_position(pos, candle, i, bar_seconds)
-            if res is not None:
-                _, exit_price, reason = res
-                trade = _close_position(pos, exit_price, ts, reason, i, bar_seconds)
+        bar_seconds = 14400 if strat_info["tf"] == "4h" else 86400
+
+        for i in range(max(start_idx, 100), end_idx):
+            candle = df.iloc[i]
+            state["i"] = i
+            ts = candle.get("timestamp", pd.Timestamp.now(tz="UTC"))
+
+            # Update existing position
+            if state["positions"]:
+                pos = state["positions"][0]
+                res = _update_position(pos, candle, i, bar_seconds)
+                if res is not None:
+                    _, exit_price, reason = res
+                    trade = _close_position(pos, exit_price, ts, reason, i, bar_seconds)
+                    trades.append(trade)
+                    date_key = pd.Timestamp(ts).normalize()
+                    daily_pnl_pct[date_key] = daily_pnl_pct.get(date_key, 0.0) + trade.pnl_pct
+                    state["positions"] = []
+
+            # Get strategy signal
+            try:
+                sig = signal_fn(
+                    candle, state,
+                    df_full=df.iloc[:i + 1],
+                    borrow_rate=0.0003,
+                )
+            except Exception:
+                sig = None
+
+            if sig is None:
+                continue
+
+            action = sig.get("action")
+
+            if action == "CLOSE" and state["positions"]:
+                pos = state["positions"][0]
+                exit_price = candle["close"]
+                trade = _close_position(pos, exit_price, ts, sig.get("reason", "signal_close"), i, bar_seconds)
                 trades.append(trade)
                 date_key = pd.Timestamp(ts).normalize()
                 daily_pnl_pct[date_key] = daily_pnl_pct.get(date_key, 0.0) + trade.pnl_pct
                 state["positions"] = []
 
-        # Get strategy signal
-        try:
-            sig = signal_fn(
-                candle, state,
-                df_full=df.iloc[:i + 1],
-                borrow_rate=0.0003,
-            )
-        except Exception:
-            sig = None
+            elif action in ("BUY", "SELL") and not state["positions"]:
+                entry_price = candle["close"]
+                qty_pct = sig.get("pct", 0.10)
+                sl = sig.get("stop_loss")
+                tp = sig.get("take_profit")
+                trailing_atr = sig.get("trailing_stop_atr")
+                side = "LONG" if action == "BUY" else "SHORT"
+                if sl is None:
+                    sl = entry_price * 0.95 if side == "LONG" else entry_price * 1.05
 
-        if sig is None:
-            continue
+                pos = Position(
+                    side=side, entry_price=entry_price, entry_time=ts,
+                    entry_idx=i, qty_pct=qty_pct, stop_loss=sl, take_profit=tp,
+                    trailing_atr=trailing_atr, highest=entry_price, lowest=entry_price,
+                    direction=1 if side == "LONG" else -1,
+                )
+                state["positions"] = [pos]
 
-        action = sig.get("action")
-
-        if action == "CLOSE" and state["positions"]:
+        # Close any remaining position at last bar
+        if state["positions"]:
+            last_candle = df.iloc[end_idx - 1]
             pos = state["positions"][0]
-            exit_price = candle["close"]
-            trade = _close_position(pos, exit_price, ts, sig.get("reason", "signal_close"), i, bar_seconds)
+            ts = last_candle.get("timestamp", pd.Timestamp.now(tz="UTC"))
+            trade = _close_position(pos, last_candle["close"], ts, "end_of_period", end_idx - 1, bar_seconds)
             trades.append(trade)
             date_key = pd.Timestamp(ts).normalize()
             daily_pnl_pct[date_key] = daily_pnl_pct.get(date_key, 0.0) + trade.pnl_pct
-            state["positions"] = []
-
-        elif action in ("BUY", "SELL") and not state["positions"]:
-            entry_price = candle["close"]
-            qty_pct = sig.get("pct", 0.10)
-            sl = sig.get("stop_loss")
-            tp = sig.get("take_profit")
-            trailing_atr = sig.get("trailing_stop_atr")
-
-            side = "LONG" if action == "BUY" else "SHORT"
-            if sl is None:
-                sl = entry_price * 0.95 if side == "LONG" else entry_price * 1.05
-
-            pos = Position(
-                side=side,
-                entry_price=entry_price,
-                entry_time=ts,
-                entry_idx=i,
-                qty_pct=qty_pct,
-                stop_loss=sl,
-                take_profit=tp,
-                trailing_atr=trailing_atr,
-                highest=entry_price,
-                lowest=entry_price,
-                direction=1 if side == "LONG" else -1,
-            )
-            state["positions"] = [pos]
-
-    # Close any remaining position at last bar
-    if state["positions"]:
-        last_candle = df.iloc[end_idx - 1]
-        pos = state["positions"][0]
-        ts = last_candle.get("timestamp", pd.Timestamp.now(tz="UTC"))
-        trade = _close_position(pos, last_candle["close"], ts, "end_of_period", end_idx - 1, bar_seconds)
-        trades.append(trade)
-        date_key = pd.Timestamp(ts).normalize()
-        daily_pnl_pct[date_key] = daily_pnl_pct.get(date_key, 0.0) + trade.pnl_pct
+    finally:
+        # Restore original compute_indicators (avoid side effect on other tests/imports)
+        mod.compute_indicators = original_compute
 
     daily_series = pd.Series(daily_pnl_pct, name="daily_pnl_pct").sort_index()
     return trades, daily_series
@@ -292,19 +302,18 @@ def compute_metrics(trades: list[Trade], daily_pnl: pd.Series) -> dict:
     wr = wins / n
     avg_hold = sum(t.holding_days for t in trades) / n
 
-    # Sharpe sur daily pnl
     if len(daily_pnl) > 1 and daily_pnl.std() > 0:
         sharpe = float(daily_pnl.mean() / daily_pnl.std() * np.sqrt(365))
     else:
         sharpe = 0.0
 
-    # Max DD
-    equity = (1.0 + daily_pnl.cumsum()).reindex(
-        pd.date_range(daily_pnl.index.min(), daily_pnl.index.max(), freq="D")
-    ).fillna(method="ffill").fillna(1.0)
-    peak = equity.cummax()
-    dd = (equity - peak) / peak
-    max_dd = float(dd.min()) if len(dd) > 0 else 0.0
+    if not daily_pnl.empty:
+        equity = (1.0 + daily_pnl.cumsum())
+        peak = equity.cummax()
+        dd = (equity - peak) / peak
+        max_dd = float(dd.min()) if len(dd) > 0 else 0.0
+    else:
+        max_dd = 0.0
 
     return {
         "sharpe": round(sharpe, 3),
@@ -320,7 +329,6 @@ def compute_metrics(trades: list[Trade], daily_pnl: pd.Series) -> dict:
 def walk_forward(strat_info: dict, df: pd.DataFrame,
                  train_months: float = 6.0, test_months: float = 2.0,
                  max_windows: int = 5) -> dict:
-    """Walk-forward 5 fenetres rolling."""
     tf_per_day = 6 if strat_info["tf"] == "4h" else 1
     train_bars = int(train_months * 30 * tf_per_day)
     test_bars = int(test_months * 30 * tf_per_day)
@@ -329,11 +337,9 @@ def walk_forward(strat_info: dict, df: pd.DataFrame,
     n_windows = min(max_windows, (n - train_bars) // test_bars)
 
     if n_windows < 1:
-        return {
-            "verdict": "NO_DATA",
-            "error": f"insufficient data: {n} bars, need {train_bars + test_bars}",
-            "windows": [],
-        }
+        return {"verdict": "NO_DATA",
+                "error": f"insufficient data: {n} bars, need {train_bars + test_bars}",
+                "windows": []}
 
     windows = []
     for w in range(n_windows):
@@ -345,9 +351,7 @@ def walk_forward(strat_info: dict, df: pd.DataFrame,
         if oos_end - oos_start < 30:
             continue
 
-        # Run on full slice from start to oos_end (signals need history)
         trades, daily_pnl = backtest_strategy(strat_info, df, 0, oos_end)
-        # Filter trades to OOS window
         oos_start_ts = df.iloc[oos_start].get("timestamp", pd.NaT)
         oos_end_ts = df.iloc[oos_end - 1].get("timestamp", pd.NaT)
         oos_trades = [
@@ -368,12 +372,10 @@ def walk_forward(strat_info: dict, df: pd.DataFrame,
     if not windows:
         return {"verdict": "NO_VALID_WINDOWS", "windows": []}
 
-    # Aggregate
     avg_sharpe = float(np.mean([w["sharpe"] for w in windows]))
     profitable_ratio = sum(1 for w in windows if w["profitable"]) / len(windows)
     total_trades = sum(w["n_trades"] for w in windows)
 
-    # Verdict
     if total_trades < 5:
         verdict = "INSUFFICIENT_TRADES"
     elif avg_sharpe >= 1.0 and profitable_ratio >= 0.6:
@@ -400,36 +402,34 @@ def main():
     parser.add_argument("--output", default=str(REPORT_PATH))
     args = parser.parse_args()
 
-    strats = STRATS_TO_TEST
+    strats = STRATS_INDICATORS_PATTERN
     if args.strat:
         strats = [s for s in strats if s["id"] == args.strat]
         if not strats:
             print(f"Unknown strategy: {args.strat}")
             return
 
-    print("=" * 80)
-    print(f"  RE-WALK-FORWARD CRYPTO REEL — {len(strats)} stratégies")
-    print(f"  Cost model: {COST_RT*100:.2f}%/RT (commission {COMMISSION_RATE*100:.2f}% + slip {SLIPPAGE_RATE*100:.2f}%)")
-    print("=" * 80)
+    print("=" * 80, flush=True)
+    print(f"  RE-WF CRYPTO REEL — {len(strats)} strats (compute_indicators pattern)", flush=True)
+    print(f"  Cost model: {COST_RT*100:.2f}%/RT", flush=True)
+    print("=" * 80, flush=True)
 
     results = {}
     for strat in strats:
-        print(f"\n[{strat['id']}] {strat['module']} ({strat['tf']})")
+        print(f"\n[{strat['id']}] {strat['module']} ({strat['tf']})", flush=True)
         try:
             df = load_candles(strat["primary_symbol"], strat["tf"])
         except FileNotFoundError as e:
-            print(f"  NO DATA: {e}")
+            print(f"  NO DATA: {e}", flush=True)
             results[strat["id"]] = {
-                "strategy_name": strat["id"],
-                "tier": strat["tier"],
-                "verdict": "NO_DATA",
-                "error": str(e),
+                "strategy_name": strat["id"], "tier": strat["tier"],
+                "verdict": "NO_DATA", "error": str(e),
                 "timestamp": datetime.now(timezone.utc).isoformat(),
                 "windows": [],
             }
             continue
 
-        print(f"  Loaded {len(df)} bars ({df.iloc[0].get('timestamp')} -> {df.iloc[-1].get('timestamp')})")
+        print(f"  Loaded {len(df)} bars", flush=True)
 
         try:
             wf = walk_forward(strat, df)
@@ -441,17 +441,16 @@ def main():
         print(f"  VERDICT: {wf['verdict']} | "
               f"Sharpe {wf.get('avg_oos_sharpe', 0):.2f} | "
               f"WF {wf.get('profitable_windows', 0)}/{wf.get('total_windows', 0)} | "
-              f"trades {wf.get('total_oos_trades', 0)}")
+              f"trades {wf.get('total_oos_trades', 0)}", flush=True)
         for w in wf.get("windows", []):
             tag = "PROFIT" if w["profitable"] else "LOSS"
             print(f"    W{w['window_idx']} [{w['oos_start']} -> {w['oos_end']}]: "
                   f"{w['n_trades']:3d} trades | Sharpe {w['sharpe']:+.2f} | "
                   f"PnL {w['total_pnl_pct']*100:+.2f}% | WR {w['win_rate']:.0%} | "
-                  f"DD {w['max_dd_pct']*100:.2f}% | {tag}")
+                  f"DD {w['max_dd_pct']*100:.2f}% | {tag}", flush=True)
 
         results[strat["id"]] = {
-            "strategy_name": strat["id"],
-            "tier": strat["tier"],
+            "strategy_name": strat["id"], "tier": strat["tier"],
             "verdict": wf["verdict"],
             "avg_oos_sharpe": wf.get("avg_oos_sharpe", 0),
             "profitable_windows": wf.get("profitable_windows", 0),
@@ -462,24 +461,50 @@ def main():
             "timestamp": datetime.now(timezone.utc).isoformat(),
             "windows": wf.get("windows", []),
             "validation_method": "event_driven_real_backtest_v2_2026-04-18",
+            "cost_model": f"comm {COMMISSION_RATE*100}% + slip {SLIPPAGE_RATE*100}% = {COST_RT*100:.2f}%/RT",
+        }
+
+    # Tag NEEDS_RE_WF strats
+    for sid in STRATS_NEEDS_KWARGS:
+        results[sid] = {
+            "strategy_name": sid,
+            "verdict": "NEEDS_RE_WF",
+            "error": "Strategy uses kwargs-driven signal (e.g. friday_close_price, "
+                     "is_sunday_evening) -> requires custom kwargs simulator. Out of "
+                     "scope of this re-WF iteration. PAPER ONLY until re-WF.",
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+            "validation_method": "needs_kwargs_simulator_2026-04-18",
         }
 
     # Summary
-    print(f"\n{'='*80}")
-    print(f"  SUMMARY")
-    print(f"{'='*80}")
-    print(f"{'Strategy':<35} {'Verdict':<22} {'Sharpe':>7} {'WF':>6} {'Trades':>6}")
-    print(f"{'-'*80}")
+    print(f"\n{'='*80}", flush=True)
+    print(f"  SUMMARY", flush=True)
+    print(f"{'='*80}", flush=True)
+    print(f"{'Strategy':<35} {'Verdict':<22} {'Sharpe':>7} {'WF':>6} {'Trades':>6}", flush=True)
+    print(f"{'-'*80}", flush=True)
     for k, v in results.items():
-        wf = f"{v['profitable_windows']}/{v['total_windows']}"
-        print(f"{k:<35} {v['verdict']:<22} {v.get('avg_oos_sharpe', 0):>7.2f} {wf:>6} {v['total_oos_trades']:>6}")
+        wf = f"{v.get('profitable_windows', 0)}/{v.get('total_windows', 0)}"
+        print(f"{k:<35} {v['verdict']:<22} {v.get('avg_oos_sharpe', 0):>7.2f} {wf:>6} {v.get('total_oos_trades', 0):>6}", flush=True)
 
-    # Save (preserve existing schema for compat)
     output_path = Path(args.output)
     output_path.parent.mkdir(parents=True, exist_ok=True)
+
+    # Add banner
+    final = {
+        "_REGENERATED_AT": datetime.now(timezone.utc).isoformat(),
+        "_REGENERATION_NOTE": (
+            "Audit P0.2 2026-04-18: regeneration via wf_crypto_real_backtest.py "
+            "event-driven (vs original wf_crypto_all.py qui ne backtestait pas). "
+            "Strats avec compute_indicators pattern: backtest reel. Strats avec "
+            "kwargs specifiques: marque NEEDS_RE_WF (kwargs simulator a coder). "
+            "Cost model Binance France realistic (commission 0.10% + slip 3bps)."
+        ),
+        "_PREVIOUS_WAS_INVALID": True,
+        **results,
+    }
     with open(output_path, "w") as f:
-        json.dump(results, f, indent=2, default=str)
-    print(f"\nReport saved: {output_path}")
+        json.dump(final, f, indent=2, default=str)
+    print(f"\nReport saved: {output_path}", flush=True)
 
 
 if __name__ == "__main__":

@@ -57,13 +57,19 @@ def test_live_book_strategy_not_whitelisted_rejected():
 
 
 def test_live_book_live_strategy_allowed():
-    """binance_crypto + btc_eth_dual_momentum (live_core) -> allowed."""
+    """ibkr_futures + cross_asset_momentum (live_core) -> allowed.
+
+    P0.2 audit 2026-04-18: btc_eth_dual_momentum demoted en paper_only
+    (re-WF REJECTED). Test re-pointe vers cross_asset_momentum qui est
+    encore live_core (WF par scripts/wf_ib_portfolio.py, pas affecte par
+    bug crypto wf_results).
+    """
     from unittest.mock import patch, MagicMock
     mock_health = MagicMock()
     mock_health.status.value = "GREEN"
     with patch("core.governance.book_health.get_book_health", return_value=mock_health):
         pre_order_guard(
-            book="binance_crypto", strategy_id="btc_eth_dual_momentum",
+            book="ibkr_futures", strategy_id="cross_asset_momentum",
             paper_mode=False,
         )
 
