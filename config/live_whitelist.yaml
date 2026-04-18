@@ -372,7 +372,21 @@ ibkr_eu:
   - strategy_id: mib_estx50_spread
     book: ibkr_eu
     status: paper_only
-    notes: "Paper only"
+    runtime_entrypoint: "worker.py:run_mib_estx50_spread_paper_cycle (17h45 Paris)"
+    runtime_module: "core.runtime.spread_paper_runner.SpreadPaperRunner"
+    wf_source: "reports/research/wf_mib_estx50_corrected.json (2026-04-18)"
+    sizing_policy: "notional_dollar_neutral (1 FIB + ~3 FESX, hedge ratio recalc per entry)"
+    kill_criteria:
+      - "30j paper avant decision promotion"
+      - "Si avg Sharpe paper < 1.0 sur 30j -> retire"
+      - "Si DD spread > EUR 14K (W4 backtest level) -> alerte"
+    notes: |
+      WF corrige 2026-04-18 (4 bugs fixes vs original Sharpe 14.35 buggy):
+      avg Sharpe 3.91, WF 4/5, +EUR 22.6K / 12 trades / 24 mois OOS.
+      Runner isole (pas StrategyBase/Signal multi-leg). Paper journal:
+      data/state/mib_estx50_spread/paper_trades.jsonl. Source yfinance.
+      Promotion live: discussion apres 30j data + capital suffisant
+      (~EUR 13.5K margin requise pour 1 FIB + 3 FESX).
 
   - strategy_id: sector_rotation_eu
     book: ibkr_eu

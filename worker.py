@@ -1579,6 +1579,78 @@ def run_trailing_stop_cycle():
         _ibkr_lock.release()
 
 
+def run_mib_estx50_spread_paper_cycle():
+    """MIB/ESTX50 spread — paper runner isole, 1x/jour apres close EU.
+
+    Fetch via yfinance (^FTSEMIB.MI + ^STOXX50E), passe au runner qui
+    gere etat + journal. Pas de broker, pas de capital. Trades simules
+    dans data/state/mib_estx50_spread/paper_trades.jsonl.
+
+    WF corrige: avg Sharpe 3.91, WF 4/5, +EUR22.6K sur 12 trades / 24 mois OOS.
+    Promotion live a discuter apres 30j paper data.
+    """
+    try:
+        import yfinance as yf
+        from core.runtime.spread_paper_runner import SpreadPaperRunner
+
+        runner = SpreadPaperRunner.for_mib_estx50()
+
+        # Fetch ~90 jours pour avoir lookback=60 + marge
+        mib_raw = yf.download("^FTSEMIB.MI", period="90d", interval="1d",
+                              progress=False, auto_adjust=False)
+        estx_raw = yf.download("^STOXX50E", period="90d", interval="1d",
+                               progress=False, auto_adjust=False)
+
+        if mib_raw.empty or estx_raw.empty:
+            logger.warning("MIB/ESTX50 SPREAD: yfinance returned empty data")
+            return
+
+        # MultiIndex columns workaround
+        mib_close = mib_raw["Close"].squeeze() if hasattr(mib_raw["Close"], "squeeze") else mib_raw["Close"]
+        estx_close = estx_raw["Close"].squeeze() if hasattr(estx_raw["Close"], "squeeze") else estx_raw["Close"]
+
+        # Drop NaN, align
+        df = pd.DataFrame({"mib": mib_close, "estx": estx_close}).dropna()
+        if len(df) < 65:
+            logger.warning(f"MIB/ESTX50 SPREAD: insufficient history ({len(df)} bars)")
+            return
+
+        today_a = float(df["mib"].iloc[-1])
+        today_b = float(df["estx"].iloc[-1])
+        as_of = df.index[-1].date().isoformat()
+
+        result = runner.tick(
+            today_a=today_a,
+            today_b=today_b,
+            history_a=df["mib"],
+            history_b=df["estx"],
+            as_of=as_of,
+        )
+
+        action = result.get("action")
+        if action == "entry":
+            _send_alert(
+                f"SPREAD ENTRY {result['direction']} @ {as_of}\n"
+                f"{result['n_a']} MIB + {result['n_b']} ESTX50, z={result['z']:.2f}\n"
+                f"PAPER ONLY (mib_estx50_spread)",
+                level="info",
+            )
+        elif action == "exit":
+            _send_alert(
+                f"SPREAD EXIT @ {as_of}\n"
+                f"PnL net EUR{result['pnl_net']:+.0f} ({result['reason']})\n"
+                f"PAPER ONLY (mib_estx50_spread)",
+                level="info",
+            )
+        elif action in ("hold", "no_signal", "skip"):
+            logger.debug(f"MIB/ESTX50 SPREAD: {action} (z={result.get('z')})")
+
+    except ImportError as ie:
+        logger.warning(f"MIB/ESTX50 SPREAD: missing dep: {ie}")
+    except Exception as e:
+        logger.warning(f"MIB/ESTX50 SPREAD cycle error: {e}", exc_info=True)
+
+
 def _make_macro_ecb_executor(mode: str):
     """Factory for MacroECB futures executor — places bracket orders on IBKR.
 
@@ -5985,6 +6057,18 @@ def main():
             run_cross_asset_momentum_cycle._done_today = True
         if is_weekday() and now_paris.hour < 16:
             run_cross_asset_momentum_cycle._done_today = False
+
+        # === MIB/ESTX50 SPREAD PAPER (lun-ven, 17h45 Paris = apres close EU 17h30) ===
+        # Runner isole, fetch yfinance, log JSONL. Pas de broker, pas de capital.
+        # WF corrige 2026-04-18: avg Sharpe 3.91, WF 4/5. Validation 30j paper.
+        if is_weekday() and now_paris.hour == 17 and now_paris.minute >= 45 and not getattr(run_mib_estx50_spread_paper_cycle, '_done_today', False):
+            try:
+                run_mib_estx50_spread_paper_cycle()
+            except Exception as _ms_err:
+                logger.warning(f"MIB/ESTX50 SPREAD error: {_ms_err}")
+            run_mib_estx50_spread_paper_cycle._done_today = True
+        if is_weekday() and now_paris.hour < 17:
+            run_mib_estx50_spread_paper_cycle._done_today = False
 
         # === BRACKET WATCHDOG toutes les 5 minutes (24/7) ===
         # Verifie que chaque position futures live a un bracket actif.

@@ -97,17 +97,25 @@ books:
       paper_only_note: "n/a, mode paper"
     health_requirements:
       - "ibkr_gateway_4003_connected_paper"
+      - "yfinance_indices_eu (mib_estx50_spread runner self-contained)"
     allowed_strategies_source: "config/live_whitelist.yaml#ibkr_eu"
     execution_window:
       timezone: "Europe/Paris"
       hours: "09:00-17:30"
       days: "weekday"
     kill_switch_scope: "ibkr_eu_only"
-    runtime_entrypoint: "scripts/live_portfolio_eu.py via worker.run_intraday(EU)"
-    state_files: []
+    runtime_entrypoint: "scripts/live_portfolio_eu.py via worker.run_intraday(EU) + worker.run_mib_estx50_spread_paper_cycle (17h45)"
+    state_files:
+      - "data/state/mib_estx50_spread/spread_state.json"
+      - "data/state/mib_estx50_spread/paper_trades.jsonl"
     notes: |
       P0 fix 2026-04-16: bloque live tant que live_portfolio_eu.py pas
       whitelist-aware. 5 strats paper_only en attente refacto.
+      2026-04-18: mib_estx50_spread paper actif via runner isole
+      (core/runtime/spread_paper_runner.py, multi-leg atomique,
+      pas de StrategyBase). WF corrige Sharpe 3.91 / WF 4/5 /
+      +EUR 22.6K / 12 trades 24 mois OOS. Validation 30j requise
+      avant promotion live.
 
   - book_id: "ibkr_fx"
     broker: "ibkr"
