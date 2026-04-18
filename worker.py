@@ -2145,6 +2145,29 @@ def _run_futures_cycle(live: bool = False):
             except Exception as e:
                 logger.error(f"    MES calendar paper error: {e}")
 
+            # 3a-ter. MCL overnight mon trend10 paper (T3-A1 validation 2026-04-18)
+            # Source: docs/research/wf_reports/T3A-01_mcl_overnight.md + INT-B
+            # Sharpe +0.80, MaxDD -4.3%, WF 4/5, MC P(DD>30%) 0.0% -> VALIDATED
+            # Paper -> live_probation apres 30j sans divergence > 1 sigma (resserre
+            # car trigger shift friday vs monday backtest, cf docstring strat).
+            if _cam_top_pick == "MCL":
+                logger.info("    mcl_overnight_mon_trend10 (paper): SKIP — CAM reserved MCL")
+            else:
+                try:
+                    from strategies_v2.futures.mcl_overnight_mon_trend import MCLOvernightMonTrend
+                    _mcl_strat = MCLOvernightMonTrend()
+                    _mcl_strat.set_data_feed(feed)
+                    bar = feed.get_latest_bar("MCL")
+                    if bar:
+                        sig = _mcl_strat.on_bar(bar, portfolio_state)
+                        if sig:
+                            signals.append((_mcl_strat.name, sig))
+                            logger.info(f"    {_mcl_strat.name} (paper): BUY @ {bar.close:.2f}")
+                        else:
+                            logger.info(f"    {_mcl_strat.name} (paper): pas un jour/trend pattern")
+                except Exception as e:
+                    logger.error(f"    MCL overnight mon trend paper error: {e}")
+
             # 3b. Overnight MES V2 — params validates par sweep V2 (640 combos) + WF 3/3
             #     SL=60 TP=120 EMA=50 none → Sharpe 1.69, +$7,272, 163 trades 5Y
             #     WF 4/5 profitable, IS 1.41 → OOS 1.68 (OOS > IS, robuste)
@@ -2846,6 +2869,8 @@ def _run_futures_cycle(live: bool = False):
             "mes_monday_long_oc":     "mes_monday_long_oc",
             "mes_wednesday_long_oc":  "mes_wednesday_long_oc",
             "mes_pre_holiday_long":   "mes_pre_holiday_long",
+            # T3-A1 INT-B 2026-04-18 paper promotion
+            "mcl_overnight_mon_trend10": "mcl_overnight_mon_trend10",
         }
 
         for name, sig in signals:

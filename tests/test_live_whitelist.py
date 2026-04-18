@@ -50,6 +50,17 @@ def test_alpaca_us_paper_only():
     assert is_strategy_live_allowed("us_stocks_daily", "alpaca_us") is False
 
 
+def test_mcl_overnight_mon_trend10_is_paper_only():
+    """T3-A1 INT-B 2026-04-18 promotion: paper_only avec caveats trigger
+    shift + data source mismatch documentes. Ne doit PAS etre live_allowed."""
+    assert is_strategy_live_allowed("mcl_overnight_mon_trend10", "ibkr_futures") is False
+    # Entry existe et runtime_module correct
+    entry = get_strategy_entry("mcl_overnight_mon_trend10", "ibkr_futures")
+    assert entry is not None
+    assert entry["status"] == "paper_only"
+    assert entry["runtime_module"] == "strategies_v2.futures.mcl_overnight_mon_trend.MCLOvernightMonTrend"
+
+
 def test_unknown_strategy_blocked():
     """Une strategie hors whitelist doit etre bloquee."""
     assert is_strategy_live_allowed("fake_strategy_xyz", "ibkr_futures") is False

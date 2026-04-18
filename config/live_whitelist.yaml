@@ -195,6 +195,47 @@ ibkr_futures:
       WF 5/5 OOS PASS, MC P(DD>30%) 0%. Best risk/reward de la cohorte T1-A.
       Trigger: veille de jour ferie NYSE. Start paper: 2026-04-16.
 
+  # ---------------------------------------------------------------------------
+  # T3-A1 INT-B 2026-04-18 discovery batch paper promotion
+  # ---------------------------------------------------------------------------
+
+  - strategy_id: mcl_overnight_mon_trend10
+    book: ibkr_futures
+    status: paper_only
+    runtime_entrypoint: "worker.py:_run_futures_cycle (bloc if not live, section 3a-ter)"
+    runtime_module: "strategies_v2.futures.mcl_overnight_mon_trend.MCLOvernightMonTrend"
+    wf_source: "docs/research/wf_reports/T3A-01_mcl_overnight.md + INT-B_discovery_batch.md"
+    sizing_policy: fixed_1_contract
+    max_risk_usd: 300
+    kill_criteria:
+      drawdown_absolute: -10%
+      drawdown_rolling_90d: -8%
+      sharpe_rolling_60d: -0.5
+      divergence_vs_backtest: "1x_std"   # resserre vs 2x default
+      correlation_drift: ">0.70"
+    notes: |
+      T3-A1 VALIDATED (Sharpe +0.80, MaxDD -4.3%, WF 4/5 OOS PASS, MC P(DD>30%) 0%).
+      Backtest 2015-2026 (2833 bars MCL_LONG.parquet), cost $2.70 RT.
+      Backtest signal: lundi (dow=0) + close.pct_change(10) > 0 -> capture weekend gap.
+
+      CAVEATS RUNTIME (review N2 2026-04-18):
+        1. TRIGGER SHIFT: signal emis au VENDREDI (dow=4) au lieu de lundi,
+           pour que l'ordre BUY MCL parte vendredi soir et execute a l'open
+           dimanche soir futures = capture reelle du weekend gap du backtest.
+           Correlation trend_friday vs trend_monday ~0.99 sur fenetre 10j.
+        2. DATA SOURCE: worker charge MCL_1D.parquet (cron yfinance daily,
+           stale ~10j observe 2026-04-18), backtest utilise MCL_LONG.parquet
+           (cron specifique, fresh). La strat ajoute un freshness guard
+           (MAX_BAR_AGE_DAYS=5) qui skip silencieusement si data stale.
+           Fix data pipeline MCL requis avant promotion live.
+        3. SL/TP ADDED (backtest n'en avait pas): 1.2% / 1.8% conservateurs
+           vs vol daily MCL ~2-3%. En paper, observer % de trades stoppes
+           intraday = metric cle pour calibrer avant live.
+
+      Kill criteria resserres (1 sigma vs 2) car trade un signal different du
+      backtest validated. Re-WF "friday_trigger" requis avant live_probation.
+      Start paper: 2026-04-18.
+
 # -----------------------------------------------------------------------------
 # BINANCE CRYPTO — 11 strats live (core + probation)
 # -----------------------------------------------------------------------------
