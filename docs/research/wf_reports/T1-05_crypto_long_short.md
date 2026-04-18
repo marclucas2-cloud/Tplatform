@@ -1,6 +1,6 @@
 # T1-E — Crypto long/short cross-sectional (alts vs BTC)
 
-**Run** : 2026-04-16 06:20 UTC
+**Run** : 2026-04-18 16:29 UTC
 **Univers** : 10 alts (ADA, AVAX, BNB, DOGE, DOT, LINK, NEAR, SOL, SUI, XRP)
 **Base** : BTC (benchmark)
 **Methodologie** : top 3 long, bottom 3 short sur alpha vs BTC 20d, rebalance 7d
