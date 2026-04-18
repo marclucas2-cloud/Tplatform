@@ -1777,14 +1777,14 @@ def run_btc_asia_mes_leadlag_paper_cycle():
 
 def _run_relmom_paper_tick(
     name: str,
-    returns: pd.DataFrame,
+    returns: "pd.DataFrame",  # string annotation: pd importe localement dans worker.py
     state_path: Path,
     journal_path: Path,
     lookback: int,
     hold_days: int,
     capital_per_leg: float,
     rt_cost_pct: float,
-    as_of_date: pd.Timestamp,
+    as_of_date: "pd.Timestamp",
 ) -> None:
     """Shared logic for us_sector_ls + eu_relmom paper runners.
 
