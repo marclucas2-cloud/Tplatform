@@ -41,13 +41,21 @@ logger = logging.getLogger("worker")
 
 log_dir = ROOT / "logs" / "worker"
 log_dir.mkdir(parents=True, exist_ok=True)
-file_handler = RotatingFileHandler(
-    log_dir / "worker.log", maxBytes=10 * 1024 * 1024, backupCount=5,
+_worker_log_target = str((log_dir / "worker.log").resolve())
+_root_logger = logging.getLogger()
+_has_worker_file_handler = any(
+    isinstance(h, RotatingFileHandler)
+    and getattr(h, "baseFilename", None) == _worker_log_target
+    for h in _root_logger.handlers
 )
-file_handler.setFormatter(logging.Formatter(
-    "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
-))
-logging.getLogger().addHandler(file_handler)
+if not _has_worker_file_handler:
+    file_handler = RotatingFileHandler(
+        log_dir / "worker.log", maxBytes=10 * 1024 * 1024, backupCount=5,
+    )
+    file_handler.setFormatter(logging.Formatter(
+        "%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+    ))
+    _root_logger.addHandler(file_handler)
 
 # ── Extracted modules ────────────────────────────────────────────────────────
 from core.worker.alerts import log_event as _log_event  # noqa: E402

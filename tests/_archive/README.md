@@ -19,6 +19,14 @@ Quarantine 9.0 (2026-04-19 PM, ChatGPT audit follow-up):
 - test_p2_strategies.py — importe strategies.futures_estx_trend et co-modules
   supprimes (Phase 2 batch jamais mergee en main)
 
+Quarantine iter3 B8 (2026-04-19 PM, business audit):
+- test_crypto_strategies.py (40 tests, 80 skips) — testait 8 crypto strats
+  TOUTES drainees bucket A (btc_eth_dual_momentum, altcoin_relative_strength
+  V0, btc_mean_reversion, vol_breakout, btc_dominance_v2, borrow_rate_carry,
+  liquidation_momentum, weekend_gap). Fichiers strategies/_archive/crypto/.
+  Note: alt_rel_strength_14_60_7 (different fichier) est un successeur
+  en paper, non couvert par ces tests.
+
 Ces tests sont quarantaines, pas supprimes, pour audit historique. Le contrat
 de qualite `pytest tests/` doit etre vert. Si un module archive est restaure,
 re-deplacer le test en tests/ et verifier qu'il passe.
