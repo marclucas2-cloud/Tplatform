@@ -113,3 +113,12 @@ data/us_stocks/*
 
 # Research artifacts auto-genere specifique (scout cards discovery engine)
 data/research/strategy_discovery_engine_*_scout_cards.json
+
+# Discovery engine test artifacts (generated par scripts/discover_*, transients)
+reports/research/auto_test_strat.json
+reports/research/corr_full_test.json
+reports/research/costs_full_test.json
+reports/research/quick_*.json
+reports/research/sweep_test.json
+reports/research/wf_full_test.json
+reports/research/thesis_test_strat.md

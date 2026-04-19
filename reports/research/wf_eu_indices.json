@@ -1,0 +1,466 @@
+[
+  {
+    "strategy": "STRAT 1: Country Momentum Cross-Sectionnel",
+    "total_pnl": -14258.6279296875,
+    "total_trades": 20,
+    "win_rate": 0.5,
+    "avg_sharpe": -1.5657827977047416,
+    "wf_ratio": "3/5",
+    "profitable_windows": 3,
+    "n_windows": 5,
+    "verdict": "PASS",
+    "windows": [
+      {
+        "window": 1,
+        "period": "2024-02-26 to 2024-07-23",
+        "n_trades": 6,
+        "pnl_usd": -4686.03955078125,
+        "win_rate": 0.3333333333333333,
+        "sharpe": -11.225196681709393,
+        "max_dd": -5996.00048828125
+      },
+      {
+        "window": 2,
+        "period": "2024-07-24 to 2024-12-16",
+        "n_trades": 5,
+        "pnl_usd": 27271.201171875,
+        "win_rate": 0.8,
+        "sharpe": 11.251954406387481,
+        "max_dd": -549.005859375
+      },
+      {
+        "window": 3,
+        "period": "2024-12-17 to 2025-05-23",
+        "n_trades": 5,
+        "pnl_usd": -47826.70166015625,
+        "win_rate": 0.4,
+        "sharpe": -7.855671713201796,
+        "max_dd": -51436.19775390625
+      },
+      {
+        "window": 4,
+        "period": "2025-05-27 to 2025-10-22",
+        "n_trades": 2,
+        "pnl_usd": 10805.904296875,
+        "win_rate": 0.5,
+        "sharpe": 0,
+        "max_dd": -4081.095703125
+      },
+      {
+        "window": 5,
+        "period": "2025-10-23 to 2026-03-24",
+        "n_trades": 2,
+        "pnl_usd": 177.0078125,
+        "win_rate": 0.5,
+        "sharpe": 0,
+        "max_dd": -11753.0
+      }
+    ]
+  },
+  {
+    "strategy": "STRAT 2: Core vs Periphery Spread",
+    "total_pnl": -5372.78564453125,
+    "total_trades": 60,
+    "win_rate": 0.4666666666666667,
+    "avg_sharpe": 1.1621221467075724,
+    "wf_ratio": "2/5",
+    "profitable_windows": 2,
+    "n_windows": 5,
+    "verdict": "FAIL",
+    "windows": [
+      {
+        "window": 1,
+        "period": "2024-02-26 to 2024-07-23",
+        "n_trades": 10,
+        "pnl_usd": -9501.28173828125,
+        "win_rate": 0.3,
+        "sharpe": -14.287453939528717,
+        "max_dd": -11099.9873046875
+      },
+      {
+        "window": 2,
+        "period": "2024-07-24 to 2024-12-16",
+        "n_trades": 15,
+        "pnl_usd": 11092.294921875,
+        "win_rate": 0.6,
+        "sharpe": 19.857714806976684,
+        "max_dd": -4310.0078125
+      },
+      {
+        "window": 3,
+        "period": "2024-12-17 to 2025-05-23",
+        "n_trades": 20,
+        "pnl_usd": -14784.08447265625,
+        "win_rate": 0.4,
+        "sharpe": -8.032146308722911,
+        "max_dd": -39544.29541015625
+      },
+      {
+        "window": 4,
+        "period": "2025-05-27 to 2025-10-22",
+        "n_trades": 10,
+        "pnl_usd": 9560.595703125,
+        "win_rate": 0.5,
+        "sharpe": 8.272496174812806,
+        "max_dd": -5298.00146484375
+      },
+      {
+        "window": 5,
+        "period": "2025-10-23 to 2026-03-24",
+        "n_trades": 5,
+        "pnl_usd": -1740.31005859375,
+        "win_rate": 0.6,
+        "sharpe": 0,
+        "max_dd": -13278.01171875
+      }
+    ]
+  },
+  {
+    "strategy": "STRAT 3: Nikkei Lead-Lag",
+    "total_pnl": -9490.93293457028,
+    "total_trades": 196,
+    "win_rate": 0.47959183673469385,
+    "avg_sharpe": -1.7363416803678764,
+    "wf_ratio": "1/5",
+    "profitable_windows": 1,
+    "n_windows": 5,
+    "verdict": "FAIL",
+    "windows": [
+      {
+        "window": 1,
+        "period": "2024-02-26 to 2024-07-23",
+        "n_trades": 32,
+        "pnl_usd": -1230.5003173828172,
+        "win_rate": 0.4375,
+        "sharpe": -2.0147232736793477,
+        "max_dd": -2808.6958740234368
+      },
+      {
+        "window": 2,
+        "period": "2024-07-24 to 2024-12-16",
+        "n_trades": 38,
+        "pnl_usd": 1586.808422851569,
+        "win_rate": 0.6578947368421053,
+        "sharpe": 1.6617854930410136,
+        "max_dd": -2192.0479980468754
+      },
+      {
+        "window": 3,
+        "period": "2024-12-17 to 2025-05-23",
+        "n_trades": 36,
+        "pnl_usd": -4017.445239257784,
+        "win_rate": 0.4166666666666667,
+        "sharpe": -3.640650986384068,
+        "max_dd": -6157.826489257783
+      },
+      {
+        "window": 4,
+        "period": "2025-05-27 to 2025-10-22",
+        "n_trades": 34,
+        "pnl_usd": -1310.8466796875036,
+        "win_rate": 0.4411764705882353,
+        "sharpe": -1.7398323064554835,
+        "max_dd": -1624.6189941406265
+      },
+      {
+        "window": 5,
+        "period": "2025-10-23 to 2026-03-24",
+        "n_trades": 56,
+        "pnl_usd": -4518.949121093745,
+        "win_rate": 0.44642857142857145,
+        "sharpe": -2.9482873283614963,
+        "max_dd": -5930.246484374989
+      }
+    ]
+  },
+  {
+    "strategy": "STRAT 3b: Nikkei Lead-Lag (threshold 0.5%)",
+    "total_pnl": -18795.875937499994,
+    "total_trades": 307,
+    "win_rate": 0.4527687296416938,
+    "avg_sharpe": -2.630412027888098,
+    "wf_ratio": "0/5",
+    "profitable_windows": 0,
+    "n_windows": 5,
+    "verdict": "FAIL",
+    "windows": [
+      {
+        "window": 1,
+        "period": "2024-02-26 to 2024-07-23",
+        "n_trades": 56,
+        "pnl_usd": -2617.676582031234,
+        "win_rate": 0.44642857142857145,
+        "sharpe": -2.3455311772874254,
+        "max_dd": -5296.554941406239
+      },
+      {
+        "window": 2,
+        "period": "2024-07-24 to 2024-12-16",
+        "n_trades": 64,
+        "pnl_usd": -1192.696601562513,
+        "win_rate": 0.5625,
+        "sharpe": -0.8165209024987391,
+        "max_dd": -4879.889843750005
+      },
+      {
+        "window": 3,
+        "period": "2024-12-17 to 2025-05-23",
+        "n_trades": 57,
+        "pnl_usd": -3901.7009765624935,
+        "win_rate": 0.42105263157894735,
+        "sharpe": -2.6523636710900016,
+        "max_dd": -7176.425742187508
+      },
+      {
+        "window": 4,
+        "period": "2025-05-27 to 2025-10-22",
+        "n_trades": 64,
+        "pnl_usd": -4274.026249999999,
+        "win_rate": 0.40625,
+        "sharpe": -3.3812086827309176,
+        "max_dd": -4091.429570312499
+      },
+      {
+        "window": 5,
+        "period": "2025-10-23 to 2026-03-24",
+        "n_trades": 66,
+        "pnl_usd": -6809.775527343752,
+        "win_rate": 0.42424242424242425,
+        "sharpe": -3.956435705833407,
+        "max_dd": -7609.503457031256
+      }
+    ]
+  },
+  {
+    "strategy": "STRAT 4: Pairs CAC40/MIB",
+    "total_pnl": 9606.5078125,
+    "total_trades": 18,
+    "win_rate": 0.5555555555555556,
+    "avg_sharpe": -1.0515323218919135,
+    "wf_ratio": "2/5",
+    "profitable_windows": 2,
+    "n_windows": 5,
+    "verdict": "FAIL",
+    "windows": [
+      {
+        "window": 1,
+        "period": "2024-02-26 to 2024-07-23",
+        "n_trades": 4,
+        "pnl_usd": -6771.3017578125,
+        "win_rate": 0.5,
+        "sharpe": -21.651565796705345,
+        "max_dd": -12575.404296875
+      },
+      {
+        "window": 2,
+        "period": "2024-07-24 to 2024-12-16",
+        "n_trades": 2,
+        "pnl_usd": -2421.302734375,
+        "win_rate": 0.0,
+        "sharpe": 0,
+        "max_dd": -1403.0
+      },
+      {
+        "window": 3,
+        "period": "2024-12-17 to 2025-05-23",
+        "n_trades": 8,
+        "pnl_usd": 21002.0107421875,
+        "win_rate": 0.625,
+        "sharpe": 16.393904187245777,
+        "max_dd": -7541.2958984375
+      },
+      {
+        "window": 4,
+        "period": "2025-05-27 to 2025-10-22",
+        "n_trades": 2,
+        "pnl_usd": -5269.30078125,
+        "win_rate": 0.5,
+        "sharpe": 0,
+        "max_dd": -7208.0
+      },
+      {
+        "window": 5,
+        "period": "2025-10-23 to 2026-03-24",
+        "n_trades": 2,
+        "pnl_usd": 3066.40234375,
+        "win_rate": 1.0,
+        "sharpe": 0,
+        "max_dd": 0.0
+      }
+    ]
+  },
+  {
+    "strategy": "STRAT 4: Pairs ESTX50/FTSE",
+    "total_pnl": -773.8193359375,
+    "total_trades": 18,
+    "win_rate": 0.5,
+    "avg_sharpe": 0.9332909423092882,
+    "wf_ratio": "3/5",
+    "profitable_windows": 3,
+    "n_windows": 5,
+    "verdict": "PASS",
+    "windows": [
+      {
+        "window": 1,
+        "period": "2024-02-26 to 2024-07-23",
+        "n_trades": 2,
+        "pnl_usd": 159.7958984375,
+        "win_rate": 0.5,
+        "sharpe": 0,
+        "max_dd": -278.0
+      },
+      {
+        "window": 2,
+        "period": "2024-07-24 to 2024-12-16",
+        "n_trades": 6,
+        "pnl_usd": -473.7080078125,
+        "win_rate": 0.5,
+        "sharpe": -1.9475248512259449,
+        "max_dd": -2760.001953125
+      },
+      {
+        "window": 3,
+        "period": "2024-12-17 to 2025-05-23",
+        "n_trades": 4,
+        "pnl_usd": 779.69921875,
+        "win_rate": 0.5,
+        "sharpe": 11.338181863856674,
+        "max_dd": -1403.99609375
+      },
+      {
+        "window": 4,
+        "period": "2025-05-27 to 2025-10-22",
+        "n_trades": 2,
+        "pnl_usd": 257.994140625,
+        "win_rate": 0.5,
+        "sharpe": 0,
+        "max_dd": -1662.00390625
+      },
+      {
+        "window": 5,
+        "period": "2025-10-23 to 2026-03-24",
+        "n_trades": 4,
+        "pnl_usd": -1497.6005859375,
+        "win_rate": 0.5,
+        "sharpe": -4.724202301084288,
+        "max_dd": -2527.9921875
+      }
+    ]
+  },
+  {
+    "strategy": "STRAT 4: Pairs DAX/MIB",
+    "total_pnl": -14880.435546875,
+    "total_trades": 18,
+    "win_rate": 0.6111111111111112,
+    "avg_sharpe": 63.2572266251655,
+    "wf_ratio": "2/5",
+    "profitable_windows": 2,
+    "n_windows": 5,
+    "verdict": "FAIL",
+    "windows": [
+      {
+        "window": 1,
+        "period": "2024-02-26 to 2024-07-23",
+        "n_trades": 2,
+        "pnl_usd": 3277.75,
+        "win_rate": 0.5,
+        "sharpe": 0,
+        "max_dd": -58.0
+      },
+      {
+        "window": 2,
+        "period": "2024-07-24 to 2024-12-16",
+        "n_trades": 6,
+        "pnl_usd": -10311.974609375,
+        "win_rate": 0.6666666666666666,
+        "sharpe": -6.785598111265685,
+        "max_dd": -8318.986328125
+      },
+      {
+        "window": 3,
+        "period": "2024-12-17 to 2025-05-23",
+        "n_trades": 4,
+        "pnl_usd": -20889.783203125,
+        "win_rate": 0.5,
+        "sharpe": -10.446624311129174,
+        "max_dd": -36610.001953125
+      },
+      {
+        "window": 4,
+        "period": "2025-05-27 to 2025-10-22",
+        "n_trades": 2,
+        "pnl_usd": -4106.21484375,
+        "win_rate": 0.5,
+        "sharpe": 0,
+        "max_dd": -9228.0
+      },
+      {
+        "window": 5,
+        "period": "2025-10-23 to 2026-03-24",
+        "n_trades": 4,
+        "pnl_usd": 17149.787109375,
+        "win_rate": 0.75,
+        "sharpe": 333.51835554822236,
+        "max_dd": -2583.0
+      }
+    ]
+  },
+  {
+    "strategy": "STRAT 4: Pairs AEX/IBEX",
+    "total_pnl": -21629.96484375,
+    "total_trades": 12,
+    "win_rate": 0.5,
+    "avg_sharpe": -1.463094907740358,
+    "wf_ratio": "1/5",
+    "profitable_windows": 1,
+    "n_windows": 5,
+    "verdict": "FAIL",
+    "windows": [
+      {
+        "window": 1,
+        "period": "2024-02-26 to 2024-07-23",
+        "n_trades": 2,
+        "pnl_usd": 1989.00732421875,
+        "win_rate": 1.0,
+        "sharpe": 0,
+        "max_dd": 0.0
+      },
+      {
+        "window": 2,
+        "period": "2024-07-24 to 2024-12-16",
+        "n_trades": 2,
+        "pnl_usd": -5524.00048828125,
+        "win_rate": 0.0,
+        "sharpe": 0,
+        "max_dd": -2225.998046875
+      },
+      {
+        "window": 3,
+        "period": "2024-12-17 to 2025-05-23",
+        "n_trades": 4,
+        "pnl_usd": -11376.98046875,
+        "win_rate": 0.5,
+        "sharpe": -7.315474538701791,
+        "max_dd": -19643.99560546875
+      },
+      {
+        "window": 4,
+        "period": "2025-05-27 to 2025-10-22",
+        "n_trades": 2,
+        "pnl_usd": -4933.0068359375,
+        "win_rate": 0.5,
+        "sharpe": 0,
+        "max_dd": -11347.00390625
+      },
+      {
+        "window": 5,
+        "period": "2025-10-23 to 2026-03-24",
+        "n_trades": 2,
+        "pnl_usd": -1784.984375,
+        "win_rate": 0.5,
+        "sharpe": 0,
+        "max_dd": -10276.984375
+      }
+    ]
+  }
+]
