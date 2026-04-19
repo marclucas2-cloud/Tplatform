@@ -58,6 +58,9 @@ norecursedirs = [
     "node_modules",
     "dashboard/frontend/node_modules",
     "dashboard/frontend/dist",
+    # Quarantined tests: modules supprimes, conserves pour audit historique.
+    # Voir tests/_archive/README.md. pytest tests/ doit rester vert.
+    "tests/_archive",
 ]
 addopts = "-ra --strict-markers"
 filterwarnings = [
