@@ -27,6 +27,16 @@ def log_heartbeat():
     except Exception:
         pass
 
+    # R2 residuel post-XXL: emit heartbeat age=0 metric pour anomaly_detector.
+    # AnomalyRule worker.heartbeat.age_seconds threshold > 600s = WARN, > 1800s = CRITICAL.
+    try:
+        from core.monitoring.metrics_pipeline import get_metrics
+        get_metrics().emit("worker.heartbeat.age_seconds", 0.0,
+                           tags={"pid": str(os.getpid())})
+    except Exception:
+        # metrics pipeline pas dispo en tests / startup early - non bloquant
+        pass
+
     try:
         import psutil
         process = psutil.Process()

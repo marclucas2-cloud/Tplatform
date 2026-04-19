@@ -101,6 +101,18 @@ DEFAULT_RULES = [
                 AlertLevel.WARN, threshold_max=60),
     AnomalyRule("queue.oldest_seconds", "threshold",
                 AlertLevel.CRITICAL, threshold_max=300),
+
+    # --- Heartbeat (R2 residuel post-XXL) ---
+    # Worker emit heartbeat every cycle (~5min). Detect absence > N min.
+    # Defense in depth: VPS cron check_heartbeat.sh covers external view,
+    # this rule covers internal view via metrics_pipeline if heartbeat
+    # gauge is emitted by core/worker/heartbeat.py.
+    AnomalyRule("worker.heartbeat.age_seconds", "threshold",
+                AlertLevel.WARN, threshold_max=600),    # 10 min
+    AnomalyRule("worker.heartbeat.age_seconds", "threshold",
+                AlertLevel.CRITICAL, threshold_max=1800),  # 30 min
+    AnomalyRule("worker.heartbeat.age_seconds", "absence",
+                AlertLevel.CRITICAL, max_silence_minutes=30),
 ]
 
 
