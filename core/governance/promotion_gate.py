@@ -115,17 +115,46 @@ def _load_whitelist_entry(strategy_id: str) -> tuple[dict | None, str | None]:
 # Individual checks
 # ---------------------------------------------------------------------------
 
-def _check_paper_age(entry: dict, min_days: int) -> CheckResult:
-    """Check strategy has been on paper for >= min_days based on notes timestamp."""
+def _check_paper_age(strategy_id: str, entry: dict, min_days: int) -> CheckResult:
+    """Check strategy has been on paper for >= min_days.
+
+    Source of truth: config/quant_registry.yaml (B3 plan 9.0 2026-04-19).
+    Falls back to regex parsing of `notes:` text only if registry misses the
+    strategy (legacy transition). Logs a warning when falling back so we can
+    migrate remaining stragglers.
+    """
+    # Primary source: canonical quant_registry
+    try:
+        from core.governance.quant_registry import get_entry
+        qr_entry = get_entry(strategy_id)
+    except Exception:
+        qr_entry = None
+
+    if qr_entry and qr_entry.paper_start_at:
+        age_days = qr_entry.age_paper_days() or 0
+        return CheckResult(
+            name="age_paper_days",
+            passed=age_days >= min_days,
+            message=(
+                f"{age_days}j on paper (need >= {min_days}j) since "
+                f"{qr_entry.paper_start_at.isoformat()} [source: quant_registry]"
+            ),
+        )
+
+    # Legacy fallback: regex on notes text. Emits warning severity so operator
+    # migrates to quant_registry for canonical source.
     notes = entry.get("notes", "")
-    # Heuristic: look for "Start paper: YYYY-MM-DD" pattern in notes
     import re
     match = re.search(r"Start paper:\s*(\d{4}-\d{2}-\d{2})", notes)
     if not match:
         return CheckResult(
             name="age_paper_days",
             passed=False,
-            message=f"No 'Start paper: YYYY-MM-DD' marker in notes (need >= {min_days}j)",
+            message=(
+                f"No paper_start_at in quant_registry.yaml for '{strategy_id}' "
+                f"AND no 'Start paper: YYYY-MM-DD' in notes. "
+                f"Add strategy to config/quant_registry.yaml."
+            ),
         )
     try:
         start_date = datetime.strptime(match.group(1), "%Y-%m-%d").replace(tzinfo=UTC)
@@ -136,10 +165,18 @@ def _check_paper_age(entry: dict, min_days: int) -> CheckResult:
             message=f"Invalid Start paper date: {match.group(1)}",
         )
     age_days = (datetime.now(UTC) - start_date).days
+    logger.warning(
+        f"promotion_gate: strategy '{strategy_id}' uses LEGACY regex-on-notes "
+        f"for paper_start_at. Migrate to config/quant_registry.yaml."
+    )
     return CheckResult(
         name="age_paper_days",
         passed=age_days >= min_days,
-        message=f"{age_days}j on paper (need >= {min_days}j) since {match.group(1)}",
+        message=(
+            f"{age_days}j on paper (need >= {min_days}j) since {match.group(1)} "
+            f"[source: LEGACY notes regex - migrate to quant_registry]"
+        ),
+        severity="warning",
     )
 
 
@@ -179,30 +216,74 @@ def _check_paper_journal(strategy_id: str, min_trades: int) -> CheckResult:
     )
 
 
-def _check_wf_source(entry: dict) -> CheckResult:
-    """wf_source path/marker present in whitelist entry."""
+def _check_wf_source(strategy_id: str, entry: dict) -> CheckResult:
+    """WF artifact must exist physically (A2 plan 9.0 — strict).
+
+    Audit ChatGPT 2026-04-19 flagged this as blocking gap:
+      "un wf_source absent physiquement peut quand meme 'passer' en info
+       non bloquante -> promotion possible sans preuve machine-readable reelle"
+
+    Primary source: quant_registry.wf_manifest_path (B3). Must exist + readable.
+    Fallback: live_whitelist wf_source field, path resolved relative to ROOT.
+    Declarative-only wf_source ('5/5 OOS PASS' without file) = BLOCKING FAIL.
+    """
+    # Primary: quant_registry manifest path
+    try:
+        from core.governance.quant_registry import get_entry
+        qr_entry = get_entry(strategy_id)
+    except Exception:
+        qr_entry = None
+
+    if qr_entry and qr_entry.wf_manifest_path is not None:
+        if qr_entry.has_wf_artifact():
+            return CheckResult(
+                name="wf_source",
+                passed=True,
+                message=(
+                    f"wf manifest present: {qr_entry.wf_manifest_path.relative_to(ROOT)} "
+                    f"[grade={qr_entry.grade}, source: quant_registry]"
+                ),
+            )
+        return CheckResult(
+            name="wf_source",
+            passed=False,
+            message=(
+                f"wf_manifest_path declared in quant_registry but file missing: "
+                f"{qr_entry.wf_manifest_path}. Run a WF via "
+                f"core.research.wf_canonical and write manifest to "
+                f"data/research/wf_manifests/."
+            ),
+        )
+
+    # Legacy fallback: live_whitelist.yaml wf_source field
     wf = entry.get("wf_source", "")
     if not wf:
         return CheckResult(
             name="wf_source",
             passed=False,
-            message="No wf_source in live_whitelist.yaml entry",
+            message=(
+                f"No wf_manifest_path in quant_registry for '{strategy_id}' AND "
+                f"no wf_source in live_whitelist. Strict gate: promotion impossible "
+                f"without machine-readable WF artifact."
+            ),
         )
-    # Best-effort: check first path component exists
     first_token = wf.split()[0] if wf else ""
-    candidate = ROOT / first_token if first_token and not first_token.startswith("data/crypto") else None
-    if candidate and candidate.exists():
+    candidate = ROOT / first_token if first_token else None
+    if candidate and candidate.exists() and candidate.is_file():
         return CheckResult(
             name="wf_source",
             passed=True,
-            message=f"wf_source file present: {first_token}",
+            message=f"wf_source file present: {first_token} [source: LEGACY whitelist]",
+            severity="warning",  # pass but warn: migrate to quant_registry
         )
-    # Accept declarative wf_source (e.g. "5/5 OOS PASS") as proof
+    # Declarative-only (no file) = BLOCKING. A2 strict.
     return CheckResult(
         name="wf_source",
-        passed=True,
-        message=f"wf_source declared: {wf[:80]}",
-        severity="info",  # not blocking — manual verification required
+        passed=False,
+        message=(
+            f"wf_source declarative only ('{wf[:80]}') without readable file at "
+            f"'{first_token}'. A2 strict: promotion requires physical WF artifact."
+        ),
     )
 
 
@@ -383,9 +464,9 @@ def check_promotion(
             severity="blocking",
         ))
 
-    result.checks.append(_check_paper_age(entry, min_days))
+    result.checks.append(_check_paper_age(strategy_id, entry, min_days))
     result.checks.append(_check_paper_journal(strategy_id, min_trades))
-    result.checks.append(_check_wf_source(entry))
+    result.checks.append(_check_wf_source(strategy_id, entry))
     result.checks.append(_check_kill_switch_clean_24h())
     result.checks.append(_check_manual_greenlight(strategy_id, target))
 

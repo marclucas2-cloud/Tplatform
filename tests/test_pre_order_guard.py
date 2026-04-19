@@ -119,3 +119,38 @@ def test_books_registry_load_fail_closed(tmp_path, monkeypatch):
     with pytest.raises(GuardError) as exc:
         pre_order_guard(book="binance_crypto", strategy_id="anything")
     assert "books_registry" in str(exc.value).lower() or "not found" in str(exc.value).lower()
+
+
+def test_book_health_exception_is_fail_closed():
+    """A4 plan 9.0 (2026-04-19): unexpected exception in book_health path
+    must BLOCK the order (fail-closed), not downgrade to warning.
+
+    ChatGPT audit flagged:
+      'une exception du book_health devient warning non bloquant -> un bug de
+       health peut rouvrir un chemin live silencieux'
+    """
+    from unittest.mock import patch
+    # Force book_health to raise unexpectedly in live mode
+    with patch("core.governance.book_health.get_book_health",
+               side_effect=RuntimeError("simulated health service crash")):
+        with pytest.raises(GuardError) as exc:
+            pre_order_guard(
+                book="ibkr_futures", strategy_id="cross_asset_momentum",
+                paper_mode=False,
+            )
+    # Error message should indicate fail-closed on health exception
+    msg = str(exc.value).lower()
+    assert "book_health" in msg and ("exception" in msg or "runtimeerror" in msg)
+
+
+def test_book_health_exception_allowed_in_paper_mode():
+    """Paper mode bypasses book_health entirely (already gated by `if not paper_mode`).
+    A4 fail-closed only applies to live path."""
+    from unittest.mock import patch
+    with patch("core.governance.book_health.get_book_health",
+               side_effect=RuntimeError("health service unavailable")):
+        # Should not raise — paper mode skips health check
+        pre_order_guard(
+            book="ibkr_eu", strategy_id="eu_gap_open",
+            paper_mode=True,
+        )

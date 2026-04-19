@@ -249,7 +249,18 @@ def pre_order_guard(
         except GuardError:
             raise
         except Exception as e:
-            logger.warning(f"book_health check error (non-blocking): {e}")
+            # A4 plan 9.0 (2026-04-19): fail-closed on book_health exception.
+            # Previous behaviour (warning-only) flagged by ChatGPT audit:
+            #   "une exception du book_health devient warning non bloquant ->
+            #    un bug de health peut rouvrir un chemin live silencieux"
+            # Now: any unexpected exception in book_health path = BLOCKING,
+            # caller must surface and escalate. Paper mode still bypasses
+            # (already gated by `if not paper_mode:` above).
+            logger.error(f"book_health check exception (fail-closed): {e}")
+            raise GuardError(
+                f"book_health check raised unexpected exception: {type(e).__name__}: {e}",
+                book=book, strategy_id=strategy_id,
+            ) from e
 
     # All checks passed — log debug only (no spam)
     logger.debug(

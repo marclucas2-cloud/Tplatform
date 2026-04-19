@@ -191,6 +191,11 @@ class TestGreenlight:
 
     def test_promotion_check_pass_with_greenlight(self, isolated_paths):
         old_date = (datetime.now(UTC) - timedelta(days=40)).strftime("%Y-%m-%d")
+        # A2 strict: wf_source must exist physically. Create a WF artifact file.
+        wf_file = isolated_paths / "data" / "wf.json"
+        wf_file.parent.mkdir(parents=True, exist_ok=True)
+        wf_file.write_text('{"windows_pass": 3, "windows_total": 5}', encoding="utf-8")
+
         _write_whitelist(isolated_paths / "live_whitelist.yaml", {
             "binance_crypto": [{
                 "strategy_id": "test_strat",
@@ -253,6 +258,11 @@ def _write_wf_manifest(tmp: Path, strategy_id: str, grade: str):
 class TestSGradeFastTrack:
     def test_fast_track_allowed_with_s_grade(self, isolated_paths):
         start = (datetime.now(UTC) - timedelta(days=16)).strftime("%Y-%m-%d")
+        # A2 strict: wf_source must exist physically
+        wf_file = isolated_paths / "data" / "wf.json"
+        wf_file.parent.mkdir(parents=True, exist_ok=True)
+        wf_file.write_text('{}', encoding="utf-8")
+
         _write_whitelist(isolated_paths / "live_whitelist.yaml", {
             "ibkr_futures": [{
                 "strategy_id": "s_strat",
