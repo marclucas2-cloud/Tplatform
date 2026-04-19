@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "run_id": "backfill_us_sector_ls_40_5_2026-04-19",
+  "strategy_id": "us_sector_ls_40_5",
+  "started_at": "2026-04-19T11:32:25.117751+00:00",
+  "finished_at": "2026-04-19T11:32:25.117761+00:00",
+  "source": "md_backfill",
+  "source_report": "T3B-01_us_sector_ls.md (1274 days)",
+  "params": {
+    "n_windows": 5,
+    "n_bars_oos": 637,
+    "n_trials": 2
+  },
+  "summary": {
+    "windows_pass": 3,
+    "windows_total": 5,
+    "pass_rate": 0.6,
+    "median_sharpe": 0.39,
+    "dsr_pvalue": 1.0,
+    "grade": "B",
+    "verdict": "VALIDATED"
+  }
+}

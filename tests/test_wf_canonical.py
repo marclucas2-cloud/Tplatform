@@ -193,3 +193,72 @@ class TestMedianStats:
         r = run_walk_forward(strategy_id="t", data_length=1000, backtest_window_fn=varying)
         # Median of [0.5, 1.0, 1.5] = 1.0 (insufficient excluded)
         assert r.median_sharpe == 1.0
+
+
+class TestDeflatedSharpeAndGrade:
+    """v2 schema: DSR p-value + S/A/B grade."""
+
+    def test_dsr_pvalue_none_when_n_bars_oos_absent(self):
+        from core.research.wf_canonical import run_walk_forward
+        def bt(*args):
+            return {"sharpe": 1.2, "max_dd_pct": -3, "total_pnl_usd": 1000, "n_trades": 20}
+        r = run_walk_forward(strategy_id="t", data_length=1000, backtest_window_fn=bt)
+        # No n_bars_oos in params or metrics → DSR skipped
+        assert r.dsr_pvalue is None
+        assert r.to_dict()["summary"]["dsr_pvalue"] is None
+
+    def test_dsr_pvalue_computed_when_params_has_n_bars_oos(self):
+        from core.research.wf_canonical import run_walk_forward
+        def bt(*args):
+            return {"sharpe": 1.5, "max_dd_pct": -3, "total_pnl_usd": 1000, "n_trades": 30}
+        r = run_walk_forward(
+            strategy_id="t",
+            data_length=1000,
+            backtest_window_fn=bt,
+            extra_params={"n_bars_oos": 1260, "n_trials": 1},
+        )
+        # Strong Sharpe + long sample + no multi-testing → low p-value
+        assert r.dsr_pvalue is not None
+        assert r.dsr_pvalue < 0.01
+
+    def test_dsr_high_when_many_trials(self):
+        from core.research.wf_canonical import compute_deflated_sharpe_pvalue
+        # If we searched 100 strategies, best Sharpe 0.87 is not strong evidence
+        p = compute_deflated_sharpe_pvalue(sharpe=0.87, n_observations=1260, n_trials=100)
+        assert p > 0.5
+
+    def test_grade_S_for_strong_stats(self):
+        from core.research.wf_canonical import classify_grade
+        assert classify_grade(pass_rate=1.0, median_sharpe=2.0, dsr_pvalue=None) == "S"
+        assert classify_grade(pass_rate=0.8, median_sharpe=1.0, dsr_pvalue=0.01) == "S"
+
+    def test_grade_A_for_moderate_stats(self):
+        from core.research.wf_canonical import classify_grade
+        assert classify_grade(pass_rate=0.6, median_sharpe=0.5, dsr_pvalue=None) == "A"
+        assert classify_grade(pass_rate=0.6, median_sharpe=0.5, dsr_pvalue=0.08) == "A"
+
+    def test_grade_B_for_legacy_validated(self):
+        from core.research.wf_canonical import classify_grade
+        assert classify_grade(pass_rate=0.5, median_sharpe=0.3, dsr_pvalue=None) == "B"
+
+    def test_grade_rejected_for_weak(self):
+        from core.research.wf_canonical import classify_grade
+        assert classify_grade(pass_rate=0.4, median_sharpe=0.1, dsr_pvalue=None) == "REJECTED"
+
+    def test_grade_downgrades_when_dsr_fails(self):
+        from core.research.wf_canonical import classify_grade
+        # Would be S by pass_rate + Sharpe alone, but DSR p>0.05 downgrades
+        g = classify_grade(pass_rate=0.8, median_sharpe=1.0, dsr_pvalue=0.20)
+        assert g == "B"  # still legacy B, not S
+
+    def test_verdict_maps_grade_to_validated(self):
+        from core.research.wf_canonical import run_walk_forward
+        def strong(*args):
+            return {"sharpe": 1.5, "max_dd_pct": -3, "total_pnl_usd": 500, "n_trades": 20}
+        r = run_walk_forward(strategy_id="t", data_length=1000, backtest_window_fn=strong)
+        assert r.grade in ("S", "A", "B")
+        assert r.verdict == "VALIDATED"
+
+    def test_schema_version_bumped_to_2(self):
+        from core.research.wf_canonical import WF_SCHEMA_VERSION
+        assert WF_SCHEMA_VERSION == 2

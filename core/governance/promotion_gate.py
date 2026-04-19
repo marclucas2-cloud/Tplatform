@@ -48,8 +48,10 @@ GREENLIGHT_DIR = ROOT / "data" / "governance" / "greenlights"
 
 # Tunables
 MIN_PAPER_DAYS = 30
+MIN_PAPER_DAYS_S_GRADE = 14  # S-grade fast-track: halves the paper quarantine
 MIN_PROBATION_DAYS = 30
 MIN_PAPER_TRADES = 10
+MIN_PAPER_TRADES_S_GRADE = 5  # S-grade: fewer trades tolerated (rare strats like pre-holiday)
 MAX_DIVERGENCE_SIGMA = 1.0
 
 
@@ -288,10 +290,45 @@ def _check_kill_switch_clean_24h() -> CheckResult:
 # Main entrypoint
 # ---------------------------------------------------------------------------
 
-def check_promotion(strategy_id: str, target: str = "live_probation") -> PromotionResult:
+def _latest_wf_grade(strategy_id: str) -> str | None:
+    """Scan data/research/wf_manifests/{strategy_id}_*.json for the latest grade.
+
+    Returns "S", "A", "B", "REJECTED", or None if no manifest found.
+    """
+    manifest_dir = ROOT / "data" / "research" / "wf_manifests"
+    if not manifest_dir.exists():
+        return None
+    candidates = sorted(manifest_dir.glob(f"{strategy_id}_*.json"), reverse=True)
+    if not candidates:
+        return None
+    try:
+        data = json.loads(candidates[0].read_text(encoding="utf-8"))
+        grade = data.get("summary", {}).get("grade")
+        if grade in ("S", "A", "B", "REJECTED"):
+            return grade
+    except (json.JSONDecodeError, OSError):
+        return None
+    return None
+
+
+def check_promotion(
+    strategy_id: str,
+    target: str = "live_probation",
+    fast_track: bool = False,
+) -> PromotionResult:
     """Run the promotion checklist. Returns PromotionResult with all checks.
 
-    target: "live_probation" or "live_core"
+    Args:
+        strategy_id: canonical id from live_whitelist.yaml
+        target: "live_probation" or "live_core"
+        fast_track: opt-in S-grade fast-track. Requires:
+            - wf manifest exists with grade == "S"
+            - passes 14j paper (vs 30j) and 5 trades (vs 10)
+            - still requires manual_greenlight (no bypass of signed approval)
+
+    Fast-track is gated on S-grade because S-grade means: >=80% windows PASS,
+    median Sharpe >= 1.0, DSR p-value <= 0.05 (when computed). This is a much
+    stronger signal than legacy "VALIDATED" (>=50% windows, Sharpe > 0.0).
     """
     if target not in ("live_probation", "live_core"):
         raise ValueError(f"Invalid target {target}, must be live_probation or live_core")
@@ -316,8 +353,38 @@ def check_promotion(strategy_id: str, target: str = "live_probation") -> Promoti
         target_status=target,
     )
 
-    result.checks.append(_check_paper_age(entry, MIN_PAPER_DAYS))
-    result.checks.append(_check_paper_journal(strategy_id, MIN_PAPER_TRADES))
+    # Fast-track eligibility: must have wf manifest grade == S
+    grade = _latest_wf_grade(strategy_id)
+    fast_track_eligible = fast_track and grade == "S"
+
+    min_days = MIN_PAPER_DAYS_S_GRADE if fast_track_eligible else MIN_PAPER_DAYS
+    min_trades = MIN_PAPER_TRADES_S_GRADE if fast_track_eligible else MIN_PAPER_TRADES
+
+    # Document the grade path in the result
+    result.checks.append(CheckResult(
+        name="wf_grade",
+        passed=(grade in ("S", "A", "B")) if grade else True,
+        message=(
+            f"grade={grade} (fast_track={'ENABLED' if fast_track_eligible else 'disabled'}, "
+            f"paper_days_required={min_days}, trades_required={min_trades})"
+            if grade else
+            "no wf manifest found -> using standard gate (30j / 10 trades)"
+        ),
+        severity="info",
+    ))
+    if fast_track and not fast_track_eligible:
+        result.checks.append(CheckResult(
+            name="fast_track_rejected",
+            passed=False,
+            message=(
+                f"--fast-track requested but grade={grade} (need S). "
+                f"Fall back to standard 30j gate."
+            ),
+            severity="blocking",
+        ))
+
+    result.checks.append(_check_paper_age(entry, min_days))
+    result.checks.append(_check_paper_journal(strategy_id, min_trades))
     result.checks.append(_check_wf_source(entry))
     result.checks.append(_check_kill_switch_clean_24h())
     result.checks.append(_check_manual_greenlight(strategy_id, target))

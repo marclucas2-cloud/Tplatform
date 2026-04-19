@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "run_id": "backfill_mcl_overnight_mon_trend10_2026-04-19",
+  "strategy_id": "mcl_overnight_mon_trend10",
+  "started_at": "2026-04-19T11:32:25.116367+00:00",
+  "finished_at": "2026-04-19T11:32:25.116373+00:00",
+  "source": "md_backfill",
+  "source_report": "T3A-01_mcl_overnight.md (2015-2026)",
+  "params": {
+    "n_windows": 5,
+    "n_bars_oos": 1416,
+    "n_trials": 3
+  },
+  "summary": {
+    "windows_pass": 4,
+    "windows_total": 5,
+    "pass_rate": 0.8,
+    "median_sharpe": 0.8,
+    "dsr_pvalue": 1.0,
+    "grade": "B",
+    "verdict": "VALIDATED"
+  }
+}

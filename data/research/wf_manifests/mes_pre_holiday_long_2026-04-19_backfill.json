@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "run_id": "backfill_mes_pre_holiday_long_2026-04-19",
+  "strategy_id": "mes_pre_holiday_long",
+  "started_at": "2026-04-19T11:32:25.115217+00:00",
+  "finished_at": "2026-04-19T11:32:25.115225+00:00",
+  "source": "md_backfill",
+  "source_report": "INT-A_tier1_validation.md T1-A (pre_holiday_drift)",
+  "params": {
+    "n_windows": 5,
+    "n_bars_oos": 1135,
+    "n_trials": 7
+  },
+  "summary": {
+    "windows_pass": 5,
+    "windows_total": 5,
+    "pass_rate": 1.0,
+    "median_sharpe": 0.57,
+    "dsr_pvalue": 1.0,
+    "grade": "B",
+    "verdict": "VALIDATED"
+  }
+}

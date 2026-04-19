@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "run_id": "backfill_alt_rel_strength_14_60_7_2026-04-19",
+  "strategy_id": "alt_rel_strength_14_60_7",
+  "started_at": "2026-04-19T11:32:25.118276+00:00",
+  "finished_at": "2026-04-19T11:32:25.118285+00:00",
+  "source": "md_backfill",
+  "source_report": "T4A-02_crypto_relative_strength.md (797 active days, 818 total)",
+  "params": {
+    "n_windows": 5,
+    "n_bars_oos": 409,
+    "n_trials": 5
+  },
+  "summary": {
+    "windows_pass": 3,
+    "windows_total": 5,
+    "pass_rate": 0.6,
+    "median_sharpe": 1.11,
+    "dsr_pvalue": 1.0,
+    "grade": "B",
+    "verdict": "VALIDATED"
+  }
+}

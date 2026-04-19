@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "run_id": "backfill_eu_relmom_40_3_2026-04-19",
+  "strategy_id": "eu_relmom_40_3",
+  "started_at": "2026-04-19T11:32:25.117241+00:00",
+  "finished_at": "2026-04-19T11:32:25.117249+00:00",
+  "source": "md_backfill",
+  "source_report": "T3A-03_eu_indices_relmom.md (1346 days)",
+  "params": {
+    "n_windows": 5,
+    "n_bars_oos": 673,
+    "n_trials": 2
+  },
+  "summary": {
+    "windows_pass": 4,
+    "windows_total": 5,
+    "pass_rate": 0.8,
+    "median_sharpe": 0.71,
+    "dsr_pvalue": 0.2984,
+    "grade": "B",
+    "verdict": "VALIDATED"
+  }
+}

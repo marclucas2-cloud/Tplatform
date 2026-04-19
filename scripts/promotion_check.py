@@ -51,6 +51,13 @@ def main():
     )
     parser.add_argument("--signer", help="Signer name (required with --grant-greenlight)")
     parser.add_argument("--note", default="", help="Optional note for greenlight")
+    parser.add_argument(
+        "--fast-track", action="store_true",
+        help=(
+            "S-grade fast-track: 14j paper + 5 trades (vs 30j/10). "
+            "Requires wf manifest with grade=S in data/research/wf_manifests/."
+        ),
+    )
     args = parser.parse_args()
 
     if args.grant_greenlight:
@@ -66,7 +73,7 @@ def main():
         print(f"Greenlight created: {path}")
         return 0
 
-    result = check_promotion(args.strategy_id, target=args.target)
+    result = check_promotion(args.strategy_id, target=args.target, fast_track=args.fast_track)
     print(result.summary())
     return 0 if result.is_pass() else 1
 

@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "run_id": "backfill_btc_asia_mes_leadlag_q70_v80_2026-04-19",
+  "strategy_id": "btc_asia_mes_leadlag_q70_v80",
+  "started_at": "2026-04-19T11:32:25.116805+00:00",
+  "finished_at": "2026-04-19T11:32:25.116812+00:00",
+  "source": "md_backfill",
+  "source_report": "T3A-02_mes_btc_asia_leadlag.md (489 days, 97 active)",
+  "params": {
+    "n_windows": 5,
+    "n_bars_oos": 245,
+    "n_trials": 3
+  },
+  "summary": {
+    "windows_pass": 4,
+    "windows_total": 5,
+    "pass_rate": 0.8,
+    "median_sharpe": 1.07,
+    "dsr_pvalue": 0.6123,
+    "grade": "B",
+    "verdict": "VALIDATED"
+  }
+}

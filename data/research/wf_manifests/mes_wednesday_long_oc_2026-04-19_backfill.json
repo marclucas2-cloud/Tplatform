@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "run_id": "backfill_mes_wednesday_long_oc_2026-04-19",
+  "strategy_id": "mes_wednesday_long_oc",
+  "started_at": "2026-04-19T11:32:25.115969+00:00",
+  "finished_at": "2026-04-19T11:32:25.115976+00:00",
+  "source": "md_backfill",
+  "source_report": "INT-A_tier1_validation.md T1-A (long_wed_oc)",
+  "params": {
+    "n_windows": 5,
+    "n_bars_oos": 1135,
+    "n_trials": 7
+  },
+  "summary": {
+    "windows_pass": 4,
+    "windows_total": 5,
+    "pass_rate": 0.8,
+    "median_sharpe": 0.26,
+    "dsr_pvalue": 1.0,
+    "grade": "B",
+    "verdict": "VALIDATED"
+  }
+}

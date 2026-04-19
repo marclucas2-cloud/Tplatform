@@ -236,3 +236,74 @@ class TestPromotionResult:
         assert "Promotion Gate" in out
         assert "test" in out
         assert "verdict" in out
+
+
+def _write_wf_manifest(tmp: Path, strategy_id: str, grade: str):
+    """Drop a minimal wf manifest to unlock fast-track."""
+    manifest_dir = tmp / "data" / "research" / "wf_manifests"
+    manifest_dir.mkdir(parents=True, exist_ok=True)
+    path = manifest_dir / f"{strategy_id}_2026-04-19_abc123.json"
+    path.write_text(json.dumps({
+        "strategy_id": strategy_id,
+        "summary": {"grade": grade, "verdict": "VALIDATED" if grade != "REJECTED" else "REJECTED"},
+    }), encoding="utf-8")
+    return path
+
+
+class TestSGradeFastTrack:
+    def test_fast_track_allowed_with_s_grade(self, isolated_paths):
+        start = (datetime.now(UTC) - timedelta(days=16)).strftime("%Y-%m-%d")
+        _write_whitelist(isolated_paths / "live_whitelist.yaml", {
+            "ibkr_futures": [{
+                "strategy_id": "s_strat",
+                "status": "paper_only",
+                "wf_source": "data/wf.json",
+                "notes": f"Start paper: {start}",
+            }],
+        })
+        _write_paper_journal(isolated_paths, "s_strat", 6)  # only 6 trades
+        _write_wf_manifest(isolated_paths, "s_strat", "S")
+        grant_greenlight("s_strat", "live_probation", signer="marc")
+        result = check_promotion("s_strat", target="live_probation", fast_track=True)
+        # 16d paper + 6 trades would FAIL under 30d/10 gate, PASSES under 14d/5 S-grade
+        assert result.is_pass(), result.summary()
+        age = next(c for c in result.checks if c.name == "age_paper_days")
+        assert age.passed
+
+    def test_fast_track_rejected_without_s_grade(self, isolated_paths):
+        start = (datetime.now(UTC) - timedelta(days=16)).strftime("%Y-%m-%d")
+        _write_whitelist(isolated_paths / "live_whitelist.yaml", {
+            "ibkr_futures": [{
+                "strategy_id": "b_strat",
+                "status": "paper_only",
+                "wf_source": "data/wf.json",
+                "notes": f"Start paper: {start}",
+            }],
+        })
+        _write_paper_journal(isolated_paths, "b_strat", 6)
+        _write_wf_manifest(isolated_paths, "b_strat", "B")
+        grant_greenlight("b_strat", "live_probation", signer="marc")
+        result = check_promotion("b_strat", target="live_probation", fast_track=True)
+        # User asked fast-track but grade=B → blocking reject
+        assert not result.is_pass()
+        rej = next((c for c in result.checks if c.name == "fast_track_rejected"), None)
+        assert rej is not None and not rej.passed
+
+    def test_no_fast_track_still_uses_30d_gate(self, isolated_paths):
+        start = (datetime.now(UTC) - timedelta(days=16)).strftime("%Y-%m-%d")
+        _write_whitelist(isolated_paths / "live_whitelist.yaml", {
+            "ibkr_futures": [{
+                "strategy_id": "s_strat2",
+                "status": "paper_only",
+                "wf_source": "data/wf.json",
+                "notes": f"Start paper: {start}",
+            }],
+        })
+        _write_paper_journal(isolated_paths, "s_strat2", 6)
+        _write_wf_manifest(isolated_paths, "s_strat2", "S")
+        grant_greenlight("s_strat2", "live_probation", signer="marc")
+        # fast_track=False → normal 30j gate, 16d < 30d so FAIL
+        result = check_promotion("s_strat2", target="live_probation", fast_track=False)
+        assert not result.is_pass()
+        age = next(c for c in result.checks if c.name == "age_paper_days")
+        assert not age.passed

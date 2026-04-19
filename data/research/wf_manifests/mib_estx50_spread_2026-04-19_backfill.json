@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "run_id": "backfill_mib_estx50_spread_2026-04-19",
+  "strategy_id": "mib_estx50_spread",
+  "started_at": "2026-04-19T11:32:25.118723+00:00",
+  "finished_at": "2026-04-19T11:32:25.118730+00:00",
+  "source": "md_backfill",
+  "source_report": "reports/research/wf_mib_estx50_corrected.json (24mo OOS, post-fix)",
+  "params": {
+    "n_windows": 5,
+    "n_bars_oos": 360,
+    "n_trials": 2
+  },
+  "summary": {
+    "windows_pass": 4,
+    "windows_total": 5,
+    "pass_rate": 0.8,
+    "median_sharpe": 3.91,
+    "dsr_pvalue": 0.0,
+    "grade": "S",
+    "verdict": "VALIDATED"
+  }
+}

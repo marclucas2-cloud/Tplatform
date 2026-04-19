@@ -1,0 +1,23 @@
+{
+  "schema_version": 2,
+  "run_id": "backfill_gold_oil_rotation_2026-04-19",
+  "strategy_id": "gold_oil_rotation",
+  "started_at": "2026-04-19T11:32:25.114562+00:00",
+  "finished_at": "2026-04-19T11:32:25.114572+00:00",
+  "source": "md_backfill",
+  "source_report": "scripts/wf_gold_oil_rotation.py (Sharpe solo high, portfolio 0.87)",
+  "params": {
+    "n_windows": 5,
+    "n_bars_oos": 1260,
+    "n_trials": 1
+  },
+  "summary": {
+    "windows_pass": 5,
+    "windows_total": 5,
+    "pass_rate": 1.0,
+    "median_sharpe": 6.44,
+    "dsr_pvalue": 0.0,
+    "grade": "S",
+    "verdict": "VALIDATED"
+  }
+}
