@@ -17,13 +17,17 @@
 # =============================================================================
 
 metadata:
-  version: 1
-  updated_at: "2026-04-16"
-  updated_by: "phase_1_1_books_registry_initial"
+  version: 2
+  updated_at: "2026-04-19"
+  updated_by: "audit_9_0_chatgpt_b1_cleanup"
   schema_version: 1
   notes: |
     v1 2026-04-16: registre initial. 5 books identifies cf doctrine projet.
     Chaque book doit avoir un mode_authorized explicite. Pas de defaut implicite.
+
+    v2 2026-04-19: B1 cleanup narrative drift. Notes alignees sur verite post-drain
+    XXL + bucket A + C (voir live_whitelist.yaml v7). 0 live_core binance_crypto
+    actuel, 2 live_core ibkr_futures (CAM + GOR).
 
 # -----------------------------------------------------------------------------
 # Books actifs en prod
@@ -55,8 +59,12 @@ books:
       - "data/state/binance_crypto/positions.json"   # a creer (Phase 5.2)
       - "data/state/binance_crypto/dd_state.json"    # a creer
     notes: |
-      Book le plus actif (12 strats deployees). 11 live + 1 paper_only + 1 disabled
-      apres P0 fix. Equity reel ~$9,800 (cash $2K + earn $7.8K).
+      Post-drain 2026-04-19 (bucket A): 0 live_core, 2 paper_only
+      (alt_rel_strength_14_60_7, btc_asia_mes_leadlag_q70_v80), 1 disabled
+      (btc_dominance_rotation_v2). 11 strats live_probation REJECTED par WF
+      ont ete archivees -> strategies/_archive/crypto/. Equity live snapshot
+      2026-04-19: $9,843 (cash + earn). Aucun moteur live crypto actuel;
+      promotion_gate bloque (paper < 30j sur les candidates).
 
   - book_id: "ibkr_futures"
     broker: "ibkr"
@@ -85,8 +93,11 @@ books:
       - "data/state/ibkr_futures/positions_live.json"
       - "data/state/ibkr_futures/positions_paper.json"
     notes: |
-      2 strats live_core + 4 paper_only post-P0. Equity €10,152.
-      MGC trade actuel (2026-04-16) sous V0 params, en cours.
+      2 strats live_core (cross_asset_momentum + gold_oil_rotation) + 5 paper_only
+      (gold_trend_mgc V1, mes_monday/wednesday/pre_holiday_long, mcl_overnight_mon_trend10).
+      Equity live snapshot 2026-04-19: $11,013 (compte U25023333), inclut
+      position MCL 1 contrat +$295 unrealized. Trade ouvert via gold_oil_rotation
+      ou cross_asset_momentum.
 
   - book_id: "ibkr_eu"
     broker: "ibkr"
@@ -109,13 +120,14 @@ books:
       - "data/state/mib_estx50_spread/spread_state.json"
       - "data/state/mib_estx50_spread/paper_trades.jsonl"
     notes: |
-      P0 fix 2026-04-16: bloque live tant que live_portfolio_eu.py pas
-      whitelist-aware. 5 strats paper_only en attente refacto.
-      2026-04-18: mib_estx50_spread paper actif via runner isole
-      (core/runtime/spread_paper_runner.py, multi-leg atomique,
-      pas de StrategyBase). WF corrige Sharpe 3.91 / WF 4/5 /
-      +EUR 22.6K / 12 trades 24 mois OOS. Validation 30j requise
-      avant promotion live.
+      Post-drain 2026-04-19 (bucket C): 2 strats paper_only restantes
+      (mib_estx50_spread grade S-via wf_manifests, eu_relmom_40_3 grade B).
+      3 strats archivees apres re-WF INSUFFICIENT_TRADES: vix_mean_reversion,
+      gold_equity_divergence, sector_rotation_eu + eu_gap_open REJECTED.
+      Book bloque live car live_portfolio_eu.py pas whitelist-aware;
+      mib_estx50_spread tourne via runner isole spread_paper_runner.py.
+      Earliest promotion live: 2026-05-02 (mib_estx50_spread fast-track
+      S-grade 14j) si margin EUR 13.5K dispo.
 
   - book_id: "ibkr_fx"
     broker: "ibkr"
@@ -159,8 +171,10 @@ books:
     state_files:
       - "data/state/alpaca_us/paper_portfolio_state.json"
     notes: |
-      1 strat paper_only (us_stocks_daily). Doctrine paper d'abord, capital
-      reel non requis tant que paper sans divergence > 30j.
+      2 strats paper_only (us_stocks_daily, us_sector_ls_40_5). Doctrine paper
+      d'abord, capital reel non requis tant que paper sans divergence > 30j.
+      Alpaca live requerrait PDT waiver (capital > $25K) + 30j paper stable.
+      Post-drain 2026-04-19: capital equity paper $99,495 (simule $100K).
 
 # -----------------------------------------------------------------------------
 # Schema validation

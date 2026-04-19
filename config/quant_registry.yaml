@@ -1,0 +1,257 @@
+# =============================================================================
+# QUANT REGISTRY CANONIQUE — source unique de verite par strategie
+# =============================================================================
+# B2 plan 9.0 (2026-04-19): remplace regex sur notes text libres dans
+# live_whitelist.yaml. Chaque strategie a une entree structuree machine-readable.
+#
+# Consomme par:
+#   - core/governance/promotion_gate.py (paper_start_at + wf_manifest_path)
+#   - scripts/runtime_audit.py (status_runtime)
+#   - dashboard/api/routes_v2.py (status calcule)
+#
+# Regles:
+#   - PAS de notes libres ici. Si tu veux documenter, ecris dans docs/strategies/.
+#   - paper_start_at: date YYYY-MM-DD OBLIGATOIRE pour toute strat paper_only.
+#   - wf_manifest_path: chemin vers data/research/wf_manifests/*.json.
+#     Si fichier manquant -> promotion_gate BLOCK (strict).
+#   - grade: S | A | B | REJECTED (calcule par core.research.wf_canonical).
+#     Si REJECTED -> strat doit etre archivee dans les 7 jours.
+# =============================================================================
+
+metadata:
+  version: 1
+  created_at: "2026-04-19"
+  schema_version: 1
+  notes: |
+    v1: registre initial. Backfill depuis WF reports existants.
+    promotion_gate migration vers source canonique (plan 9.0 B3).
+
+# Schema par strategie:
+#   strategy_id: string                # match live_whitelist.yaml canonique
+#   book: string                       # binance_crypto | ibkr_futures | ibkr_eu | alpaca_us
+#   status: string                     # disabled | paper_only | live_probation | live_core
+#   paper_start_at: YYYY-MM-DD         # OBLIGATOIRE si status in (paper_only, live_probation)
+#   live_start_at: YYYY-MM-DD | null   # Date premiere promotion live (si applicable)
+#   wf_manifest_path: string           # path vers json manifest OBLIGATOIRE
+#   grade: string                      # S | A | B | REJECTED
+#   last_wf_run_at: YYYY-MM-DD
+#   is_live: bool                      # strat tourne en live ACTUELLEMENT
+#   infra_gaps: list[string]           # blockers connus (data stale, short variant, margin)
+
+strategies:
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # IBKR FUTURES — 2 live_core + 5 paper_only
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - strategy_id: cross_asset_momentum
+    book: ibkr_futures
+    status: live_core
+    paper_start_at: null
+    live_start_at: "2026-04-07"
+    wf_manifest_path: data/research/wf_manifests/cross_asset_momentum_2026-04-19_backfill.json
+    grade: A
+    last_wf_run_at: "2026-04-19"
+    is_live: true
+    infra_gaps: []
+
+  - strategy_id: gold_oil_rotation
+    book: ibkr_futures
+    status: live_core
+    paper_start_at: null
+    live_start_at: "2026-04-08"
+    wf_manifest_path: data/research/wf_manifests/gold_oil_rotation_2026-04-19_backfill.json
+    grade: S
+    last_wf_run_at: "2026-04-19"
+    is_live: true
+    infra_gaps: []
+
+  - strategy_id: gold_trend_mgc
+    book: ibkr_futures
+    status: paper_only
+    paper_start_at: "2026-04-16"
+    live_start_at: null
+    wf_manifest_path: null   # V1 recalibration en cours, WF/MC pending
+    grade: null
+    last_wf_run_at: null
+    is_live: false
+    infra_gaps: ["wf_recalibration_v1_pending", "mc_validation_pending"]
+
+  - strategy_id: mes_monday_long_oc
+    book: ibkr_futures
+    status: paper_only
+    paper_start_at: "2026-04-16"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/mes_monday_long_oc_2026-04-19_backfill.json
+    grade: B
+    last_wf_run_at: "2026-04-19"
+    is_live: false
+    infra_gaps: []
+
+  - strategy_id: mes_wednesday_long_oc
+    book: ibkr_futures
+    status: paper_only
+    paper_start_at: "2026-04-16"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/mes_wednesday_long_oc_2026-04-19_backfill.json
+    grade: B
+    last_wf_run_at: "2026-04-19"
+    is_live: false
+    infra_gaps: ["mc_p_dd_30pct_tres_limite_28pct"]
+
+  - strategy_id: mes_pre_holiday_long
+    book: ibkr_futures
+    status: paper_only
+    paper_start_at: "2026-04-16"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/mes_pre_holiday_long_2026-04-19_backfill.json
+    grade: B
+    last_wf_run_at: "2026-04-19"
+    is_live: false
+    infra_gaps: ["trade_rare_8_10_par_an_pas_10_trades_en_30j"]
+
+  - strategy_id: mcl_overnight_mon_trend10
+    book: ibkr_futures
+    status: paper_only
+    paper_start_at: "2026-04-18"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/mcl_overnight_mon_trend10_2026-04-19_backfill.json
+    grade: B
+    last_wf_run_at: "2026-04-19"
+    is_live: false
+    infra_gaps: ["data_stale_mcl_1d_parquet", "friday_trigger_re_wf_requis"]
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # BINANCE CRYPTO — 0 live + 2 paper_only + 1 disabled (post-drain bucket A)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - strategy_id: btc_dominance_rotation_v2
+    book: binance_crypto
+    status: disabled
+    paper_start_at: null
+    live_start_at: null
+    wf_manifest_path: null
+    grade: REJECTED
+    last_wf_run_at: "2026-04-17"
+    is_live: false
+    infra_gaps: ["btc_dominance_logic_historically_broken"]
+
+  - strategy_id: alt_rel_strength_14_60_7
+    book: binance_crypto
+    status: paper_only
+    paper_start_at: "2026-04-18"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/alt_rel_strength_14_60_7_2026-04-19_backfill.json
+    grade: B
+    last_wf_run_at: "2026-04-19"
+    is_live: false
+    infra_gaps: ["strat_hebdo_4_trades_max_en_30j_pas_10", "data_stale_btcusdt_alts_parquets"]
+
+  - strategy_id: btc_asia_mes_leadlag_q70_v80
+    book: binance_crypto
+    status: paper_only
+    paper_start_at: "2026-04-18"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/btc_asia_mes_leadlag_q70_v80_2026-04-19_backfill.json
+    grade: B
+    last_wf_run_at: "2026-04-19"
+    is_live: false
+    infra_gaps:
+      - data_stale_btcusdt_1h_parquet
+      - mode_both_long_short_incompatible_binance_france_spot
+      - variante_long_only_q80_v80_a_wirer_pour_live
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # IBKR EU — 0 live + 2 paper_only (post-drain bucket C)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - strategy_id: eu_relmom_40_3
+    book: ibkr_eu
+    status: paper_only
+    paper_start_at: "2026-04-18"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/eu_relmom_40_3_2026-04-19_backfill.json
+    grade: B
+    last_wf_run_at: "2026-04-19"
+    is_live: false
+    infra_gaps: ["shorts_indices_eu_cfd_ou_futures_mini_sans_plan_concret"]
+
+  - strategy_id: mib_estx50_spread
+    book: ibkr_eu
+    status: paper_only
+    paper_start_at: "2026-04-18"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/mib_estx50_spread_2026-04-19_backfill.json
+    grade: S
+    last_wf_run_at: "2026-04-19"
+    is_live: false
+    infra_gaps: ["margin_eur_13500_requise_dispo_eur_9900_ibkr_gap_3600"]
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # IBKR FX — disabled (ESMA EU leverage limits)
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - strategy_id: fx_carry_momentum_filter
+    book: ibkr_fx
+    status: disabled
+    paper_start_at: null
+    live_start_at: null
+    wf_manifest_path: null
+    grade: null
+    last_wf_run_at: null
+    is_live: false
+    infra_gaps: ["esma_eu_leverage_limits_reglementaire"]
+
+  # ═══════════════════════════════════════════════════════════════════════════
+  # ALPACA US — 0 live + 2 paper_only
+  # ═══════════════════════════════════════════════════════════════════════════
+
+  - strategy_id: us_stocks_daily
+    book: alpaca_us
+    status: paper_only
+    paper_start_at: "2026-04-18"
+    live_start_at: null
+    wf_manifest_path: null   # Meta-strategie portfolio, pas WF unique
+    grade: null
+    last_wf_run_at: null
+    is_live: false
+    infra_gaps: ["pdt_waiver_requis_capital_25k_min", "aggregate_portfolio_pas_wf_unique"]
+
+  - strategy_id: us_sector_ls_40_5
+    book: alpaca_us
+    status: paper_only
+    paper_start_at: "2026-04-18"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/us_sector_ls_40_5_2026-04-19_backfill.json
+    grade: B
+    last_wf_run_at: "2026-04-19"
+    is_live: false
+    infra_gaps: ["shorts_sectors_pdt_rule_borrow_cost", "re_wf_etf_data_requis_vs_500_tickers"]
+
+# =============================================================================
+# Strategies archivees post-drain 19 avril (NE PLUS PROMOUVOIR)
+# =============================================================================
+# Presence ici = memoire historique. Ces strats ont ete drainees (REJECTED WF
+# ou INSUFFICIENT_TRADES) et archivees dans strategies/_archive/. Toute
+# tentative de re-promotion sans nouveau WF VALIDATED doit etre rejetee.
+# =============================================================================
+
+archived_rejected:
+  # Bucket A — 11 binance_crypto REJECTED WF ou NEEDS_RE_WF
+  - btc_eth_dual_momentum
+  - vol_breakout
+  - weekend_gap
+  - liquidation_momentum
+  - trend_short_btc
+  - mr_scalp_btc
+  - liquidation_spike
+  - funding_rate_arb
+  - basis_carry_crypto
+  - triangular_arb
+  - ld_earn_yield_harvest
+
+  # Bucket C — 4 ibkr_eu REJECTED ou INSUFFICIENT_TRADES
+  - eu_gap_open              # REJECTED
+  - vix_mean_reversion       # INSUFFICIENT_TRADES (0/5)
+  - gold_equity_divergence   # INSUFFICIENT_TRADES (0/5)
+  - sector_rotation_eu       # INSUFFICIENT_TRADES (1/5)
