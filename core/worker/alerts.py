@@ -11,6 +11,11 @@ logger = logging.getLogger("worker")
 _events_log_path = Path(__file__).parent.parent.parent / "logs" / "events.jsonl"
 _events_log_path.parent.mkdir(parents=True, exist_ok=True)
 
+# Local alert fallback JSONL (always written, even if Telegram fails)
+# Defense-in-depth: trace on disk survives broker/network outage.
+_ALERTS_FALLBACK_PATH = Path(__file__).parent.parent.parent / "data" / "alerts" / "alerts.jsonl"
+_ALERTS_FALLBACK_PATH.parent.mkdir(parents=True, exist_ok=True)
+
 # Signal-to-fill monitoring
 _SIGNAL_FILL_LOG = Path(__file__).parent.parent.parent / "data" / "monitoring" / "signal_fill_ratio.jsonl"
 _SIGNAL_FILL_LOG.parent.mkdir(parents=True, exist_ok=True)
@@ -33,33 +38,69 @@ def log_event(action: str, strategy: str = "", details: dict | None = None):
         pass
 
 
-def send_alert(message: str, level: str = "info"):
-    """Unified alert: routes to Telegram V2 smart notifications.
+def _append_alert_fallback(message: str, level: str, telegram_ok: bool) -> None:
+    """Persist alert to local JSONL regardless of Telegram status.
 
-    - critical -> sent immediately (never throttled)
-    - warning -> sent with 5 min throttle per type
-    - info -> buffered into digest (never sent individually)
+    Defense-in-depth: if Telegram is down/token leaked/rate-limited, the
+    alert stays on disk (data/alerts/alerts.jsonl) where a healthcheck
+    or manual review can find it. Warning/critical also hit syslog via logger.
     """
+    entry = {
+        "ts": datetime.now(UTC).isoformat(),
+        "level": level,
+        "message": message[:2000],
+        "telegram_ok": telegram_ok,
+    }
+    try:
+        with open(_ALERTS_FALLBACK_PATH, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, default=str) + "\n")
+    except Exception:
+        pass
+    # Syslog path: logger.{critical,warning} goes to systemd journal
+    if level == "critical":
+        logger.critical(f"ALERT_CRITICAL: {message[:500]}")
+    elif level == "warning":
+        logger.warning(f"ALERT_WARN: {message[:500]}")
+
+
+def send_alert(message: str, level: str = "info"):
+    """Unified alert: Telegram V2 + local JSONL fallback + syslog.
+
+    - critical -> sent immediately (never throttled) + JSONL + syslog
+    - warning -> sent with 5 min throttle per type + JSONL + syslog
+    - info -> buffered into digest (never sent individually)
+
+    Local JSONL fallback is ALWAYS written first, so trace survives even if
+    Telegram token leaks / API is down / rate limit hit. Syslog path ensures
+    `journalctl -u trading-worker` shows warnings/criticals for VPS ops.
+    """
+    telegram_ok = False
     try:
         from core.telegram_v2 import tg
         if level == "critical":
             title = message.split("\n")[0][:60]
             details = "\n".join(message.split("\n")[1:])
             tg.critical(title, details=details)
+            telegram_ok = True
         elif level == "warning":
             title = message.split("\n")[0][:60]
             details = "\n".join(message.split("\n")[1:])
             tg.warning(title, details=details)
+            telegram_ok = True
         else:
             tg.info(message[:100])
-        return
+            telegram_ok = True
     except Exception:
-        pass
-    try:
-        from core.telegram_alert import send_alert as _legacy_alert
-        _legacy_alert(message, level=level)
-    except Exception:
-        pass
+        try:
+            from core.telegram_alert import send_alert as _legacy_alert
+            _legacy_alert(message, level=level)
+            telegram_ok = True
+        except Exception:
+            telegram_ok = False
+
+    # Always persist warning/critical to local JSONL (info skipped — digest only)
+    if level in ("critical", "warning"):
+        _append_alert_fallback(message, level, telegram_ok)
 
 
 def record_signal_fill(cycle: str, n_signals: int, n_fills: int, n_errors: int):
