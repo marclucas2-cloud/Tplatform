@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "run_id": "99055cbd-2236-43c1-b2b7-9b96dd167d60",
+  "started_at": "2026-04-19T08:59:29.025707+00:00",
+  "finished_at": "2026-04-19T08:59:29.031006+00:00",
+  "strategy_id": "vix_mean_reversion",
+  "params": {
+    "n_windows": 5,
+    "train_pct": 0.7,
+    "test_pct": 0.3,
+    "seed": 42,
+    "schema_version": 1,
+    "vix_threshold": 25.0,
+    "rsi_threshold": 30.0,
+    "sl_points": 50,
+    "max_hold_days": 10,
+    "data_range": "2021-01-04 -> 2026-03-30",
+    "data_bars": 1318
+  },
+  "n_windows": 5,
+  "windows": [
+    {
+      "window_idx": 0,
+      "train_start": "0",
+      "train_end": "184",
+      "test_start": "184",
+      "test_end": "263",
+      "metrics": {
+        "sharpe": 0.0,
+        "max_dd_pct": 0.0,
+        "total_pnl_usd": 0.0,
+        "n_trades": 0
+      },
+      "n_trades": 0,
+      "verdict": "INSUFFICIENT_TRADES"
+    },
+    {
+      "window_idx": 1,
+      "train_start": "263",
+      "train_end": "447",
+      "test_start": "447",
+      "test_end": "526",
+      "metrics": {
+        "sharpe": 0.0,
+        "max_dd_pct": 0.0,
+        "total_pnl_usd": 0.0,
+        "n_trades": 0
+      },
+      "n_trades": 0,
+      "verdict": "INSUFFICIENT_TRADES"
+    },
+    {
+      "window_idx": 2,
+      "train_start": "526",
+      "train_end": "710",
+      "test_start": "710",
+      "test_end": "789",
+      "metrics": {
+        "sharpe": 0.0,
+        "max_dd_pct": 0.0,
+        "total_pnl_usd": 0.0,
+        "n_trades": 0
+      },
+      "n_trades": 0,
+      "verdict": "INSUFFICIENT_TRADES"
+    },
+    {
+      "window_idx": 3,
+      "train_start": "789",
+      "train_end": "973",
+      "test_start": "973",
+      "test_end": "1052",
+      "metrics": {
+        "sharpe": 0.0,
+        "max_dd_pct": 0.0,
+        "total_pnl_usd": 0.0,
+        "n_trades": 0
+      },
+      "n_trades": 0,
+      "verdict": "INSUFFICIENT_TRADES"
+    },
+    {
+      "window_idx": 4,
+      "train_start": "1052",
+      "train_end": "1236",
+      "test_start": "1236",
+      "test_end": "1315",
+      "metrics": {
+        "sharpe": -23.31430084984926,
+        "max_dd_pct": -0.6322589080582657,
+        "total_pnl_usd": -476.86365706027004,
+        "n_trades": 3,
+        "avg_trade_pnl_pct": -0.003179091047068467
+      },
+      "n_trades": 3,
+      "verdict": "INSUFFICIENT_TRADES"
+    }
+  ],
+  "summary": {
+    "windows_pass": 0,
+    "windows_total": 5,
+    "median_sharpe": 0.0,
+    "median_dd": 0.0,
+    "verdict": "INSUFFICIENT_TRADES"
+  },
+  "env_capture": {
+    "git_sha": "68966f87fb4fd7ff6e36de639221339fcce4eb4c",
+    "python": "3.14.3",
+    "platform": "Windows-11-10.0.26200-SP0"
+  }
+}

@@ -516,25 +516,12 @@ def run_futures_cycle(live: bool = False):
                 except Exception as e:
                     logger.error(f"    RS MES/MNQ error: {e}")
 
-            # 9. VIX Mean Reversion
-            if "VIX" in data_sources and "MES" in data_sources:
-                try:
-                    from strategies_v2.futures.vix_mean_reversion import VIXMeanReversion
-                    strat = VIXMeanReversion()
-                    strat.set_data_feed(feed)
-                    bar = feed.get_latest_bar("MES")
-                    if bar:
-                        sig = strat.on_bar(bar, portfolio_state)
-                        if sig:
-                            signals.append(("VIX MR", sig))
-                            logger.info(f"    VIX MR (paper): {sig.side} @ {bar.close:.2f}")
-                        else:
-                            logger.info("    VIX MR (paper): pas de signal")
-                except Exception as e:
-                    logger.error(f"    VIX MR error: {e}")
+            # 9. VIX Mean Reversion — ARCHIVED 2026-04-19 (Bucket C-2 RE-WF
+            # INSUFFICIENT_TRADES 0/5 windows sur 5.3 ans data event-driven).
+            # Code dans strategies_v2/_archive/futures/vix_mean_reversion.py.
         else:
             # LIVE MODE — only keep the validated ones, all others disabled
-            logger.info("    LIVE mode: MES Trend/Trend+MR/Stretch/Overnight/TSMOM/M2K/MCL/MGC/VIX-MR all DISABLED")
+            logger.info("    LIVE mode: MES Trend/Trend+MR/Stretch/Overnight/TSMOM/M2K/MCL/MGC all DISABLED")
         for tsmom_sym in []:
             if tsmom_sym not in data_sources:
                 continue
@@ -553,62 +540,17 @@ def run_futures_cycle(live: bool = False):
             except Exception as e:
                 logger.error(f"    TSMOM {tsmom_sym} error: {e}")
 
-        # 6b. EU Gap Open (ESTX50) — priority 9
-        if "ESTX50" in data_sources:
-            try:
-                from strategies_v2.futures.eu_gap_open import EUGapOpen
-                strat_gap = EUGapOpen()
-                strat_gap.set_data_feed(feed)
-                bar_estx = feed.get_latest_bar("ESTX50")
-                if bar_estx:
-                    sig = strat_gap.on_bar(bar_estx, portfolio_state)
-                    if sig:
-                        signals.append(("EU Gap Open", sig))
-                        logger.info(f"    EU Gap Open: {sig.side} ESTX50 @ {bar_estx.close:.2f} str={sig.strength:.2f}")
-                    else:
-                        logger.info("    EU Gap Open: pas de gap > 1%")
-                else:
-                    logger.info("    EU Gap Open: pas de bar ESTX50")
-            except Exception as e:
-                logger.error(f"    EU Gap Open error: {e}")
+        # 6b. EU Gap Open — ARCHIVED 2026-04-19 (Bucket C residuel post-XXL)
+        # WF REJECTED 2026-03-31 (output/wf_eu_results/wf_eu_summary.json).
+        # Code dans strategies_v2/_archive/futures/eu_gap_open.py si reactivation.
 
-        # 6c. Sector Rotation EU (DAX/CAC40) — priority 6, weekly Monday
-        if "DAX" in data_sources and "CAC40" in data_sources:
-            try:
-                from strategies_v2.futures.sector_rotation_eu import SectorRotationEU
-                strat_rot = SectorRotationEU()
-                strat_rot.set_data_feed(feed)
-                bar_dax = feed.get_latest_bar("DAX")
-                if bar_dax:
-                    sig = strat_rot.on_bar(bar_dax, portfolio_state)
-                    if sig:
-                        signals.append(("Sector Rotation", sig))
-                        logger.info(f"    Sector Rotation: {sig.side} {sig.symbol} @ {bar_dax.close:.2f} str={sig.strength:.2f}")
-                    else:
-                        logger.info("    Sector Rotation: pas de signal (pas lundi ou pas de divergence)")
-                else:
-                    logger.info("    Sector Rotation: pas de bar DAX")
-            except Exception as e:
-                logger.error(f"    Sector Rotation error: {e}")
+        # 6c. Sector Rotation EU — ARCHIVED 2026-04-19 (Bucket C-2 RE-WF
+        # INSUFFICIENT_TRADES 1/5 windows, median Sharpe +0.12 marginal).
+        # Code dans strategies_v2/_archive/futures/sector_rotation_eu.py.
 
-        # 6c. Gold-Equity Divergence — PAPER only
-        if "MGC" in data_sources:
-            try:
-                from strategies_v2.futures.gold_equity_divergence import GoldEquityDivergence
-                strat_ge = GoldEquityDivergence()
-                strat_ge.set_data_feed(feed)
-                bar = feed.get_latest_bar("MES")
-                if bar:
-                    sig = strat_ge.on_bar(bar, portfolio_state)
-                    if sig:
-                        signals.append(("Gold-Equity Div", sig))
-                        logger.info(f"    Gold-Equity Div: {sig.side} MES @ {bar.close:.2f} str={sig.strength:.2f}")
-                    else:
-                        logger.info("    Gold-Equity Div: pas de signal (pas de divergence)")
-                else:
-                    logger.info("    Gold-Equity Div: pas de bar MES")
-            except Exception as e:
-                logger.error(f"    Gold-Equity Div error: {e}")
+        # 6d. Gold-Equity Divergence — ARCHIVED 2026-04-19 (Bucket C-2 RE-WF
+        # INSUFFICIENT_TRADES 0/5 windows, median Sharpe -0.15 negative).
+        # Code dans strategies_v2/_archive/futures/gold_equity_divergence.py.
 
         # 7. Commodity Seasonality (MCL, MGC) — paper monitoring
         for season_sym in ["MCL", "MGC"]:

@@ -1,0 +1,117 @@
+{
+  "schema_version": 1,
+  "run_id": "4693fb63-e25e-4df4-b15f-9889ce9a34a9",
+  "started_at": "2026-04-19T08:59:29.228973+00:00",
+  "finished_at": "2026-04-19T08:59:29.238317+00:00",
+  "strategy_id": "gold_equity_divergence",
+  "params": {
+    "n_windows": 5,
+    "train_pct": 0.7,
+    "test_pct": 0.3,
+    "seed": 42,
+    "schema_version": 1,
+    "mes_threshold": 0.02,
+    "mgc_threshold": 0.01,
+    "sl_points": 40,
+    "tp_points": 60,
+    "lookback": 5,
+    "max_hold_days": 5,
+    "data_range": "2021-01-04 -> 2026-03-30",
+    "data_bars": 1318
+  },
+  "n_windows": 5,
+  "windows": [
+    {
+      "window_idx": 0,
+      "train_start": "0",
+      "train_end": "184",
+      "test_start": "184",
+      "test_end": "263",
+      "metrics": {
+        "sharpe": 0.0,
+        "max_dd_pct": 0.0,
+        "total_pnl_usd": -232.0932573492624,
+        "n_trades": 1,
+        "avg_trade_pnl_pct": -0.004641865146985248
+      },
+      "n_trades": 1,
+      "verdict": "INSUFFICIENT_TRADES"
+    },
+    {
+      "window_idx": 1,
+      "train_start": "263",
+      "train_end": "447",
+      "test_start": "447",
+      "test_end": "526",
+      "metrics": {
+        "sharpe": -10.466682752629884,
+        "max_dd_pct": -0.84307590893451,
+        "total_pnl_usd": -1025.851844669096,
+        "n_trades": 3,
+        "avg_trade_pnl_pct": -0.006839012297793973
+      },
+      "n_trades": 3,
+      "verdict": "INSUFFICIENT_TRADES"
+    },
+    {
+      "window_idx": 2,
+      "train_start": "526",
+      "train_end": "710",
+      "test_start": "710",
+      "test_end": "789",
+      "metrics": {
+        "sharpe": -6.183522414971304,
+        "max_dd_pct": 0.0,
+        "total_pnl_usd": -591.8277453333828,
+        "n_trades": 2,
+        "avg_trade_pnl_pct": -0.005918277453333828
+      },
+      "n_trades": 2,
+      "verdict": "INSUFFICIENT_TRADES"
+    },
+    {
+      "window_idx": 3,
+      "train_start": "789",
+      "train_end": "973",
+      "test_start": "973",
+      "test_end": "1052",
+      "metrics": {
+        "sharpe": -0.1492094464336527,
+        "max_dd_pct": -2.870075370346277,
+        "total_pnl_usd": -40.06471929992299,
+        "n_trades": 5,
+        "avg_trade_pnl_pct": -0.000160258877199692
+      },
+      "n_trades": 5,
+      "verdict": "FAIL"
+    },
+    {
+      "window_idx": 4,
+      "train_start": "1052",
+      "train_end": "1236",
+      "test_start": "1236",
+      "test_end": "1315",
+      "metrics": {
+        "sharpe": 27.329743258159706,
+        "max_dd_pct": 0.0,
+        "total_pnl_usd": 287.83526395149397,
+        "n_trades": 2,
+        "avg_trade_pnl_pct": 0.0028783526395149395
+      },
+      "n_trades": 2,
+      "verdict": "INSUFFICIENT_TRADES"
+    }
+  ],
+  "summary": {
+    "windows_pass": 0,
+    "windows_total": 5,
+    "median_sharpe": -0.1492094464336527,
+    "median_dd": -2.870075370346277,
+    "verdict": "INSUFFICIENT_TRADES"
+  },
+  "env_capture": {
+    "git_sha": "68966f87fb4fd7ff6e36de639221339fcce4eb4c",
+    "python": "3.14.3",
+    "platform": "Windows-11-10.0.26200-SP0"
+  }
+}

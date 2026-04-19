@@ -1,7 +1,7 @@
 metadata:
-  version: 5
+  version: 7
   updated_at: '2026-04-19'
-  updated_by: phase_a_residuel_archive_bucket_a
+  updated_by: phase_c_residuel_archive_3_re_wf_insufficient
   review_cadence: hebdomadaire
   notes: 'v2 2026-04-16: +3 candidates ibkr_futures paper_only (INT-C).
 
@@ -16,7 +16,12 @@ metadata:
     Portfolio live passe de 12 -> 9 strats (live + probation), plus defendable.
 
     v5 2026-04-19: Bucket A residuel post-XXL — 11 binance demotees (P0.2 18 avril REJECTED ou NEEDS_RE_WF jamais traite)
-    ARCHIVEES vers strategies/_archive/crypto/. Whitelist passe de 30 -> 19 strats.'
+    ARCHIVEES vers strategies/_archive/crypto/. Whitelist passe de 30 -> 19 strats.
+
+    v6 2026-04-19: Bucket C residuel — eu_gap_open ARCHIVE (WF REJECTED 31 mars, output/wf_eu_results/wf_eu_summary.json).
+
+    v7 2026-04-19: Bucket C-2 — vix_mean_reversion + gold_equity_divergence + sector_rotation_eu ARCHIVES apres RE-WF INSUFFICIENT_TRADES
+    (0/5, 0/5, 1/5 windows). Manifests data/research/wf_bucket_c/.'
 ibkr_futures:
 - strategy_id: cross_asset_momentum
   book: ibkr_futures
@@ -73,7 +78,8 @@ ibkr_futures:
     \ ->\n  backtest emule +$11.7K MaxDD -32.7%.\n- Nouveaux defaults SL 0.4% TP 0.8% -> backtest +$23.8K Sharpe 1.58\n  MaxDD\
     \ -7.1% WR 47.6% sur 5Y MGC daily.\n- Status downgrade live_core -> paper_only en attente WF + MC.\n- Trade live ouvert\
     \ 2026-04-16 17:54 UTC (parent SL 1.5% TP 3%) reste\n  actif sous old params pour ne pas casser le setup en cours; nouveaux\n\
-    \  signaux V1 a partir du prochain cycle.\n- Cf docs/research/gold_trend_sl_recalibration.md.\n"
+    \  signaux V1 a partir du prochain cycle.\n- Cf docs/research/gold_trend_sl_recalibration.md.\nStart paper: 2026-04-16\
+    \ (Phase C residuel marker pour promotion_check.py)."
 - strategy_id: gold_oil_rotation
   book: ibkr_futures
   status: live_core
@@ -268,23 +274,6 @@ ibkr_fx:
 
     '
 ibkr_eu:
-- strategy_id: eu_gap_open
-  book: ibkr_eu
-  status: paper_only
-  runtime_entrypoint: worker.py:_run_futures_cycle (bloc if not live)
-  runtime_module: strategies_v2.futures.eu_gap_open
-  wf_source: output/wf_eu_results/wf_eu_summary.json (rejected 2026-03-31)
-  sizing_policy: N/A - paper
-  notes: Paper only pour data collection, rejected OOS
-- strategy_id: vix_mean_reversion
-  book: ibkr_eu
-  status: paper_only
-  runtime_entrypoint: worker.py:_run_futures_cycle (bloc if not live)
-  notes: Paper only
-- strategy_id: gold_equity_divergence
-  book: ibkr_eu
-  status: paper_only
-  notes: Paper only
 - strategy_id: eu_relmom_40_3
   book: ibkr_eu
   status: paper_only
@@ -326,11 +315,7 @@ ibkr_eu:
 
     (~EUR 13.5K margin requise pour 1 FIB + 3 FESX).
 
-    '
-- strategy_id: sector_rotation_eu
-  book: ibkr_eu
-  status: paper_only
-  notes: Paper only
+    Start paper: 2026-04-18 (Phase C residuel marker pour promotion_check.py).'
 alpaca_us:
 - strategy_id: us_stocks_daily
   book: alpaca_us
@@ -341,7 +326,7 @@ alpaca_us:
 
     a PDT compat + capital > $25K + 30 jours de paper stable.
 
-    '
+    Start paper: 2026-04-18 (Phase C residuel marker pour promotion_check.py).'
 - strategy_id: us_sector_ls_40_5
   book: alpaca_us
   status: paper_only
