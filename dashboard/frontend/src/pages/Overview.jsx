@@ -10,7 +10,7 @@ import { TOOLTIPS } from '../utils/tooltips'
 
 const PERIOD_MAP = { '7j': '7d', '30j': '30d', '90j': '90d', 'YTD': 'ytd' }
 
-function BrokerCard({ name, equity, deposited, status, paper }) {
+function BrokerCard({ name, equity, deposited, status, paper, currency = '$' }) {
   const pnl = equity - deposited
   const pnlPct = deposited > 0 ? ((pnl / deposited) * 100) : 0
   return (
@@ -28,10 +28,10 @@ function BrokerCard({ name, equity, deposited, status, paper }) {
         </span>
       </div>
       <div className="font-mono text-xl font-semibold text-[var(--color-text-primary)]">
-        ${equity.toLocaleString('en-US', { maximumFractionDigits: 0 })}
+        {currency}{equity.toLocaleString('en-US', { maximumFractionDigits: 0 })}
       </div>
       <div className="mt-1 flex items-center gap-3 text-xs">
-        <span className="text-[var(--color-text-secondary)]">Depose: ${deposited.toLocaleString()}</span>
+        <span className="text-[var(--color-text-secondary)]">Depose: {currency}{deposited.toLocaleString()}</span>
         <span className={`font-mono ${pnl >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}`}>
           {pnl >= 0 ? '+' : ''}{pnlPct.toFixed(1)}%
         </span>
@@ -49,6 +49,8 @@ export default function Overview() {
   const { data: equityData } = useApi(`/equity-curve?period=${PERIOD_MAP[period] || '30d'}`, 60000)
   const { data: alertsData } = useApi('/alerts', 30000)
   const { data: cryptoData } = useApi('/crypto/strategies', 60000)
+  // D3 plan 9.0: unified computed StrategyStatus (vs declared text in registry)
+  const { data: statusData } = useApi('/strategies/status', 60000)
 
   if (pLoad || !portfolio) {
     return (
@@ -61,9 +63,47 @@ export default function Overview() {
   const positions = posData?.positions || []
   const strategies = stratData?.strategies || []
   const brokers = nav?.brokers || {}
+  const statusCounts = statusData?.counts || {}
 
   return (
     <div className="space-y-6">
+      {/* D3 plan 9.0 (2026-04-19): unified StrategyStatus — computed from
+          canonical sources (quant_registry + promotion_gate + reconciliation),
+          NOT narrative text in YAML notes. Dashboard = runtime truth. */}
+      <div className="bg-[var(--color-bg-card)] border border-[var(--color-border)] rounded-xl p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <CheckCircle size={14} className="text-emerald-400" />
+            <span className="text-sm font-semibold text-[var(--color-text-primary)]">
+              Strategies — Statuts calcul&eacute;s (vrai runtime)
+            </span>
+          </div>
+          <span className="text-[10px] text-[var(--color-text-secondary)]">
+            source: quant_registry + promotion_gate
+          </span>
+        </div>
+        <div className="grid grid-cols-3 md:grid-cols-7 gap-2 text-xs">
+          {['ACTIVE', 'PROMOTABLE', 'READY', 'AUTHORIZED', 'DISABLED', 'REJECTED', 'UNKNOWN'].map((key) => {
+            const count = statusCounts[key] || 0
+            const color = {
+              ACTIVE: 'text-emerald-400 bg-emerald-500/10',
+              PROMOTABLE: 'text-cyan-400 bg-cyan-500/10',
+              READY: 'text-blue-400 bg-blue-500/10',
+              AUTHORIZED: 'text-yellow-400 bg-yellow-500/10',
+              DISABLED: 'text-gray-500 bg-gray-500/10',
+              REJECTED: 'text-red-400 bg-red-500/10',
+              UNKNOWN: 'text-rose-500 bg-rose-500/10',
+            }[key] || 'text-[var(--color-text-secondary)]'
+            return (
+              <div key={key} className={`rounded px-2 py-1.5 flex flex-col items-center ${color}`}>
+                <span className="font-mono text-lg font-semibold">{count}</span>
+                <span className="text-[10px] uppercase tracking-wide">{key}</span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+
       {/* KPI Row */}
       <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
         <MetricCard
@@ -109,20 +149,21 @@ export default function Overview() {
         <BrokerCard
           name="IBKR"
           equity={brokers.IBKR?.equity || portfolio.ibkr_equity || 0}
-          deposited={brokers.IBKR?.deposited || 0}
+          deposited={brokers.IBKR?.deposited || 10000}
           status={true}
+          currency="EUR "
         />
         <BrokerCard
           name="Binance"
           equity={brokers.BINANCE?.equity || portfolio.binance_equity || 0}
-          deposited={brokers.BINANCE?.deposited || 0}
+          deposited={brokers.BINANCE?.deposited || 10000}
           status={true}
         />
         <BrokerCard
           name="Alpaca"
           equity={brokers.ALPACA?.equity || portfolio.alpaca_equity || 0}
-          deposited={brokers.ALPACA?.deposited || 0}
-          paper={true}
+          deposited={brokers.ALPACA?.deposited || 100000}
+          paper={portfolio.alpaca_paper !== false}
         />
       </div>
 
