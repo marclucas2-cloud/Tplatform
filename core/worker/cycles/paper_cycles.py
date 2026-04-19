@@ -300,6 +300,60 @@ def run_btc_asia_mes_leadlag_paper_cycle():
             f"btc_asia_mes_leadlag paper: {signal.side} @ {target_date.date()} "
             f"pnl ${trade.pnl_usd:+.0f} (mes_sig={signal.mes_sig:+.4f}, thr={signal.signal_thr:.4f})"
         )
+
+        # B5 iter3: variante long-only q80_v80 pour compat Binance France spot.
+        # Binance FR ne supporte pas facilement le short spot; on logge en
+        # parallele pour evaluation promotion live. WF Sharpe +1.08, WF 4/5.
+        _journal_lo_path = (
+            ROOT / "data" / "state" / "btc_asia_mes_leadlag_q80_long_only" / "paper_journal.jsonl"
+        )
+        _journal_lo_path.parent.mkdir(parents=True, exist_ok=True)
+
+        signal_lo = compute_signal_for_date(
+            daily,
+            target_date,
+            signal_quantile=0.80,
+            vol_quantile=0.80,
+            rolling_window=365,
+            mode="long_only",
+        )
+        if signal_lo is not None:
+            trade_lo = simulate_paper_trade(daily, signal_lo)
+
+            journaled_lo: set[str] = set()
+            if _journal_lo_path.exists():
+                for line in _journal_lo_path.read_text(encoding="utf-8").splitlines():
+                    try:
+                        _e = json.loads(line)
+                        _d = _e.get("target_date")
+                        if _d:
+                            journaled_lo.add(_d)
+                    except Exception:
+                        pass
+            if target_date.isoformat() not in journaled_lo:
+                _lo_entry = {
+                    "target_date": target_date.isoformat(),
+                    "logged_at_utc": now_utc.isoformat(),
+                    "variant": "q80_v80_long_only",
+                    "side": signal_lo.side,
+                    "mes_sig": signal_lo.mes_sig,
+                    "mes_vol": signal_lo.mes_vol,
+                    "signal_thr": signal_lo.signal_thr,
+                    "vol_thr": signal_lo.vol_thr,
+                    "rolling_window": signal_lo.rolling_window_used,
+                    "entry_price": trade_lo.entry_price,
+                    "exit_price": trade_lo.exit_price,
+                    "notional_usd": trade_lo.notional_usd,
+                    "gross_ret": trade_lo.gross_ret,
+                    "cost_pct": trade_lo.cost_pct,
+                    "pnl_usd": trade_lo.pnl_usd,
+                }
+                with _journal_lo_path.open("a", encoding="utf-8") as f:
+                    f.write(json.dumps(_lo_entry) + "\n")
+                logger.info(
+                    f"btc_asia_mes_leadlag_q80_long_only paper: {signal_lo.side} "
+                    f"@ {target_date.date()} pnl ${trade_lo.pnl_usd:+.0f}"
+                )
     except ImportError as ie:
         logger.warning(f"btc_asia_mes_leadlag: missing dep: {ie}")
     except Exception as e:

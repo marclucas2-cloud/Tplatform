@@ -71,12 +71,12 @@ strategies:
     status: paper_only
     paper_start_at: "2026-04-16"
     live_start_at: null
-    wf_manifest_path: null   # V1 recalibration en cours, WF/MC pending
-    wf_exempt_reason: "wf_v1_recalibration_in_progress"  # G2 iter1: legitimate pending
-    grade: null
-    last_wf_run_at: null
+    wf_manifest_path: data/research/wf_manifests/gold_trend_mgc_v1_2026-04-19.json
+    grade: A
+    last_wf_run_at: "2026-04-19"
     is_live: false
-    infra_gaps: ["wf_recalibration_v1_pending", "mc_validation_pending"]
+    infra_gaps: []
+    notes: "B2 iter3: WF V1 livre (4/5 OOS, mean Sharpe 2.625, MC P(DD>30%)=0.15%, DSR p=0.0003). Grade A. Paper 30j start 2026-04-16, earliest promotion live 2026-05-16."
 
   - strategy_id: mes_monday_long_oc
     book: ibkr_futures
@@ -161,6 +161,18 @@ strategies:
       - data_stale_btcusdt_1h_parquet
       - mode_both_long_short_incompatible_binance_france_spot
       - variante_long_only_q80_v80_a_wirer_pour_live
+
+  - strategy_id: btc_asia_mes_leadlag_q80_v80_long_only
+    book: binance_crypto
+    status: paper_only
+    paper_start_at: "2026-04-20"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/btc_asia_mes_leadlag_q70_v80_2026-04-19_backfill.json
+    grade: B
+    last_wf_run_at: "2026-04-19"
+    is_live: false
+    infra_gaps: []
+    notes: "B5 iter3 wire parallele au q70_v80 both. Compat Binance France spot (long only). Sharpe backtest +1.08."
 
   # ═══════════════════════════════════════════════════════════════════════════
   # IBKR EU — 0 live + 2 paper_only (post-drain bucket C)

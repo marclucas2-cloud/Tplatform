@@ -254,6 +254,25 @@ binance_crypto:
     \     considerer pour le live.\n  2. Rolling quantile 365j (runtime) vs quantile full-history (backtest).\n     Divergence\
     \ attendue petite mais a mesurer sur 30j paper.\n  3. BTCUSDT_1h.parquet observe stale ~20j 2026-04-18. Fix data pipeline\n\
     \     ops (cron 15min Binance client refresh) requis avant promotion.\n\nStart paper: 2026-04-18.\n"
+- strategy_id: btc_asia_mes_leadlag_q80_v80_long_only
+  book: binance_crypto
+  status: paper_only
+  runtime_entrypoint: worker.py:run_btc_asia_mes_leadlag_paper_cycle (10h30 Paris, parallele q70 both)
+  runtime_module: strategies.crypto.btc_asia_mes_leadlag
+  wf_source: docs/research/wf_reports/T3A-02_mes_btc_asia_leadlag.md (variante q80_v80 long_only)
+  sizing_policy: notional_fixed_10k_usd (paper, log-only)
+  max_risk_usd: 800
+  kill_criteria:
+    drawdown_absolute: -10%
+    drawdown_rolling_90d: -8%
+    sharpe_rolling_60d: -0.5
+    divergence_vs_backtest: 1x_std
+  notes: 'B5 iter3 wire (2026-04-19). Variante long-only compat Binance France
+    spot. Sharpe backtest +1.08, WF 4/5. Journalise en parallele dans
+    data/state/btc_asia_mes_leadlag_q80_long_only/paper_journal.jsonl.
+    Start paper: 2026-04-20 (weekday apres wire).
+    Promotion live_probation si 30j paper + divergence contenue + PnL paper >=0.
+    Candidate principal vs q70 both pour live Binance.'
 ibkr_fx:
 - strategy_id: fx_carry_momentum_filter
   book: ibkr_fx

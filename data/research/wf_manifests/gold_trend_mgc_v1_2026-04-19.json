@@ -1,0 +1,106 @@
+{
+  "schema_version": 2,
+  "run_id": "wf_gold_trend_mgc_v1_20260419T142944Z",
+  "strategy_id": "gold_trend_mgc",
+  "variant": "v1_sl04_tp08",
+  "source": "scripts/wf_gold_trend_mgc_v1.py",
+  "source_data": "data\\futures\\MGC_1D.parquet",
+  "finished_at": "2026-04-19T14:29:44.108883+00:00",
+  "params": {
+    "ema_period": 20,
+    "sl_pct": 0.004,
+    "tp_pct": 0.008,
+    "max_hold_days": 10
+  },
+  "spec": {
+    "mult": 10.0,
+    "cost_rt": 2.49
+  },
+  "windows": [
+    {
+      "window": 1,
+      "is_period": "2021-01-04..2021-08-17",
+      "oos_period": "2021-08-18..2022-01-18",
+      "is_n": 40,
+      "is_sharpe": -3.261,
+      "is_total": -828.5,
+      "oos_n": 28,
+      "oos_sharpe": 0.198,
+      "oos_total": 44.7,
+      "oos_profitable": true
+    },
+    {
+      "window": 2,
+      "is_period": "2022-01-19..2022-09-01",
+      "oos_period": "2022-09-02..2023-02-03",
+      "is_n": 48,
+      "is_sharpe": -0.758,
+      "is_total": -308.14,
+      "oos_n": 41,
+      "oos_sharpe": 5.603,
+      "oos_total": 1663.68,
+      "oos_profitable": true
+    },
+    {
+      "window": 3,
+      "is_period": "2023-02-06..2023-09-20",
+      "oos_period": "2023-09-21..2024-02-22",
+      "is_n": 48,
+      "is_sharpe": -0.142,
+      "is_total": -51.28,
+      "oos_n": 34,
+      "oos_sharpe": -1.032,
+      "oos_total": -270.29,
+      "oos_profitable": false
+    },
+    {
+      "window": 4,
+      "is_period": "2024-02-23..2024-10-07",
+      "oos_period": "2024-10-08..2025-03-11",
+      "is_n": 84,
+      "is_sharpe": 2.671,
+      "is_total": 2064.67,
+      "oos_n": 53,
+      "oos_sharpe": 3.903,
+      "oos_total": 2304.66,
+      "oos_profitable": true
+    },
+    {
+      "window": 5,
+      "is_period": "2025-03-12..2025-10-22",
+      "oos_period": "2025-10-23..2026-03-26",
+      "is_n": 96,
+      "is_sharpe": 3.413,
+      "is_total": 4369.18,
+      "oos_n": 65,
+      "oos_sharpe": 4.455,
+      "oos_total": 8021.36,
+      "oos_profitable": true
+    }
+  ],
+  "monte_carlo": {
+    "n_sims": 2000,
+    "p_dd_gt_30": 0.0015,
+    "p_dd_gt_40": 0.0,
+    "p_dd_gt_50": 0.0,
+    "median_dd": 0.1195
+  },
+  "summary": {
+    "all_trades": {
+      "n": 537,
+      "sharpe": 2.346,
+      "total": 17010.05,
+      "wr": 0.413,
+      "max_dd_usd": -1470.33
+    },
+    "windows_pass": 4,
+    "windows_total": 5,
+    "pass_rate": 0.8,
+    "mean_oos_sharpe": 2.625,
+    "total_oos_pnl_usd": 11764.11,
+    "dsr_pvalue": 0.000312,
+    "mc_p_dd_gt_30": 0.0015,
+    "grade": "A",
+    "verdict": "VALIDATED"
+  }
+}
