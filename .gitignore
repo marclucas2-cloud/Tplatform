@@ -114,6 +114,10 @@ data/us_stocks/*
 # Research artifacts auto-genere specifique (scout cards discovery engine)
 data/research/strategy_discovery_engine_*_scout_cards.json
 
+# Coverage reports (regenerable, volume)
+reports/coverage.json
+.coverage
+
 # Discovery engine test artifacts (generated par scripts/discover_*, transients)
 reports/research/auto_test_strat.json
 reports/research/corr_full_test.json

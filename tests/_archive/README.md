@@ -27,6 +27,16 @@ Quarantine iter3 B8 (2026-04-19 PM, business audit):
   Note: alt_rel_strength_14_60_7 (different fichier) est un successeur
   en paper, non couvert par ces tests.
 
+Quarantine H2-T2 (2026-04-19 PM, tests hygiene map):
+- test_crypto_new_strategies.py (49 tests, ~40 skips) — testait 4 strats
+  STRAT-009 a STRAT-012 toutes absentes :
+  * funding_rate_divergence.py : archived
+  * stablecoin_supply_flow.py : never existed canonically
+  * eth_btc_ratio_breakout.py : never existed canonically
+  * monthly_turn_of_month.py : archived
+  Seuls 2 strats crypto live dans strategies/crypto/ (btc_asia_mes_leadlag
+  + btc_dominance_v2 DISABLED). Quarantine tests morts.
+
 Ces tests sont quarantaines, pas supprimes, pour audit historique. Le contrat
 de qualite `pytest tests/` doit etre vert. Si un module archive est restaure,
 re-deplacer le test en tests/ et verifier qu'il passe.
