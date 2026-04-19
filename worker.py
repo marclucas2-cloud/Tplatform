@@ -4073,6 +4073,25 @@ def main():
     logger.info(f"  Binance API: {'SET' if os.getenv('BINANCE_API_KEY') else 'NOT SET'}")
     logger.info("=" * 60)
 
+    # A5/E1/E3 plan 9.0 (2026-04-19): boot preflight.
+    # Checks registries present/parseable, equity_state for live books, data
+    # freshness, IBKR gateway reachable. Fail-closed (exit 2) on any critical
+    # failure. Override via SKIP_PREFLIGHT=true for dev sandbox only.
+    if os.environ.get("SKIP_PREFLIGHT", "").lower() == "true":
+        logger.warning("PREFLIGHT SKIPPED via SKIP_PREFLIGHT=true (dev only)")
+    else:
+        try:
+            from core.runtime.preflight import boot_preflight
+            preflight = boot_preflight(fail_closed=True)
+            logger.info(preflight.summary())
+        except SystemExit:
+            logger.critical("Boot preflight FAILED (fail-closed). Exiting.")
+            raise
+        except Exception as e:
+            # If preflight itself is broken, log + continue (don't block boot on
+            # a bug in our own preflight code).
+            logger.error(f"Boot preflight module error (continuing): {e}")
+
     _log_event("worker_start", details={
         "alpaca": bool(os.getenv("ALPACA_API_KEY")),
         "binance": bool(os.getenv("BINANCE_API_KEY")),
