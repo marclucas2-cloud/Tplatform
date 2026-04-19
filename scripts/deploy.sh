@@ -88,12 +88,35 @@ case "${1:-}" in
 
         sleep 5
 
-        # 6. Health check
+        # 6. Health check (Phase 18 XXL: auto-rollback if failed)
         if curl -sf "$HEALTH_ENDPOINT" > /dev/null 2>&1; then
             echo "Health check OK"
         else
-            echo "WARNING: Health check failed"
+            echo "ERROR: Health check FAILED. Auto-rollback to $ROLLBACK_TAG"
+            git checkout "$ROLLBACK_TAG"
+            systemctl restart "$WORKER_SERVICE"
+            sleep 5
+            if curl -sf "$HEALTH_ENDPOINT" > /dev/null 2>&1; then
+                echo "Rollback successful — back to $ROLLBACK_TAG"
+            else
+                echo "CRITICAL: rollback ALSO failed health check. Manual intervention."
+            fi
+            exit 1
         fi
+
+        # 7. Phase 18 XXL: 60s canary monitoring window
+        echo "Canary monitoring window (60s)..."
+        for i in 1 2 3; do
+            sleep 20
+            if ! curl -sf "$HEALTH_ENDPOINT" > /dev/null 2>&1; then
+                echo "ERROR: Health check failed during canary window (tick $i/3). Auto-rollback."
+                git checkout "$ROLLBACK_TAG"
+                systemctl restart "$WORKER_SERVICE"
+                exit 1
+            fi
+            echo "  canary tick $i/3 OK"
+        done
+        echo "Canary window CLEAN."
 
         echo ""
         echo "Deploy complete."
