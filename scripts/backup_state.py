@@ -23,6 +23,16 @@ STATE_DIR = ROOT / "data" / "state"
 MAX_BACKUPS = 7
 
 CRITICAL_STATE_FILES = [
+    "data/state/binance_crypto/equity_state.json",
+    "data/state/binance_crypto/dd_state.json",
+    "data/state/ibkr_futures/equity_state.json",
+    "data/state/ibkr_futures/positions_live.json",
+    "data/state/ibkr_eu/portfolio_state.json",
+    "data/state/alpaca_us/equity_state.json",
+    "data/state/global/always_on_carry.json",
+    "data/state/global/live_risk_dd_state.json",
+    "data/state/global/kill_switch_state.json",
+    "data/kill_switch_state.json",
     "data/state/futures_positions_live.json",
     "data/state/futures_positions_paper.json",
     "data/state/paper_portfolio_state.json",
@@ -36,6 +46,12 @@ CRITICAL_STATE_FILES = [
     "data/risk/unified_portfolio.json",
     "data/risk/last_known_broker_state.json",
     "data/orchestrator/state.json",
+    # Phase 1 XXL: DD baselines schema v1 (peak survives reboot)
+    "data/crypto_dd_state.json",
+    # Phase 3 XXL: OrderTracker persistance (crash recovery)
+    "data/state/order_tracker.json",
+    # Phase 7 XXL: greenlights signed promotions
+    # (data/governance/greenlights/ captured by CRITICAL_STATE_DIRS below)
     "config/live_whitelist.yaml",
     "config/books_registry.yaml",
     "config/strategies_registry.yaml",
@@ -50,6 +66,8 @@ CRITICAL_STATE_FILES = [
 CRITICAL_STATE_DIRS = [
     "data/state/kill_switches",
     "data/reconciliation",
+    "data/governance/greenlights",   # Phase 7 XXL: signed promotion tokens
+    "data/audit",                     # Phase 5 XXL: per-day order audit JSONL
 ]
 
 
