@@ -16,17 +16,20 @@ const PAGE_SIZE = 20
 
 const BROKER_FILTERS = [
   { key: 'all', label: 'Tous' },
-  { key: 'alpaca', label: 'Alpaca' },
+  { key: 'ibkr', label: 'IBKR' },
   { key: 'binance', label: 'Binance' },
+  { key: 'alpaca', label: 'Alpaca' },
 ]
 
 const CRYPTO_PATTERN = /^(BTC|ETH|BNB|SOL|ADA|DOGE|XRP|DOT|AVAX|MATIC|LINK|UNI|AAVE|ATOM)/i
+const FUTURES_PATTERN = /^(MES|MNQ|MCL|MGC|M2K|FIB|FESX|NQ|ES|CL|GC)/i
 
 function detectBroker(trade) {
+  if (trade.broker === 'IBKR' || trade.asset_class === 'futures') return 'ibkr'
   if (trade.trade_source === 'crypto') return 'binance'
-  if (trade.trade_source === 'paper' || trade.trade_source === 'live') return 'alpaca'
   const sym = (trade.symbol || '').toUpperCase()
-  if (sym.includes('USDT') || sym.includes('BUSD') || CRYPTO_PATTERN.test(sym)) return 'binance'
+  if (sym.includes('USDT') || sym.includes('USDC') || CRYPTO_PATTERN.test(sym)) return 'binance'
+  if (FUTURES_PATTERN.test(sym)) return 'ibkr'
   return 'alpaca'
 }
 
@@ -379,6 +382,10 @@ export default function Journal() {
                     {t._broker === 'binance' ? (
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-yellow-500/15 text-yellow-500">
                         Binance
+                      </span>
+                    ) : t._broker === 'ibkr' ? (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-emerald-500/15 text-emerald-400">
+                        IBKR
                       </span>
                     ) : (
                       <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-blue-500/15 text-blue-400">

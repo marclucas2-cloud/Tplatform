@@ -99,8 +99,8 @@ export default function Crypto() {
         />
         <MetricCard
           label="Margin Level"
-          value={marginLevel != null ? `${marginLevel}%` : 'N/A'}
-          color={marginLevel != null && marginLevel < 150 ? 'text-[var(--color-loss)]' : undefined}
+          value={marginLevel != null ? `${Number(marginLevel).toFixed(2)}x` : 'N/A'}
+          color={marginLevel != null && marginLevel < 1.5 ? 'text-[var(--color-loss)]' : undefined}
         />
       </div>
 
