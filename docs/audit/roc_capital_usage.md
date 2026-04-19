@@ -1,181 +1,117 @@
 # ROC & Capital Usage — Mesure + Cible
 
-**Date** : 2026-04-19
-**But** : rendre lisible le capital alloue vs utilise vs contributeur au ROC. Diagnostic honnete.
+**As of** : 2026-04-19T14:33Z
+**But** : rendre lisible le capital alloue vs deployable vs utilise vs a-risque + ROC par strat, **honnetement** post iter3-fix.
 
 ---
 
-## 1. Capital actuel (snapshot 2026-04-19)
+## 1. Taxonomie capital (4 niveaux distincts)
 
-### Disponible vs en-risque
+| Niveau | Definition | Valeur 2026-04-19 | source_of_truth |
+|---|---|---|---|
+| **Capital alloue** | Budget cible par book dans `books_registry.yaml` | $10K ibkr_futures + $10K binance + $100K alpaca paper | config/books_registry.yaml |
+| **Capital deployable** | Equity live broker accessible pour trade | $11,013 IBKR + $9,843 Binance = **$20,856** live. $99,495 Alpaca paper. | broker API via worker authenticate log VPS |
+| **Capital utilise** | Positions ouvertes notional | $7,881 (MCL 1) | `data/state/ibkr_futures/positions_live.json` VPS |
+| **Capital a risque** | Risk-if-stopped sum positions | **$228** (MCL entry-SL = $75.85 - $73.57 × 100) | calcul positions_live.json |
 
-| Book | Equity total | Cash/spot dispo | Position live (notional) | Risk-if-stopped | % book at risk |
-|---|---|---|---|---|---|
-| ibkr_futures | $11,012.79 | $58,073.75 buying power | $7,881 (MCL 1) | $228 (stop -3.0%) | **2.07%** |
-| binance_crypto | $9,843 | $1,000 spot + $8,865 earn | 0 | 0 | **0.00%** |
-| alpaca_us (paper) | $99,495 | $397,981 BP | 0 live | 0 | 0 |
-| ibkr_eu | n/a (paper-only) | — | — | — | — |
-| ibkr_fx | 0 (disabled) | — | — | — | — |
-| **TOTAL live** | **$20,856** | **$11,000 cash dispo** | **$7,881** | **$228** | **1.09%** |
+**Ratios** :
+- utilise / deployable = $7,881 / $20,856 = **37.8% brut** (mais single position, concentre MCL)
+- a-risque / deployable = $228 / $20,856 = **1.09%**
 
-### Diagnostic
-- **Capital live deployable** : $20,856.
-- **Capital en-risque actuellement** : $228 (1.09%).
-- **Capital idle (cash + earn passif Binance)** : **$19,628 (94.1%)**.
-
-**VERDICT** : platform under-utilisee. 1 seule position live sur 2 strats live_core actives. Le book binance_crypto est 100% idle (earn passif $8.87K + $1K cash sans strat active).
+Nuance critique : notional $7.9K suggere occupation brute 37%, mais risk-if-stopped = 1.09% = **vraie mesure du capital engage**. Ceci reflete la nature futures : effet de levier important sur notional sans capital equivalent a risque.
 
 ---
 
 ## 2. ROC contribution observee (30 derniers jours)
 
-### Source : `data/tax/classified_trades.jsonl` + `data/state/ibkr_futures/positions_live.json`.
+### Source : `data/tax/classified_trades.jsonl` VPS + positions live.
 
-| Strat | Book | Trades 30j | PnL realise | PnL unrealized | Notes |
+| Strat | Book | Trades 30j fermes | PnL realise | PnL unrealized | source_of_truth |
 |---|---|---|---|---|---|
-| cross_asset_momentum | ibkr_futures | 1 entree (MCL 2026-04-17) | 0 | **+$295.23** | Position ouverte, en profit |
-| gold_oil_rotation | ibkr_futures | 0 (signal dormant) | 0 | 0 | Attente momentum spread |
-| STRAT-001 (legacy) | binance_crypto | 2 trades (2026-04-16, 04-17) | 0 (crypto non taxable FR) | 0 | Legacy pre-drain, BTC<->USDC |
-| STRAT-015 (legacy) | binance_crypto | 1 trade (2026-04-08) | 0 | 0 | Legacy pre-drain |
-| **TOTAL** | — | **4 trades** | **$0** | **+$295** | |
+| cross_asset_momentum | ibkr_futures | 0 ferme (1 ouvert MCL) | $0 | **+$295.23** | positions_live.json + classified_trades |
+| gold_oil_rotation | ibkr_futures | 0 | $0 | $0 | - |
+| STRAT-001 (legacy BTCUSDC) | binance_crypto | 2 crypto<->stable (04-16, 04-17) | $0 (non taxable) | $0 | classified_trades.jsonl |
+| STRAT-015 (legacy) | binance_crypto | 1 (2026-04-08) | $0 | $0 | classified_trades.jsonl |
+| **TOTAL** | — | **4 trades** | **$0 realise** | **+$295** | |
 
-**ROC annualise observe (sur periode 13j)** :
-- IBKR futures : +$295 / $11,013 = +2.68% (13j) = **+75% annualise brut** (signal unique, trop court pour conclure).
-- Binance : 0% (pas de strat active).
-- Global : +1.41% sur $20,856 en 13j.
+**ROC annualise observe (sur 13 jours echantillon, n=1 position signifiant pas concluant)** :
+- IBKR futures : +$295 / $11,013 = +2.68% en 13j = **+75% annualise brut** (1 trade seul, non significatif statistiquement)
+- Binance live : 0%
+- **Global live** : +$295 / $20,856 = +1.41% sur 13j
 
-**Caveat** : PnL unrealized non-capture. Signal unique pas representatif. Pour significant ROC, besoin de >= 30-60 trades minimum.
-
----
-
-## 3. Cible ROC 30% annualise (directive user)
-
-### Decomposition honnete
-
-Pour atteindre **30% portfolio annualise sur $20K** = **+$6,000/an** = **+$500/mois moyenne** :
-
-#### Scenario conservative (hypothese backtest -50% haircut)
-
-| Source | Capital alloue | Sharpe attendu | Return annualise | Contribution $/an |
-|---|---|---|---|---|
-| CAM + GOR (live_core) | $7K | 0.85 portfolio | 12-15% | +$1,050 |
-| mes_monday post probation | $1K (1 contrat) | 0.9 | 8-12% | +$110 |
-| gold_trend_mgc V1 post WF | $1K | 1.5 | 15-20% | +$180 |
-| alt_rel_strength live_probation | $3K gross | 1.1 | 12-18% | +$450 |
-| mcl_overnight_fri re-WF | $0.5K | 0.8 | 8-12% | +$50 |
-| mib_estx50 (si EUR 3.6K fund) | $EUR 13.5K (~$14K) | 3.9 backtest / 2.0 haircut | 20-30% | +$3,500 |
-| **TOTAL conservative** | **~$27K** | — | — | **+$5,340/an** |
-| **Return sur $20K portfolio** | — | — | **+26.7%** | |
-
-#### Scenario realiste (sans mib_estx50, sans funding supplementaire)
-
-| Source | Contribution $/an |
-|---|---|
-| CAM + GOR | +$1,050 |
-| mes_monday | +$110 |
-| gold_trend_mgc V1 | +$180 |
-| alt_rel_strength | +$450 |
-| mcl_overnight_fri | +$50 |
-| **TOTAL realiste** | **+$1,840/an** |
-| **Return sur $20K** | **+9.2%** |
-
-**VERDICT** : 30% annualise sur **$20K seul** = **non atteignable** sans mib_estx50 (+EUR 3.6K funding) ou sans strat high-Sharpe supplementaire.
-
-**Recommendation** :
-- Cible M3 realiste : **+10-15% annualise sur $20K** avec 5 strats live diversifiees.
-- 30% annualise atteignable uniquement post funding mib_estx50 OU scaling capital a ~$50K avec portfolio elargi.
+**Caveat** : fenêtre trop courte, 1 position seule, non significatif statistiquement. Nombre de trades minimum pour inference ROC fiable : >= 30-50 trades par strat.
 
 ---
 
-## 4. Capital occupancy — metrique canonique
+## 3. ROC realiste a 20K — scenario conservative
 
-### Definition
+### Hypothese : **-50% haircut vs backtest** (transaction costs reels, slippage, overfitting partiel).
 
-**Capital occupancy** = `sum(gross notional moyen des positions live) / equity total du book`.
+| Source | Capital alloue | Sharpe backtest | Return annualise backtest | Return annualise haircut | Contribution $/an |
+|---|---|---|---|---|---|
+| CAM + GOR (live_core) | $7K risk-budget | 0.85 blended portfolio | 12-15% | 6-7.5% | **+$490** |
+| mes_monday_long_oc (post probation 2026-05-16) | $1K (1 contrat) | 0.9 | 8-12% | 4-6% | **+$55** |
+| gold_trend_mgc V1 (post probation 2026-05-16) | $1K | 2.625 OOS (V1 iter3-fix) | 15-20% | 7-10% | **+$90** |
+| alt_rel_strength (post probation 2026-05-18) | $3K gross | 1.11 | 12-18% | 6-9% | **+$225** |
+| mcl_overnight_fri (post re-WF, earliest 2026-05-30) | $0.5K | 0.80 | 8-12% | 4-6% | **+$25** |
+| mib_estx50 (SI funding +EUR 3.6K) | EUR 13.5K (~$14K) | 3.91 (haircut fort 2x) | 20-30% | 10-15% | **+$1,750** (si funde) |
+| **TOTAL conservative sans funding** | ~$12K live | — | — | — | **+$885/an** |
+| **Return sur $20K portfolio sans funding** | — | — | — | — | **+4.4%/an** |
+| **TOTAL conservative AVEC funding mib_estx50** | ~$26K | — | — | — | **+$2,635/an** |
+| **Return sur ~$24K portfolio post-funding** | — | — | — | — | **+10.9%/an** |
 
-Mesure sur fenetre glissante 30 jours. Neutre au PnL (separation performance / utilisation).
-
-### Benchmarks cibles
-
-| Book | Occupancy M1 | Occupancy M3 | Seuil alerte |
-|---|---|---|---|
-| ibkr_futures | >= 20% | >= 50% | <= 10% pendant 2 sem = revue |
-| binance_crypto | >= 15% | >= 40% | <= 5% pendant 2 sem = revue |
-| **Portfolio combine** | >= 15% | >= 35% | <= 5% pendant 2 sem = flag P1 |
-
-### Implementation (script a scaffolder)
-
-**Fichier** : `scripts/capital_occupancy_report.py` (proposition, pas encore ecrit).
-
-Lit :
-- `data/state/ibkr_futures/positions_live.json` (positions instantanees).
-- `data/tax/classified_trades.jsonl` (historique fills).
-- `data/state/binance_crypto/equity_state.json` (equity book).
-- IBKR API snapshot (via broker client authenticate) pour positions temps-reel.
-
-Produit :
-- Tableau occupancy % par strat par jour (30j glissant).
-- Heatmap capital idle time.
-- Alertes Telegram si occupancy < seuil 14j.
-
-**Status** : **NON IMPLEMENTE**. Peut etre scaffolde en 1h. Proposition : apres classification strats faite + 3-4 strats live probation actives.
+### Hypothese optimiste (haircut -25% vs backtest, best case)
+Memes lignes, haircut reduit. Total sans funding = +$1,550/an = +7.75%. Avec funding = +$4,600/an = +19.1%.
 
 ---
 
-## 5. Allocation cible 20K (proposition decision user)
+## 4. ROC cible 30% (directive user) — atteignable ou non ?
 
-### V1 conservative (pre-mib_estx50)
+**Cible** : +30% annualise sur $20K = +$6,000/an.
 
-| Book | Strat | Risque-if-stopped max | Max gross notional | Rationale |
-|---|---|---|---|---|
-| ibkr_futures | CAM | $500 (5%) | $10K (1-2 contrats) | Moteur principal, keep |
-| ibkr_futures | GOR | $500 (5%) | $10K | Complement CAM decorrele |
-| ibkr_futures | mes_monday (post 2026-05-16) | $300 | 1 contrat MES ~$6K | Probation minimal |
-| ibkr_futures | gold_trend_mgc V1 (post WF) | $500 | 1 contrat MGC ~$20K buying power | Recalibre V1, sizing reduit |
-| ibkr_futures | **cap global** | **max $1,500 risk simultane** | **max 4 contrats** | cf `config/limits_live.yaml` |
-| binance_crypto | alt_rel_strength | $980 (10% DD abs) | $3K gross (6x$500) | Probation sleeve #1 |
-| binance_crypto | btc_asia long-only (post B5) | $800 (8%) | $5K notional | Sleeve #2 optionnel |
-| binance_crypto | **cap global** | **max $1,800 risk** | **max $8K gross** | |
-| alpaca_us | **paper-only** | 0 | 0 | Waive PDT requis, cf `alpaca_go_25k_rule.md` |
-| ibkr_eu | **paper-only** | 0 | 0 | mib_estx50 attend funding EUR 3.6K |
-| **PORTFOLIO TOTAL** | — | **max $3,300 risk** (16.5% equity total) | ~$25K gross max | 20K equity : leverage brut acceptable |
+**Conditions necessaires** :
+- Funding mib_estx50 (+EUR 3.6K) OU capital Binance scale > $15K.
+- Haircut optimiste (-25% vs backtest) confirme par 90j+ de live probation.
+- 5-6 strats live diversifiees concurremment.
+- Sharpe portfolio blended >= 1.5 (exigeant).
 
-### V2 si funding +EUR 3.6K mib_estx50
+**Atteignable** :
+- Avec mib_estx50 + optimiste : **+19%/an** ($3,800) → pas 30% mais acceptable.
+- Pour 30% : besoin d'**une** strat haut-Sharpe additionnelle grade A/S non encore identifiee, OU scaling Binance a $20K.
 
-Ajouter :
-- **mib_estx50_spread** : EUR 13.5K margin (60-70% equity book ibkr_eu si dedicated). Kill criteria DD spread EUR 14K.
-- Book IBKR EU passe de paper_only a live_allowed (decision formelle + runtime entrypoint whitelist-aware a dev/confirmer).
+**Non atteignable a $20K sans** :
+- `mib_estx50` funde
+- Nouvelle strat grade A/S non actuellement READY
 
-### V3 si PDT waiver Alpaca + $25K deposit
-
-- us_sector_ls_40_5 live_probation apres 30j paper + re-WF ETF data.
-- Capital Alpaca live $25K dedicated.
-- Portfolio total ~$45K equity, diversifie 3 brokers.
+**Recommendation honnete** :
+- **Cible M3 realiste** : **+10-15% annualise sur $20K** (scenario conservative avec funding) — **ambitieux mais credible**.
+- **Cible 30%** : post-trajectory 60K equity ou decouverte strat A/S additionnelle.
 
 ---
 
-## 6. Trajectoire 20K -> 100K (qualitative)
+## 5. ROC cible a 100K — trajectoire honnete
 
-### Etape 1 : 20K -> 30K (ROC + performance)
-- 5-7 strats live diversifiees.
+**100K** = $20K actuel + $80K injection capital + reinvestissement ROC cumule.
+
+### Etape 1 : 20K -> 30K (ROC + performance reel, 6-18 mois)
+- 4-5 strats live diversifiees.
 - +10-15% ROC annualise = +$2-3K/an.
-- Build up capital via reinvestissement profits sur 12-24 mois.
-- **Sans injection capital supplementaire**.
+- Build-up capital via reinvestissement profits sur 12-24 mois.
+- Sans injection supplementaire.
 
-### Etape 2 : 30K -> 60K (injection capital + Alpaca PDT)
+### Etape 2 : 30K -> 60K (injection + Alpaca PDT)
 - Dep Alpaca +$25K pour PDT waiver.
-- Activation us_sector_ls + us_stocks_daily (paper -> probation).
-- Books : IBKR futures + Binance + Alpaca US + EU optionnel.
+- Activation us_sector_ls + us_stocks_daily (apres 30j paper + gate GO).
+- Books : IBKR futures + Binance + Alpaca + ibkr_eu optionnel.
 
-### Etape 3 : 60K -> 100K (scaling + redondance)
-- Augmentation sizing sur strats graded A+.
-- Envisager 2e VPS (redondance ops) a partir de $75K.
+### Etape 3 : 60K -> 100K (scaling + redondance ops)
+- Augmentation sizing sur strats grade A+.
+- Envisager 2e VPS redondant a partir de $75K (PAS avant).
 - Alerting multi-canal (Slack + SMS fallback).
-- Monitoring renforce + post-mortem hebdo.
+- Post-mortem hebdo + monitoring renforce.
 
-### Conditions de go
-A chaque etape, exiger :
-- ROC observe >= 10% annualise sur 6 mois minimum.
+### Conditions de go a chaque etape
+- ROC observe >= 10% annualise sur **6 mois minimum** (pas 1 trade isole).
 - Max drawdown < 15% sur 12 mois.
 - 0 incident P0 sur 3 mois.
 - Decision user explicite.
@@ -184,28 +120,87 @@ A chaque etape, exiger :
 
 ---
 
-## 7. Metriques a implementer (roadmap)
+## 6. Sleeves qui augmentent le ROC vs sleeves qui augmentent juste l'occupation
 
-1. **Capital occupancy tracker** (P1) : script lit positions + equity, output timeseries + alertes.
-2. **ROC par strat** (P1) : agreger PnL par strategy_id sur fenetre 30j/90j/365j.
-3. **Marginal contribution analyzer** (P2) : corr portfolio, marginal Sharpe ajoute.
-4. **Dashboard widget occupancy** (P2) : live graphique dans dashboard v2.
-5. **Weekly report auto** (P3) : rapport email/Telegram dim soir.
+### Augmentent le ROC (Sharpe + decorrelation)
+
+| Strat | Pourquoi | Impact ROC attendu |
+|---|---|---|
+| **gold_trend_mgc V1** (iter3-fix B2) | Sharpe 2.625 OOS, MC P(DD>30%)=0.15%, decorrelation CAM/GOR acceptable | HAUT (+7-10%) |
+| **alt_rel_strength_14_60_7** | Corr portfolio -0.014, bull+bear robuste | MOYEN (+6-9%) |
+| **mib_estx50** (si funde) | Sharpe 3.91 backtest, EU indices decorrele US | TRES HAUT (+10-15%) |
+
+### Augmentent occupation mais edge marginal (a surveiller)
+
+| Strat | Pourquoi | Risque |
+|---|---|---|
+| **mes_wednesday_long_oc** | MC P(DD>30%)=28.3% limite | Surveiller 45j vs 30j |
+| **mes_pre_holiday_long** | Trade rare 8-10/an seul | Inutile seul, OK en cohorte |
+| **mcl_overnight_mon_trend10** | Friday trigger re-WF pending | Non promouvable sans re-WF |
+
+### Ne PAS promouvoir pour l'occupation seule
+
+- **btc_dominance_rotation_v2** : REJECTED, ne pas reactiver.
+- **us_stocks_daily** : meta-portfolio, pas de WF unique, bloque par PDT.
+- Toute strat sans manifest physique grade >= B.
 
 ---
 
-## 8. Diagnostic final
+## 7. Metriques manquantes a implementer
 
-**Score ROC / capital usage : 4.0 / 10**
+| Metrique | Priorite | Status | Impact business |
+|---|---|---|---|
+| Capital occupancy tracker (timeseries par strat) | P1 | **NON IMPLEMENTE** | Sans cette metrique, impossible mesurer KPI "occupancy" du mandat user |
+| ROC par strat (30j/90j/365j glissant) | P1 | **NON IMPLEMENTE** | Impossible attribuer ROC individuel |
+| Marginal contribution analyzer (corr portfolio) | P2 | **NON IMPLEMENTE** | Impossible justifier promotion diversification |
+| Dashboard widget occupancy | P2 | **NON IMPLEMENTE** | Visibility reduite |
+| Weekly report auto (Telegram + email) | P3 | **NON IMPLEMENTE** | Manuel hebdo |
 
-| Dimension | Note | Justification |
+**Gap** : 5 items non livres. Score "observabilite ROC" est **4.0 / 10** (non modifie iter3-fix).
+
+---
+
+## 8. Allocation cible 20K (decision user)
+
+### V1 conservative (pre-mib_estx50, post iter3-fix)
+
+| Book | Strat | Risk max | Max gross | Commentaire |
+|---|---|---|---|---|
+| ibkr_futures | CAM | $500 (5%) | $10K BP | Moteur principal, `ready now` |
+| ibkr_futures | GOR | $500 (5%) | $10K BP | Complement decorrele, `ready now` |
+| ibkr_futures | mes_monday (post 2026-05-16) | $300 | 1 contrat MES | `blocked by paper time` |
+| ibkr_futures | gold_trend_mgc V1 (post 2026-05-16) | $500 | 1 contrat MGC | `blocked by paper time` (WF V1 iter3-fix B2 livre) |
+| ibkr_futures | **cap global** | **max $1,500 risk simultane** | **max 4 contrats** | cf `config/limits_live.yaml` |
+| binance_crypto | alt_rel_strength | $980 (10% DD abs) | $3K gross | Candidate #1 probation 2026-05-18 |
+| binance_crypto | btc_asia q80_long_only (B5 iter3-fix) | $800 | $5K notional | Candidate #2, earliest 2026-05-20 |
+| binance_crypto | **cap global** | **max $1,800 risk** | **max $8K gross** | |
+| alpaca_us | **paper-only** | 0 | 0 | Waive PDT requis, voir `alpaca_go_25k_rule.md` |
+| ibkr_eu | **paper-only** | 0 | 0 | mib_estx50 attend funding EUR 3.6K |
+| **PORTFOLIO TOTAL** | — | **max $3,300 risk** (16.5% equity) | ~$25K gross max | Leverage brut acceptable |
+
+### V2 si funding +EUR 3.6K mib_estx50
+- mib_estx50_spread : EUR 13.5K margin (60-70% equity book ibkr_eu). Kill DD EUR 14K.
+- Book ibkr_eu passe paper_only -> live_allowed (decision + whitelist-aware runner a dev).
+
+### V3 si PDT waiver Alpaca + $25K deposit (gate GO_25K obtenu)
+- us_sector_ls_40_5 live_probation apres gate + 30j paper + re-WF ETF.
+- Capital Alpaca live $25K dedicated.
+- Portfolio ~$45K equity 3 brokers.
+
+---
+
+## 9. Diagnostic score ROC / capital usage
+
+| Dimension | Note (post iter3-fix) | Justification |
 |---|---|---|
-| Capital deploye lisible | 7.0 | Registries canoniques OK, mais pas de vue agregee live_pnl_tracker (2j data) |
-| Occupancy observee | 3.0 | 1.09% actuellement. Massive gap vs cible 15-30%. |
-| ROC mesurable par strat | 4.0 | Pas de metric par strat 30j, seulement snapshot positions. |
-| Contribution marginale | 2.0 | Pas d'analyse corr portfolio par strat live. Quant work manquant. |
-| Alignement capital cible / reel | 5.0 | Allocation proposee dans allocation.yaml mais pas re-baseline post-drain. |
+| Capital deploye lisible | 7.0 | Registries canoniques OK, live_pnl_tracker 1j data insuffisant |
+| Occupancy observee | 3.0 | 1.09% actuellement. Gap massif vs cible 15-30%. Inchange iter3. |
+| ROC mesurable par strat | 3.5 | Pas de script metric par strat 30j/90j. Inchange iter3. |
+| Contribution marginale | 2.0 | Pas d'analyse corr portfolio par strat live. Inchange iter3. |
+| Alignement capital cible / reel | 5.5 | Allocation propose dans V1, baselines post-drain alignees. |
 
-**Cause principale** : plateforme solide gouvernance mais **trop peu de strats actives** -> capital idle. La trajectoire de resolution passe par **promotion 3-5 nouvelles strats sur 4-8 semaines**, pas par refactor technique supplementaire.
+**Note ROC / capital usage** : **4.0 / 10** (inchange vs iter3 initial — iter3-fix n'a pas livre de metriques nouvelles, juste du code gov et 2 strats additionnelles).
 
-**Accord avec directive user** : ne **PAS** augmenter le capital a risque pour "ameliorer l'occupancy". Promouvoir vraies strats, mesurees, probation-gate-validated.
+**Cause principale** : plateforme solide gouvernance mais **trop peu de strats actives** -> capital idle. Resolution : **promotion 3-5 nouvelles strats sur 4-8 semaines**. Pas par refactor technique.
+
+**Accord avec directive user** : ne **PAS** augmenter le capital a risque juste pour l'occupation. Promouvoir vraies strats, mesurees, gate-validated. 30% est ambitieux mais crédible uniquement avec mib_estx50 funde + paper 30j validation.

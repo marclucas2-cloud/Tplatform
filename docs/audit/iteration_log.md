@@ -1,28 +1,24 @@
-# Iteration Log — Mission 9.5/10
+# Iteration Log — Audit Trading Platform
 
 Journal strict des iterations audit -> correction -> re-audit.
+Chaque iteration = snapshot point-in-time. Les scores sont valides **a la date indiquee**.
+Pour l'etat actuel du repo : voir `deep_audit_current.md` + `live_readiness_scoreboard.md`.
 
 ---
 
 ## ITERATION 0 — Baseline (2026-04-19 PM)
 
-**Contexte** : Mandat audit ambitieux 9.5/10 apres plan 9.0 livre (11 commits pushed + C2/E2 commit local). ChatGPT avait donne 6.7 avant plan 9.0.
+**as_of** : 2026-04-19T~16:00Z (debut session audit 9.5/10)
+**environment** : local Windows + VPS Hetzner runtime
+**evidence** :
+- `pytest tests/ --ignore=tests/_archive` : 3667 pass, 80 skipped, 0 fail
+- `python scripts/runtime_audit.py --strict` : VPS exit 0 (2 warnings PAPER_WITHOUT_WF)
+- cross-check registres : alignes
+- scan fail-open patterns : 0 dans governance/execution/worker
 
-**Actions** :
-- Runtime audit complet (`python scripts/runtime_audit.py --strict`)
-- Cross-check registres (books + whitelist + quant) : ALIGNES
-- Scan fail-open patterns (`except Exception: pass`) : 0 dans governance/execution/worker
-- LOC audit : worker.py 5402, ibkr_bracket.py 1395, risk_manager_crypto 1347
-- Review strats par status (runtime_audit.py)
+**Score historique revendique** : **8.8/10** (combine plateforme + live readiness, non separes)
 
-**Tests lances** :
-- `pytest tests/ --ignore=tests/_archive -q` : **3667 passed, 80 skipped, 0 failed** en 117s
-- `pytest tests/test_kill_switch_per_strategy.py` : 13/13 pass
-- runtime_audit.py --strict : 2 warnings PAPER_WITHOUT_WF
-
-**Score baseline** : **8.8/10**
-
-**Gaps identifies** :
+**Gaps identifies** (G1-G6) :
 - G1 Dashboard D3 deploy VPS
 - G2 wf_exempt_reason pour meta/pending
 - G3 coverage.py integration
@@ -30,126 +26,179 @@ Journal strict des iterations audit -> correction -> re-audit.
 - G5 E2 scoped disable crypto cycle
 - G6 commentaires obsoletes cleanup
 
-**Docs produits** :
-- docs/audit/deep_audit_current.md (audit complet)
-- docs/audit/gap_to_9_5.md (liste vivante)
-- docs/audit/iteration_log.md (ce fichier)
-
-**Risques residuels iteration 0** :
-- worker.py 5402 LOC (acceptable avec encapsulation OSM)
-- VPS unique / solo dev (directive user accepte a $20K)
-- 2 strats AUTHORIZED sans WF (legitimes mais doivent etre annotees)
-
-**Verdict** : score honnete 8.8, pas 9.5. Pas de gonflage.
+**Commits** : 2a7b477 (C2+E2 code), 7a2d392 (docs baseline)
 
 ---
 
-## ITERATION 1 — Phase 1 urgent ✅ COMPLETE (2026-04-19 PM)
+## ITERATION 1 — Phase 1 urgent (2026-04-19 PM)
 
-**Objectif** : 8.8 -> 9.2 via G1 + G2 + G3 **ATTEINT**
+**as_of** : 2026-04-19T~18:00Z
+**environment** : local + VPS
+**evidence** :
+- pytest : 3667 pass 0 fail
+- runtime_audit VPS exit 0, 0 incoherence
+- curl `/api/governance/strategies/status` VPS : 15 strats classees
+- dashboard widget D3 LIVE observed
 
-**Actions executees** :
-1. ✅ G2 `wf_exempt_reason` champ + runtime_audit tolerance (commit c25df15)
-2. ✅ G3 coverage.py baseline: 65% core / 72% critical (commit 6b9c92f)
-3. ✅ G1 dashboard deploy VPS + fix systemd pre-existant (commits 30fa2d5 + 719efac)
+**Actions** :
+- G2 `wf_exempt_reason` champ + runtime_audit tolerance
+- G3 coverage.py baseline measure : claim **65% core / 72% critical**
+- G1 dashboard deploy VPS + fix systemd ExecStart uvicorn
 
-**Surprise iter1** : G1 deploy a revele un bug pre-existant du service
-trading-dashboard (start_dashboard.py manquant depuis commit anterieur non
-trace). Fix applique: systemd ExecStart uvicorn module entry. Service
-redemarre LIVE, widget status visible.
+**Score historique revendique** : **9.2/10** (combine, single number)
 
-**Tests relances** :
-- pytest full: **3667 passed**, 80 skipped, 0 failed
-- runtime_audit --strict sur VPS: **0 incoherence, exit 0**
-- Curl /api/governance/strategies/status VPS: counts corrects, 15 strats
+**Commits** : c25df15, 6b9c92f, 30fa2d5, 719efac, 3654c88
 
-**Commits iter1 (locaux, pas pushes)** :
-- 7a2d392 docs(audit): iteration 0 baseline
-- c25df15 feat(governance): G2 wf_exempt_reason
-- 6b9c92f docs(audit): G3 coverage baseline
-- 30fa2d5 fix(dashboard): G1 route collision
-- 719efac fix(ops): G1 systemd ExecStart uvicorn
+**Note iter3-fix2 (2026-04-19T14:33Z)** : coverage 65%/72% **n'a pas ete re-mesure** post iter2/iter3. Confidence sur ce nombre = medium. A re-run si claim doit tenir dans docs actuelles.
 
-**Score post-iter1** : **9.2 / 10** (+0.4 vs baseline)
+---
 
-**Gaps residuels vers 9.5** (iter2 stretch non-bloquant) :
-- G4 OSM wire futures (parite crypto)
-- G5 E2 check dans run_crypto_cycle (defense-en-profondeur)
+## ITERATION 2 — Phase 2 stretch (2026-04-19 PM)
+
+**as_of** : 2026-04-19T~20:00Z
+**environment** : local + VPS
+**evidence** :
+- pytest : 3674 pass 0 fail (+7 iter2 tests)
+- worker import OK post modifications
+- futures_runner OSM wire via code audit TestG4FuturesRunnerOSMWire
+
+**Actions** :
 - G6 Commentaires obsoletes cleanup
+- G5 E2 defense-en-profondeur run_crypto_cycle
+- G4 OSM wire futures parite
+- 7 tests regression iter2 ajoutes
 
----
+**Score historique revendique** : **9.5/10** (combine)
 
-## ITERATION 2 — Phase 2 stretch ✅ COMPLETE (2026-04-19 PM)
+**Commits** : 3973ab1, cfa7b1c
 
-**Objectif** : 9.2 -> 9.5 via G4 + G5 + G6 **ATTEINT**
-
-**Actions executees** :
-1. ✅ G6 Commentaires obsoletes cleanup (worker.py + telegram_commands.py)
-2. ✅ G5 E2 defense-en-profondeur run_crypto_cycle (early skip is_strategy_disabled)
-3. ✅ G4 OSM wire futures parite (create_order/validate/submit/fill + error path)
-4. ✅ 7 tests regression iter2 (TestG4 + TestG5 + TestG4G5Integration)
-
-**Tests relances** :
-- pytest full: **3674 passed**, 80 skipped, 0 failed (+7 iter2)
-- Worker import OK, futures_runner import OK
-- Aucun regression existante
-
-**Commits iter2 (locaux, pas pushes)** :
-- 3973ab1 feat(iter2): G4+G5+G6
-- cfa7b1c test(iter2): 7 regression
-
-**Score post-iter2** : **9.5 / 10** (+0.3 vs iter1, +0.7 vs baseline)
-
-**Mandat respecte** : pas de gonflage. 12/12 criteres DoD fermes avec preuves.
-Voir docs/audit/final_verdict.md pour justification complete.
-
----
-
-## Historique commits iteration
-
-- iteration 0: commits `2a7b477` (C2+E2 code) + `7a2d392` (docs baseline)
-- iteration 1: commits `c25df15` (G2), `6b9c92f` (G3), `30fa2d5` (G1 route),
-  `719efac` (G1 systemd fix), `3654c88` (docs iter1)
-- iteration 2: commits `3973ab1` (G4+G5+G6 code), `cfa7b1c` (tests regression)
-
-**Total session 9.5** : 9 commits locaux (post commit C2+E2 2a7b477) + docs final verdict.
+**Note iter3-fix2 (2026-04-19T14:33Z)** : le score 9.5 represente la qualite **plateforme** a cet instant T. Il ne reflete PAS le score **live readiness** (qui necessite temps paper + diversification) ni le score **ROC / capital usage** (massive gap 1.09% occupancy). Ces dimensions distinctes ont ete fusionnees a tort dans le "9.5" iter2.
 
 ---
 
 ## ITERATION 3 — Business audit (2026-04-19 PM)
 
-**Mandat** : auditer pour le business (live rentable + ROC + capital usage + trajectoire 20K -> 100K), pas pour un score abstrait. Livrable : 6 docs, decisions machine-readable.
+**as_of** : 2026-04-19T~14:05Z (PM post iter2 push)
+**environment** : local + VPS
+**evidence** :
+- runtime_audit VPS exit 0, 0 incoherence, 15 strats
+- pytest : 3674 pass, 50 skipped, 0 fail (post B8 quarantine)
+- VPS state files : alt_rel_strength paper journal actif 1j, autres paper silencieux (dim)
+- live position MCL +$295 unrealized
 
-**Actions executees** :
-1. ✅ Runtime audit VPS -> 0 incoherence, 15 strats, 2 ACTIVE, 9 READY, 2 AUTHORIZED, 2 DISABLED
-2. ✅ Cross-check pytest: 3674 pass, 0 fail, 80 skipped legacy (quarantine residuelle)
-3. ✅ Ecriture `docs/audit/live_readiness_scoreboard.md` — verite par book + strat, score 6.5/10 live-readiness
-4. ✅ Ecriture `docs/audit/ib_binance_live_plan.md` — classification strats, decision sleeve `alt_rel_strength_14_60_7`, checklist semaines
-5. ✅ Ecriture `docs/audit/roc_capital_usage.md` — diagnostic capital occupancy 1.09%, allocation cible 20K, trajectoire 100K
-6. ✅ Ecriture `docs/audit/alpaca_go_25k_rule.md` + implementation `scripts/alpaca_go_25k_gate.py` (exit codes GO=0 / WATCH=1 / NO_GO=2)
+**Actions** : pivot audit business-focused
+- Ecriture `live_readiness_scoreboard.md` (score 6.5/10 **live readiness** clairement separe)
+- Ecriture `ib_binance_live_plan.md` + decision sleeve `alt_rel_strength_14_60_7`
+- Ecriture `roc_capital_usage.md` (diagnostic occupancy 1.09%)
+- Ecriture `alpaca_go_25k_rule.md` + implementation `scripts/alpaca_go_25k_gate.py`
 
-**Findings critiques iter3** :
-- **1 position live MCL +$295 unrealized** via CAM (IBKR futures). Rest idle.
-- **Capital occupancy 1.09%** sur $20,855 deployable. Binance 0%.
-- **Trade frequency observee ~0.1-0.2/jour** vs cible ~1/jour (5-10x gap).
-- **Decision sleeve Binance : `alt_rel_strength_14_60_7`** (bat btc_asia car compat Binance France spot + runner production-ready + decorrelation portfolio -0.014 + bull/bear robust).
-- **9/10 paper strats sans journal sur VPS** : a verifier lundi 2026-04-20 si weekend artefact ou fail silencieux.
-- **Gold trend MGC V1** : WF + MC pending, bloque promotion live second moteur IBKR.
+**Scores revendiques** (premiere tentative de separation) :
+- Plateforme : **9.5/10** (inchange, contexte iter2)
+- Live readiness : **6.5/10**
+- ROC / capital usage : **4.0/10**
 
-**Blockers nouveaux identifies** :
-- B2 : gold_trend_mgc V1 WF manifest a produire
-- B5 : btc_asia_mes_leadlag variante long-only a wirer (Binance France compat)
-- B6 : cron VPS refresh parquets crypto toutes les 15min
-- B9 : paper runners weekday ecriture journal a verifier
+**Commits** : 6e0ee7f (docs iter3 + gate)
 
-**Tests** : pytest 3674 pass (confirme, pas de regression).
+**Note iter3-fix2 (2026-04-19T14:33Z)** : les scores iter3 n'ont pas integre les **corrections iter3-fix** (B2/B5/B6/B7/B8). Apres iter3-fix, les 2 blockers code principaux (B2 gold_trend_mgc WF, B5 btc_asia long_only wire) sont leves, ce qui porte les strats READY de 9 a 11 et ajoute 1 grade A (gold_trend_mgc).
 
-**Commits iter3** : (a faire local, pas de push sans validation user)
-- iter3 docs + scripts/alpaca_go_25k_gate.py
+---
 
-**Score iter3** :
-- Plateforme gouvernance : 9.5/10 (maintenu, stable post iter2)
-- Live readiness : **6.5/10** (honnete, gap temps paper + diversification)
-- ROC / capital usage : **4.0/10** (gap occupancy 1% + pas de mesure par strat)
+## ITERATION 3-FIX — Fix des risques iter3 (2026-04-19 PM)
 
-**Mandat respecte** : livrables business-oriented, pas gonflage. Prochaine action user = verifications lundi 2026-04-20 + decision funding EUR 3.6K mib_estx50.
+**as_of** : 2026-04-19T~14:00Z
+**environment** : local + VPS
+**evidence** :
+- `python scripts/wf_gold_trend_mgc_v1.py` : grade A VALIDATED (4/5 OOS, Sharpe 2.625, MC P(DD>30%)=0.15%)
+- `python scripts/refresh_mes_1h_yf2y.py` VPS : 11737 rows, last bar 2026-04-17 20:00
+- runtime_audit VPS post-fix : 16 strats, 2 ACTIVE + 11 READY + 1 AUTHORIZED + 2 DISABLED, 0 incoherence
+- pytest regression : 53/53 pass (boot_preflight + iter2 + kill_switch + promotion_gate + reconciliation)
+
+**Actions** :
+- **B7** : guard idempotent RotatingFileHandler (fix logging double binding)
+- **B8** : move `tests/test_crypto_strategies.py` -> `tests/_archive/` (50 skipped vs 80)
+- **B6** : cron VPS MES_1H_YF2Y deploye (weekday 21:35 UTC)
+- **B9** : audit confirme scheduler OK, root cause = B6 (data stale crypto alts residuel)
+- **B5** : wire btc_asia variante long_only q80_v80 en parallele paper (nouveau strat_id)
+- **B2** : WF gold_trend_mgc V1 livre + manifest + grade A, wf_exempt_reason retire
+
+**Scores revendiques** (avant fix docs) :
+- Plateforme : 9.5/10 (stable)
+- Live readiness : 6.5/10 (stable, les fixes activent des strats pour PLUS TARD, pas maintenant)
+- ROC / capital usage : 4.0/10 (stable, pas de metriques nouvelles)
+
+**Commits** : fdcb50d (B6+B7+B8), 386e45e (B5+B2)
+
+---
+
+## ITERATION 3-FIX2 — Consistency review docs (2026-04-19 PM)
+
+**as_of** : 2026-04-19T14:33Z (re-run 3 commandes de verite)
+**environment** : local Windows + VPS
+**evidence** :
+- `python -m pytest -q -o cache_dir=.pytest_cache --basetemp .pytest_tmp` : **3669 pass, 50 skipped, 0 fail (exit 0)**
+- `python scripts/runtime_audit.py --strict` LOCAL : **exit 3 FAIL** (equity_state::ibkr_futures absent + 4 parquets _1D stales)
+- `python scripts/runtime_audit.py --strict` VPS : **exit 0 OK** (12/12 preflight, data fresh 41h)
+- `python scripts/alpaca_go_25k_gate.py --strategy us_sector_ls_40_5` : **exit 2 NO_GO_paper_journal_missing**
+
+**Actions** : realignement des 6 livrables sur la verite runtime
+- `live_readiness_scoreboard.md` : separation stricte repo local / VPS / cible, colonnes source_of_truth + confidence, encadre dev vs prod
+- `ib_binance_live_plan.md` : etapes marquees `ready now` / `blocked by infra` / `blocked by paper time` / `blocked by missing artifact` ; question centrale "qu'est-ce qui peut trader lundi matin ?" explicite
+- `roc_capital_usage.md` : taxonomie 4 niveaux capital (alloue / deployable / utilise / a risque), ROC realiste 20K vs cible 100K, separation ROC-contributive vs occupation
+- `alpaca_go_25k_rule.md` : alignement EXACT avec script (ordre evaluation, exit codes, verdict courant reel NO_GO_paper_journal_missing)
+- `deliverables_consistency_review.md` : nouveau doc, audit des docs + meta-recommandation source of truth
+- `iteration_log.md` : cette version ajoutee avec as_of/environment/evidence par iter
+- `deep_audit_current.md` : re-calcul score base sur pytest courant + runtime_audit courant, historique separe
+
+**Scores recalcules honnetement** (post iter3-fix2) :
+- **Plateforme** : **8.5/10** (baisse vs 9.5 iter2 car : coverage non re-mesure, preflight local FAIL non documente historiquement, occupancy tracker non livre)
+- **Live readiness** : **5.5/10** (baisse vs 6.5 iter3 car : paper signal quality reevalue honnetement, trade freq insuffisante, B6r residuel)
+- **ROC / capital usage** : **4.0/10** (stable, iter3-fix ne livre pas de metriques nouvelles)
+- **Qualite livrables docs** : **7.5/10** (post cette correction, vs 5.0/10 pre-correction)
+
+**Commits prevus** : (ce commit) docs(iter3-fix2): realign 6 deliverables sur runtime reel
+
+---
+
+## Synthese — historique vs etat courant
+
+| Claim historique | Date | Reste valide aujourd'hui ? |
+|---|---|---|
+| "3674 tests pass 0 fail" (iter2) | 2026-04-19T20:00Z | ⚠️ non — post B8 quarantine = 3669 pass (mathematiquement correct) |
+| "coverage 65% core / 72% critical" | iter1 2026-04-19T18:00Z | ⚠️ non re-mesure, confidence medium |
+| "Score 9.5/10 plateforme" | iter2 | ✅ plateforme seule oui a cette date. **Score combine confus** maintenant recadre : plateforme 8.5, live readiness 5.5, ROC 4.0 |
+| "Runtime audit VPS 12/12 preflight OK" | iter2 | ✅ confirme 2026-04-19T14:33Z |
+| "0 incoherence registries" | iter1+ | ✅ confirme 2026-04-19T14:33Z |
+| "Dashboard widget D3 LIVE verifie" | iter1 | ✅ probable, non re-verifie specifiquement iter3-fix2 |
+| "Capital occupancy 1.09%" | iter3 | ✅ inchange 2026-04-19T14:33Z |
+| "gold_trend_mgc grade A VALIDATED" | iter3-fix | ✅ confirme wf_manifest present |
+| "btc_asia q80_long_only READY" | iter3-fix | ✅ confirme runtime_audit 16 strats |
+
+---
+
+## Historique commits (ordre chronologique)
+
+**Plan 9.0 (non inclus dans session audit)** : 11 commits pre-session 9.5, deja pushes.
+
+**Session 9.5/iter0-2** :
+- 2a7b477 feat(execution+risk): C2+E2
+- 7a2d392 docs(audit): iteration 0 baseline
+- c25df15 feat(governance): ITER1 G2 wf_exempt_reason
+- 6b9c92f docs(audit): ITER1 G3 coverage baseline
+- 30fa2d5 fix(dashboard): ITER1 G1 route collision
+- 719efac fix(ops): ITER1 G1 systemd ExecStart uvicorn
+- 3654c88 docs(audit): iteration 1 complete
+- 3973ab1 feat(iter2): G4 + G5 + G6
+- cfa7b1c test(iter2): 7 regression tests
+- 526ea19 docs(audit): final_verdict.md + iteration log update
+
+**Session iter3 business audit** :
+- 6e0ee7f docs(iter3): business-focused audit + alpaca 25K gate
+
+**Session iter3-fix** :
+- fdcb50d fix(iter3): B6 cron parquet + B7 logging double + B8 test quarantine
+- 386e45e feat(iter3): B5 btc_asia long_only + B2 gold_trend_mgc V1 WF grade A
+
+**Session iter3-fix2** (ce commit) :
+- [pending] docs(iter3-fix2): realign 6 deliverables sur runtime reel
+
+**Total pushes origin/main** : 13 commits session 9.5/iter3/iter3-fix. iter3-fix2 pending push validation user.

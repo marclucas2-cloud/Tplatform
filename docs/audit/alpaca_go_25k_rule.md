@@ -1,197 +1,219 @@
 # Alpaca Go / No-Go 25K — Regle de promotion
 
-**Date** : 2026-04-19
-**Objectif** : decider objectivement si le depot +$25K Alpaca (pour PDT waiver + live us_sector_ls_40_5) est justifie, base sur des metriques machine-readable du paper trading.
+**As of** : 2026-04-19T14:33Z
+**Source executable** : `scripts/alpaca_go_25k_gate.py` (exit 0 GO / 1 WATCH / 2 NO_GO).
+**Regle** : le script est la verite executable. Ce markdown doit s'aligner exactement sur le script. Toute divergence = bug documentation.
 
 ---
 
 ## 1. Pourquoi $25K
 
-Alpaca (et brokers US equities en general) applique le **Pattern Day Trader rule** (PDT) sur comptes retail :
-- Compte < $25K equity : max 3 day-trades / 5 jours glissants. Au-dela : flag PDT -> compte freeze 90j.
+Alpaca (brokers US equities retail) applique le **Pattern Day Trader rule (PDT)** :
+- Compte < $25K equity : max 3 day-trades / 5 jours glissants. Au-dela : PDT flag + 90j restriction.
 - Compte >= $25K equity : **waive PDT** -> day-trades illimites.
 
-Pour les strats Alpaca daily+intraday (us_sector_ls_40_5, us_stocks_daily), le PDT rule peut bloquer des re-balances ou rotations. Depot $25K = **prerequis technique**.
+Pour les strats `us_sector_ls_40_5`, `us_stocks_daily` qui peuvent rebalancer infrajournalier, depot $25K = **prerequis technique**.
 
-**Cout** : $25K capital immobilise. A justifier par edge et trade frequency.
+**Cout** : $25K capital immobilise. A justifier par edge + trade frequency.
 
 ---
 
-## 2. Criteres de go (machine-readable)
+## 2. Ordre d'evaluation du gate (authoritatif = script)
 
-### Regle GO_25K (toutes conditions ET)
+Le script `_evaluate()` verifie dans cet ordre strict. **Premier match = verdict**.
 
-1. **Paper stable** : >= 30 jours calendaires continus en mode paper sans crash runtime.
-2. **Trade count** : >= 12 trades fermes (entries + exits complets) sur la periode paper.
-3. **PnL net positif** : `paper_pnl_net_after_costs >= 0` sur la periode.
-4. **Drawdown max paper** : `max_dd_paper <= 6%` (plus strict que kill_criteria standard -10%).
-5. **Divergence vs backtest <= 1.5 sigma** : sur au moins **2 metriques** parmi (Sharpe, PnL cumule, WR, avg trade PnL).
-6. **0 incident ouvert P0 / P1** : `data/incidents/*.jsonl` sans entry `status=open` severity in (P0, P1) sur la periode.
-7. **Promotion gate vert** : `core.governance.promotion_gate.check(strategy_id="us_sector_ls_40_5", target_status="live_probation")` retourne `PASS`.
+### Phase NO_GO (exit 2)
 
-### Regle WATCH (au moins 1 NON dans GO mais pas BLOCK)
+1. **`NO_GO_paper_journal_missing`** — si aucun paper_journal.jsonl trouve pour la strat.
+   - Recommendation : "Paper journal absent. Verifier que le paper runner ecrit bien sur VPS."
+2. **`NO_GO_paper_too_short`** — paper_days < min_days (default 30).
+   - Recommendation : "Continuer paper {N}j supplementaires."
+3. **`NO_GO_drawdown_exceeded`** — paper_max_dd_pct > 8.0%.
+   - Recommendation : "Pas de deposit. Revue strat + re-WF."
+4. **`NO_GO_incident_open`** — incidents_open_p0p1 > 0 (filtres par window since paper_start + book=alpaca_us).
+   - Recommendation : "Fermer incidents P0/P1 avant re-evaluation."
+5. **`NO_GO_divergence_critical`** — max divergence > 2.5 sigma (parmi sharpe / pnl / wr).
+   - Recommendation : "Paper diverge du backtest. Revue strat."
 
-Criteres 1-4 OK mais divergence 1.5-2.5 sigma OU trade count 6-11 OU incident P2 ouvert.
+### Phase WATCH (exit 1)
 
-**Action** : continuer paper 15 jours supplementaires. Re-evaluer.
+6. **`WATCH_trade_count_low`** — trade_count < 12.
+   - Recommendation : "Continuer paper, attendre {N} trades fermes supplementaires."
+7. **`WATCH_divergence_elevated`** — max divergence > 1.5 sigma (entre 1.5 et 2.5).
+   - Recommendation : "Divergence paper/backtest elevee. Continuer 15j supplementaires."
+8. **`WATCH_pnl_negative`** — paper_pnl_net < 0.
+   - Recommendation : "PnL paper negatif. Continuer 15j, revue edge si persiste."
+9. **`WATCH_drawdown_elevated`** — paper_max_dd_pct > 6.0% (entre 6% et 8%).
+   - Recommendation : "Drawdown paper superieur a cible. Surveillance accrue."
 
-### Regle NO_GO (bloquants)
+### Phase GO (exit 0)
 
-- Paper < 30 jours.
-- Divergence > 2.5 sigma sur >= 1 metric.
-- Drawdown paper > 8%.
-- Incident P0/P1 ouvert.
-- Crash runtime > 2 sur periode.
+10. **`GO_25K`** — toutes les conditions GO tenues simultanement :
+    - paper_days >= min_days (30)
+    - trade_count >= 12
+    - paper_pnl_net >= 0
+    - paper_max_dd_pct <= 6.0%
+    - max divergence <= 1.5 sigma
+    - incidents_open == 0
+    - Recommendation : "Depot $25K Alpaca recommande. Promotion us_sector_ls_40_5 vers live_probation autorisee."
 
-**Action** : pas de deposit. Revue strat + re-WF si necessaire.
+### Condition NON verifiee par le script (documentation uniquement)
+
+- **`promotion_gate` vert** : le script `alpaca_go_25k_gate.py` **ne verifie PAS** formellement le passage de `core.governance.promotion_gate`. Cette condition est **operationnelle** (a verifier manuellement au moment du depot capital via `python -c "from core.governance.promotion_gate import check; ..."`). A integrer Phase 2 si critique.
 
 ---
 
 ## 3. Metriques sources (machine-readable)
 
-### Fichiers consommes
+### Fichiers consommes par le script
 
-- `data/state/alpaca_us/paper_portfolio_state.json` : equity snapshot.
-- `data/state/us_sector_ls/paper_journal.jsonl` : journal paper trades (**a creer** si n'existe pas).
-- `data/research/wf_manifests/us_sector_ls_40_5_*.json` : baseline backtest (Sharpe, WR, PnL).
-- `data/incidents/*.jsonl` : timeline P0/P1.
+| Fichier | Usage |
+|---|---|
+| `config/quant_registry.yaml` | lire `paper_start_at` + `book` pour filter incidents |
+| `data/state/{strategy}/paper_journal.jsonl` (ou `us_sector_ls`, `alpaca_us/{strategy}_journal.jsonl`) | paper trades |
+| `data/research/wf_manifests/{strategy}_*.json` | baseline backtest (sharpe, pnl, wr + std) |
+| `data/incidents/*.jsonl` | incidents P0/P1/CRITICAL filtrees depuis paper_start + book |
 
-### Calculs
+### Calculs implementes
 
-```python
-def compute_alpaca_gate_metrics(journal_path: Path, backtest_manifest: dict) -> dict:
-    trades = load_jsonl(journal_path)
-    closed_trades = [t for t in trades if t.get("exit_price") is not None]
+- `paper_days` = `date.today() - paper_start_at.date()`
+- `trade_count` = count entries with `exit_price` present OR `action == "close"`
+- `paper_pnl_net` = sum `pnl_after_cost` OR `realized_pnl_usd`
+- `paper_wr` = win rate sur closed trades
+- `paper_max_dd_pct` = max drawdown sur equity curve cumule
+- `paper_sharpe` = annualised mean(daily_return) / std * sqrt(252), requires >= 5 trades + manifest
+- `div_sigmas` = divergence vs manifest baseline (sharpe_std + pnl_std + wr_std)
 
-    paper_days = (today - start_date).days
-    trade_count = len(closed_trades)
-    paper_pnl_net = sum(t["pnl_after_cost"] for t in closed_trades)
-    paper_sharpe = compute_sharpe(daily_returns(trades))
-    paper_wr = len([t for t in closed_trades if t["pnl_after_cost"] > 0]) / max(1, trade_count)
-    paper_max_dd = compute_max_dd(equity_curve(trades))
+### Calculs NON implementes (gap documente)
 
-    # Divergence vs backtest (en sigmas)
-    bt = backtest_manifest["baseline"]
-    div_sharpe_sigma = abs(paper_sharpe - bt["sharpe"]) / bt["sharpe_std"]
-    div_wr_sigma = abs(paper_wr - bt["wr"]) / bt["wr_std"]
-    div_pnl_sigma = abs(paper_pnl_net - bt["pnl_expected_for_period"]) / bt["pnl_std"]
-
-    return {
-        "paper_days": paper_days,
-        "trade_count": trade_count,
-        "paper_pnl_net": paper_pnl_net,
-        "paper_max_dd_pct": paper_max_dd,
-        "paper_sharpe": paper_sharpe,
-        "paper_wr": paper_wr,
-        "div_sigmas": {
-            "sharpe": div_sharpe_sigma,
-            "wr": div_wr_sigma,
-            "pnl": div_pnl_sigma,
-        },
-    }
-```
-
-### Evaluation gate
-
-```python
-def evaluate_alpaca_gate(metrics: dict, incidents_open_p0p1: int) -> str:
-    # NO_GO conditions
-    if metrics["paper_days"] < 30:
-        return "NO_GO_paper_too_short"
-    if metrics["paper_max_dd_pct"] > 8.0:
-        return "NO_GO_drawdown_exceeded"
-    if incidents_open_p0p1 > 0:
-        return "NO_GO_incident_open"
-    if max(metrics["div_sigmas"].values()) > 2.5:
-        return "NO_GO_divergence_critical"
-
-    # WATCH conditions
-    if metrics["trade_count"] < 12:
-        return "WATCH_trade_count_low"
-    if max(metrics["div_sigmas"].values()) > 1.5:
-        return "WATCH_divergence_elevated"
-
-    # GO conditions (all must hold)
-    go_checks = [
-        metrics["paper_days"] >= 30,
-        metrics["trade_count"] >= 12,
-        metrics["paper_pnl_net"] >= 0,
-        metrics["paper_max_dd_pct"] <= 6.0,
-        max(metrics["div_sigmas"].values()) <= 1.5,
-        incidents_open_p0p1 == 0,
-    ]
-    return "GO_25K" if all(go_checks) else "WATCH_mixed_signals"
-```
+- **paper vs broker reconciliation** : le script n'audite pas que le broker Alpaca a effectivement flag les positions simulees.
+- **WF re-run freshness** : pas de check si manifest date > N jours.
 
 ---
 
-## 4. Implementation proposee
+## 4. Etat courant reel (script run 2026-04-19T14:33Z)
 
-**Fichier** : `scripts/alpaca_go_25k_gate.py` (a implementer).
+### Commande executee
 
-```bash
-python scripts/alpaca_go_25k_gate.py --strategy us_sector_ls_40_5 --min-days 30
-# Output:
-#   verdict: GO_25K | WATCH_* | NO_GO_*
-#   metrics: {paper_days, trade_count, pnl, max_dd, sharpe, divergences}
-#   recommendation: deposit $25K | continue paper 15 more days | halt + review
+```
+python scripts/alpaca_go_25k_gate.py --strategy us_sector_ls_40_5
 ```
 
-**Telegram integration** (optionnel) : command `/alpaca_gate` retourne verdict + metriques.
+### Output brut (verbatim)
 
-**Dashboard widget** (optionnel P3) : section "Alpaca 25K gate" sur `/overview` avec countdown jours restants + progress metriques.
+```
+========================================================================
+  Alpaca Go / No-Go 25K Gate   strategy=us_sector_ls_40_5
+========================================================================
+  Paper start    : 2026-04-18
+  Paper days     : 1
+  Trades ferme   : 0
+  PnL net paper  : $0.00
+  Max DD paper   : 0.00%
+  WR paper       : 0.0%
+  Incidents P0/P1: 0
+------------------------------------------------------------------------
+  Verdict        : NO_GO_paper_journal_missing
+  Reasons        : paper_journal_missing
+  Recommendation : Paper journal absent. Verifier que le paper runner ecrit bien sur VPS.
+========================================================================
+exit=2
+```
+
+### Verdict courant reel
+
+**`NO_GO_paper_journal_missing`** (exit code 2)
+
+### Blocage exact
+
+Le script n'a trouve **aucun** paper_journal pour `us_sector_ls_40_5` dans les chemins candidates :
+1. `data/state/us_sector_ls_40_5/paper_journal.jsonl`
+2. `data/state/us_sector_ls/paper_journal.jsonl`
+3. `data/state/alpaca_us/us_sector_ls_40_5_journal.jsonl`
+
+Localement : aucun paper journal (attendu sur dev Windows).
+
+VPS : a verifier lundi 2026-04-20 apres premier cycle `run_us_sector_ls_paper_cycle` (schedule 23h30 Paris weekday). Le paper runner devrait creer le journal lors du 1er fire.
+
+### Prochaine condition necessaire pour progresser
+
+**Pour sortir de NO_GO_paper_journal_missing** :
+- Confirmer qu'une execution weekday de `run_us_sector_ls_paper_cycle` a tourne sur VPS (lundi 2026-04-20 23h30 Paris = apres close US). Source : `logs/worker/worker.log` VPS.
+- Si journal n'existe toujours pas apres premier lundi ouvre → bug scheduler OU data us_stocks stale.
+
+**Pour atteindre GO_25K** (toutes conditions) :
+1. paper_journal.jsonl existe (debloque NO_GO_paper_journal_missing)
+2. >= 30 calendar days paper (earliest = 2026-05-18)
+3. >= 12 trades fermes (hebdo ~5 trades/cycle => >= 3 cycles complets)
+4. paper_pnl_net >= 0
+5. max_dd_paper <= 6.0%
+6. max divergence vs backtest <= 1.5 sigma
+7. 0 incident P0/P1 ouvert filtree window [paper_start, now] + book alpaca_us
+
+**Earliest GO_25K theorique** : **2026-05-18** + >= 12 trades observes + metriques stables.
 
 ---
 
-## 5. Etat actuel (2026-04-19)
+## 5. Script interface — exit codes & flags
 
-| Metrique | Valeur actuelle | Cible GO_25K | Status |
-|---|---|---|---|
-| Paper days | 1 (start 2026-04-18) | >= 30 | ❌ NO_GO (trop court) |
-| Trade count ferme | 0 | >= 12 | ❌ |
-| PnL net | n/a | >= 0 | — (pas de trades) |
-| Max DD paper | n/a | <= 6% | — |
-| Divergence Sharpe | n/a | <= 1.5 sigma | — |
-| Incidents P0/P1 ouverts | 0 | 0 | ✅ |
-| Journal paper existe | ❌ (pas vu VPS) | Oui | ❌ **P0 a verifier** |
+```
+python scripts/alpaca_go_25k_gate.py [--strategy STRATEGY_ID] [--min-days N] [--json]
 
-**Verdict courant** : **NO_GO_paper_too_short** (attendu, debut paper 1 jour).
+Exit codes:
+  0 = GO_25K (depot recommande)
+  1 = WATCH_* (continuer paper)
+  2 = NO_GO_* (blocage)
 
-**Earliest GO_25K possible** : **2026-05-18** (+ 12 trades fermes + PnL ok + divergence contenue).
-
-**Attention P0** : le paper journal `data/state/us_sector_ls/paper_journal.jsonl` n'est pas observe sur VPS actuellement. Si absence persiste apres 2026-04-21 (premiers cycles US weekday), le runner n'ecrit pas -> **blocker P0**.
+Flags:
+  --strategy : default "us_sector_ls_40_5"
+  --min-days : default 30 (DoD paper minimum)
+  --json     : output JSON (machine-readable) vs texte lisible
+```
 
 ---
 
 ## 6. Coupling avec IBKR futures roadmap
 
-Le deposit $25K Alpaca est **independant** des decisions IBKR futures. Cependant :
+Le deposit $25K Alpaca est **independant** des decisions IBKR futures. Priorite de funding si capital user supplementaire disponible (ordre decroissant) :
 
-**Priorite de funding si capital supplementaire dispo** (ordre decroissant) :
-1. **EUR 3.6K IBKR** pour mib_estx50_spread (Sharpe 3.9 backtest, strat unique grade S).
-2. **$25K Alpaca** pour PDT waiver (si us_sector_ls + us_stocks_daily validated paper gate).
-3. **+$5K Binance** pour scaler alt_rel_strength post live_probation ok.
+| Rang | Action | Conditions | Upside estimé |
+|---|---|---|---|
+| 1 | **+EUR 3.6K IBKR** pour mib_estx50_spread | mib_estx50 grade S, capital gap fixe | +$1,750/an (conservative haircut) |
+| 2 | **+$25K Alpaca** pour PDT waiver | Gate GO_25K obtenu | +$300-800/an probation |
+| 3 | **+$5K Binance** pour scaler alt_rel_strength post live_probation | alt_rel_strength 30j paper OK | +$150-300/an marginal |
 
-**Coherent avec directive** : ne **pas** scaler capital sans preuve machine-readable. Gate alpaca_go_25k est le mecanisme.
+Coherent avec directive : **pas de scale sans preuve machine-readable**. Gate `alpaca_go_25k_gate.py` est le mecanisme declaratif pour Alpaca.
 
 ---
 
-## 7. Decision template
-
-Pour chaque re-evaluation (hebdo ou bi-mensuel) :
+## 7. Template decision (re-check hebdo ou bi-mensuel)
 
 ```markdown
 ### Alpaca 25K gate check — 2026-MM-DD
 
+- Commande : python scripts/alpaca_go_25k_gate.py --strategy us_sector_ls_40_5
+- Exit code: N (0 / 1 / 2)
+- Verdict : GO_25K | WATCH_* | NO_GO_*
 - Paper days : N
 - Trade count : X
 - PnL net : $Y
 - Max DD : Z%
 - Divergence max : W sigmas
 - Incidents open : K
-- Verdict : GO_25K | WATCH_* | NO_GO_*
 - Recommendation : [action concrete]
 - Next review : 2026-MM-DD
 ```
 
-Historique tenu dans `docs/audit/alpaca_gate_history.md` (a creer apres premier check utile).
+Historique : `docs/audit/alpaca_gate_history.md` (a creer apres premier check avec journal present).
+
+---
+
+## 8. Honnêtete auditeur — divergences script vs anciennes versions doc
+
+Pre-correction iter3-fix2 (ce document) :
+- Ancien doc listait "paper < 30j" en 1er NO_GO — **FAUX**, script evalue `journal_missing` avant.
+- Ancien doc affichait "Verdict courant: NO_GO_paper_too_short" — **FAUX**, script sort `NO_GO_paper_journal_missing`.
+- Ancien doc implicait "crash runtime > 2 = NO_GO" — **FAUX**, aucun check crash runtime dans le script.
+- Ancien doc suggerait "promotion_gate vert" comme condition GO — **IMPLICITE, non verifie par script**, desormais clarifie section 2.
+
+Ce document est maintenant **aligne 100%** sur l'implementation `scripts/alpaca_go_25k_gate.py`.

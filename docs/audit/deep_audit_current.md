@@ -1,173 +1,245 @@
-# Deep Audit — Trading Platform
+# Deep Audit — Current State
 
-**Date** : 2026-04-19 (iteration 3 business-focused)
-**Mode** : comite senior impitoyable. Aucune complaisance.
+**As of** : 2026-04-19T14:33Z (post iter3-fix + re-run truth commands)
+**Mode** : comite senior impitoyable. Aucune complaisance. Honnetete prime sur score.
 **Auditeurs virtuels** : CTO + CRO + Quant + Produit + Ops.
 
-**Iter3 addendum** : audit pivote vers business metrics (live rentable + ROC + capital usage). Voir
-`live_readiness_scoreboard.md`, `ib_binance_live_plan.md`, `roc_capital_usage.md`,
-`alpaca_go_25k_rule.md` pour decisions concretes. Ce document reste la base gouvernance
-infrastructure ; le diagnostic live-readiness (6.5/10) n'invalide PAS le score plateforme
-(9.5/10) — ce sont deux axes distincts (qualite gouvernance vs temps paper + diversification).
+**Raison d'etre de ce document** : etat **courant** du repo, recalcule a partir des
+3 commandes de verite. Tout ce qui est historique (scores 8.8 → 9.5 iter0-iter2) est
+deplace en section `historical context`.
 
 ---
 
-## 1. Comprehension globale (10 lignes)
+## 0. Truth commands — 3 sources executables
 
-Plateforme de trading algo multi-broker (Binance crypto + IBKR futures/EU + Alpaca paper) operee en solo par Marc depuis VPS Hetzner. Capital reel $20,854 live snapshot 2026-04-19 (IBKR $11,013 + Binance $9,843). **16 strategies canoniques** dans quant_registry, dont **2 live_core** (cross_asset_momentum + gold_oil_rotation sur ibkr_futures), **9 paper READY**, **2 AUTHORIZED avec wf_exempt_reason legitime** (gold_trend_mgc V1 recalibration, us_stocks_daily meta-portfolio), **2 DISABLED** (fx_carry ESMA, btc_dominance REJECTED), **15 archived REJECTED**. Post plan 9.0 + iter1: registries alignes, gouvernance stricte, kill switch per-strategy, OSM wire crypto, boot preflight fail-closed, incident JSONL timeline, runtime_audit CLI, dashboard widget + API dedie, **0 incoherence** detectee runtime VPS.
-
-**Thèse sous-jacente** : desk perso discipline ou la rigueur process compense la petitesse du capital. Live uniquement apres paper + preuve machine-readable + governance.
-
-**Avantage competitif réel** : qualité code et discipline gouvernance (atomic persistence, WF Deflated Sharpe + grade, canonical registries, fail-closed defaults), rare chez solo dev.
-
-**Avantage illusoire** : multiplicite strats paper/READY peut donner illusion d'un moteur plus large que le reel (2 strats live seul).
-
-**Point de rupture** : reactiver du live prematurement avant que les candidates accumulent 30j paper + WF canonique structure.
-
----
-
-## 2. Architecture & Tech
-
-**Score CTO : 9.0/10** (+0.8 vs iter0)
-
-| Dimension | Score | Constat |
-|---|---|---|
-| Modularite | 9.0 | worker.py 5402 LOC mais encapsulation OSM + preflight + kill switch per-strat fait. Registries canoniques. Acceptation consciente solo-dev scope. |
-| Tests | 9.5 | **3667 pass 0 fail**, collectable clean, coverage core 65% / critical 72% measure + baselined doc |
-| Persistance | 9.5 | DDBaselines atomic tempfile+fsync+replace. OrderTracker atomic save_state par transition. Quant_registry mtime cache. |
-| Gouvernance | 9.5 | promotion_gate strict (wf_source blocking+fichier physique), pre_order_guard fail-closed (check 6b E2 scoped disable), boot preflight fail-closed, wf_exempt_reason pour meta-strats |
-| Observabilite | 9.0 | Telegram V2 anti-panic + JSONL fallback + syslog + incident JSONL auto + metrics SQLite + runtime_audit.py + dashboard computed widget LIVE |
-| SPOFs | 7.5 | Solo dev + VPS unique + Gateway IBKR unique = constants structurels acceptes a $20K (feedback_prove_profitability_first). Non bloquant pour 9.5 score. |
-
-### Top 3 risques techniques restants
-
-1. **worker.py 5402 LOC** : encore monolithe. Acceptable a ce stade car hot paths critiques encapsules (OSM crypto, E2 kill switch per-strat). Extraction complete = Phase 2 post-9.5.
-2. **OSM wire asymetrique** : crypto ✅, futures ❌. Trace orders futures limite a OrderTracker boot recovery, pas transitions par order.
-3. **E2 visible uniquement dans run_live_risk_cycle** : scoped disable trigger dans live_risk_cycle + block dans pre_order_guard (check 6b). Pas de check redondant dans run_crypto_cycle (belt-and-braces).
-
-Ces 3 risques ne bloquent PAS le score 9.5 :
-- 1 est structurel accepte (directive user feedback_prove_profitability_first)
-- 2 et 3 sont des ameliorations de symetrie, pas des chemins fail-open
-
----
-
-## 3. Audit ligne par ligne — gaps fermes iter1
-
-| Bloc | Etat iter0 | Etat iter1 | Commit |
+| Command | Exit | Sortie resumee | as_of |
 |---|---|---|---|
-| runtime_audit PAPER_WITHOUT_WF | 2 warnings | **0 incoherence** | c25df15 (G2) |
-| coverage.py integration | absent | baseline core 65% / critical 72% | 6b9c92f (G3) |
-| Dashboard D3 widget VPS | build local only | **LIVE sur VPS (15 strats)** | 30fa2d5 + 719efac (G1 + fix systemd) |
-| start_dashboard.py bug pre-existant | oculte | **resolu via uvicorn module ExecStart** | 719efac |
+| `python -m pytest -q -o cache_dir=.pytest_cache --basetemp .pytest_tmp` | 0 | **3669 pass, 50 skipped, 0 fail, 2380 warnings** | 2026-04-19T14:33Z |
+| `python scripts/runtime_audit.py --strict` (local) | **3** | **FAIL : equity_state::ibkr_futures absent + 4 parquets _1D stales** | 2026-04-19T14:33Z |
+| `python scripts/runtime_audit.py --strict` (VPS) | 0 | OK 12/12 preflight + 16 strats + 0 incoherence + data fresh 41h | 2026-04-19T14:33Z |
+| `python scripts/alpaca_go_25k_gate.py --strategy us_sector_ls_40_5` | 2 | **NO_GO_paper_journal_missing** (paper 1j, 0 trades) | 2026-04-19T14:33Z |
 
 ---
 
-## 4. Audit strategies (verite runtime VPS 2026-04-19)
+## 1. Etat actuel — par dimension
 
-```
-Strategies: 15 total
-  ACTIVE       2  (cross_asset_momentum A-grade + gold_oil_rotation S-grade)
-  READY        9  (paper avec wf_artifact, blockers infra documentes)
-  AUTHORIZED   2  (gold_trend_mgc V1 pending + us_stocks_daily meta) [wf_exempt legitime]
-  DISABLED     2  (fx_carry_momentum_filter ESMA + btc_dominance_rotation_v2 REJECTED)
-```
+### 1.1 Tests (pytest)
 
-**Aucune strategie pretendument "ready" sans l'etre**. La distinction AUTHORIZED / READY / ACTIVE / PROMOTABLE est computed via core.governance.strategy_status depuis sources canoniques (quant_registry + promotion_gate + reconciliation). Dashboard widget D3 reflete ce statut en live sur VPS.
+**3669 pass, 50 skipped, 0 fail** sur `tests/` (hors `tests/_archive/`).
+
+- 0 collection errors
+- Skips restants = 50, dont crypto_new_strategies (modules legacy pas encore quarantaines formellement)
+- Pas de regression post iter3-fix (B5+B2) : 53/53 tests iter2+iter3 pass
+
+**Note dimension** : **9.0 / 10** (suite saine, skips restants non bloquants mais documente)
+
+### 1.2 Runtime audit
+
+#### Local Windows (dev)
+- **FAIL exit 3** : equity_state::ibkr_futures absent (attendu sur dev), 4 parquets _1D stales 200h+
+- **16 strats classees** identiquement au VPS
+- **0 incoherence registries**
+
+#### VPS Hetzner (prod)
+- **OK exit 0** : 12/12 preflight checks PASS
+- Data fresh 41h (cron Mon-Fri 21:30 UTC)
+- 2 ACTIVE (CAM + GOR), 11 READY, 1 AUTHORIZED, 2 DISABLED
+- 0 runtime/registry incoherence
+
+**Distinction critique** : le FAIL local est **attendu** (dev env ≠ prod env). Pas un P0 business. Le VPS fait foi pour operationnel.
+
+**Note dimension** : **9.0 / 10** (VPS clean, local documente comme dev-only)
+
+### 1.3 Gouvernance fail-closed
+
+Source de verite : code review + pre_order_guard tests + promotion_gate tests.
+
+- pre_order_guard : fail-closed sur erreur critique (A4 + 6b E2 scoped per-strategy)
+- promotion_gate : strict sur preuves machine-readable (wf_source fichier physique, paper_start_at)
+- boot preflight fail-closed sur registries + equity_state + data freshness
+- LiveKillSwitch per-strategy `disable_strategy()` / `enable_strategy()` / `is_strategy_disabled()`
+- wf_exempt_reason champ canonique pour meta-strats / WF pending
+
+**Post iter3-fix B2** : gold_trend_mgc n'a plus `wf_exempt_reason` (WF V1 livre physique).
+
+**Note dimension** : **9.5 / 10** (12/12 DoD fermes, pas de fail-open chemin residuel)
+
+### 1.4 Persistance & Recovery
+
+- DDBaselines atomic (tempfile + fsync + replace)
+- OrderTracker atomic save_state par transition
+- Quant_registry mtime cache
+- 4 BootState explicit (C1 iter-ante)
+- OSM wire symetrique crypto (iter2 C2) + futures (iter2 G4)
+
+**Note dimension** : **9.5 / 10**
+
+### 1.5 Observabilite
+
+- Dashboard D3 LIVE VPS (widget computed statuses)
+- runtime_audit CLI machine-readable
+- incident JSONL auto-log timeline
+- Telegram V2 anti-panic + JSONL fallback
+- metrics SQLite
+
+**Gaps** :
+- **Capital occupancy tracker** non implemente (impact direct KPI user)
+- **ROC par strat 30j/90j** non implemente
+- Dashboard widget occupancy non livre (Phase 3)
+- live_pnl_tracker historique 1j actuellement ("Insufficient history")
+
+**Note dimension** : **7.0 / 10** (baisse vs 9.0 claim iter2 car metriques business manquantes non vues a l'epoque)
+
+### 1.6 Architecture & Code
+
+- worker.py 5402 LOC (encapsulation OSM + preflight + kill switch per-strat)
+- Extraction `core/worker/cycles/*_runner.py` partielle (futures, paper, macro_ecb)
+- Registries canoniques (books + whitelist + quant_registry)
+- Logging double binding **fixe iter3-fix B7** (guard idempotent)
+
+**Note dimension** : **8.5 / 10** (monolithe residuel acceptable solo-dev, fixes hygiene livres iter3-fix)
+
+### 1.7 Coverage
+
+**Claim historique iter1** : 65% core / 72% critical path.
+**Statut iter3-fix2** : **NON re-mesure** post iter2/iter3. Confidence medium.
+
+**Action requise si le nombre doit tenir** : re-run `pytest --cov` + `coverage report`. Estime <15 min.
+
+**Note dimension** : **6.5 / 10** (doute raisonnable sur le nombre, pas de proof recent)
+
+### 1.8 SPOFs / Ops
+
+- Solo dev (structurel, accepte jusqu'a 10x capital)
+- VPS unique Hetzner (structurel)
+- IBKR Gateway unique (structurel)
+
+**Note dimension** : **6.5 / 10** (inchange, constant structurel $20K capital)
 
 ---
 
-## 5. Risque systemique
+## 2. Score plateforme recalcule (post iter3-fix2)
 
-**Correlations connues** : CAM + GOR partagent MGC/MCL. Stress August 2024 = both lose en meme temps.
+| Dimension | Note | Poids | Contribution |
+|---|---|---|---|
+| Tests pytest | 9.0 | 15% | 1.35 |
+| Runtime audit coherence | 9.0 | 15% | 1.35 |
+| Gouvernance fail-closed | 9.5 | 15% | 1.43 |
+| Persistance atomic | 9.5 | 10% | 0.95 |
+| Observabilite | 7.0 | 15% | 1.05 |
+| Architecture / Code | 8.5 | 10% | 0.85 |
+| Coverage | 6.5 | 10% | 0.65 |
+| SPOFs / Ops | 6.5 | 10% | 0.65 |
+| **TOTAL plateforme** | — | 100% | **8.28 / 10** |
 
-**Protections actives** :
-- Kill switch daily -5% / 5d -8% portfolio
-- **Kill switch per-strategy E2** : une strat peut etre disable sans fermer portfolio (nouveau iter0)
-- Reconciliation 15min par book avec severity paper/live distincte
+**Arrondi : 8.5 / 10 plateforme post iter3-fix2.**
 
-**Effet domino contenu** : IB Gateway down -> futures cycles skip (pre_order_guard block par data+ibkr health). OSM crash recovery OK (transitions persistees atomiquement).
-
-**Queue risk** : solo dev + VPS unique = constant structurel assume ($20K).
-
----
-
-## 6. Failles critiques
-
-### Top 5 risques residuels post-iter1
-
-1. OSM wire futures (asymetrie crypto vs futures) - **NON bloquant 9.5**
-2. E2 redondance run_crypto_cycle - **NON bloquant 9.5**
-3. worker.py monolithe - **NON bloquant 9.5 (encapsulation OK)**
-4. Solo dev + VPS unique - **STRUCTURAL accepte**
-5. Coverage < 80% sur core - **NON bloquant (critical path 72% OK)**
-
-### Top 3 fixes iter1 (effectues)
-
-1. runtime_audit distinguer meta/pending vs incoherence (G2)
-2. coverage baseline mesuree et documentee (G3)
-3. Dashboard computed widget LIVE sur VPS + fix systemd pre-existant (G1)
+Ecart avec score 9.5 revendique iter2 : l'iter2 "9.5" melait plateforme + live readiness + ne ponderait pas la dimension observabilite business (occupancy, ROC par strat) ni coverage non re-mesure. Clarifie iter3-fix2.
 
 ---
 
-## 7. Plan vers 9.5 — STATUS
+## 3. Score live readiness business (honnetement)
 
-### Phase 1 urgent iter1 — COMPLETE
+Voir `live_readiness_scoreboard.md` pour detail. Synthese :
 
-- [x] G1 Dashboard D3 deploy VPS (via scp + systemd fix)
-- [x] G2 wf_exempt_reason + runtime_audit tolerance
-- [x] G3 coverage.py baseline
+| Dimension | Note | Source |
+|---|---|---|
+| Live engine existant | 7.5 | 2 strats ACTIVE, 1 position |
+| Diversification promotable 30j | 5.5 | 4 candidates READY (+1 post iter3-fix) |
+| Fail-open surface | 9.5 | VPS 0 incoherence |
+| Capital occupancy | 3.0 | 1.09% observe |
+| Trade frequency | 3.5 | 0.1-0.2/jour vs cible 1/jour |
+| Paper signal quality | 5.5 | 1/10 paper strats produit journal daily continu |
 
-**Gain estime iter1** : +0.4 pt (8.8 -> 9.2)
-
-### Phase 2 stabilisation iter2 — stretch (non-bloquant)
-
-- [ ] G4 OSM wire futures (1h, parite)
-- [ ] G5 E2 check dans run_crypto_cycle (30min, defense-en-profondeur)
-- [ ] G6 Commentaires obsoletes cleanup (30min)
-
-**Gain estime iter2** : +0.3 pt (9.2 -> 9.5)
+**Score live readiness ponderable : 5.5 / 10.**
 
 ---
 
-## 8. Test de realite post-iter1
+## 4. Score ROC / capital usage
 
-- Le projet survivra-t-il en reel ? **OUI**, avec confiance notable.
-- Probabilite succes **desk perso sain** : **80%** (+5 pt vs iter0)
-- Probabilite succes **PnL significatif $20K** : **25%** (plafond capital inchange)
-- Temps avant probleme majeur : **12-18 mois** si gouvernance strict maintenue
+Voir `roc_capital_usage.md` pour detail. Synthese :
+
+| Dimension | Note |
+|---|---|
+| Capital deploye lisible | 7.0 |
+| Occupancy observee | 3.0 |
+| ROC mesurable par strat | 3.5 |
+| Contribution marginale | 2.0 |
+| Alignement capital cible/reel | 5.5 |
+
+**Score ROC : 4.0 / 10.**
 
 ---
 
-## 9. Verdict iteration 1
+## 5. Score qualite livrables docs
 
-**Score global : 9.2 / 10**
+Voir `deliverables_consistency_review.md`. Synthese :
 
-**Niveau** : 🟢 **Solide**
+- Pre iter3-fix2 : 5.0/10 (docs melaient local/VPS/cible, script Alpaca ≠ doc)
+- Post iter3-fix2 : **7.5 / 10** (docs alignes sur verite runtime, separation dimensions, sources citees)
 
-**Recommandation** : **CONTINUE**
+---
 
-**Gap vers 9.5** : 0.3 pt via iter2 G4+G5+G6 stretch (optionnel — ces items amelioratifs, pas correctifs)
+## 6. Synthese — 4 scores distincts (pas de chiffre agrege)
 
-### Justification honnete du score 9.2
+| Dimension | Score | Confidence |
+|---|---|---|
+| **Plateforme** (code, gouv, tests) | **8.5 / 10** | high |
+| **Live readiness** (paper + diversif + trade freq) | **5.5 / 10** | med |
+| **ROC / capital usage** | **4.0 / 10** | high |
+| **Qualite livrables docs** | **7.5 / 10** (post iter3-fix2) | high |
 
-**Preuves objectives** (mandat auditeur DoD 9.5) :
+**Refus explicite** de faire une moyenne ponderee unique des 4. Les 4 axes sont orthogonaux et ont des rythmes de resolution differents :
+- Plateforme : refactor code, rapide si priorite
+- Live readiness : **temps paper 30j incompressible** (structurel)
+- ROC / capital usage : depend promotions + metriques a livrer
+- Docs : rapide si rigueur maintenue
 
-1. ✅ Suite tests verte + collectable (3667 pass, 0 err collection, 80 skipped justifies)
-2. ✅ Tests orphelins quarantines formellement (3 in tests/_archive + README)
-3. ✅ pre_order_guard fail-closed sur erreur critique (A4 commit 6688a57 + E2 6b)
-4. ✅ promotion_gate preuve machine-readable physique (A2 strict wf_source file check)
-5. ✅ live_whitelist + books_registry + quant_registry alignes (cross-check script OK)
-6. ✅ Chaque strat promouvable: canonical id + status + wf_manifest path + paper_start_at structure
-7. ✅ **Aucun book live-ready mal classe** (runtime_audit --strict exit 0 sur VPS)
-8. ✅ **Dashboard/API reflete statuts calcules** (widget D3 LIVE sur VPS verifie via curl)
-9. ✅ Recovery / DD state : 4 BootState + warmup par etat (C1)
-10. ✅ Monolithe encapsule sur hot paths (OSM crypto, E2 kill switch, boot preflight)
-11. ⚠️ Commentaires obsoletes : partiel, G6 iter2 (non bloquant)
-12. ✅ Score justifie par preuves (runtime_audit output, coverage report, commit history)
+---
 
-**NE peut PAS monter a 9.5 dans iter1** car :
-- Critere 11 pas entierement ferme (stretch G6)
-- Asymetrie OSM crypto vs futures documentee (G4 stretch)
-- Ces 2 points sont fixes pas bloques, mais necessitent 2h+ additionnelles
+## 7. Top 5 risques business (ranked)
 
-**Donc 9.2 honnete, pas 9.5 encore**. Iteration 2 optionnelle si user demande.
+1. **Capital occupancy 1.09% durable** — desk vivant mais sous-utilise. Resolution : promotions 3-5 strats (4-8 sem).
+2. **Trade frequency 0.1-0.2/jour** — 5-10x sous cible. Resolution : diversification post promotion.
+3. **B6r crypto alts parquets stale** (residuel) — bloque alt_rel_strength + btc_asia paper. **Deadline 2026-05-18**.
+4. **mib_estx50 capital gap EUR 3.6K** — strat grade S bloquee funding. User decision.
+5. **live_pnl_tracker historique insuffisant (1j)** — KPI PnL net pas mesurable avant 30j.
+
+---
+
+## 8. Historical context — scores historiques (point-in-time, archive)
+
+### Iter0 baseline (2026-04-19T~16:00Z)
+- Score revendique : **8.8/10** (combine)
+- Contexte : debut session audit 9.5, mandat anti-gonflage
+
+### Iter1 phase 1 urgent (2026-04-19T~18:00Z)
+- Score revendique : **9.2/10**
+- Gains : G1 dashboard VPS + G2 wf_exempt_reason + G3 coverage baseline
+
+### Iter2 phase 2 stretch (2026-04-19T~20:00Z)
+- Score revendique : **9.5/10** (plateforme seulement, confusion initiale)
+- Gains : G4 OSM wire futures + G5 E2 defense + G6 cleanup
+
+### Iter3 business audit (2026-04-19T~~22:00Z)
+- Scores revendiques (premiere separation) : plateforme 9.5, live readiness 6.5, ROC 4.0
+- Gains : 6 livrables docs business + alpaca gate script
+
+### Iter3-fix (2026-04-19 PM)
+- Scores revendiques (avant fix docs) : plateforme 9.5, live readiness 6.5, ROC 4.0
+- Gains : B2 gold_trend_mgc WF V1 grade A + B5 btc_asia long_only wire + B6/B7/B8 hygiene
+
+### Iter3-fix2 (2026-04-19T14:33Z) — CE DOCUMENT
+- Scores recalcules : **plateforme 8.5, live readiness 5.5, ROC 4.0, docs 7.5**
+- Gains : realignement 6 deliverables sur verite runtime + distinction repo/VPS/cible + alpaca doc-script parity
+
+---
+
+## 9. Honnete auditeur — ce que JE NE PEUX PAS revendiquer
+
+- **Coverage 65/72 historique iter1** : pas re-mesure. Si le chiffre doit apparaitre dans les docs, re-run requis.
+- **Paper signal quality** : je ne sais pas si le scheduler va fire correctement lundi 2026-04-20 pour les runners weekday (mes_monday, eu_relmom, us_sector_ls, mib_estx50, btc_asia). L'observation empirique lundi matin confirmera.
+- **ROC projection +10-15% annualise post M3** : hypothese haircut -50% backtest. Confidence medium. Un seul signal (+$295 MCL) ne constitue pas preuve statistique.
+- **Promotion_gate vert vs alpaca gate** : le script alpaca_go_25k_gate.py **ne verifie PAS** formellement promotion_gate. Clarifie dans alpaca_go_25k_rule.md iter3-fix2.
+
+Ces gaps ne invalident PAS la decision business lundi matin (desk continue inchange), mais ils sont listes pour honnêtete auditeur.
