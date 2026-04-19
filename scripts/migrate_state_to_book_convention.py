@@ -29,6 +29,9 @@ MIGRATIONS = [
     # IBKR futures
     ("data/state/futures_positions_live.json", "data/state/ibkr_futures/positions_live.json"),
     ("data/state/futures_positions_paper.json", "data/state/ibkr_futures/positions_paper.json"),
+    ("data/state/ibkr_equity.json", "data/state/ibkr_futures/equity_state.json"),
+    # IBKR EU
+    ("paper_portfolio_eu_state.json", "data/state/ibkr_eu/portfolio_state.json"),
     # Live risk (cross-book mais centralise sous global)
     ("data/live_risk_dd_state.json", "data/state/global/live_risk_dd_state.json"),
     ("data/kill_switch_state.json", "data/state/global/kill_switch_state.json"),

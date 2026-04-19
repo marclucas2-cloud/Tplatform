@@ -1,6 +1,6 @@
 # T1-D — US PEAD backtest
 
-**Run** : 2026-04-16 06:18 UTC
+**Run** : 2026-04-18 16:29 UTC
 **Univers** : 30 tickers SP500 (top liquidity)
 **Methodologie** : long day+1 open si Surprise >= 5.0% ET gap up >= 1.0%
 **Exit** : 20D hold OR TP 8.0% OR SL 3.0%

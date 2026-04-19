@@ -198,7 +198,17 @@ def signal_gold_oil(mgc, mcl, common, i, lookback=20, min_edge=0.02, last_entry=
     }
 
 
-def run_portfolio(dfs, common_all, use_first_refusal: bool, label: str, disable_gold_trend: bool = False, apply_slippage: bool = False):
+def run_portfolio(dfs, common_all, use_first_refusal: bool, label: str,
+                  disable_gold_trend: bool = False, apply_slippage: bool = False,
+                  regime_kill_switch: bool = False,
+                  ks_pause_threshold: float = -0.15,
+                  ks_resume_threshold: float = -0.08,
+                  ks_window: int = 90):
+    """Run portfolio backtest.
+
+    regime_kill_switch: if True, pause new entries when rolling-90 DD < -15%,
+                       resume when DD > -8% (hysteresis).
+    """
     mgc = dfs["MGC"]; mcl = dfs["MCL"]
     equity = INITIAL_EQUITY
     open_positions = {}
@@ -212,6 +222,12 @@ def run_portfolio(dfs, common_all, use_first_refusal: bool, label: str, disable_
     signals_blocked_risk = 0
     signals_blocked_maxsym = 0
     signals_blocked_firstrefusal = 0
+    signals_blocked_killswitch = 0
+
+    # Regime kill-switch state
+    equity_history = []  # daily equity end-of-day for rolling peak
+    killswitch_paused = False
+    days_paused = 0
 
     for i, d in enumerate(common_all):
         # Process exits
@@ -221,6 +237,19 @@ def run_portfolio(dfs, common_all, use_first_refusal: bool, label: str, disable_
             equity += pos["pnl"]
             trades_log.append(pos)
             del open_positions[sym]
+
+        # Track equity & kill-switch state (BEFORE accepting new signals)
+        equity_history.append(equity)
+        if regime_kill_switch and len(equity_history) >= ks_window:
+            window = equity_history[-ks_window:]
+            rolling_peak = max(window)
+            current_dd = (equity - rolling_peak) / rolling_peak if rolling_peak > 0 else 0.0
+            if not killswitch_paused and current_dd <= ks_pause_threshold:
+                killswitch_paused = True
+            elif killswitch_paused and current_dd >= ks_resume_threshold:
+                killswitch_paused = False
+            if killswitch_paused:
+                days_paused += 1
 
         # Compute Cross-Asset top pick (for first-refusal check)
         cam_top = cross_asset_top_pick(dfs, common_all, i) if use_first_refusal else None
@@ -241,6 +270,11 @@ def run_portfolio(dfs, common_all, use_first_refusal: bool, label: str, disable_
         for sig in signals_today:
             signals_total += 1
             sym = sig["symbol"]
+
+            # Regime kill-switch: block all NEW entries while paused
+            if regime_kill_switch and killswitch_paused:
+                signals_blocked_killswitch += 1
+                continue
 
             # First-refusal: if cross_asset would want this symbol today (and
             # the signal is NOT from cross_asset), block it — reserve for CAM
@@ -365,6 +399,8 @@ def run_portfolio(dfs, common_all, use_first_refusal: bool, label: str, disable_
         "signals_blocked_risk": signals_blocked_risk,
         "signals_blocked_maxsym": signals_blocked_maxsym,
         "signals_blocked_firstrefusal": signals_blocked_firstrefusal,
+        "signals_blocked_killswitch": signals_blocked_killswitch,
+        "days_paused": days_paused,
     }
 
 
@@ -382,7 +418,10 @@ def print_result(r):
     print(f"Signals: total={r['signals_total']}, accept={r['signals_accepted']} "
           f"({r['signals_accepted']/r['signals_total']*100:.0f}%), "
           f"guard2={r['signals_blocked_guard2']}, risk={r['signals_blocked_risk']}, "
-          f"first_refusal={r['signals_blocked_firstrefusal']}")
+          f"first_refusal={r['signals_blocked_firstrefusal']}, "
+          f"killswitch={r.get('signals_blocked_killswitch', 0)}")
+    if r.get('days_paused', 0) > 0:
+        print(f"Days paused by kill-switch: {r['days_paused']}")
     print("\nPar strategie:")
     print(r['per_strat'].to_string())
     print("\nPar symbole:")
