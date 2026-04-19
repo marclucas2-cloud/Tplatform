@@ -2,16 +2,17 @@
 Description=Trading Platform Worker (24/7 scheduler)
 After=network.target ibgateway-live.service
 Wants=ibgateway-live.service
+# StartLimit* keys must live in [Unit] section, not [Service] (systemd v229+)
+StartLimitBurst=5
+StartLimitIntervalSec=300
 
 [Service]
 Type=simple
 User=root
 WorkingDirectory=/opt/trading-platform
-ExecStart=/usr/bin/python3 worker.py
+ExecStart=/opt/trading-platform/.venv/bin/python worker.py
 Restart=always
 RestartSec=10
-StartLimitBurst=5
-StartLimitIntervalSec=300
 Environment=PYTHONUNBUFFERED=1
 EnvironmentFile=/opt/trading-platform/.env
 
