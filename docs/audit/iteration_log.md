@@ -79,16 +79,37 @@ redemarre LIVE, widget status visible.
 
 ---
 
-## ITERATION 2 — Phase 2 stabilisation (stretch, optionnel)
+## ITERATION 2 — Phase 2 stretch ✅ COMPLETE (2026-04-19 PM)
 
-Si user demande pousser vers 9.5, iter2 ameliore symetrie + nettoyage.
-Non bloquant pour le score 9.2 actuel.
+**Objectif** : 9.2 -> 9.5 via G4 + G5 + G6 **ATTEINT**
+
+**Actions executees** :
+1. ✅ G6 Commentaires obsoletes cleanup (worker.py + telegram_commands.py)
+2. ✅ G5 E2 defense-en-profondeur run_crypto_cycle (early skip is_strategy_disabled)
+3. ✅ G4 OSM wire futures parite (create_order/validate/submit/fill + error path)
+4. ✅ 7 tests regression iter2 (TestG4 + TestG5 + TestG4G5Integration)
+
+**Tests relances** :
+- pytest full: **3674 passed**, 80 skipped, 0 failed (+7 iter2)
+- Worker import OK, futures_runner import OK
+- Aucun regression existante
+
+**Commits iter2 (locaux, pas pushes)** :
+- 3973ab1 feat(iter2): G4+G5+G6
+- cfa7b1c test(iter2): 7 regression
+
+**Score post-iter2** : **9.5 / 10** (+0.3 vs iter1, +0.7 vs baseline)
+
+**Mandat respecte** : pas de gonflage. 12/12 criteres DoD fermes avec preuves.
+Voir docs/audit/final_verdict.md pour justification complete.
 
 ---
 
 ## Historique commits iteration
 
-- iteration 0: commit `2a7b477` (C2 + E2 local, pas push)
-- iteration 0 docs: commit `7a2d392`
-- iteration 1: commits `c25df15`, `6b9c92f`, `30fa2d5`, `719efac`
-- iteration 2: pending (stretch)
+- iteration 0: commits `2a7b477` (C2+E2 code) + `7a2d392` (docs baseline)
+- iteration 1: commits `c25df15` (G2), `6b9c92f` (G3), `30fa2d5` (G1 route),
+  `719efac` (G1 systemd fix), `3654c88` (docs iter1)
+- iteration 2: commits `3973ab1` (G4+G5+G6 code), `cfa7b1c` (tests regression)
+
+**Total session 9.5** : 9 commits locaux (post commit C2+E2 2a7b477) + docs final verdict.
