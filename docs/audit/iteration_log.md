@@ -44,32 +44,51 @@ Journal strict des iterations audit -> correction -> re-audit.
 
 ---
 
-## ITERATION 1 — Phase 1 urgent (en cours)
+## ITERATION 1 — Phase 1 urgent ✅ COMPLETE (2026-04-19 PM)
 
-**Objectif** : 8.8 -> 9.2 via G1 + G2 + G3
+**Objectif** : 8.8 -> 9.2 via G1 + G2 + G3 **ATTEINT**
 
-**Actions planifiees** :
-1. G2 wf_exempt_reason dans quant_registry + runtime_audit tolerance
-2. G3 coverage.py baseline + seuil 60%
-3. G1 dashboard deploy VPS (dernier car risque runtime)
+**Actions executees** :
+1. ✅ G2 `wf_exempt_reason` champ + runtime_audit tolerance (commit c25df15)
+2. ✅ G3 coverage.py baseline: 65% core / 72% critical (commit 6b9c92f)
+3. ✅ G1 dashboard deploy VPS + fix systemd pre-existant (commits 30fa2d5 + 719efac)
 
-**Tests a relancer** :
-- pytest full suite
-- runtime_audit --strict (doit passer 0 incoherence)
-- coverage report baseline
+**Surprise iter1** : G1 deploy a revele un bug pre-existant du service
+trading-dashboard (start_dashboard.py manquant depuis commit anterieur non
+trace). Fix applique: systemd ExecStart uvicorn module entry. Service
+redemarre LIVE, widget status visible.
 
-[A COMPLETER APRES ITERATION 1]
+**Tests relances** :
+- pytest full: **3667 passed**, 80 skipped, 0 failed
+- runtime_audit --strict sur VPS: **0 incoherence, exit 0**
+- Curl /api/governance/strategies/status VPS: counts corrects, 15 strats
+
+**Commits iter1 (locaux, pas pushes)** :
+- 7a2d392 docs(audit): iteration 0 baseline
+- c25df15 feat(governance): G2 wf_exempt_reason
+- 6b9c92f docs(audit): G3 coverage baseline
+- 30fa2d5 fix(dashboard): G1 route collision
+- 719efac fix(ops): G1 systemd ExecStart uvicorn
+
+**Score post-iter1** : **9.2 / 10** (+0.4 vs baseline)
+
+**Gaps residuels vers 9.5** (iter2 stretch non-bloquant) :
+- G4 OSM wire futures (parite crypto)
+- G5 E2 check dans run_crypto_cycle (defense-en-profondeur)
+- G6 Commentaires obsoletes cleanup
 
 ---
 
-## ITERATION 2 — Phase 2 stabilisation
+## ITERATION 2 — Phase 2 stabilisation (stretch, optionnel)
 
-[A COMPLETER]
+Si user demande pousser vers 9.5, iter2 ameliore symetrie + nettoyage.
+Non bloquant pour le score 9.2 actuel.
 
 ---
 
 ## Historique commits iteration
 
 - iteration 0: commit `2a7b477` (C2 + E2 local, pas push)
-- iteration 1: TBD
-- iteration 2: TBD
+- iteration 0 docs: commit `7a2d392`
+- iteration 1: commits `c25df15`, `6b9c92f`, `30fa2d5`, `719efac`
+- iteration 2: pending (stretch)
