@@ -81,3 +81,35 @@ desktop.ini
 
 # === Node (si Railway/CI) ===
 node_modules/
+
+# === Hygiene H1-T1b (2026-04-19) : runtime artifacts ===
+# Politique : structure (README.md) versionnee, contenu ignore.
+# Chaque dir documente producteur/consommateur/criticite via README.md.
+# temp/ : decision differee T1c apres inspect contenu.
+
+# Claude Code agent workspace
+.claude/
+.pytest_tmp/
+
+# Runtime data dirs — structure preservee, contenu auto-genere ignore
+data/alerts/*
+!data/alerts/README.md
+data/audit/*
+!data/audit/README.md
+data/backups/*
+!data/backups/README.md
+data/incidents/*
+!data/incidents/README.md
+data/orchestrator/*
+!data/orchestrator/README.md
+data/reconciliation/*
+!data/reconciliation/README.md
+data/research_funnel/*
+!data/research_funnel/README.md
+data/tickets/*
+!data/tickets/README.md
+data/us_stocks/*
+!data/us_stocks/README.md
+
+# Research artifacts auto-genere specifique (scout cards discovery engine)
+data/research/strategy_discovery_engine_*_scout_cards.json
