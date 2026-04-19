@@ -32,6 +32,10 @@ class QuantEntry:
     last_wf_run_at: date | None
     is_live: bool
     infra_gaps: list[str] = field(default_factory=list)
+    # G2 iter1 (2026-04-19): legitimate reason for absent wf_manifest_path.
+    # When set, runtime_audit.py PAPER_WITHOUT_WF check is skipped (not an
+    # incoherence, just pending or meta-portfolio).
+    wf_exempt_reason: str | None = None
 
     def age_paper_days(self, now: datetime | None = None) -> int | None:
         """Days on paper. None if paper_start_at is null."""
@@ -74,6 +78,7 @@ def _parse_entry(raw: dict) -> QuantEntry:
         last_wf_run_at=_parse_date(raw.get("last_wf_run_at")),
         is_live=bool(raw.get("is_live", False)),
         infra_gaps=list(raw.get("infra_gaps") or []),
+        wf_exempt_reason=raw.get("wf_exempt_reason"),
     )
 
 

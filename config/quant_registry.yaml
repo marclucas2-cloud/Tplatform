@@ -72,6 +72,7 @@ strategies:
     paper_start_at: "2026-04-16"
     live_start_at: null
     wf_manifest_path: null   # V1 recalibration en cours, WF/MC pending
+    wf_exempt_reason: "wf_v1_recalibration_in_progress"  # G2 iter1: legitimate pending
     grade: null
     last_wf_run_at: null
     is_live: false
@@ -212,6 +213,7 @@ strategies:
     paper_start_at: "2026-04-18"
     live_start_at: null
     wf_manifest_path: null   # Meta-strategie portfolio, pas WF unique
+    wf_exempt_reason: "meta_portfolio_aggregate"  # G2 iter1: aggregat sous-strats
     grade: null
     last_wf_run_at: null
     is_live: false

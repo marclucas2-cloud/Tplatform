@@ -99,15 +99,23 @@ def build_report() -> dict:
                 "message": f"in archived_rejected but registry status={registry[sid].status}",
             })
 
-    # Incoherence 3: paper strategy without wf_manifest_path
+    # Incoherence 3: paper strategy without wf_manifest_path.
+    # G2 iter1 (2026-04-19): wf_exempt_reason legitimise l'absence (meta-portfolio,
+    # WF recalibration in progress, etc.) - skip l'incoherence si flag present.
     for sid, entry in registry.items():
-        if entry.status in ("paper_only", "live_probation") and entry.wf_manifest_path is None:
-            incoherences.append({
-                "type": "PAPER_WITHOUT_WF",
-                "strategy_id": sid,
-                "severity": "warning",
-                "message": "paper strategy has null wf_manifest_path - promotion will fail wf_source check",
-            })
+        if entry.status not in ("paper_only", "live_probation"):
+            continue
+        if entry.wf_manifest_path is not None:
+            continue
+        if entry.wf_exempt_reason:
+            # Legitimate exemption, not an incoherence
+            continue
+        incoherences.append({
+            "type": "PAPER_WITHOUT_WF",
+            "strategy_id": sid,
+            "severity": "warning",
+            "message": "paper strategy has null wf_manifest_path - promotion will fail wf_source check",
+        })
 
     # Incoherence 4: strategy with infra_gaps but no backlog ticket (best-effort check)
     strats_with_gaps = [
