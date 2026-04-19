@@ -122,3 +122,7 @@ reports/research/quick_*.json
 reports/research/sweep_test.json
 reports/research/wf_full_test.json
 reports/research/thesis_test_strat.md
+
+# Temp workspace (one-shot scripts, brouillons, non reproducibles minor)
+# Strategies completes extraites -> scripts/research/
+temp/

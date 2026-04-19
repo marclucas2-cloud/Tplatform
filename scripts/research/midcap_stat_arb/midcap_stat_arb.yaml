@@ -1,0 +1,98 @@
+# MidCap Statistical Arbitrage — Configuration
+# Strategy: Cointegration-based pairs trading on S&P 400 MidCap stocks
+# Broker: Alpaca (commission $0, fractional shares)
+# Capital: $30K allocation
+
+strategy:
+  name: "midcap_stat_arb"
+  version: "1.0"
+  broker: "alpaca"
+  asset_class: "us_equity"
+  style: "market_neutral"
+
+# Universe
+universe:
+  index: "SP400"
+  min_market_cap_usd: 10_000_000_000   # $10B
+  max_market_cap_usd: 50_000_000_000   # $50B
+  min_daily_volume_usd: 5_000_000       # $5M average
+  exclude_sectors: ["biotech_binary"]    # Binary outcomes = untradeable
+  grouping: "GICS_industry_group"
+
+# Pair Formation
+formation:
+  lookback_days: 120
+  rebalance_frequency: "weekly"          # Sunday night
+  adf_pvalue_max: 0.05
+  half_life_min_days: 1
+  half_life_max_days: 30
+  hurst_exponent_max: 0.50
+  min_spread_sharpe: 0.3
+  max_pairs: 10
+  max_correlation_between_pairs: 0.50
+
+# Trading Signals
+signals:
+  z_entry: 2.0                           # Enter when |z| > 2.0
+  z_exit: 0.5                            # Exit when |z| < 0.5
+  z_stop: 4.0                            # Stop loss when |z| > 4.0
+  z_add: 3.0                             # Add to position (optional, disabled by default)
+  enable_add_to_position: false
+
+# Time Management
+time:
+  max_holding_days: 20
+  min_holding_hours: 4
+  signal_time_cet: "15:45"               # Generate signals 15min after US open
+  eod_check_cet: "21:45"                 # End-of-day position check
+
+# Sizing
+sizing:
+  position_per_leg_usd: 1500             # $1.5K per leg, $3K per pair
+  max_portfolio_pct: 0.80                # Max 80% of capital deployed
+  kelly_enabled: false                    # Static sizing for simplicity
+  min_position_usd: 100                  # Skip if position < $100
+
+# Risk Management
+risk:
+  daily_loss_limit_pct: 0.03             # -3% daily → stop all new entries
+  pair_loss_limit_pct: 0.05              # -5% per pair → close pair
+  max_net_exposure_pct: 0.05             # Market neutral: net < 5%
+  max_gross_exposure_pct: 0.80           # Gross < 80%
+  correlation_check_enabled: true
+  time_stop_enabled: true
+
+# Regime Integration
+regime:
+  enabled: true
+  multipliers:
+    TREND_STRONG: 0.5                    # Pairs underperform in trends
+    MEAN_REVERT: 1.0                     # Best regime for pairs
+    HIGH_VOL: 0.7                        # More opportunity but more risk
+    PANIC: 0.3                           # Reduce heavily
+    LOW_LIQUIDITY: 0.3                   # Spreads unreliable
+    UNKNOWN: 0.6                         # Conservative default
+
+# Cost Model (Alpaca)
+costs:
+  commission_per_trade: 0.0
+  spread_bps: 1.0
+  slippage_bps: 2.0
+  short_borrow_annual_pct: 1.5
+
+# Monitoring
+monitoring:
+  telegram_alerts: true
+  alert_on_entry: true
+  alert_on_exit: true
+  alert_on_stop: true
+  daily_summary: true
+  summary_time_cet: "22:00"
+
+# Walk-Forward Validation
+walk_forward:
+  n_windows: 5
+  train_pct: 0.70
+  min_oos_sharpe: 0.5
+  min_profitable_windows_pct: 60
+  min_total_trades: 30
