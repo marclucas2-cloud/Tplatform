@@ -58,17 +58,26 @@ CSV_HEADERS = [
 
 
 def _fetch_ibkr_live_equity() -> float:
-    """Fetch IBKR live account equity in USD. Returns 0.0 on failure."""
+    """Fetch IBKR live account equity in USD. Returns 0.0 on failure.
+
+    Uses a dedicated clientId (200) to avoid conflict with the running worker
+    (which uses 1, 3, 10, 77, 80-89, 310-329). If IB Gateway is already
+    saturated or unreachable, returns 0.0 and caller fails-closed.
+    """
     if os.getenv("IBKR_PAPER", "true").lower() == "true":
         logger.info("IBKR_PAPER=true - skipping IBKR live fetch")
         return 0.0
     try:
         from core.broker.ibkr_adapter import IBKRBroker
-        broker = IBKRBroker()
+        broker = IBKRBroker(client_id=200)
         info = broker.get_account_info()
         for key in ("equity", "net_liquidation_usd", "nav", "net_liquidation"):
             v = info.get(key) if isinstance(info, dict) else None
             if v:
+                try:
+                    broker.disconnect() if hasattr(broker, "disconnect") else None
+                except Exception:
+                    pass
                 return float(v)
     except Exception as e:
         logger.warning(f"IBKR live equity fetch failed: {e}")
