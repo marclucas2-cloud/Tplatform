@@ -29,11 +29,11 @@ logger = logging.getLogger(__name__)
 
 # Default thresholds — conservative for real money
 DEFAULT_THRESHOLDS = {
-    "daily_loss_pct": 0.015,        # -1.5% daily
-    "hourly_loss_pct": 0.01,        # -1.0% hourly
-    "trailing_5d_loss_pct": 0.03,   # -3.0% rolling 5d
-    "monthly_loss_pct": 0.05,       # -5.0% monthly
-    "strategy_loss_pct": 0.02,      # -2.0% per strategy (MC override available)
+    "daily_loss_pct": 0.05,         # -5% daily (futures: 1 SL MES = ~2%)
+    "hourly_loss_pct": 0.03,        # -3% hourly
+    "trailing_5d_loss_pct": 0.08,   # -8% rolling 5d
+    "monthly_loss_pct": 0.12,       # -12% monthly
+    "strategy_loss_pct": 0.05,      # -5% per strategy
 }
 
 # Default state file location
@@ -560,6 +560,116 @@ class LiveKillSwitch:
     def get_history(self) -> list:
         """History of all kill switch activations/deactivations."""
         return list(self._history)
+
+    # ------------------------------------------------------------------
+    # E2 plan 9.0 (2026-04-19) — per-strategy scoped disable
+    # ------------------------------------------------------------------
+    # Audit CRO: "Kill switch per-portfolio ferme TOUT. CAM peut stopper sans
+    # tuer GOR." Isolation per-strategy evite l'asymetrie destructrice du
+    # portfolio kill (feedback memory killswitch_naive_bad).
+    #
+    # disable_strategy: mark ONE strategy disabled, DOES NOT close portfolio.
+    # Ne touche pas aux positions ouvertes; bloque uniquement les nouveaux
+    # ordres via is_strategy_disabled() check dans pre_order_guard.
+    # ------------------------------------------------------------------
+
+    def disable_strategy(
+        self,
+        strategy_id: str,
+        reason: str,
+        trigger_type: str = "STRATEGY_SCOPED",
+    ) -> dict:
+        """Disable ONE strategy without activating global kill switch.
+
+        Used when per-strategy loss threshold is hit but portfolio is fine
+        (or strategy has repeat failures). The strategy is added to
+        `_disabled_strategies` and can be re-enabled via enable_strategy().
+
+        Existing positions for the strategy are NOT auto-closed (operator
+        decision). New orders for this strategy will be blocked by
+        pre_order_guard via is_strategy_disabled() check.
+
+        Returns status dict with {strategy_id, reason, disabled_at, ...}.
+        """
+        if not strategy_id:
+            return {"error": "empty strategy_id"}
+
+        already = strategy_id in self._disabled_strategies
+        self._disabled_strategies.add(strategy_id)
+        now_iso = datetime.now(UTC).isoformat()
+
+        event = {
+            "action": "DISABLE_STRATEGY",
+            "strategy_id": strategy_id,
+            "reason": reason,
+            "trigger_type": trigger_type,
+            "timestamp": now_iso,
+        }
+        self._history.append(event)
+        self._save_state()
+
+        logger.warning(
+            f"STRATEGY KILL SWITCH: '{strategy_id}' disabled "
+            f"(trigger={trigger_type}, reason={reason})"
+        )
+
+        if self.alert_callback and not already:
+            try:
+                self.alert_callback(
+                    f"STRATEGY DISABLED: {strategy_id}\n"
+                    f"Trigger: {trigger_type}\n"
+                    f"Reason: {reason}\n"
+                    f"Portfolio NOT affected. Other strategies continue.\n"
+                    f"Re-enable via LiveKillSwitch.enable_strategy()",
+                    "critical",
+                )
+            except Exception as exc:
+                logger.warning(f"alert_callback error: {exc}")
+
+        return {
+            "strategy_id": strategy_id,
+            "reason": reason,
+            "trigger_type": trigger_type,
+            "disabled_at": now_iso,
+            "was_already_disabled": already,
+            "currently_disabled": sorted(self._disabled_strategies),
+        }
+
+    def enable_strategy(self, strategy_id: str, signer: str = "operator") -> dict:
+        """Re-enable a previously disabled strategy. Requires manual signer."""
+        if strategy_id not in self._disabled_strategies:
+            return {
+                "strategy_id": strategy_id,
+                "was_disabled": False,
+                "message": "not in disabled set, no-op",
+            }
+        self._disabled_strategies.discard(strategy_id)
+        now_iso = datetime.now(UTC).isoformat()
+        self._history.append({
+            "action": "ENABLE_STRATEGY",
+            "strategy_id": strategy_id,
+            "signer": signer,
+            "timestamp": now_iso,
+        })
+        self._save_state()
+        logger.warning(f"STRATEGY RE-ENABLED: '{strategy_id}' (signer={signer})")
+        return {
+            "strategy_id": strategy_id,
+            "was_disabled": True,
+            "signer": signer,
+            "enabled_at": now_iso,
+        }
+
+    def is_strategy_disabled(self, strategy_id: str) -> bool:
+        """Public check: True if strategy is in the disabled set.
+
+        pre_order_guard consults this before allowing new orders.
+        """
+        return strategy_id in self._disabled_strategies
+
+    def get_disabled_strategies(self) -> list:
+        """Return sorted list of currently-disabled strategy IDs."""
+        return sorted(self._disabled_strategies)
 
     # ------------------------------------------------------------------
     # Internal: broker operations

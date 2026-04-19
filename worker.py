@@ -86,6 +86,21 @@ from core.worker.event_logger import get_event_logger  # noqa: E402
 from core.worker.worker_state import WorkerState  # noqa: E402
 from core.monitoring.metrics_pipeline import get_metrics  # noqa: E402
 from core.execution.order_tracker import OrderTracker  # noqa: E402
+
+# C2 plan 9.0 (2026-04-19): module-level tracker accessor pour run_crypto_cycle.
+# Assigne dans main() apres init. Shadow mode -> hot path wiring.
+_ORDER_TRACKER: OrderTracker | None = None
+
+
+def set_order_tracker(tracker: OrderTracker) -> None:
+    """Assign module-level OrderTracker (called from main() at boot)."""
+    global _ORDER_TRACKER
+    _ORDER_TRACKER = tracker
+
+
+def get_order_tracker() -> OrderTracker | None:
+    """Module-level accessor for run_crypto_cycle OSM wiring."""
+    return _ORDER_TRACKER
 from core.broker.broker_health import BrokerHealthRegistry  # noqa: E402
 
 
@@ -1875,14 +1890,48 @@ def run_live_risk_cycle():
         )
 
         if ks_result["triggered"]:
+            _trigger_type = ks_result["trigger_type"]
+            _details = ks_result.get("details", {})
             logger.critical(f"KILL SWITCH TRIGGERED: {ks_result['reason']}")
             _log_event("kill_switch", "live_risk_cycle", {
                 "reason": ks_result["reason"],
-                "trigger_type": ks_result["trigger_type"],
+                "trigger_type": _trigger_type,
             })
+
+            # E2 plan 9.0 (2026-04-19): STRATEGY_LOSS isole une seule strat,
+            # ne pas fermer tout le portfolio (asymetrie destructrice).
+            # Portfolio-level triggers (DAILY_LOSS, TRAILING_5D, MONTHLY) =
+            # activation full comme avant.
+            if _trigger_type == "STRATEGY_LOSS":
+                _strat_offender = _details.get("strategy")
+                if _strat_offender:
+                    logger.warning(
+                        f"STRATEGY_LOSS scoped disable: {_strat_offender} "
+                        f"(portfolio NOT closed, other strategies continue)"
+                    )
+                    kill_switch.disable_strategy(
+                        strategy_id=_strat_offender,
+                        reason=ks_result["reason"],
+                        trigger_type=_trigger_type,
+                    )
+                    # F2: JSONL incident auto-log
+                    try:
+                        from core.monitoring.incident_report import log_incident_auto
+                        log_incident_auto(
+                            category="kill_switch_strategy_scoped",
+                            severity="critical",
+                            source="live_risk_cycle",
+                            message=f"Strategy '{_strat_offender}' disabled: {ks_result['reason']}",
+                            context=_details,
+                        )
+                    except Exception:
+                        pass
+                    # Early return: skip global activate below
+                    return
+            # Portfolio-level triggers fall through to global activate
             kill_switch.activate(
                 reason=ks_result["reason"],
-                trigger_type=ks_result["trigger_type"],
+                trigger_type=_trigger_type,
             )
             # Arm crypto kill switch too (prevent re-entry on next crypto cycle)
             try:
@@ -3210,6 +3259,27 @@ def run_crypto_cycle():
                     else:
                         _sell_qty = float(f"{raw_qty:.3f}")  # 3 decimals for alts
 
+                # C2 plan 9.0 (2026-04-19): wire OrderStateMachine autour du hot
+                # path crypto. Transitions: DRAFT -> VALIDATED -> SUBMITTED ->
+                # FILLED (ou ERROR sur exception). Persistance atomique par
+                # OrderTracker permet crash recovery.
+                _osm_order = None
+                _tracker = get_order_tracker()
+                if _tracker is not None:
+                    try:
+                        _osm_order = _tracker.create_order(
+                            symbol=exec_symbol,
+                            side=side,
+                            quantity=_sell_qty if _sell_qty else notional,
+                            broker="binance",
+                            strategy=strat_id,
+                        )
+                        # Risk check a deja passe (code au-dessus) -> validate
+                        _tracker.validate(_osm_order.order_id, risk_approved=True)
+                    except Exception as _ote:
+                        logger.warning(f"[{strat_id}] OSM create/validate failed: {_ote}")
+                        _osm_order = None
+
                 try:
                     result = broker.create_position(
                         symbol=exec_symbol,
@@ -3225,6 +3295,22 @@ def run_crypto_cycle():
                         f"${notional:.0f} {signal.get('symbol', primary_symbol)} "
                         f"— {result.get('status', '???')}"
                     )
+                    # C2 plan 9.0: submit + fill OSM transitions post-broker call
+                    if _osm_order is not None and _tracker is not None:
+                        try:
+                            _broker_oid = str(result.get("order_id", "") or "")
+                            _tracker.submit(_osm_order.order_id, _broker_oid)
+                            _filled = float(result.get("filled_qty", 0) or 0)
+                            _sl_id = result.get("sl_order_id")
+                            if _filled > 0:
+                                # Full fill: invariant requires has_sl OR sl_order_id
+                                _tracker.fill(
+                                    _osm_order.order_id,
+                                    has_sl=bool(_sl_id) or stop_loss is not None,
+                                    sl_order_id=str(_sl_id) if _sl_id else None,
+                                )
+                        except Exception as _ote:
+                            logger.warning(f"[{strat_id}] OSM submit/fill failed: {_ote}")
                     n_orders += 1
                     _strat_record_success(strat_id)  # #2: reset failure counter
                     # #4: funnel tracker
@@ -3333,6 +3419,12 @@ def run_crypto_cycle():
                         f"  [{strat_id}] Erreur execution: {e}",
                         exc_info=True,
                     )
+                    # C2 plan 9.0: mark OSM ERROR on broker exception
+                    if _osm_order is not None and _tracker is not None:
+                        try:
+                            _tracker.error(_osm_order.order_id)
+                        except Exception:
+                            pass
                     n_errors += 1
                     _log_event("error", strat_id, {
                         "type": type(e).__name__, "message": str(e)[:200],
@@ -4427,11 +4519,15 @@ def main():
     # 2026-04-19 (Phase 3 XXL): persist OrderTracker state for crash recovery.
     # Before this, in-flight orders were lost on worker restart -> orphan orders
     # on broker with no internal record.
+    # 2026-04-19 PM (C2 plan 9.0): tracker exposed module-level via
+    # set_order_tracker() so run_crypto_cycle() can wire OSM transitions
+    # around broker.create_position(). Shadow mode -> real hot path.
     _order_tracker_path = ROOT / "data" / "state" / "order_tracker.json"
     _order_tracker = OrderTracker(
         alert_callback=lambda msg: _send_alert(msg, level="critical"),
         state_path=_order_tracker_path,
     )
+    set_order_tracker(_order_tracker)
     _ot_recovery = _order_tracker.recovery_summary()
     if _ot_recovery["total_recovered"] > 0:
         logger.info(

@@ -190,6 +190,28 @@ def pre_order_guard(
     except Exception as e:
         logger.warning(f"kill_switches_scoped check error: {e}")
 
+    # 6b. E2 plan 9.0 (2026-04-19): per-strategy scoped disable check.
+    # Strategy-level kill switch: si STRATEGY_LOSS a fire, seule cette strat
+    # est bloquee (portfolio continue). Check non-bloquant si module absent.
+    if not paper_mode:
+        try:
+            from core.kill_switch_live import LiveKillSwitch
+            _ks = LiveKillSwitch()
+            if _ks.is_strategy_disabled(strategy_id):
+                disabled = _ks.get_disabled_strategies()
+                raise GuardError(
+                    f"strategy '{strategy_id}' scoped-disabled "
+                    f"(E2 per-strategy isolation). Disabled: {disabled}. "
+                    f"Operator must enable_strategy() to reactivate.",
+                    book=book, strategy_id=strategy_id,
+                )
+        except GuardError:
+            raise
+        except Exception as e:
+            # Non-blocking: if LiveKillSwitch init fails, fall through.
+            # Global kill_switches_scoped check (above) is primary safety net.
+            logger.debug(f"LiveKillSwitch per-strategy check error: {e}")
+
     # 7. Book health check (B1 audit 2026-04-17, raffine P1.1 audit 2026-04-18).
     # BLOCKED = refuse always. UNKNOWN = refuse in live.
     # DEGRADED = decision par cause (matrice ci-dessous), pas blanket-allow:
