@@ -50,23 +50,26 @@ def reconcile_binance_crypto() -> dict:
         result["error"] = f"binance broker query failed: {e}"
         return result
 
-    # Local state files
-    local_paths = [
-        ROOT / "data" / "state" / "binance_crypto" / "positions.json",  # new convention
-        ROOT / "data" / "crypto_dd_state.json",                          # legacy
-    ]
-    local = {}
-    for p in local_paths:
-        if p.exists():
-            try:
-                local.update(json.loads(p.read_text(encoding="utf-8")))
-            except Exception:
-                pass
-    result["local_positions"] = list(local.keys())
+    # Local positions source: canonical positions.json only.
+    # IMPORTANT: crypto_dd_state.json was historically listed here but it is NOT
+    # a positions file — it contains DDBaselines metadata (peak_equity, session_id,
+    # daily_anchor, etc.). Reading its keys as "positions" generated false CRITICAL
+    # reconciliation alerts (2026-04-19 incident).
+    positions_path = ROOT / "data" / "state" / "binance_crypto" / "positions.json"
+    local_positions_dict: dict = {}
+    if positions_path.exists():
+        try:
+            data = json.loads(positions_path.read_text(encoding="utf-8"))
+            # Accept 2 formats: {"positions": {...}} or {SYMBOL: {...}} directly
+            local_positions_dict = data.get("positions", data) if isinstance(data, dict) else {}
+        except (json.JSONDecodeError, OSError) as e:
+            result["divergences"].append({"type": "state_file_corrupted", "err": str(e)})
+            return result
+    result["local_positions"] = sorted(local_positions_dict.keys())
 
     # Detect divergences (informational, broker is source of truth)
     broker_syms = {p["symbol"] for p in result["broker_positions"]}
-    local_syms = set(local.keys()) if isinstance(local, dict) else set()
+    local_syms = set(local_positions_dict.keys())
     only_broker = broker_syms - local_syms
     only_local = local_syms - broker_syms
     if only_broker:
@@ -163,23 +166,40 @@ def reconcile_alpaca_us() -> dict:
         result["error"] = f"alpaca broker query failed: {e}"
         return result
 
-    # Local state files (alpaca paper portfolio)
-    local_paths = [
-        ROOT / "data" / "state" / "alpaca_us" / "positions.json",
-        ROOT / "data" / "state" / "paper_portfolio_state.json",  # legacy
-    ]
+    # Local positions source.
+    # IMPORTANT: paper_portfolio_state.json uses strategy_id as key (e.g. "vrp_rotation"),
+    # not broker ticker. Extract the nested `symbols[]` list for proper ticker-level
+    # comparison (2026-04-19 incident: false CRITICAL on "vrp_rotation" only_in_local).
     local_syms: set[str] = set()
-    for p in local_paths:
-        if p.exists():
-            try:
-                data = json.loads(p.read_text(encoding="utf-8"))
-                if isinstance(data, dict) and "positions" in data:
-                    local_syms.update(data["positions"].keys())
-                elif isinstance(data, list):
-                    local_syms.update(item.get("symbol") for item in data if "symbol" in item)
-                break
-            except Exception as e:
-                logger.debug(f"reconcile_alpaca_us: local state read error {p}: {e}")
+    alpaca_positions = ROOT / "data" / "state" / "alpaca_us" / "positions.json"
+    paper_portfolio = ROOT / "data" / "state" / "paper_portfolio_state.json"
+
+    if alpaca_positions.exists():
+        try:
+            data = json.loads(alpaca_positions.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                pos = data.get("positions", data)
+                if isinstance(pos, dict):
+                    local_syms.update(pos.keys())
+            elif isinstance(data, list):
+                local_syms.update(item.get("symbol") for item in data if "symbol" in item)
+        except Exception as e:
+            logger.debug(f"reconcile_alpaca_us: positions.json read error: {e}")
+    elif paper_portfolio.exists():
+        # Legacy fallback: paper_portfolio_state.json is strategy-level state. Extract
+        # actual tickers from each strategy's `symbols` list. Skip strategies without
+        # symbols (typically strat_id mapping only, not open position).
+        try:
+            data = json.loads(paper_portfolio.read_text(encoding="utf-8"))
+            positions_by_strat = data.get("positions", {}) if isinstance(data, dict) else {}
+            for strat_id, meta in positions_by_strat.items():
+                if isinstance(meta, dict):
+                    for sym in meta.get("symbols", []):
+                        if sym:
+                            local_syms.add(sym)
+        except Exception as e:
+            logger.debug(f"reconcile_alpaca_us: paper_portfolio read error: {e}")
+
     result["local_positions"] = sorted(local_syms)
 
     broker_syms = {p["symbol"] for p in result["broker_positions"]}
