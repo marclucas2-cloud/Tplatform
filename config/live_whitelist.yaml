@@ -1,624 +1,362 @@
-# =============================================================================
-# LIVE WHITELIST CANONIQUE — source unique de verite
-# =============================================================================
-# Ce fichier est la source de verite unique pour les strategies autorisees
-# a executer des ordres LIVE (vrai argent). Toute strategie qui n'est PAS
-# dans cette whitelist est:
-#   - soit en paper (pour apprentissage + data collection)
-#   - soit desactivee
-#
-# Contrat:
-#   - Le worker lit ce fichier au boot via load_live_whitelist()
-#   - Avant tout ordre live, le worker verifie que strategy_id est whitelist
-#   - Un signal hors whitelist est logged + bloque sans etre execute
-#   - Les promotions live passent par edit de ce fichier + commit + redeploy
-#
-# Schema par entree:
-#   strategy_id: identifiant canonique (doit matcher runtime_entrypoint)
-#   book: ibkr_futures | ibkr_fx | ibkr_eu | binance_crypto | alpaca_us
-#   status: live_core | live_probation | paper_only | disabled
-#   runtime_entrypoint: ou le code tourne (worker.py:function ou module)
-#   wf_source: fichier ou artefact avec le dernier walk-forward
-#   sizing_policy: risk_budget | kelly_quarter | fixed
-#   max_risk_usd: cap max worst-case par position ($)
-#   kill_criteria: conditions de retrait automatique
-#   notes: contexte libre
-#
-# Derniere MAJ: 2026-04-15 (P1.1 live hardening, 3 books gouvernables)
-# =============================================================================
-
 metadata:
-  version: 4
-  updated_at: "2026-04-16"
-  updated_by: "phase_3_1_audit_demotes"
-  review_cadence: "hebdomadaire"
-  notes: |
-    v2 2026-04-16: +3 candidates ibkr_futures paper_only (INT-C).
+  version: 5
+  updated_at: '2026-04-19'
+  updated_by: phase_a_residuel_archive_bucket_a
+  review_cadence: hebdomadaire
+  notes: 'v2 2026-04-16: +3 candidates ibkr_futures paper_only (INT-C).
+
     v3 2026-04-16: gold_trend_mgc -> paper_only (V1 recalibration SL/TP).
+
     v4 2026-04-16: Phase 3.1 audit demotes (3 strats binance_crypto
+
     live_probation -> paper_only): trend_short_btc, mr_scalp_btc,
+
     liquidation_spike. Cf docs/audit/strategy_by_strategy_audit.md.
+
     Portfolio live passe de 12 -> 9 strats (live + probation), plus defendable.
 
-# -----------------------------------------------------------------------------
-# IBKR FUTURES — 3 strats alpha pur validees 10Y + WF + MC
-# -----------------------------------------------------------------------------
-# Portefeuille V2 (first-refusal): CAGR 12.2%, Sharpe 0.87, DD -28.6%
-# Monte Carlo: P(ruine)=0%, P(DD>-40%)=8.5%, longest DD median 530j
-# Risk Budget Framework 5% equity deploye depuis le 15 avril 2026.
-# -----------------------------------------------------------------------------
-
+    v5 2026-04-19: Bucket A residuel post-XXL — 11 binance demotees (P0.2 18 avril REJECTED ou NEEDS_RE_WF jamais traite)
+    ARCHIVEES vers strategies/_archive/crypto/. Whitelist passe de 30 -> 19 strats.'
 ibkr_futures:
+- strategy_id: cross_asset_momentum
+  book: ibkr_futures
+  status: live_core
+  runtime_entrypoint: worker.py:_run_futures_cycle (bloc STRATS LIVE CAPABLE)
+  runtime_module: strategies_v2.futures.cross_asset_momentum.CrossAssetMomentum
+  wf_source: scripts/wf_ib_portfolio.py (5 windows, 4/5 OOS profitable)
+  sizing_policy: risk_budget_5pct
+  max_risk_usd: 500
+  priority: first_refusal
+  universe:
+  - MES
+  - MNQ
+  - M2K
+  - MGC
+  - MCL
+  holding_period_days: 20
+  rebalance_cadence_days: 20
+  min_momentum_pct: 0.02
+  kill_criteria:
+  - 5 consecutive losses
+  - rolling 90d Sharpe < -0.5
+  - DD depuis peak > 35%
+  notes: 'Rotate meilleur de MES/MNQ/M2K/MGC/MCL sur 20d momentum.
 
-  - strategy_id: cross_asset_momentum
-    book: ibkr_futures
-    status: live_core
-    runtime_entrypoint: "worker.py:_run_futures_cycle (bloc STRATS LIVE CAPABLE)"
-    runtime_module: "strategies_v2.futures.cross_asset_momentum.CrossAssetMomentum"
-    wf_source: "scripts/wf_ib_portfolio.py (5 windows, 4/5 OOS profitable)"
-    sizing_policy: "risk_budget_5pct"
-    max_risk_usd: 500  # on $10K equity = 5% cap
-    priority: "first_refusal"  # CAM a priorite sur ses symboles preferes
-    universe: [MES, MNQ, M2K, MGC, MCL]
-    holding_period_days: 20
-    rebalance_cadence_days: 20
-    min_momentum_pct: 0.02
-    kill_criteria:
-      - "5 consecutive losses"
-      - "rolling 90d Sharpe < -0.5"
-      - "DD depuis peak > 35%"
-    notes: |
-      Rotate meilleur de MES/MNQ/M2K/MGC/MCL sur 20d momentum.
-      Backtest 10Y Sharpe 0.85, corr MES 0.003. First-refusal sur
-      ses symboles preferes via cam_top_pick() (bloque gold_trend
-      et gold_oil si CAM voudrait le meme symbole).
+    Backtest 10Y Sharpe 0.85, corr MES 0.003. First-refusal sur
 
-  - strategy_id: gold_trend_mgc
-    book: ibkr_futures
-    status: paper_only   # 2026-04-16 TRANSITION live_core -> paper_only pour V1 recalibration
-    runtime_entrypoint: "worker.py:_run_futures_cycle (bloc STRATS LIVE CAPABLE)"
-    runtime_module: "strategies_v2.futures.gold_trend_mgc.GoldTrendMGC"
-    wf_source: "scripts/research/backtest_gold_trend_sl_variants.py + WF/MC pending (INT-A T1-A pattern)"
-    sizing_policy: "risk_budget_5pct"
-    max_risk_usd: 500
-    priority: "secondary_to_cross_asset"
-    universe: [MGC]
-    ema_period: 20
-    sl_pct: 0.004     # V1 Option B (2026-04-16): aligne deleveraging level_3 -1.8% NAV
-    tp_pct: 0.008     # V1 Option B: R/R 2:1 maintenu
-    max_hold_days: 10
-    kill_criteria:
-      - "5 consecutive losses"
-      - "rolling 90d Sharpe < -0.5"
-    notes: |
-      Long MGC si close > EMA20. Capture les rallies gold co-occurents
-      avec oil rally (spread faible -> gold_oil silencieux, gold_trend
-      seul actif). Essentiel pour 2020 COVID, 2024.
+    ses symboles preferes via cam_top_pick() (bloque gold_trend
 
-      RECALIBRATION 2026-04-16 (V1 Option B):
-      - Anciens defaults SL 1.5% TP 3% -> backtest +$26K Sharpe 0.73 mais
-        en prod sabote par deleveraging level_3 -1.8% NAV (= MGC -0.4%) ->
-        backtest emule +$11.7K MaxDD -32.7%.
-      - Nouveaux defaults SL 0.4% TP 0.8% -> backtest +$23.8K Sharpe 1.58
-        MaxDD -7.1% WR 47.6% sur 5Y MGC daily.
-      - Status downgrade live_core -> paper_only en attente WF + MC.
-      - Trade live ouvert 2026-04-16 17:54 UTC (parent SL 1.5% TP 3%) reste
-        actif sous old params pour ne pas casser le setup en cours; nouveaux
-        signaux V1 a partir du prochain cycle.
-      - Cf docs/research/gold_trend_sl_recalibration.md.
+    et gold_oil si CAM voudrait le meme symbole).
 
-  - strategy_id: gold_oil_rotation
-    book: ibkr_futures
-    status: live_core
-    runtime_entrypoint: "worker.py:_run_futures_cycle (bloc STRATS LIVE CAPABLE)"
-    runtime_module: "strategies_v2.futures.gold_oil_rotation.GoldOilRotation"
-    wf_source: "scripts/wf_gold_oil_rotation.py (5/5 OOS profitable)"
-    sizing_policy: "risk_budget_5pct"
-    max_risk_usd: 500
-    priority: "secondary_to_cross_asset"
-    universe: [MGC, MCL]
-    lookback_days: 20
-    min_edge_pct: 0.02
-    sl_pct: 0.02
-    tp_pct: 0.04
-    max_hold_days: 10
-    cooldown_days: 10
-    kill_criteria:
-      - "5 consecutive losses"
-      - "rolling 90d Sharpe < -0.5"
-    notes: |
-      Rotate long MGC vs MCL selon 20d momentum spread. Positive chaque
-      annee 2021-2026 (backtest 5Y). Sharpe 6.44 solo, 0.87 en portefeuille
-      (dilute par interactions avec gold_trend).
+    '
+- strategy_id: gold_trend_mgc
+  book: ibkr_futures
+  status: paper_only
+  runtime_entrypoint: worker.py:_run_futures_cycle (bloc STRATS LIVE CAPABLE)
+  runtime_module: strategies_v2.futures.gold_trend_mgc.GoldTrendMGC
+  wf_source: scripts/research/backtest_gold_trend_sl_variants.py + WF/MC pending (INT-A T1-A pattern)
+  sizing_policy: risk_budget_5pct
+  max_risk_usd: 500
+  priority: secondary_to_cross_asset
+  universe:
+  - MGC
+  ema_period: 20
+  sl_pct: 0.004
+  tp_pct: 0.008
+  max_hold_days: 10
+  kill_criteria:
+  - 5 consecutive losses
+  - rolling 90d Sharpe < -0.5
+  notes: "Long MGC si close > EMA20. Capture les rallies gold co-occurents\navec oil rally (spread faible -> gold_oil silencieux,\
+    \ gold_trend\nseul actif). Essentiel pour 2020 COVID, 2024.\n\nRECALIBRATION 2026-04-16 (V1 Option B):\n- Anciens defaults\
+    \ SL 1.5% TP 3% -> backtest +$26K Sharpe 0.73 mais\n  en prod sabote par deleveraging level_3 -1.8% NAV (= MGC -0.4%)\
+    \ ->\n  backtest emule +$11.7K MaxDD -32.7%.\n- Nouveaux defaults SL 0.4% TP 0.8% -> backtest +$23.8K Sharpe 1.58\n  MaxDD\
+    \ -7.1% WR 47.6% sur 5Y MGC daily.\n- Status downgrade live_core -> paper_only en attente WF + MC.\n- Trade live ouvert\
+    \ 2026-04-16 17:54 UTC (parent SL 1.5% TP 3%) reste\n  actif sous old params pour ne pas casser le setup en cours; nouveaux\n\
+    \  signaux V1 a partir du prochain cycle.\n- Cf docs/research/gold_trend_sl_recalibration.md.\n"
+- strategy_id: gold_oil_rotation
+  book: ibkr_futures
+  status: live_core
+  runtime_entrypoint: worker.py:_run_futures_cycle (bloc STRATS LIVE CAPABLE)
+  runtime_module: strategies_v2.futures.gold_oil_rotation.GoldOilRotation
+  wf_source: scripts/wf_gold_oil_rotation.py (5/5 OOS profitable)
+  sizing_policy: risk_budget_5pct
+  max_risk_usd: 500
+  priority: secondary_to_cross_asset
+  universe:
+  - MGC
+  - MCL
+  lookback_days: 20
+  min_edge_pct: 0.02
+  sl_pct: 0.02
+  tp_pct: 0.04
+  max_hold_days: 10
+  cooldown_days: 10
+  kill_criteria:
+  - 5 consecutive losses
+  - rolling 90d Sharpe < -0.5
+  notes: 'Rotate long MGC vs MCL selon 20d momentum spread. Positive chaque
 
-  # ---------------------------------------------------------------------------
-  # Paper probation candidates (INT-C 2026-04-16 promotion committee)
-  # Source: sessions T1-A / INT-A / INT-B
-  # WF 5-windows, MC 1000 sims bootstrap, stress tests 2018/2020/2022/2024/2025
-  # Kill criteria standard: DD_abs>10%, DD_90d>8%, divergence>2std, corr>0.70
-  # Transition paper -> live_probation apres 30 jours de paper sans divergence.
-  # ---------------------------------------------------------------------------
+    annee 2021-2026 (backtest 5Y). Sharpe 6.44 solo, 0.87 en portefeuille
 
-  - strategy_id: mes_monday_long_oc
-    book: ibkr_futures
-    status: paper_only
-    runtime_entrypoint: "scripts/research/backtest_futures_calendar.py:variant_dow_long dow=0"
-    runtime_module: "scripts.research.backtest_futures_calendar"  # P0.3 fix: path correct
-    wf_source: "docs/research/wf_reports/INT-A_tier1_validation.md"
-    sizing_policy: fixed_1_contract
-    max_risk_usd: 300
-    kill_criteria:
-      drawdown_absolute: -10%
-      drawdown_rolling_90d: -8%
-      sharpe_rolling_60d: -0.5
-      divergence_vs_backtest: "2x_std"
-      correlation_drift: ">0.70"
-    notes: |
-      T1-A PROMOTE_LIVE in-sample (score +1.21, dSharpe +0.22). WF 3/5 OOS PASS,
-      MC P(DD>30%) 9.8%. Session INT-A VALIDATED. Start date paper: 2026-04-16.
-      Goto live_probation apres 30 jours sans divergence > 2 sigma.
+    (dilute par interactions avec gold_trend).
 
-  - strategy_id: mes_wednesday_long_oc
-    book: ibkr_futures
-    status: paper_only
-    runtime_entrypoint: "scripts/research/backtest_futures_calendar.py:variant_dow_long dow=2"
-    runtime_module: "scripts.research.backtest_futures_calendar"  # P0.3 fix: path correct
-    wf_source: "docs/research/wf_reports/INT-A_tier1_validation.md"
-    sizing_policy: fixed_1_contract
-    max_risk_usd: 300
-    kill_criteria:
-      drawdown_absolute: -10%
-      drawdown_rolling_90d: -8%
-      sharpe_rolling_60d: -0.5
-      divergence_vs_backtest: "2x_std"
-      correlation_drift: ">0.70"
-    notes: |
-      T1-A PROMOTE_LIVE in-sample (score +0.60, dSharpe +0.08). WF 4/5 OOS PASS,
-      MC P(DD>30%) 28.3% (tres limite, a surveiller). Start paper: 2026-04-16.
+    '
+- strategy_id: mes_monday_long_oc
+  book: ibkr_futures
+  status: paper_only
+  runtime_entrypoint: scripts/research/backtest_futures_calendar.py:variant_dow_long dow=0
+  runtime_module: scripts.research.backtest_futures_calendar
+  wf_source: docs/research/wf_reports/INT-A_tier1_validation.md
+  sizing_policy: fixed_1_contract
+  max_risk_usd: 300
+  kill_criteria:
+    drawdown_absolute: -10%
+    drawdown_rolling_90d: -8%
+    sharpe_rolling_60d: -0.5
+    divergence_vs_backtest: 2x_std
+    correlation_drift: '>0.70'
+  notes: 'T1-A PROMOTE_LIVE in-sample (score +1.21, dSharpe +0.22). WF 3/5 OOS PASS,
 
-  - strategy_id: mes_pre_holiday_long
-    book: ibkr_futures
-    status: paper_only
-    runtime_entrypoint: "scripts/research/backtest_futures_calendar.py:variant_pre_holiday"
-    runtime_module: "scripts.research.backtest_futures_calendar"  # P0.3 fix: path correct
-    wf_source: "docs/research/wf_reports/INT-A_tier1_validation.md"
-    sizing_policy: fixed_1_contract
-    max_risk_usd: 300
-    kill_criteria:
-      drawdown_absolute: -10%
-      drawdown_rolling_90d: -8%
-      sharpe_rolling_60d: -0.5
-      divergence_vs_backtest: "2x_std"
-      correlation_drift: ">0.70"
-    notes: |
-      T1-A PROMOTE_LIVE in-sample (score +0.32, dSharpe +0.07, WR 61.3%).
-      WF 5/5 OOS PASS, MC P(DD>30%) 0%. Best risk/reward de la cohorte T1-A.
-      Trigger: veille de jour ferie NYSE. Start paper: 2026-04-16.
+    MC P(DD>30%) 9.8%. Session INT-A VALIDATED. Start date paper: 2026-04-16.
 
-  # ---------------------------------------------------------------------------
-  # T3-A1 INT-B 2026-04-18 discovery batch paper promotion
-  # ---------------------------------------------------------------------------
+    Goto live_probation apres 30 jours sans divergence > 2 sigma.
 
-  - strategy_id: mcl_overnight_mon_trend10
-    book: ibkr_futures
-    status: paper_only
-    runtime_entrypoint: "worker.py:_run_futures_cycle (bloc if not live, section 3a-ter)"
-    runtime_module: "strategies_v2.futures.mcl_overnight_mon_trend.MCLOvernightMonTrend"
-    wf_source: "docs/research/wf_reports/T3A-01_mcl_overnight.md + INT-B_discovery_batch.md"
-    sizing_policy: fixed_1_contract
-    max_risk_usd: 300
-    kill_criteria:
-      drawdown_absolute: -10%
-      drawdown_rolling_90d: -8%
-      sharpe_rolling_60d: -0.5
-      divergence_vs_backtest: "1x_std"   # resserre vs 2x default
-      correlation_drift: ">0.70"
-    notes: |
-      T3-A1 VALIDATED (Sharpe +0.80, MaxDD -4.3%, WF 4/5 OOS PASS, MC P(DD>30%) 0%).
-      Backtest 2015-2026 (2833 bars MCL_LONG.parquet), cost $2.70 RT.
-      Backtest signal: lundi (dow=0) + close.pct_change(10) > 0 -> capture weekend gap.
+    '
+- strategy_id: mes_wednesday_long_oc
+  book: ibkr_futures
+  status: paper_only
+  runtime_entrypoint: scripts/research/backtest_futures_calendar.py:variant_dow_long dow=2
+  runtime_module: scripts.research.backtest_futures_calendar
+  wf_source: docs/research/wf_reports/INT-A_tier1_validation.md
+  sizing_policy: fixed_1_contract
+  max_risk_usd: 300
+  kill_criteria:
+    drawdown_absolute: -10%
+    drawdown_rolling_90d: -8%
+    sharpe_rolling_60d: -0.5
+    divergence_vs_backtest: 2x_std
+    correlation_drift: '>0.70'
+  notes: 'T1-A PROMOTE_LIVE in-sample (score +0.60, dSharpe +0.08). WF 4/5 OOS PASS,
 
-      CAVEATS RUNTIME (review N2 2026-04-18):
-        1. TRIGGER SHIFT: signal emis au VENDREDI (dow=4) au lieu de lundi,
-           pour que l'ordre BUY MCL parte vendredi soir et execute a l'open
-           dimanche soir futures = capture reelle du weekend gap du backtest.
-           Correlation trend_friday vs trend_monday ~0.99 sur fenetre 10j.
-        2. DATA SOURCE: worker charge MCL_1D.parquet (cron yfinance daily,
-           stale ~10j observe 2026-04-18), backtest utilise MCL_LONG.parquet
-           (cron specifique, fresh). La strat ajoute un freshness guard
-           (MAX_BAR_AGE_DAYS=5) qui skip silencieusement si data stale.
-           Fix data pipeline MCL requis avant promotion live.
-        3. SL/TP ADDED (backtest n'en avait pas): 1.2% / 1.8% conservateurs
-           vs vol daily MCL ~2-3%. En paper, observer % de trades stoppes
-           intraday = metric cle pour calibrer avant live.
+    MC P(DD>30%) 28.3% (tres limite, a surveiller). Start paper: 2026-04-16.
 
-      Kill criteria resserres (1 sigma vs 2) car trade un signal different du
-      backtest validated. Re-WF "friday_trigger" requis avant live_probation.
-      Start paper: 2026-04-18.
+    '
+- strategy_id: mes_pre_holiday_long
+  book: ibkr_futures
+  status: paper_only
+  runtime_entrypoint: scripts/research/backtest_futures_calendar.py:variant_pre_holiday
+  runtime_module: scripts.research.backtest_futures_calendar
+  wf_source: docs/research/wf_reports/INT-A_tier1_validation.md
+  sizing_policy: fixed_1_contract
+  max_risk_usd: 300
+  kill_criteria:
+    drawdown_absolute: -10%
+    drawdown_rolling_90d: -8%
+    sharpe_rolling_60d: -0.5
+    divergence_vs_backtest: 2x_std
+    correlation_drift: '>0.70'
+  notes: 'T1-A PROMOTE_LIVE in-sample (score +0.32, dSharpe +0.07, WR 61.3%).
 
-# -----------------------------------------------------------------------------
-# BINANCE CRYPTO — 11 strats live (core + probation)
-# -----------------------------------------------------------------------------
-# Capital actif: Binance spot + earn + margin isole.
-# Kill switch: DD -5% daily, -8% weekly, -12% monthly (voir core/kill_switch_live).
-# DD exclut earn BTC/ETH passif, seuls les trades comptent.
-# -----------------------------------------------------------------------------
+    WF 5/5 OOS PASS, MC P(DD>30%) 0%. Best risk/reward de la cohorte T1-A.
 
+    Trigger: veille de jour ferie NYSE. Start paper: 2026-04-16.
+
+    '
+- strategy_id: mcl_overnight_mon_trend10
+  book: ibkr_futures
+  status: paper_only
+  runtime_entrypoint: worker.py:_run_futures_cycle (bloc if not live, section 3a-ter)
+  runtime_module: strategies_v2.futures.mcl_overnight_mon_trend.MCLOvernightMonTrend
+  wf_source: docs/research/wf_reports/T3A-01_mcl_overnight.md + INT-B_discovery_batch.md
+  sizing_policy: fixed_1_contract
+  max_risk_usd: 300
+  kill_criteria:
+    drawdown_absolute: -10%
+    drawdown_rolling_90d: -8%
+    sharpe_rolling_60d: -0.5
+    divergence_vs_backtest: 1x_std
+    correlation_drift: '>0.70'
+  notes: "T3-A1 VALIDATED (Sharpe +0.80, MaxDD -4.3%, WF 4/5 OOS PASS, MC P(DD>30%) 0%).\nBacktest 2015-2026 (2833 bars MCL_LONG.parquet),\
+    \ cost $2.70 RT.\nBacktest signal: lundi (dow=0) + close.pct_change(10) > 0 -> capture weekend gap.\n\nCAVEATS RUNTIME\
+    \ (review N2 2026-04-18):\n  1. TRIGGER SHIFT: signal emis au VENDREDI (dow=4) au lieu de lundi,\n     pour que l'ordre\
+    \ BUY MCL parte vendredi soir et execute a l'open\n     dimanche soir futures = capture reelle du weekend gap du backtest.\n\
+    \     Correlation trend_friday vs trend_monday ~0.99 sur fenetre 10j.\n  2. DATA SOURCE: worker charge MCL_1D.parquet\
+    \ (cron yfinance daily,\n     stale ~10j observe 2026-04-18), backtest utilise MCL_LONG.parquet\n     (cron specifique,\
+    \ fresh). La strat ajoute un freshness guard\n     (MAX_BAR_AGE_DAYS=5) qui skip silencieusement si data stale.\n    \
+    \ Fix data pipeline MCL requis avant promotion live.\n  3. SL/TP ADDED (backtest n'en avait pas): 1.2% / 1.8% conservateurs\n\
+    \     vs vol daily MCL ~2-3%. En paper, observer % de trades stoppes\n     intraday = metric cle pour calibrer avant live.\n\
+    \nKill criteria resserres (1 sigma vs 2) car trade un signal different du\nbacktest validated. Re-WF \"friday_trigger\"\
+    \ requis avant live_probation.\nStart paper: 2026-04-18.\n"
 binance_crypto:
-
-  - strategy_id: btc_eth_dual_momentum
-    book: binance_crypto
-    status: paper_only   # P0.2 audit 2026-04-18: re-WF event-driven REJECTED
-                         # (Sharpe -6.08, 102 trades, WR 18-44%, perdu 4/5 fenetres
-                         # OOS sur BTCUSDT 4h 2 ans). Demote live_core -> paper_only.
-                         # Le seul trade live observe (1 BUY BTCUSDT 17 avr) est anecdotique.
-    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-001)"
-    runtime_module: "strategies.crypto.btc_eth_dual_momentum"
-    wf_source: "data/crypto/wf_results.json (re-WF 2026-04-18: REJECTED Sharpe -6.08)"
-    sizing_policy: "n/a (paper_only)"
-    notes: |
-      Demote 2026-04-18: re-WF event-driven (scripts/wf_crypto_real_backtest.py)
-      verdict REJECTED. Source initiale (wf_crypto_all.py) etait buggy = B&H BTC
-      ajuste couts, pas de vrai backtest. Re-promotion live: necessite
-      revision strategie + re-WF Sharpe > 1.0 sur 5 fenetres.
-
-  - strategy_id: volatility_breakout
-    book: binance_crypto
-    status: paper_only   # P0.2 audit 2026-04-18: re-WF event-driven INSUFFICIENT_TRADES
-                         # (0 trades sur 5 fenetres OOS). La strategie est trop
-                         # restrictive (compression vol + breakout volume + ADX cross
-                         # cumules) pour declencher sur 2024-2026 BTC. Demote live_core.
-    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-004)"
-    runtime_module: "strategies.crypto.vol_breakout"  # P0.3 fix: file basename != canonical
-    wf_source: "data/crypto/wf_results.json (re-WF 2026-04-18: INSUFFICIENT_TRADES 0/5)"
-    sizing_policy: "n/a (paper_only)"
-    notes: |
-      Demote 2026-04-18: re-WF montre 0 signaux generes sur 7K bars BTC 4h
-      (2 ans). Strategie trop restrictive ou conditions de marche incompatibles.
-      Le code import etait casse (volatility_breakout vs vol_breakout) avant
-      P0.3 fix -> n'a probablement jamais trade live de toute facon.
-
-  - strategy_id: btc_dominance_rotation_v2
-    book: binance_crypto
-    status: disabled   # P0 FIX 2026-04-16 (audit ChatGPT): implementation cassee
-                       # dominance_series=constante 30 points + returns_data scalaires
-                       # vs series attendues -> regime toujours NEUTRAL, signal cassse.
-                       # Voir btc_dominance_v2.py:91. A reactiver apres fix logique.
-    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-005)"
-    runtime_module: "strategies.crypto.btc_dominance_v2"  # P0.3 fix: file basename
-    wf_source: "data/crypto/wf_results.json"
-    sizing_policy: "allocation_pct + kelly_quarter + broker_cap_80pct"
-
-  - strategy_id: borrow_rate_carry
-    book: binance_crypto
-    status: paper_only   # P0 FIX 2026-04-16 (audit ChatGPT): doc dit "NO directional
-                         # risk" mais scenario DIVERSIFIED alloue 40% BTC + 40% ETH
-                         # = beta crypto cache. Demote a paper_only jusqu'a clarification
-                         # these (rename ou supprimer exposition directionnelle).
-    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-006)"
-    runtime_module: "strategies.crypto.borrow_rate_carry"
-    wf_source: "data/crypto/wf_results.json"
-    sizing_policy: "earn_rebalance (pas de position trading directe)"
-    notes: |
-      Rebalance earn BTC/ETH/USDT selon yields. Audit ChatGPT 2026-04-16
-      revele beta crypto cache via 40/40/20 BTC/ETH/USDT split.
-      A clarifier: marketing as carry pure ou ajouter "with BTC/ETH beta" disclaimer.
-
-  - strategy_id: liquidation_momentum
-    book: binance_crypto
-    status: paper_only   # P0.2 audit 2026-04-18: NEEDS_RE_WF (kwargs simulator necessaire)
-    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-007)"
-    runtime_module: "strategies.crypto.liquidation_momentum"
-    wf_source: "data/crypto/wf_results.json (re-WF 2026-04-18: NEEDS_RE_WF)"
-    sizing_policy: "n/a (paper_only)"
-    notes: "Demote 2026-04-18: kwargs simulator necessaire pour re-WF, pas teste."
-
-  - strategy_id: weekend_gap_reversal
-    book: binance_crypto
-    status: paper_only   # P0.2 audit 2026-04-18: NEEDS_RE_WF (kwargs friday_close_price)
-    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-008)"
-    runtime_module: "strategies.crypto.weekend_gap"  # P0.3 fix: file basename
-    wf_source: "data/crypto/wf_results.json (re-WF 2026-04-18: NEEDS_RE_WF)"
-    sizing_policy: "n/a (paper_only)"
-    notes: "Demote 2026-04-18: kwargs simulator necessaire pour re-WF (friday_close_price, is_sunday_evening)."
-
-  - strategy_id: trend_short_btc
-    book: binance_crypto
-    status: paper_only   # Phase 3.1 audit 2026-04-16: preuves OOS fragmentees
-    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-009)"
-    runtime_module: "strategies.crypto.trend_short_v1"  # P0.3 fix: file basename
-    wf_source: "data/crypto/wf_results.json (validation insuffisante)"
-    sizing_policy: "n/a (paper_only)"
-    notes: "Demote 2026-04-16 audit Phase 3.1: short bias non valide WF correctement."
-
-  - strategy_id: mr_scalp_btc
-    book: binance_crypto
-    status: paper_only   # Phase 3.1 audit 2026-04-16: preuves OOS fragmentees
-    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-010)"
-    runtime_module: "strategies.crypto.mr_scalp_v1"  # P0.3 fix: file basename
-    wf_source: "data/crypto/wf_results.json (validation insuffisante)"
-    sizing_policy: "n/a (paper_only)"
-    notes: "Demote 2026-04-16 audit Phase 3.1: pas de WF reproductible solide."
-
-  - strategy_id: liquidation_spike
-    book: binance_crypto
-    status: paper_only   # Phase 3.1 audit 2026-04-16: doublon partiel STRAT-007
-    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-011)"
-    runtime_module: "strategies.crypto.liquidation_spike_v1"  # P0.3 fix: file basename
-    wf_source: "data/crypto/wf_results.json"
-    sizing_policy: "n/a (paper_only)"
-    notes: |
-      Demote 2026-04-16 audit Phase 3.1. Doublon partiel avec liquidation_momentum
-      (STRAT-007). A merger ou differencier clairement avant retour live.
-
-  - strategy_id: vol_expansion_bear
-    book: binance_crypto
-    status: paper_only   # P0.2 audit 2026-04-18: NEEDS_RE_WF
-    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-012)"
-    runtime_module: "strategies.crypto.vol_expansion_bear"
-    wf_source: "data/crypto/wf_results.json (re-WF 2026-04-18: NEEDS_RE_WF)"
-    sizing_policy: "n/a (paper_only)"
-    notes: "Demote 2026-04-18: kwargs simulator necessaire pour re-WF."
-
-  - strategy_id: range_bb_harvest
-    book: binance_crypto
-    status: paper_only   # P0.2 audit 2026-04-18: NEEDS_RE_WF
-    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-014)"
-    runtime_module: "strategies.crypto.range_bb_harvest"
-    wf_source: "data/crypto/wf_results.json (re-WF 2026-04-18: NEEDS_RE_WF)"
-    sizing_policy: "n/a (paper_only)"
-    notes: "Demote 2026-04-18: kwargs simulator necessaire pour re-WF."
-
-  - strategy_id: bb_mean_reversion_short
-    book: binance_crypto
-    status: paper_only   # P0.2 audit 2026-04-18: re-WF event-driven REJECTED
-                         # (Sharpe -12.45, 51 trades, perdu 4/5 fenetres OOS).
-    runtime_entrypoint: "worker.py:_run_crypto_cycle (STRAT-015)"
-    runtime_module: "strategies.crypto.bb_mr_short"  # P0.3 fix: file basename
-    wf_source: "data/crypto/wf_results.json (re-WF 2026-04-18: REJECTED Sharpe -12.45)"
-    sizing_policy: "n/a (paper_only)"
-    notes: |
-      Demote 2026-04-18: re-WF verdict REJECTED. WR 8-40% sur 5 fenetres OOS,
-      Sharpe -12.45. Source initiale wf_crypto_all.py etait buggy.
-
-  # ---------------------------------------------------------------------------
-  # T4-A2 INT-D 2026-04-18 discovery crypto bull/bear batch paper promotion
-  # ---------------------------------------------------------------------------
-
-  - strategy_id: alt_rel_strength_14_60_7
-    book: binance_crypto
-    status: paper_only
-    runtime_entrypoint: "worker.py:run_alt_rel_strength_paper_cycle (03h00 Paris daily)"
-    runtime_module: "core.runtime.alt_rel_strength_runner.AltRelStrengthRunner"
-    wf_source: "docs/research/wf_reports/T4A-02_crypto_relative_strength.md + INT-D_crypto_batch.md"
-    sizing_policy: "conservative_paper_500_per_leg"
-    max_risk_usd: 300  # SL -8% per position * $500 per leg = $40 per position worst-case single
-    kill_criteria:
-      drawdown_absolute: -10%
-      sharpe_rolling_60d: -0.5
-      divergence_vs_backtest: "1x_std"
-      stops_cascade_trigger: "2_of_6_positions"
-    notes: |
-      T4-A2 VALIDATED bull/bear robust (unique parmi le batch):
-        Sharpe +1.11, MaxDD -7.8%, WF 3/5 OOS PASS, MC P(DD>30%) 0.5%
-        Bull regime: +$3,591 (Sharpe +1.42)
-        Bear regime: +$515  (Sharpe +0.29)   <- positif dans les 2 regimes
-        Backtest: 2024-01-01 -> 2026-03-28 (818 days, 10 alts beta-adjusted)
-        Corr portfolio: -0.014 (forte decorrelation)
-
-      Univers: ETH, SOL, BNB, XRP, ADA, LINK, AVAX, DOT, NEAR, SUI (10 alts).
-      Signal: beta-adjusted alpha 14d vs BTC, beta fenetre 60d rolling.
-      Rotation: top 3 long (spot), bottom 3 short (margin isolated).
-      Rebalance: hebdomadaire dimanche 01h UTC (cycle quotidien 03h Paris).
-
-      Runtime = runner atomic core/runtime/alt_rel_strength_runner (pattern
-      spread_paper_runner MIB/ESTX50, pas signal_fn). Atomic 6-leg: close
-      rotation_out + open new longs + open new shorts en 1 tick.
-
-      Paper mode actuel:
-        - Size $500 per leg = $3K gross on ~$10K equity (30% conservative)
-        - State JSON: data/state/alt_rel_strength/state.json
-        - Journal JSONL: data/state/alt_rel_strength/paper_journal.jsonl
-        - Zero real order, PnL simule au close daily UTC
-
-      Pre-flip live_probation:
-        1. 30j observation paper sans divergence > 1 sigma vs backtest
-        2. Kill switch crypto clean 24h+ (reset manuel 2026-04-18 16h40 UTC)
-        3. Borrow rates cron refresh verified
-        4. Margin isolated account preflight OK (verifie via scripts/preflight_check.py)
-        5. User manual greenlight explicit
-
-      Gap infra residuel (a fixer avant live_probation):
-        - BTCUSDT_1d + alts parquets cron refresh (observed stale ~21j 2026-04-18)
-        - `market_caps` kwarg populate via CoinGecko (ou suppression si filter inutile)
-
-      Start paper: 2026-04-18.
-
-  # ---------------------------------------------------------------------------
-  # T3-A2 INT-B 2026-04-18 discovery batch paper promotion (cross-asset)
-  # ---------------------------------------------------------------------------
-
-  - strategy_id: btc_asia_mes_leadlag_q70_v80
-    book: binance_crypto
-    status: paper_only
-    runtime_entrypoint: "worker.py:run_btc_asia_mes_leadlag_paper_cycle (10h30 Paris)"
-    runtime_module: "strategies.crypto.btc_asia_mes_leadlag"
-    wf_source: "docs/research/wf_reports/T3A-02_mes_btc_asia_leadlag.md + INT-B_discovery_batch.md"
-    sizing_policy: "notional_fixed_10k_usd (paper, log-only)"
-    max_risk_usd: 800  # 8% MaxDD backtest * $10K notional = $770 worst-case
-    kill_criteria:
-      drawdown_absolute: -10%
-      drawdown_rolling_90d: -8%
-      sharpe_rolling_60d: -0.5
-      divergence_vs_backtest: "1x_std"   # resserre car rolling quantile vs fixed
-      correlation_drift: ">0.70"
-    notes: |
-      T3-A2 VALIDATED (Sharpe +1.07, MaxDD -7.7%, WF 4/5 OOS PASS, MC P(DD>30%) 0%).
-      Backtest 489 days 2024-04 -> 2026-03 (scripts/research/backtest_t3a_mes_btc_leadlag.py).
-      Signal: MES US 15-21 UTC return D-1 vs quantile 70 / vol quantile 80 -> trade BTC
-      Asia session 00-08 UTC day D. Cost 0.10% RT sur $10K notional.
-
-      RUNTIME (paper log-only retrospective):
-        - Cycle 10h30 Paris quotidien (weekday) via run_btc_asia_mes_leadlag_paper_cycle
-        - Lit MES_1H_YF2Y.parquet + BTCUSDT_1h.parquet (data_is_fresh guard 3j)
-        - Calcule signal pour session Asia qui vient de fermer (yesterday UTC)
-        - Simule entry at BTC open 00:00 UTC / exit at close 07:59 UTC
-        - Journal: data/state/btc_asia_mes_leadlag/paper_journal.jsonl
-        - ZERO real order, idempotent (1 entree par target_date)
-
-      CAVEATS pour promotion live:
-        1. Mode "both" = long+short. Binance France ne supporte pas facilement
-           le short crypto spot. Variante long_only q80_v80 (Sharpe +1.08) a
-           considerer pour le live.
-        2. Rolling quantile 365j (runtime) vs quantile full-history (backtest).
-           Divergence attendue petite mais a mesurer sur 30j paper.
-        3. BTCUSDT_1h.parquet observe stale ~20j 2026-04-18. Fix data pipeline
-           ops (cron 15min Binance client refresh) requis avant promotion.
-
-      Start paper: 2026-04-18.
-
-# -----------------------------------------------------------------------------
-# IBKR FX — DESACTIVE (IBKR_FX_ENABLED=false sur VPS)
-# -----------------------------------------------------------------------------
-# Decision PO: FX strictement hors scope IBKR (ESMA EU leverage limits).
-# Les strats FX restent dans le repo mais ne tournent PAS en live.
-# -----------------------------------------------------------------------------
-
+- strategy_id: btc_dominance_rotation_v2
+  book: binance_crypto
+  status: disabled
+  runtime_entrypoint: worker.py:_run_crypto_cycle (STRAT-005)
+  runtime_module: strategies.crypto.btc_dominance_v2
+  wf_source: data/crypto/wf_results.json
+  sizing_policy: allocation_pct + kelly_quarter + broker_cap_80pct
+- strategy_id: alt_rel_strength_14_60_7
+  book: binance_crypto
+  status: paper_only
+  runtime_entrypoint: worker.py:run_alt_rel_strength_paper_cycle (03h00 Paris daily)
+  runtime_module: core.runtime.alt_rel_strength_runner.AltRelStrengthRunner
+  wf_source: docs/research/wf_reports/T4A-02_crypto_relative_strength.md + INT-D_crypto_batch.md
+  sizing_policy: conservative_paper_500_per_leg
+  max_risk_usd: 300
+  kill_criteria:
+    drawdown_absolute: -10%
+    sharpe_rolling_60d: -0.5
+    divergence_vs_backtest: 1x_std
+    stops_cascade_trigger: 2_of_6_positions
+  notes: "T4-A2 VALIDATED bull/bear robust (unique parmi le batch):\n  Sharpe +1.11, MaxDD -7.8%, WF 3/5 OOS PASS, MC P(DD>30%)\
+    \ 0.5%\n  Bull regime: +$3,591 (Sharpe +1.42)\n  Bear regime: +$515  (Sharpe +0.29)   <- positif dans les 2 regimes\n\
+    \  Backtest: 2024-01-01 -> 2026-03-28 (818 days, 10 alts beta-adjusted)\n  Corr portfolio: -0.014 (forte decorrelation)\n\
+    \nUnivers: ETH, SOL, BNB, XRP, ADA, LINK, AVAX, DOT, NEAR, SUI (10 alts).\nSignal: beta-adjusted alpha 14d vs BTC, beta\
+    \ fenetre 60d rolling.\nRotation: top 3 long (spot), bottom 3 short (margin isolated).\nRebalance: hebdomadaire dimanche\
+    \ 01h UTC (cycle quotidien 03h Paris).\n\nRuntime = runner atomic core/runtime/alt_rel_strength_runner (pattern\nspread_paper_runner\
+    \ MIB/ESTX50, pas signal_fn). Atomic 6-leg: close\nrotation_out + open new longs + open new shorts en 1 tick.\n\nPaper\
+    \ mode actuel:\n  - Size $500 per leg = $3K gross on ~$10K equity (30% conservative)\n  - State JSON: data/state/alt_rel_strength/state.json\n\
+    \  - Journal JSONL: data/state/alt_rel_strength/paper_journal.jsonl\n  - Zero real order, PnL simule au close daily UTC\n\
+    \nPre-flip live_probation:\n  1. 30j observation paper sans divergence > 1 sigma vs backtest\n  2. Kill switch crypto\
+    \ clean 24h+ (reset manuel 2026-04-18 16h40 UTC)\n  3. Borrow rates cron refresh verified\n  4. Margin isolated account\
+    \ preflight OK (verifie via scripts/preflight_check.py)\n  5. User manual greenlight explicit\n\nGap infra residuel (a\
+    \ fixer avant live_probation):\n  - BTCUSDT_1d + alts parquets cron refresh (observed stale ~21j 2026-04-18)\n  - `market_caps`\
+    \ kwarg populate via CoinGecko (ou suppression si filter inutile)\n\nStart paper: 2026-04-18.\n"
+- strategy_id: btc_asia_mes_leadlag_q70_v80
+  book: binance_crypto
+  status: paper_only
+  runtime_entrypoint: worker.py:run_btc_asia_mes_leadlag_paper_cycle (10h30 Paris)
+  runtime_module: strategies.crypto.btc_asia_mes_leadlag
+  wf_source: docs/research/wf_reports/T3A-02_mes_btc_asia_leadlag.md + INT-B_discovery_batch.md
+  sizing_policy: notional_fixed_10k_usd (paper, log-only)
+  max_risk_usd: 800
+  kill_criteria:
+    drawdown_absolute: -10%
+    drawdown_rolling_90d: -8%
+    sharpe_rolling_60d: -0.5
+    divergence_vs_backtest: 1x_std
+    correlation_drift: '>0.70'
+  notes: "T3-A2 VALIDATED (Sharpe +1.07, MaxDD -7.7%, WF 4/5 OOS PASS, MC P(DD>30%) 0%).\nBacktest 489 days 2024-04 -> 2026-03\
+    \ (scripts/research/backtest_t3a_mes_btc_leadlag.py).\nSignal: MES US 15-21 UTC return D-1 vs quantile 70 / vol quantile\
+    \ 80 -> trade BTC\nAsia session 00-08 UTC day D. Cost 0.10% RT sur $10K notional.\n\nRUNTIME (paper log-only retrospective):\n\
+    \  - Cycle 10h30 Paris quotidien (weekday) via run_btc_asia_mes_leadlag_paper_cycle\n  - Lit MES_1H_YF2Y.parquet + BTCUSDT_1h.parquet\
+    \ (data_is_fresh guard 3j)\n  - Calcule signal pour session Asia qui vient de fermer (yesterday UTC)\n  - Simule entry\
+    \ at BTC open 00:00 UTC / exit at close 07:59 UTC\n  - Journal: data/state/btc_asia_mes_leadlag/paper_journal.jsonl\n\
+    \  - ZERO real order, idempotent (1 entree par target_date)\n\nCAVEATS pour promotion live:\n  1. Mode \"both\" = long+short.\
+    \ Binance France ne supporte pas facilement\n     le short crypto spot. Variante long_only q80_v80 (Sharpe +1.08) a\n\
+    \     considerer pour le live.\n  2. Rolling quantile 365j (runtime) vs quantile full-history (backtest).\n     Divergence\
+    \ attendue petite mais a mesurer sur 30j paper.\n  3. BTCUSDT_1h.parquet observe stale ~20j 2026-04-18. Fix data pipeline\n\
+    \     ops (cron 15min Binance client refresh) requis avant promotion.\n\nStart paper: 2026-04-18.\n"
 ibkr_fx:
-  - strategy_id: fx_carry_momentum_filter
-    book: ibkr_fx
-    status: disabled
-    runtime_entrypoint: "worker.py:run_fx_carry_cycle"
-    runtime_module: "core.fx_live_adapter.FXCarryMomentumFilter"
-    wf_source: "data/fx/wf_structural_results.json"
-    sizing_policy: "N/A - disabled"
-    kill_criteria: ["IBKR_FX_ENABLED=false en env = blocking"]
-    notes: |
-      DESACTIVE 2026 par decision PO. ESMA EU leverage limits + pas
-      d'edge competitif sur majors FX en daily. Les anciennes strats
-      FX legacy (eurgbp_mr, eurjpy_carry, audjpy_carry) sont rejetees
-      dans data/fx/wf_results.json et ne doivent PAS etre promues.
+- strategy_id: fx_carry_momentum_filter
+  book: ibkr_fx
+  status: disabled
+  runtime_entrypoint: worker.py:run_fx_carry_cycle
+  runtime_module: core.fx_live_adapter.FXCarryMomentumFilter
+  wf_source: data/fx/wf_structural_results.json
+  sizing_policy: N/A - disabled
+  kill_criteria:
+  - IBKR_FX_ENABLED=false en env = blocking
+  notes: 'DESACTIVE 2026 par decision PO. ESMA EU leverage limits + pas
 
-# -----------------------------------------------------------------------------
-# IBKR EU — PAPER ONLY
-# -----------------------------------------------------------------------------
-# Les strats EU tournent en paper uniquement (bloc `if not live:` dans worker).
-# eu_gap_open est rejetee au dernier WF (output/wf_eu_results/wf_eu_summary.json).
-# -----------------------------------------------------------------------------
+    d''edge competitif sur majors FX en daily. Les anciennes strats
 
+    FX legacy (eurgbp_mr, eurjpy_carry, audjpy_carry) sont rejetees
+
+    dans data/fx/wf_results.json et ne doivent PAS etre promues.
+
+    '
 ibkr_eu:
-  - strategy_id: eu_gap_open
-    book: ibkr_eu
-    status: paper_only
-    runtime_entrypoint: "worker.py:_run_futures_cycle (bloc if not live)"
-    runtime_module: "strategies_v2.futures.eu_gap_open"
-    wf_source: "output/wf_eu_results/wf_eu_summary.json (rejected 2026-03-31)"
-    sizing_policy: "N/A - paper"
-    notes: "Paper only pour data collection, rejected OOS"
+- strategy_id: eu_gap_open
+  book: ibkr_eu
+  status: paper_only
+  runtime_entrypoint: worker.py:_run_futures_cycle (bloc if not live)
+  runtime_module: strategies_v2.futures.eu_gap_open
+  wf_source: output/wf_eu_results/wf_eu_summary.json (rejected 2026-03-31)
+  sizing_policy: N/A - paper
+  notes: Paper only pour data collection, rejected OOS
+- strategy_id: vix_mean_reversion
+  book: ibkr_eu
+  status: paper_only
+  runtime_entrypoint: worker.py:_run_futures_cycle (bloc if not live)
+  notes: Paper only
+- strategy_id: gold_equity_divergence
+  book: ibkr_eu
+  status: paper_only
+  notes: Paper only
+- strategy_id: eu_relmom_40_3
+  book: ibkr_eu
+  status: paper_only
+  runtime_entrypoint: worker.py:run_eu_relmom_paper_cycle (18h00 Paris)
+  runtime_module: strategies_v2.eu.eu_relmom
+  wf_source: docs/research/wf_reports/T3A-03_eu_indices_relmom.md + INT-B_discovery_batch.md
+  sizing_policy: log_only_paper_1000_per_leg
+  max_risk_usd: 200
+  kill_criteria:
+    drawdown_absolute: -5%
+    sharpe_rolling_60d: -0.5
+    divergence_vs_backtest: 1x_std
+  notes: "T3-A3 VALIDATED (Sharpe +0.71, MaxDD -0.8%, WF 4/5, MC P(DD>30%) 0%).\nBacktest 2021-2026 (1346 days) sur DAX/CAC40/ESTX50/MIB\
+    \ closes.\nLookback 40j, hold 3j, 1v1 top long + bottom short.\n\nRuntime: core reutilise (strategies_v2/us/us_sector_ls.tick\
+    \ generic) +\nwrapper strategies_v2/eu/eu_relmom.py. Log-only retrospective via\nrun_eu_relmom_paper_cycle() 18h00 Paris\
+    \ weekday. Lit\ndata/futures/{DAX,CAC40,ESTX50,MIB}_1D.parquet.\n\nCaveats promotion live:\n  1. Shorts indices: CFD IBKR\
+    \ ou futures mini requis, pas de plan concret.\n  2. Data freshness EU indices via cron yfinance (cf data_freshness.py).\n\
+    Start paper: 2026-04-18.\n"
+- strategy_id: mib_estx50_spread
+  book: ibkr_eu
+  status: paper_only
+  runtime_entrypoint: worker.py:run_mib_estx50_spread_paper_cycle (17h45 Paris)
+  runtime_module: core.runtime.spread_paper_runner
+  wf_source: reports/research/wf_mib_estx50_corrected.json (2026-04-18)
+  sizing_policy: notional_dollar_neutral (1 FIB + ~3 FESX, hedge ratio recalc per entry)
+  kill_criteria:
+  - 30j paper avant decision promotion
+  - Si avg Sharpe paper < 1.0 sur 30j -> retire
+  - Si DD spread > EUR 14K (W4 backtest level) -> alerte
+  notes: 'WF corrige 2026-04-18 (4 bugs fixes vs original Sharpe 14.35 buggy):
 
-  - strategy_id: vix_mean_reversion
-    book: ibkr_eu
-    status: paper_only
-    runtime_entrypoint: "worker.py:_run_futures_cycle (bloc if not live)"
-    notes: "Paper only"
+    avg Sharpe 3.91, WF 4/5, +EUR 22.6K / 12 trades / 24 mois OOS.
 
-  - strategy_id: gold_equity_divergence
-    book: ibkr_eu
-    status: paper_only
-    notes: "Paper only"
+    Runner isole (pas StrategyBase/Signal multi-leg). Paper journal:
 
-  - strategy_id: eu_relmom_40_3
-    book: ibkr_eu
-    status: paper_only
-    runtime_entrypoint: "worker.py:run_eu_relmom_paper_cycle (18h00 Paris)"
-    runtime_module: "strategies_v2.eu.eu_relmom"
-    wf_source: "docs/research/wf_reports/T3A-03_eu_indices_relmom.md + INT-B_discovery_batch.md"
-    sizing_policy: "log_only_paper_1000_per_leg"
-    max_risk_usd: 200  # MaxDD 0.8% * 2 * $1000 per leg = $16 worst-case per trade
-    kill_criteria:
-      drawdown_absolute: -5%
-      sharpe_rolling_60d: -0.5
-      divergence_vs_backtest: "1x_std"
-    notes: |
-      T3-A3 VALIDATED (Sharpe +0.71, MaxDD -0.8%, WF 4/5, MC P(DD>30%) 0%).
-      Backtest 2021-2026 (1346 days) sur DAX/CAC40/ESTX50/MIB closes.
-      Lookback 40j, hold 3j, 1v1 top long + bottom short.
+    data/state/mib_estx50_spread/paper_trades.jsonl. Source yfinance.
 
-      Runtime: core reutilise (strategies_v2/us/us_sector_ls.tick generic) +
-      wrapper strategies_v2/eu/eu_relmom.py. Log-only retrospective via
-      run_eu_relmom_paper_cycle() 18h00 Paris weekday. Lit
-      data/futures/{DAX,CAC40,ESTX50,MIB}_1D.parquet.
+    Promotion live: discussion apres 30j data + capital suffisant
 
-      Caveats promotion live:
-        1. Shorts indices: CFD IBKR ou futures mini requis, pas de plan concret.
-        2. Data freshness EU indices via cron yfinance (cf data_freshness.py).
-      Start paper: 2026-04-18.
+    (~EUR 13.5K margin requise pour 1 FIB + 3 FESX).
 
-  - strategy_id: mib_estx50_spread
-    book: ibkr_eu
-    status: paper_only
-    runtime_entrypoint: "worker.py:run_mib_estx50_spread_paper_cycle (17h45 Paris)"
-    runtime_module: "core.runtime.spread_paper_runner"  # P0.3 fix: module pas classe
-    wf_source: "reports/research/wf_mib_estx50_corrected.json (2026-04-18)"
-    sizing_policy: "notional_dollar_neutral (1 FIB + ~3 FESX, hedge ratio recalc per entry)"
-    kill_criteria:
-      - "30j paper avant decision promotion"
-      - "Si avg Sharpe paper < 1.0 sur 30j -> retire"
-      - "Si DD spread > EUR 14K (W4 backtest level) -> alerte"
-    notes: |
-      WF corrige 2026-04-18 (4 bugs fixes vs original Sharpe 14.35 buggy):
-      avg Sharpe 3.91, WF 4/5, +EUR 22.6K / 12 trades / 24 mois OOS.
-      Runner isole (pas StrategyBase/Signal multi-leg). Paper journal:
-      data/state/mib_estx50_spread/paper_trades.jsonl. Source yfinance.
-      Promotion live: discussion apres 30j data + capital suffisant
-      (~EUR 13.5K margin requise pour 1 FIB + 3 FESX).
-
-  - strategy_id: sector_rotation_eu
-    book: ibkr_eu
-    status: paper_only
-    notes: "Paper only"
-
-# -----------------------------------------------------------------------------
-# ALPACA US — PAPER ONLY
-# -----------------------------------------------------------------------------
-# Doctrine: paper-first, live swing only si PDT compatible (>$25K capital).
-# Actuellement en paper sur $100K simule (PAPER_TRADING=true).
-# -----------------------------------------------------------------------------
-
+    '
+- strategy_id: sector_rotation_eu
+  book: ibkr_eu
+  status: paper_only
+  notes: Paper only
 alpaca_us:
-  - strategy_id: us_stocks_daily
-    book: alpaca_us
-    status: paper_only
-    runtime_entrypoint: "worker.py:run_intraday (market='US')"
-    sizing_policy: "N/A - paper"
-    notes: |
-      Paper trading sur $100K Alpaca simule. Promotion live conditionnee
-      a PDT compat + capital > $25K + 30 jours de paper stable.
+- strategy_id: us_stocks_daily
+  book: alpaca_us
+  status: paper_only
+  runtime_entrypoint: worker.py:run_intraday (market='US')
+  sizing_policy: N/A - paper
+  notes: 'Paper trading sur $100K Alpaca simule. Promotion live conditionnee
 
-  - strategy_id: us_sector_ls_40_5
-    book: alpaca_us
-    status: paper_only
-    runtime_entrypoint: "worker.py:run_us_sector_ls_paper_cycle (22h30 Paris)"
-    runtime_module: "strategies_v2.us.us_sector_ls"
-    wf_source: "docs/research/wf_reports/T3B-01_us_sector_ls.md + INT-C_us_batch.md"
-    sizing_policy: "log_only_paper_1000_per_leg"
-    max_risk_usd: 200
-    kill_criteria:
-      drawdown_absolute: -5%
-      sharpe_rolling_60d: -0.5
-      divergence_vs_backtest: "1x_std"
-    notes: |
-      T3-B1 VALIDATED (Sharpe +0.39, MaxDD -2.1%, WF 3/5, MC P(DD>30%) 0%).
-      Backtest 1274 days sur 11 GICS sectors (moyenne tickers US pass_all=True).
-      Lookback 40j, hold 5j, 1v1 top long + bottom short.
+    a PDT compat + capital > $25K + 30 jours de paper stable.
 
-      Runtime: log-only retrospective via run_us_sector_ls_paper_cycle()
-      22h30 Paris weekday (apres close US). Lit data/us_stocks/_metadata.csv
-      + data/us_stocks/*.parquet.
-
-      Caveats promotion live:
-        1. Shorts sectors: PDT rule + short borrow cost. Non trivial en live.
-        2. Sector baskets: probablement implementable via ETFs sectoriels
-           (XLK, XLF, XLV, XLY, XLP, XLI, XLE, XLU, XLB, XLRE, XLC) plutot
-           qu'avec 500 tickers. A re-WF avec ETF data avant live.
-      Start paper: 2026-04-18.
+    '
+- strategy_id: us_sector_ls_40_5
+  book: alpaca_us
+  status: paper_only
+  runtime_entrypoint: worker.py:run_us_sector_ls_paper_cycle (22h30 Paris)
+  runtime_module: strategies_v2.us.us_sector_ls
+  wf_source: docs/research/wf_reports/T3B-01_us_sector_ls.md + INT-C_us_batch.md
+  sizing_policy: log_only_paper_1000_per_leg
+  max_risk_usd: 200
+  kill_criteria:
+    drawdown_absolute: -5%
+    sharpe_rolling_60d: -0.5
+    divergence_vs_backtest: 1x_std
+  notes: "T3-B1 VALIDATED (Sharpe +0.39, MaxDD -2.1%, WF 3/5, MC P(DD>30%) 0%).\nBacktest 1274 days sur 11 GICS sectors (moyenne\
+    \ tickers US pass_all=True).\nLookback 40j, hold 5j, 1v1 top long + bottom short.\n\nRuntime: log-only retrospective via\
+    \ run_us_sector_ls_paper_cycle()\n22h30 Paris weekday (apres close US). Lit data/us_stocks/_metadata.csv\n+ data/us_stocks/*.parquet.\n\
+    \nCaveats promotion live:\n  1. Shorts sectors: PDT rule + short borrow cost. Non trivial en live.\n  2. Sector baskets:\
+    \ probablement implementable via ETFs sectoriels\n     (XLK, XLF, XLV, XLY, XLP, XLI, XLE, XLU, XLB, XLRE, XLC) plutot\n\
+    \     qu'avec 500 tickers. A re-WF avec ETF data avant live.\nStart paper: 2026-04-18.\n"
