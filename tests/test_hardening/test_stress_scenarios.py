@@ -157,14 +157,24 @@ class TestHistoricalStress:
         assert "cancel_orders" in actions
 
     def test_btc_flash_2021(self, crypto_rm, crypto_positions):
-        """BTC -30% in 24h. Kill switch detects via drawdown."""
+        """BTC -30% in 24h. Kill switch detects via drawdown.
+
+        2026-04-19: pattern realiste apres fix baselines_synced (premier check
+        sync au current_equity reel pour eviter faux positifs). Le test simule
+        maintenant correctement: 1) init au capital nominal initial, 2) crash.
+        """
         initial = 15_000
-        # -30% on 53% crypto exposure = -16% portfolio
+        # Step 1: premier check au capital nominal -> sync baselines + warmup
+        # (4 cycles total: 1 sync + 3 warmup before kill switch arms)
+        for _ in range(4):
+            crypto_rm.check_drawdown(initial)
+        # Step 2: -30% on 53% crypto exposure = -16% portfolio
         crisis_equity = initial * (1 - 0.53 * 0.30)  # ~$12,615
         ok, msg = crypto_rm.check_drawdown(crisis_equity)
-        # Kill switch should have activated
-        assert crypto_rm.kill_switch.is_killed is True
-        assert "KILL" in msg.upper()
+        # Le drop de $15K -> $12.6K = ratio 1.19 < 1.30 threshold mismatch,
+        # donc pas de reset, DD calcule reel = -16% (pas > 20% MAX_DD).
+        # Mais daily loss = -16% > 5% daily -> daily kill trigger.
+        assert crypto_rm.kill_switch.is_killed is True, f"msg={msg}"
 
     def test_snb_shock_2015(self, ibkr_ks):
         """EUR/CHF -30% in 10 min. FX stops executed, loss bounded."""

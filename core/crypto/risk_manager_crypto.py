@@ -487,6 +487,12 @@ class CryptoRiskManager:
         self._monthly_start_equity = capital
         self._last_hourly_reset = time.time()
         self._check_count = 0  # Warmup: skip kill switch first 3 checks
+        # 2026-04-19 fix: baseline_synced=False -> force premier check_drawdown a
+        # caler les baselines sur current_equity reel (pas capital nominal $10K).
+        # Sinon: si capital nominal $10K et current_equity Binance $7-8K (earn
+        # passif exclu trading), ratio 10/8 = 1.25 < 1.30 threshold -> pas de
+        # reset auto -> DD calcul -20% -> kill switch FAUX POSITIF.
+        self._baselines_synced = False
         self._audit_log: list[dict] = []
 
     # ------------------------------------------------------------------
@@ -678,6 +684,23 @@ class CryptoRiskManager:
         # Guard: if equity is 0 or negative, skip drawdown check (API error, not real loss)
         if current_equity <= 0:
             return True, "equity=0 (API error?) — drawdown check skipped"
+
+        # 2026-04-19 fix: premier check apres init -> sync TOUTES baselines sur
+        # current_equity reel. Le capital nominal $10K (config) != current_equity
+        # Binance qui exclut earn passif. Sans ce sync, peak nominal $10K + current
+        # $7-8K = DD -20% faux positif systematique.
+        if not self._baselines_synced:
+            self._peak_equity = current_equity
+            self._daily_start_equity = current_equity
+            self._hourly_start_equity = current_equity
+            self._weekly_start_equity = current_equity
+            self._monthly_start_equity = current_equity
+            self._baselines_synced = True
+            logger.info(
+                f"DD baselines synced to current equity ${current_equity:,.0f} "
+                f"(capital nominal was ${self.capital:,.0f}) — first check"
+            )
+            return True, f"baselines synced to ${current_equity:,.0f} — first check"
 
         # Guard: reset ALL baselines that are wildly different from current equity.
         # This catches config/restart mismatches that would trigger false kill switches.
