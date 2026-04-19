@@ -60,14 +60,13 @@ CSV_HEADERS = [
 def _fetch_ibkr_live_equity() -> float:
     """Fetch IBKR live account equity in USD. Returns 0.0 on failure."""
     if os.getenv("IBKR_PAPER", "true").lower() == "true":
-        logger.info("IBKR_PAPER=true → skipping IBKR live fetch")
+        logger.info("IBKR_PAPER=true - skipping IBKR live fetch")
         return 0.0
     try:
-        from core.broker.ibkr_adapter import IbkrAdapter
-        adapter = IbkrAdapter()
-        info = adapter.get_account_info()
-        # Prefer net_liquidation_usd then equity then nav
-        for key in ("net_liquidation_usd", "equity", "nav", "net_liquidation"):
+        from core.broker.ibkr_adapter import IBKRBroker
+        broker = IBKRBroker()
+        info = broker.get_account_info()
+        for key in ("equity", "net_liquidation_usd", "nav", "net_liquidation"):
             v = info.get(key) if isinstance(info, dict) else None
             if v:
                 return float(v)
@@ -79,16 +78,17 @@ def _fetch_ibkr_live_equity() -> float:
 def _fetch_binance_live_equity() -> float:
     """Fetch Binance live equity in USD (spot USDC + margin + earn). 0.0 on failure."""
     if os.getenv("BINANCE_TESTNET", "false").lower() == "true":
-        logger.info("BINANCE_TESTNET=true → skipping Binance live fetch")
+        logger.info("BINANCE_TESTNET=true - skipping Binance live fetch")
         return 0.0
     if not os.getenv("BINANCE_API_KEY") or not os.getenv("BINANCE_API_SECRET"):
-        logger.info("BINANCE creds missing → skipping")
+        logger.info("BINANCE creds missing - skipping")
         return 0.0
     try:
         from core.broker.binance_broker import BinanceBroker
         bnb = BinanceBroker()
         info = bnb.get_account_info()
-        for key in ("total_equity_usd", "equity_usd", "total_equity", "nav"):
+        # binance_broker returns {"equity": X, "spot_total_usd": Y, "earn_total_usd": Z}
+        for key in ("equity", "total_equity_usd", "equity_usd", "nav"):
             v = info.get(key) if isinstance(info, dict) else None
             if v:
                 return float(v)
