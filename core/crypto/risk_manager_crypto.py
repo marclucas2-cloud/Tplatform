@@ -882,24 +882,59 @@ class CryptoRiskManager:
             else 0
         )
 
-        # Kill switch warmup — skip first 3 cycles ONLY when no persisted state.
-        # When state is restored from disk, baselines are trustworthy from cycle #1.
+        # C1 plan 9.0 (2026-04-19): warmup explicit par BootState.
+        # Audit ChatGPT flagged: "distinguer explicitement first_boot, state_restored,
+        #                        state_stale, state_corrupt dans la logique de decision,
+        #                        pas seulement dans le state"
+        #
+        # - FIRST_BOOT / STATE_CORRUPT : 3 cycles warmup (aucune baseline fiable)
+        # - STATE_STALE               : 1 cycle warmup (peak OK mais anchors vieux)
+        # - STATE_RESTORED            : 0 warmup (state < 24h, trustworthy)
         self._check_count += 1
-        _is_fresh_init = self._dd_boot_state in (
-            BootState.FIRST_BOOT, BootState.STATE_CORRUPT,
-        )
-        if _is_fresh_init and self._check_count <= 3:
+        _fresh = self._dd_boot_state in (BootState.FIRST_BOOT, BootState.STATE_CORRUPT)
+        _stale = self._dd_boot_state == BootState.STATE_STALE
+        if _fresh:
+            warmup_budget = 3
+        elif _stale:
+            warmup_budget = 1  # STATE_STALE: re-verify 1 cycle post-gap
+        else:
+            warmup_budget = 0
+
+        # Emit metric for observability (alert if STATE_CORRUPT frequent)
+        try:
+            from core.monitoring.metrics_pipeline import get_metrics
+            get_metrics().emit(
+                "risk_manager.crypto.boot_state",
+                1.0,
+                tags={
+                    "state": self._dd_boot_state.value,
+                    "warmup_budget": str(warmup_budget),
+                },
+            )
+        except Exception:
+            pass
+
+        if warmup_budget > 0 and self._check_count <= warmup_budget:
             logger.info(
-                f"DD warmup {self._check_count}/3 (fresh init): daily={daily_pnl_pct:.1f}% "
+                f"DD warmup {self._check_count}/{warmup_budget} "
+                f"(boot_state={self._dd_boot_state.value}): daily={daily_pnl_pct:.1f}% "
                 f"hourly={hourly_pnl_pct:.1f}% DD={dd_pct:.1f}% — SKIPPED"
             )
-            if self._check_count == 3:
+            if self._check_count == warmup_budget:
+                # Final cycle of warmup: stabilize short-period anchors.
+                # Peak NEVER reset (preserved across boots per dd_baseline_state).
                 self._daily_start_equity = current_equity
                 self._hourly_start_equity = current_equity
                 self._peak_equity = max(self._peak_equity, current_equity)
-                logger.info(f"DD warmup done: baselines stabilized at ${current_equity:,.0f}")
+                logger.info(
+                    f"DD warmup done ({self._dd_boot_state.value}): baselines stabilized at "
+                    f"${current_equity:,.0f}, peak preserved ${self._peak_equity:,.0f}"
+                )
             self._persist_dd_state()
-            return True, f"warmup {self._check_count}/3 — DD check skipped"
+            return True, (
+                f"warmup {self._check_count}/{warmup_budget} "
+                f"[boot_state={self._dd_boot_state.value}] — DD check skipped"
+            )
 
         killed, reason = self.kill_switch.check(
             daily_pnl_pct=daily_pnl_pct,
