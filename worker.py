@@ -5600,7 +5600,27 @@ def main():
     _event_logger = get_event_logger()
     _metrics = get_metrics()
     _worker_state = WorkerState()
-    _order_tracker = OrderTracker(alert_callback=lambda msg: _send_alert(msg, level="critical"))
+    # 2026-04-19 (Phase 3 XXL): persist OrderTracker state for crash recovery.
+    # Before this, in-flight orders were lost on worker restart -> orphan orders
+    # on broker with no internal record.
+    _order_tracker_path = ROOT / "data" / "state" / "order_tracker.json"
+    _order_tracker = OrderTracker(
+        alert_callback=lambda msg: _send_alert(msg, level="critical"),
+        state_path=_order_tracker_path,
+    )
+    _ot_recovery = _order_tracker.recovery_summary()
+    if _ot_recovery["total_recovered"] > 0:
+        logger.info(
+            f"OrderTracker recovered {_ot_recovery['total_recovered']} orders "
+            f"({len(_ot_recovery['active_order_ids'])} still active). Active IDs: "
+            f"{_ot_recovery['active_order_ids'][:10]}"
+        )
+        if _ot_recovery["active_order_ids"]:
+            _send_alert(
+                f"WORKER BOOT: {len(_ot_recovery['active_order_ids'])} orders "
+                f"still active in tracker. Reconcile with broker manually if needed.",
+                level="warning",
+            )
     _broker_health = BrokerHealthRegistry()
     _broker_health.register("binance")
     _broker_health.register("ibkr")

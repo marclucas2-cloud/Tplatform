@@ -225,4 +225,35 @@ class OrderStateMachine:
             "total_quantity": self.total_quantity,
             "has_sl": self.has_sl,
             "sl_order_id": self.sl_order_id,
+            "validated_at": self.validated_at.isoformat() if self.validated_at else None,
+            "submitted_at": self.submitted_at.isoformat() if self.submitted_at else None,
+            "filled_at": self.filled_at.isoformat() if self.filled_at else None,
         }
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> "OrderStateMachine":
+        """Deserialize from to_dict() output. Used by OrderTracker recovery."""
+        def _parse_dt(val):
+            if not val:
+                return None
+            try:
+                return datetime.fromisoformat(val)
+            except (TypeError, ValueError):
+                return None
+
+        return cls(
+            order_id=str(raw["order_id"]),
+            symbol=str(raw.get("symbol", "")),
+            side=str(raw.get("side", "")),
+            state=OrderState(raw.get("state", OrderState.DRAFT.value)),
+            history=list(raw.get("history", [])),
+            created_at=_parse_dt(raw.get("created_at")) or datetime.now(),
+            broker_order_id=raw.get("broker_order_id"),
+            filled_quantity=float(raw.get("filled_quantity", 0.0)),
+            total_quantity=float(raw.get("total_quantity", 0.0)),
+            has_sl=bool(raw.get("has_sl", False)),
+            sl_order_id=raw.get("sl_order_id"),
+            validated_at=_parse_dt(raw.get("validated_at")),
+            submitted_at=_parse_dt(raw.get("submitted_at")),
+            filled_at=_parse_dt(raw.get("filled_at")),
+        )
