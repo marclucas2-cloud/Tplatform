@@ -5626,6 +5626,37 @@ def main():
     _broker_health.register("ibkr")
     _broker_health.register("alpaca")
 
+    # 2026-04-19 (Phase B post-XXL): PositionTracker SHADOW MODE.
+    # Tracker instancie + recovery, mais pas (encore) wire dans le flux d'ordres.
+    # Les flux existants continuent d'utiliser les state JSON par-book.
+    # Permet de capter manual orphans + commencer audit trail position-level.
+    from core.execution.position_tracker import PositionTracker
+    _position_tracker_path = ROOT / "data" / "state" / "position_tracker.json"
+    _position_tracker = PositionTracker(
+        alert_callback=lambda msg: _send_alert(msg, level="critical"),
+        state_path=_position_tracker_path,
+    )
+    _pt_recovery = _position_tracker.recovery_summary()
+    if _pt_recovery["total_recovered"] > 0:
+        logger.info(
+            f"PositionTracker recovered {_pt_recovery['total_recovered']} positions "
+            f"({len(_pt_recovery['active_position_ids'])} active, "
+            f"{len(_pt_recovery['orphan_position_ids'])} orphan)"
+        )
+
+    # 2026-04-19 (Phase A post-XXL): wire ContractRunner + reconciliation cycle
+    from core.broker.contracts.contract_runner import ContractRunner
+    from core.broker.contracts.validation_cycle import run_contract_validation_cycle
+    from core.governance.reconciliation_cycle import run_reconciliation_cycle
+
+    _contract_runner = ContractRunner(
+        alert_callback=lambda msg, lvl: _send_alert(msg, level=lvl),
+    )
+    _last_contract_check = 0.0
+    _last_reconciliation = 0.0
+    _CONTRACT_CHECK_INTERVAL = 3600     # hourly
+    _RECONCILIATION_INTERVAL = 900      # 15 min
+
     # ── Phase 4: BookSupervisor — per-book isolation layer ──────────────
     from core.runtime.book_factory import build_runtimes_from_registry
     from core.runtime.supervisor import BookSupervisor
@@ -5743,6 +5774,47 @@ def main():
         if time.time() - last_crypto >= CRYPTO_INTERVAL_SECONDS:
             _runners["crypto"].run()
             last_crypto = time.time()
+
+        # === Phase A post-XXL: BROKER CONTRACTS CHECK (hourly) ===
+        # Read-only API calls validated against contracts. Auto-degrades broker
+        # health on 3 consecutive violations. No order placement.
+        if time.time() - _last_contract_check >= _CONTRACT_CHECK_INTERVAL:
+            try:
+                run_contract_validation_cycle(
+                    runner=_contract_runner,
+                    health_registry=_broker_health,
+                )
+                logger.info("BROKER CONTRACTS CHECK: cycle ok")
+            except Exception as _cc_err:
+                logger.warning(f"BROKER CONTRACTS CHECK error: {_cc_err}")
+            _last_contract_check = time.time()
+
+        # === Phase A post-XXL: RECONCILIATION CYCLE (every 15 min) ===
+        # Compare broker positions vs internal state per book. Critical alerts
+        # on only_in_broker / only_in_local divergences. No state mutation.
+        if time.time() - _last_reconciliation >= _RECONCILIATION_INTERVAL:
+            try:
+                _recon_books = ("binance_crypto", "ibkr_futures", "alpaca_us")
+                _recon_results = run_reconciliation_cycle(
+                    books=_recon_books,
+                    alert_callback=_send_alert,
+                )
+                _div_count = sum(
+                    len(r.get("divergences", []))
+                    for r in _recon_results.values()
+                )
+                if _div_count == 0:
+                    logger.info(
+                        f"RECONCILIATION cycle clean ({len(_recon_books)} books)"
+                    )
+                else:
+                    logger.warning(
+                        f"RECONCILIATION cycle: {_div_count} divergence(s) "
+                        f"across {len(_recon_books)} books — see Telegram alerts"
+                    )
+            except Exception as _rc_err:
+                logger.warning(f"RECONCILIATION cycle error: {_rc_err}")
+            _last_reconciliation = time.time()
 
         # === FX CARRY DAILY (lun-ven, 10h Paris) ===
         if is_weekday() and now_paris.hour == 10 and not getattr(run_fx_carry_cycle, '_done_today', False):

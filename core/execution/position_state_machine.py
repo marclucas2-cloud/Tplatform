@@ -193,4 +193,38 @@ class PositionStateMachine:
             "unrealized_pnl": self.unrealized_pnl,
             "realized_pnl": self.realized_pnl,
             "history": self.history,
+            "created_at": self.created_at.isoformat(),
+            "opened_at": self.opened_at.isoformat() if self.opened_at else None,
+            "closed_at": self.closed_at.isoformat() if self.closed_at else None,
+            "order_id": self.order_id,
         }
+
+    @classmethod
+    def from_dict(cls, raw: dict) -> "PositionStateMachine":
+        """Deserialize from to_dict() output. Used by PositionTracker recovery."""
+        def _parse_dt(val):
+            if not val:
+                return None
+            try:
+                return datetime.fromisoformat(val)
+            except (TypeError, ValueError):
+                return None
+
+        return cls(
+            position_id=str(raw["position_id"]),
+            symbol=str(raw.get("symbol", "")),
+            side=str(raw.get("side", "")),
+            broker=str(raw.get("broker", "")),
+            state=PositionState(raw.get("state", PositionState.PENDING.value)),
+            quantity=float(raw.get("quantity", 0.0)),
+            entry_price=float(raw.get("entry_price", 0.0)),
+            current_price=float(raw.get("current_price", 0.0)),
+            has_sl=bool(raw.get("has_sl", False)),
+            sl_price=raw.get("sl_price"),
+            realized_pnl=float(raw.get("realized_pnl", 0.0)),
+            history=list(raw.get("history", [])),
+            created_at=_parse_dt(raw.get("created_at")) or datetime.now(),
+            opened_at=_parse_dt(raw.get("opened_at")),
+            closed_at=_parse_dt(raw.get("closed_at")),
+            order_id=raw.get("order_id"),
+        )
