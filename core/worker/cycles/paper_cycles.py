@@ -43,6 +43,7 @@ def run_mib_estx50_spread_paper_cycle():
     """
     try:
         import yfinance as yf
+
         from core.runtime.spread_paper_runner import SpreadPaperRunner
 
         runner = SpreadPaperRunner.for_mib_estx50()
@@ -121,7 +122,9 @@ def run_alt_rel_strength_paper_cycle():
     """
     try:
         from core.runtime.alt_rel_strength_runner import (
-            UNIVERSE, AltRelStrengthRunner, load_panel,
+            UNIVERSE,
+            AltRelStrengthRunner,
+            load_panel,
         )
 
         data_dir = ROOT / "data" / "crypto" / "candles"
@@ -204,7 +207,9 @@ def run_btc_asia_mes_leadlag_paper_cycle():
     """
     try:
         from strategies.crypto.btc_asia_mes_leadlag import (
-            build_daily_dataset, compute_signal_for_date, data_is_fresh,
+            build_daily_dataset,
+            compute_signal_for_date,
+            data_is_fresh,
             simulate_paper_trade,
         )
 
@@ -397,8 +402,11 @@ def run_us_sector_ls_paper_cycle():
     """
     try:
         from strategies_v2.us.us_sector_ls import (
-            DEFAULT_CAPITAL_PER_LEG, DEFAULT_HOLD_DAYS, DEFAULT_LOOKBACK,
-            DEFAULT_RT_COST_PCT, load_sector_return_matrix,
+            DEFAULT_CAPITAL_PER_LEG,
+            DEFAULT_HOLD_DAYS,
+            DEFAULT_LOOKBACK,
+            DEFAULT_RT_COST_PCT,
+            load_sector_return_matrix,
         )
 
         us_dir = ROOT / "data" / "us_stocks"
@@ -448,8 +456,12 @@ def run_eu_relmom_paper_cycle():
     """
     try:
         from strategies_v2.eu.eu_relmom import (
-            DEFAULT_CAPITAL_PER_LEG, DEFAULT_HOLD_DAYS, DEFAULT_LOOKBACK,
-            DEFAULT_RT_COST_PCT, EU_UNIVERSE, load_eu_returns,
+            DEFAULT_CAPITAL_PER_LEG,
+            DEFAULT_HOLD_DAYS,
+            DEFAULT_LOOKBACK,
+            DEFAULT_RT_COST_PCT,
+            EU_UNIVERSE,
+            load_eu_returns,
         )
 
         data_dir = ROOT / "data" / "futures"

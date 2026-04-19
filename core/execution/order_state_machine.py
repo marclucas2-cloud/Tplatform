@@ -51,7 +51,7 @@ class InvariantViolation(Exception):
 
 
 # Legal transitions: (from_state, to_state) -> guard function name or None
-LEGAL_TRANSITIONS: dict[tuple[OrderState, OrderState], Optional[str]] = {
+LEGAL_TRANSITIONS: dict[tuple[OrderState, OrderState], str | None] = {
     (OrderState.DRAFT, OrderState.VALIDATED): "guard_validation",
     (OrderState.DRAFT, OrderState.REJECTED): None,
     (OrderState.VALIDATED, OrderState.SUBMITTED): "guard_submission",
@@ -85,14 +85,14 @@ class OrderStateMachine:
     state: OrderState = OrderState.DRAFT
     history: list = field(default_factory=list)
     created_at: datetime = field(default_factory=datetime.now)
-    broker_order_id: Optional[str] = None
+    broker_order_id: str | None = None
     filled_quantity: float = 0.0
     total_quantity: float = 0.0
     has_sl: bool = False
-    sl_order_id: Optional[str] = None
-    validated_at: Optional[datetime] = None
-    submitted_at: Optional[datetime] = None
-    filled_at: Optional[datetime] = None
+    sl_order_id: str | None = None
+    validated_at: datetime | None = None
+    submitted_at: datetime | None = None
+    filled_at: datetime | None = None
 
     def transition(self, new_state: OrderState, **context) -> bool:
         """Attempt a state transition. Returns True if successful.

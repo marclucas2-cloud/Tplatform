@@ -51,8 +51,11 @@ def make_macro_ecb_executor(mode: str, ibkr_lock: threading.Lock | None = None):
     MAX_FUTURES_CONTRACTS = 2
 
     def _executor(sig, ib) -> bool:
-        from ib_insync import Future as IbFuture, MarketOrder as IbMarketOrder, StopOrder, LimitOrder
         import uuid as _uuid
+
+        from ib_insync import Future as IbFuture
+        from ib_insync import LimitOrder, StopOrder
+        from ib_insync import MarketOrder as IbMarketOrder
 
         try:
             if ks_state_path.exists():

@@ -110,7 +110,7 @@ class OrderTracker:
         self,
         order_id: str,
         has_sl: bool = False,
-        sl_order_id: Optional[str] = None,
+        sl_order_id: str | None = None,
     ) -> bool:
         """Transition SUBMITTED -> FILLED."""
         osm = self._get(order_id)
@@ -136,7 +136,7 @@ class OrderTracker:
         order_id: str,
         filled_quantity: float,
         sl_adjusted: bool = False,
-        sl_order_id: Optional[str] = None,
+        sl_order_id: str | None = None,
     ) -> bool:
         """Transition SUBMITTED -> PARTIAL."""
         osm = self._get(order_id)
@@ -191,7 +191,7 @@ class OrderTracker:
         self.save_state()
         return ok
 
-    def get(self, order_id: str) -> Optional[OrderStateMachine]:
+    def get(self, order_id: str) -> OrderStateMachine | None:
         return self._get(order_id)
 
     def get_active_orders(self) -> list[OrderStateMachine]:
@@ -224,7 +224,7 @@ class OrderTracker:
                 del self._orders[oid]
         return len(to_remove)
 
-    def _get(self, order_id: str) -> Optional[OrderStateMachine]:
+    def _get(self, order_id: str) -> OrderStateMachine | None:
         with self._lock:
             return self._orders.get(order_id)
 
