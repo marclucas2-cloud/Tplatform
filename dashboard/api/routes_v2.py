@@ -2671,9 +2671,13 @@ def nav_overview():
 # core.governance.strategy_status), pas la narrative historique dans des
 # notes YAML. Caller: frontend Overview + runtime_audit.py.
 
-@router.get("/api/strategies/status")
+@router.get("/api/governance/strategies/status")
 def strategies_status():
     """Return computed StrategyStatus for every strategy in quant_registry.
+
+    Path under /api/governance/ to avoid collision with legacy
+    /api/strategies/{strategy_id} route in main.py (which would match "status"
+    as a strategy_id and short-circuit this endpoint).
 
     Response schema:
       {
@@ -2704,7 +2708,7 @@ def strategies_status():
         return {"error": str(e), "generated_at": datetime.now(UTC).isoformat()}
 
 
-@router.get("/api/strategies/status/{strategy_id}")
+@router.get("/api/governance/strategies/status/{strategy_id}")
 def strategy_status_one(strategy_id: str):
     """Return computed StrategyStatus for a single strategy."""
     try:

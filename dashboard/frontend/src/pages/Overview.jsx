@@ -50,7 +50,9 @@ export default function Overview() {
   const { data: alertsData } = useApi('/alerts', 30000)
   const { data: cryptoData } = useApi('/crypto/strategies', 60000)
   // D3 plan 9.0: unified computed StrategyStatus (vs declared text in registry)
-  const { data: statusData } = useApi('/strategies/status', 60000)
+  // ITER1 G1 (2026-04-19): path /api/governance/strategies/status to avoid
+  // collision with legacy /api/strategies/{id} route.
+  const { data: statusData } = useApi('/governance/strategies/status', 60000)
 
   if (pLoad || !portfolio) {
     return (
