@@ -20,8 +20,19 @@
 set -euo pipefail
 
 REPO_ROOT="${REPO_ROOT:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
-SANDBOX_DIR="${SANDBOX_DIR:-/tmp/dr_drill_$(date +%Y%m%d_%H%M%S)}"
+# Sandbox sous le repo pour compat Git Bash/Windows.
+SANDBOX_DIR="${SANDBOX_DIR:-$REPO_ROOT/.pytest_tmp/dr_drill_$(date +%Y%m%d_%H%M%S)}"
 APPLY="${APPLY:-false}"
+
+# Helper to convert Git Bash path -> native (Windows) path for Python on Win.
+# On Linux/Mac: returns path unchanged.
+_native_path() {
+    if command -v cygpath >/dev/null 2>&1; then
+        cygpath -w "$1"
+    else
+        echo "$1"
+    fi
+}
 
 GREEN='\033[0;32m'; RED='\033[0;31m'; YELLOW='\033[0;33m'; NC='\033[0m'
 
@@ -113,11 +124,12 @@ else
     # Test load_baselines on restored DD state
     DD_PATH="$SANDBOX_DIR/restored/data/crypto_dd_state.json"
     if [[ -f "$DD_PATH" ]]; then
+        DD_NATIVE=$(_native_path "$DD_PATH")
         _log "Testing DDBaselines.load on $DD_PATH..."
         python3 -c "
 from pathlib import Path
 from core.crypto.dd_baseline_state import load_baselines, BootState
-state, baselines = load_baselines(Path('$DD_PATH'))
+state, baselines = load_baselines(Path(r'$DD_NATIVE'))
 print(f'  state={state.value}, peak=\${baselines.peak_equity:,.0f}, ' +
       f'session_id={baselines.session_id[:8]}')
 assert state in (BootState.STATE_RESTORED, BootState.STATE_STALE), f'STATE_CORRUPT detecte'
@@ -130,11 +142,12 @@ print('  -> DDBaselines integrity OK')
     # Test load_state on restored OrderTracker
     OT_PATH="$SANDBOX_DIR/restored/data/state/order_tracker.json"
     if [[ -f "$OT_PATH" ]]; then
+        OT_NATIVE=$(_native_path "$OT_PATH")
         _log "Testing OrderTracker.load on $OT_PATH..."
         python3 -c "
 from pathlib import Path
 from core.execution.order_tracker import OrderTracker
-t = OrderTracker(state_path=Path('$OT_PATH'))
+t = OrderTracker(state_path=Path(r'$OT_NATIVE'))
 summary = t.recovery_summary()
 print(f'  recovered={summary[\"total_recovered\"]} active={len(summary[\"active_order_ids\"])}')
 print('  -> OrderTracker integrity OK')
@@ -146,10 +159,11 @@ print('  -> OrderTracker integrity OK')
     # Test live_whitelist load
     WL_PATH="$SANDBOX_DIR/restored/config/live_whitelist.yaml"
     if [[ -f "$WL_PATH" ]]; then
+        WL_NATIVE=$(_native_path "$WL_PATH")
         _log "Testing whitelist YAML parse on $WL_PATH..."
         python3 -c "
 import yaml
-with open('$WL_PATH') as f:
+with open(r'$WL_NATIVE') as f:
     data = yaml.safe_load(f)
 total = sum(len(v) for v in data.values() if isinstance(v, list))
 print(f'  whitelist parses OK, {total} strats restorees')

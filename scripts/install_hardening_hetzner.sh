@@ -218,7 +218,14 @@ do_ssh() {
         _log "Validating sshd_config syntax..."
         sshd -t || { _log "${RED}sshd -t FAILED, restore backup${NC}"; cp "$SSHD_BACKUP" "$SSHD_CONFIG"; return 1; }
         _log "Reloading sshd (existing session preserved)..."
-        systemctl reload sshd
+        # Ubuntu/Debian uses ssh.service, RHEL uses sshd.service
+        if systemctl reload ssh 2>/dev/null; then
+            :
+        elif systemctl reload sshd 2>/dev/null; then
+            :
+        else
+            _log "${YELLOW}WARN: reload failed (try systemctl restart manually)${NC}"
+        fi
     else
         echo -e "${YELLOW}[DRY-RUN]${NC} Apply sshd_config edits + sshd -t + systemctl reload sshd"
     fi
