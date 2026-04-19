@@ -13,7 +13,7 @@ Commands:
   /reduce 50%    — Reduce ALL positions by percentage
   /close [ticker]— Close a specific position
   /leverage      — Current leverage by asset class
-  /health        — Infrastructure status (broker, Railway, healthcheck)
+  /health        — Infrastructure status (broker, VPS Hetzner, healthcheck)
   /help          — List of commands
 
 Security:

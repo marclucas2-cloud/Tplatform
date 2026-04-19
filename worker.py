@@ -1,5 +1,8 @@
 """
-Worker Railway — scheduler 24/7, orchestrateur multi-broker.
+Worker — scheduler 24/7, orchestrateur multi-broker.
+
+Deploye sur VPS Hetzner via systemd (trading-worker.service). Ancien hebergement
+Railway abandonne 2026-03 (memoire feedback_trading: Railway mort, IBKR IDs).
 
 Cycles : crypto (15min), FX carry (daily), EU/US intraday, futures,
          risk (5min), regime V12 (15min), HRP/Kelly (4h), RoR (daily).
@@ -322,7 +325,9 @@ def _get_global_nav() -> float:
 
 # --- Graceful shutdown handler ---
 def _handle_sigterm(signum, frame):
-    """Graceful shutdown on Railway redeploy — closes positions and cancels orders."""
+    """Graceful shutdown on SIGTERM (systemd restart / VPS shutdown).
+    Cancels Alpaca orders + closes Binance positions. IBKR brackets remain
+    server-side (not auto-closed to preserve intended exit logic)."""
     logger.critical("SIGTERM received — graceful shutdown initiated")
     _log_event("worker_stop", details={"signal": signum})
 
@@ -3189,10 +3194,9 @@ def run_crypto_cycle():
                         f"applique a {default_sl_pct*100:.0f}%: ${stop_loss:.2f}"
                     )
 
-                # P0 FIX 2026-04-16: whitelist enforcement crypto (audit ChatGPT
-                # vulnerabilite critique - 28/28 entrypoints LIVE etaient sans
-                # check whitelist). Une strat crypto en status disabled ou
-                # paper_only ne peut PAS placer d'ordre live.
+                # Whitelist enforcement crypto + E2 scoped disable check.
+                # Une strat crypto en status disabled/paper_only NE PEUT PAS
+                # placer d'ordre live; une strat scoped-disabled via E2 non plus.
                 try:
                     from core.governance import is_strategy_live_allowed
                     from core.broker.binance_broker import _CRYPTO_STRAT_ID_MAP
@@ -3210,6 +3214,25 @@ def run_crypto_cycle():
                         f"{wl_err}"
                     )
                     continue
+
+                # G5 iter2 plan 9.5 (2026-04-19): defense-en-profondeur E2 per-
+                # strategy scoped disable directement dans run_crypto_cycle.
+                # Meme si pre_order_guard (appele via broker.create_position)
+                # check deja, on fait un early-skip ici pour eviter les cycles
+                # de validation risque + sizing + enrichissement inutiles.
+                try:
+                    from core.kill_switch_live import LiveKillSwitch
+                    if LiveKillSwitch().is_strategy_disabled(strat_id):
+                        logger.warning(
+                            f"  [{strat_id}] Ordre SKIP: strat scoped-disabled "
+                            f"(E2 per-strategy kill switch). Operator must "
+                            f"LiveKillSwitch().enable_strategy() to reactivate."
+                        )
+                        continue
+                except Exception as ks_err:
+                    # Non-blocking (pre_order_guard fera un check exhaustif via
+                    # check 6b). Si LiveKillSwitch crash ici, on log + continue.
+                    logger.debug(f"E2 scoped check crypto cycle: {ks_err}")
 
                 # CRO C-3 FIX: validate_order AVANT create_position
                 try:

@@ -1023,6 +1023,25 @@ def run_futures_cycle(live: bool = False):
                     continue
                 _contract = _details[0].contract
 
+                # G4 iter2 plan 9.5 (2026-04-19): OSM wire symetrique crypto.
+                # Create_order + validate avant placeOrder IBKR, puis submit +
+                # fill OU error apres resultat. Parite avec run_crypto_cycle
+                # pour crash recovery symetrique via OrderTracker atomic save.
+                _osm_order = None
+                try:
+                    import worker as _w
+                    _osm_tracker = _w.get_order_tracker() if hasattr(_w, "get_order_tracker") else None
+                    if _osm_tracker is not None:
+                        _osm_order = _osm_tracker.create_order(
+                            symbol=sym, side=sig.side, quantity=qty,
+                            broker="ibkr", strategy=name,
+                        )
+                        # Risk check upstream (budget + whitelist) -> validate
+                        _osm_tracker.validate(_osm_order.order_id, risk_approved=True)
+                except Exception as _osm_err:
+                    logger.warning(f"    {name}: OSM create/validate: {_osm_err}")
+                    _osm_order = None
+
                 # Step 1: Market entry
                 _entry_order = IbMarketOrder(sig.side, qty)
                 _entry_trade = ibkr._ib.placeOrder(_contract, _entry_order)
@@ -1036,6 +1055,15 @@ def run_futures_cycle(live: bool = False):
                         time.sleep(1); ibkr._ib.sleep(0.5)
                     except Exception:
                         pass
+                    # G4: transition OSM -> ERROR si entry pas fill
+                    if _osm_order is not None:
+                        try:
+                            import worker as _w
+                            _tracker = _w.get_order_tracker() if hasattr(_w, "get_order_tracker") else None
+                            if _tracker:
+                                _tracker.error(_osm_order.order_id)
+                        except Exception:
+                            pass
                     continue
 
                 # Step 2: OCA SL + TP (standalone, no parentId)
@@ -1066,8 +1094,25 @@ def run_futures_cycle(live: bool = False):
 
                 _tp = LimitOrder(_exit_side, qty, _final_tp)
                 _tp.tif = "GTC"; _tp.ocaGroup = _oca; _tp.ocaType = 1; _tp.outsideRth = True
-                ibkr._ib.placeOrder(_contract, _tp)
+                _tp_trade = ibkr._ib.placeOrder(_contract, _tp)
                 time.sleep(2); ibkr._ib.sleep(1)
+
+                # G4 iter2: transition OSM SUBMITTED -> FILLED avec SL id.
+                # Entry DEJA remplie par IBKR (status=Filled assured above),
+                # on log fill + invariant has_sl=True (SL place via _sl above).
+                if _osm_order is not None:
+                    try:
+                        import worker as _w
+                        _tracker = _w.get_order_tracker() if hasattr(_w, "get_order_tracker") else None
+                        if _tracker:
+                            _tracker.submit(_osm_order.order_id, str(_entry_trade.order.orderId))
+                            _tracker.fill(
+                                _osm_order.order_id,
+                                has_sl=True,
+                                sl_order_id=str(_sl.orderId) if hasattr(_sl, "orderId") else None,
+                            )
+                    except Exception as _osm_err:
+                        logger.warning(f"    {name}: OSM submit/fill: {_osm_err}")
 
                 logger.info(
                     f"    FUTURES {_mode}: {sig.side} {sym} @ {_fill_price:.2f} "
