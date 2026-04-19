@@ -8,17 +8,69 @@ When a CRITICAL anomaly is detected, generates a structured report:
 5. Previous alerts: were there WARNs before the CRITICAL?
 
 Reports are saved as Markdown in data/incidents/ and summarized on Telegram.
+
+F2 plan 9.0 (2026-04-19): adds log_incident_auto() for machine-readable
+JSONL timeline accumulation. Called from:
+  - core/governance/reconciliation_cycle.py on only_in_broker/local
+  - core/kill_switch_live.py on trigger
+  - core/crypto/risk_manager_crypto.py on STATE_CORRUPT recovery
+
+JSONL format: one line per incident, append-only. Allows post-mortem
+analysis without parsing markdown.
 """
 
 import json
 import logging
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Optional
 
 logger = logging.getLogger("monitoring.incident")
 
 ROOT = Path(__file__).resolve().parent.parent.parent
+INCIDENTS_JSONL_DIR = ROOT / "data" / "incidents"
+INCIDENTS_JSONL_DIR.mkdir(parents=True, exist_ok=True)
+
+
+def log_incident_auto(
+    *,
+    category: str,
+    severity: str,
+    source: str,
+    message: str,
+    context: Optional[dict] = None,
+) -> Path:
+    """Append a machine-readable incident record to data/incidents/YYYY-MM-DD.jsonl.
+
+    Args:
+        category: "kill_switch" | "reconciliation" | "boot_state_corrupt"
+                  | "data_stale" | "broker_down" | ...
+        severity: "critical" | "warning" | "info"
+        source: module name triggering (e.g. "reconciliation_cycle")
+        message: human-readable 1-line summary
+        context: free-form structured data (positions, pnl, etc.)
+
+    Returns path to the JSONL file written. Never raises (best-effort log —
+    the incident itself is already happening, we don't want to chain failures).
+    """
+    try:
+        now = datetime.now(UTC)
+        entry = {
+            "timestamp": now.isoformat(),
+            "category": category,
+            "severity": severity,
+            "source": source,
+            "message": message[:2000],
+            "context": context or {},
+        }
+        path = INCIDENTS_JSONL_DIR / f"{now.strftime('%Y-%m-%d')}.jsonl"
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, default=str) + "\n")
+        return path
+    except Exception as e:
+        # Never let incident logging block the pipeline
+        logger.warning(f"log_incident_auto failed (non-blocking): {e}")
+        return INCIDENTS_JSONL_DIR / "FAILED_WRITE"
 
 
 class IncidentReportGenerator:

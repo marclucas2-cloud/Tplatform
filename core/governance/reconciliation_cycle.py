@@ -79,6 +79,24 @@ def run_reconciliation_cycle(
                         alert_callback(msg, "critical")
                     except Exception as exc:
                         logger.warning(f"alert_callback error: {exc}")
+                    # F2 plan 9.0: persist incident in JSONL timeline for post-mortem
+                    try:
+                        from core.monitoring.incident_report import log_incident_auto
+                        log_incident_auto(
+                            category="reconciliation",
+                            severity="critical",
+                            source="reconciliation_cycle",
+                            message=msg,
+                            context={
+                                "book": book_id,
+                                "divergence_type": dtype,
+                                "symbols": syms,
+                                "broker_positions": result.get("broker_positions", []),
+                                "local_positions": result.get("local_positions", []),
+                            },
+                        )
+                    except Exception:
+                        pass
                 elif dtype == "state_file_corrupted":
                     try:
                         alert_callback(
