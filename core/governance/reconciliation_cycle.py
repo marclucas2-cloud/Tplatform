@@ -38,6 +38,24 @@ from core.governance.reconciliation import (
 logger = logging.getLogger(__name__)
 
 
+def _is_paper_only(book_id: str) -> bool:
+    """Check if book is paper_only in books_registry (affects alert severity)."""
+    try:
+        from pathlib import Path
+        import yaml
+        root = Path(__file__).resolve().parent.parent.parent
+        registry = root / "config" / "books_registry.yaml"
+        if not registry.exists():
+            return False
+        data = yaml.safe_load(registry.read_text(encoding="utf-8")) or {}
+        for b in data.get("books", []) or []:
+            if b.get("book_id") == book_id:
+                return b.get("mode_authorized") == "paper_only"
+    except Exception:
+        pass
+    return False
+
+
 def run_reconciliation_cycle(
     books: tuple[str, ...] = ("binance_crypto", "ibkr_futures", "alpaca_us", "ibkr_eu"),
     alert_callback: Callable[[str, str], None] | None = None,
@@ -65,18 +83,35 @@ def run_reconciliation_cycle(
         except Exception as exc:
             logger.warning(f"save_reconciliation_report failed for {book_id}: {exc}")
 
+        # Determine book mode (live vs paper) to tune severity. paper_only books
+        # are expected to have local_positions (simulation) without real broker
+        # positions — this is NOT critical, just informational/warning.
+        is_paper_book = _is_paper_only(book_id)
+
         # Alert on divergences using severity matrix
         if alert_callback is not None:
             for div in result.get("divergences", []):
                 dtype = div.get("type", "unknown")
                 if dtype in ("only_in_broker", "only_in_local"):
                     syms = div.get("symbols", [])
-                    msg = (
-                        f"RECONCILIATION CRITICAL [{book_id}] {dtype}: "
-                        f"symbols={syms}. Manual reconcile needed."
-                    )
+                    if is_paper_book:
+                        # Paper book simulation is locally-maintained, not pushed
+                        # to broker. Divergence expected — warning only.
+                        severity = "warning"
+                        label = "RECONCILIATION INFO"
+                        msg = (
+                            f"{label} [{book_id} paper_only] {dtype}: "
+                            f"symbols={syms}. Local simulation only, no broker push."
+                        )
+                    else:
+                        severity = "critical"
+                        label = "RECONCILIATION CRITICAL"
+                        msg = (
+                            f"{label} [{book_id}] {dtype}: "
+                            f"symbols={syms}. Manual reconcile needed."
+                        )
                     try:
-                        alert_callback(msg, "critical")
+                        alert_callback(msg, severity)
                     except Exception as exc:
                         logger.warning(f"alert_callback error: {exc}")
                     # F2 plan 9.0: persist incident in JSONL timeline for post-mortem
@@ -84,11 +119,12 @@ def run_reconciliation_cycle(
                         from core.monitoring.incident_report import log_incident_auto
                         log_incident_auto(
                             category="reconciliation",
-                            severity="critical",
+                            severity=severity,
                             source="reconciliation_cycle",
                             message=msg,
                             context={
                                 "book": book_id,
+                                "book_mode": "paper_only" if is_paper_book else "live_allowed",
                                 "divergence_type": dtype,
                                 "symbols": syms,
                                 "broker_positions": result.get("broker_positions", []),
