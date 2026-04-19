@@ -376,8 +376,8 @@ def risk_overview():
         except Exception:
             pass
 
-        # Drawdown actuel
-        peak = max(equity, equity)  # Will be better with DD state tracking
+        # Drawdown actuel — read peak from state files
+        peak = equity
         drawdown_pct = 0.0
         try:
             _crypto_dd = DATA_DIR / "crypto_dd_state.json"
@@ -568,30 +568,57 @@ def risk_correlation():
             # (necessiterait des donnees de prix historiques)
             pass
 
-        # Matrice exemple basee sur les classes d'actifs en portefeuille
-        assets = ["EUR/USD", "EUR/GBP", "EUR/JPY", "AUD/JPY", "GBP/USD", "EU Gap", "BTC/ETH", "MES"]
-        n = len(assets)
-        # Correlations FX EUR fort entre elles, BTC/MES moderement correles
-        corr_matrix = [
-            [1.00, 0.72, 0.65, 0.30, 0.55, 0.10, 0.08, 0.15],
-            [0.72, 1.00, 0.50, 0.20, 0.60, 0.12, 0.05, 0.10],
-            [0.65, 0.50, 1.00, 0.45, 0.35, 0.08, 0.10, 0.18],
-            [0.30, 0.20, 0.45, 1.00, 0.25, 0.05, 0.15, 0.22],
-            [0.55, 0.60, 0.35, 0.25, 1.00, 0.10, 0.07, 0.12],
-            [0.10, 0.12, 0.08, 0.05, 0.10, 1.00, 0.20, 0.65],
-            [0.08, 0.05, 0.10, 0.15, 0.07, 0.20, 1.00, 0.35],
-            [0.15, 0.10, 0.18, 0.22, 0.12, 0.65, 0.35, 1.00],
-        ]
+        # Compute real correlations from daily returns if data exists
+        assets = ["IBKR", "Binance"]
+        corr_matrix = [[1.0, 0.0], [0.0, 1.0]]
+        max_pw = 0.0
+        avg_pw = 0.0
+        source = "default"
+
+        try:
+            import glob as _glob
+            snap_dir = ROOT / "logs" / "portfolio"
+            if snap_dir.exists() and pd is not None:
+                files = sorted(_glob.glob(str(snap_dir / "*.jsonl")))[-30:]
+                daily_ibkr = []
+                daily_bnb = []
+                for fpath in files:
+                    with open(fpath) as f:
+                        lines = f.readlines()
+                    if not lines:
+                        continue
+                    try:
+                        snap = json.loads(lines[-1].strip())
+                        brokers = snap.get("portfolio", {}).get("brokers", [])
+                        ib = next((b["equity"] for b in brokers if b.get("broker") == "ibkr"), None)
+                        bn = next((b["equity"] for b in brokers if b.get("broker") == "binance"), None)
+                        if ib is not None and bn is not None:
+                            daily_ibkr.append(float(ib))
+                            daily_bnb.append(float(bn))
+                    except Exception:
+                        continue
+
+                if len(daily_ibkr) >= 5:
+                    df_corr = pd.DataFrame({"IBKR": daily_ibkr, "Binance": daily_bnb})
+                    rets = df_corr.pct_change().dropna()
+                    if len(rets) >= 3:
+                        cm = rets.corr()
+                        corr_matrix = cm.values.tolist()
+                        assets = list(cm.columns)
+                        n = len(assets)
+                        pairs = [cm.iloc[i, j] for i in range(n) for j in range(i + 1, n)]
+                        max_pw = round(max(pairs), 3) if pairs else 0
+                        avg_pw = round(float(np.mean(pairs)), 3) if pairs else 0
+                        source = "computed"
+        except Exception:
+            pass
 
         return {
             "assets": assets,
             "matrix": corr_matrix,
-            "max_pairwise": 0.72,
-            "avg_pairwise": round(
-                np.mean([corr_matrix[i][j]
-                         for i in range(n) for j in range(i + 1, n)]), 3
-            ),
-            "note": "Correlations estimees — mise a jour avec donnees live quand disponibles",
+            "max_pairwise": max_pw,
+            "avg_pairwise": avg_pw,
+            "source": source,
         }
     except Exception as e:
         logger.error("risk/correlation error: %s", e)
@@ -606,31 +633,47 @@ def risk_drawdown():
         history = state.get("history", [])
 
         if not history:
-            # Donnees fictives pour developpement
-            base = 100_000
-            today = datetime.now(UTC)
+            # Try reading from portfolio snapshots
+            import glob as _glob
+            snap_dir = ROOT / "logs" / "portfolio"
             dd_history = []
-            equity = base
-            peak = base
-            for i in range(90):
-                dt = today - timedelta(days=90 - i)
-                change = np.random.normal(0.0005, 0.008) * equity
-                equity += change
-                peak = max(peak, equity)
-                dd = (equity - peak) / peak * 100
-                dd_history.append({
-                    "date": dt.strftime("%Y-%m-%d"),
-                    "equity": round(equity, 2),
-                    "peak": round(peak, 2),
-                    "drawdown_pct": round(dd, 2),
-                })
+            if snap_dir.exists():
+                files = sorted(_glob.glob(str(snap_dir / "*.jsonl")))[-90:]
+                _peak = 0
+                for fpath in files:
+                    try:
+                        with open(fpath) as f:
+                            lines = f.readlines()
+                        if not lines:
+                            continue
+                        snap = json.loads(lines[-1].strip())
+                        total = snap.get("portfolio", {}).get("total_equity", 0)
+                        if total > 0:
+                            _peak = max(_peak, total)
+                            dd = (total - _peak) / _peak * 100 if _peak > 0 else 0
+                            dd_history.append({
+                                "date": snap.get("timestamp", "")[:10],
+                                "equity": round(total, 2),
+                                "peak": round(_peak, 2),
+                                "drawdown_pct": round(dd, 2),
+                            })
+                    except Exception:
+                        continue
+
+            if dd_history:
+                return {
+                    "history": dd_history,
+                    "current_dd_pct": round(dd_history[-1]["drawdown_pct"], 2),
+                    "max_dd_pct": round(min(h["drawdown_pct"] for h in dd_history), 2),
+                    "max_dd_date": min(dd_history, key=lambda h: h["drawdown_pct"])["date"],
+                    "source": "snapshots",
+                }
 
             return {
-                "history": dd_history,
-                "current_dd_pct": round(dd_history[-1]["drawdown_pct"], 2),
-                "max_dd_pct": round(min(h["drawdown_pct"] for h in dd_history), 2),
-                "max_dd_date": min(dd_history, key=lambda h: h["drawdown_pct"])["date"],
-                "source": "simulated",
+                "history": [],
+                "current_dd_pct": 0,
+                "max_dd_pct": 0,
+                "source": "no_data",
             }
 
         # Calcul reel depuis history
@@ -718,6 +761,34 @@ def risk_kill_switch():
         }
     except Exception as e:
         logger.error("risk/kill-switch error: %s", e)
+        return {"error": str(e)}
+
+
+@router.post("/api/risk/kill-switch/reset")
+def reset_kill_switch():
+    """Reset kill switch states (manual override)."""
+    try:
+        # Reset IBKR kill switch
+        ks_path = DATA_DIR / "kill_switch_state.json"
+        if ks_path.exists():
+            ks = json.loads(ks_path.read_text(encoding="utf-8"))
+            ks["active"] = False
+            ks["armed"] = False
+            ks["history"] = ks.get("history", []) + [{
+                "action": "MANUAL_RESET",
+                "timestamp": datetime.now(UTC).isoformat(),
+                "reason": "Dashboard manual reset",
+            }]
+            ks_path.write_text(json.dumps(ks, indent=2), encoding="utf-8")
+
+        # Reset crypto kill switch
+        cks_path = DATA_DIR / "crypto_kill_switch_state.json"
+        if cks_path.exists():
+            cks_path.write_text(json.dumps({"active": False}), encoding="utf-8")
+
+        return {"status": "ok", "message": "Kill switches reset"}
+    except Exception as e:
+        logger.error("kill-switch reset error: %s", e)
         return {"error": str(e)}
 
 
@@ -1730,13 +1801,8 @@ def tax_summary():
         has_data = (ibkr_count + binance_count + alpaca_count) > 0
 
         if not has_data:
-            # Donnees fictives pour developpement
-            ibkr_pnl = 1250.0
-            ibkr_count = 85
-            binance_pnl = 480.0
-            binance_count = 40
-            alpaca_pnl = 320.0
-            alpaca_count = 95
+            # Pas de trades encore — retourner zeros (pas de donnees fictives)
+            pass
 
         total_pnl = ibkr_pnl + binance_pnl + alpaca_pnl
         pv_brute = max(total_pnl, 0)
@@ -1978,6 +2044,7 @@ def cross_exposure():
         combined_net = combined_long - combined_short
 
         return {
+            "total_equity": round(total_capital, 2),
             "ibkr": ibkr,
             "binance": crypto,
             "alpaca": alpaca,
@@ -2404,61 +2471,54 @@ def comparison_slippage():
 def equity_curve():
     """Courbe d'equity multi-broker : IBKR + Binance + total."""
     try:
-        state = _load_state()
-        history = state.get("history", [])
+        # Priority: real portfolio snapshots (logs/portfolio/*.jsonl)
+        import glob
+        snap_dir = ROOT / "logs" / "portfolio"
+        curve = []
+        if snap_dir.exists():
+            files = sorted(glob.glob(str(snap_dir / "*.jsonl")))[-90:]
+            for fpath in files:
+                try:
+                    with open(fpath) as f:
+                        lines = f.readlines()
+                    # Take first and last entry per day for daily resolution
+                    if not lines:
+                        continue
+                    for line_idx in [0, len(lines) - 1]:
+                        try:
+                            snap = json.loads(lines[line_idx].strip())
+                            brokers = snap.get("portfolio", {}).get("brokers", [])
+                            ibkr_eq = 0
+                            binance_eq = 0
+                            for b in brokers:
+                                if b.get("broker") == "ibkr":
+                                    ibkr_eq = float(b.get("equity", 0))
+                                elif b.get("broker") == "binance":
+                                    binance_eq = float(b.get("equity", 0))
+                            if ibkr_eq > 0 or binance_eq > 0:
+                                curve.append({
+                                    "timestamp": snap.get("timestamp", ""),
+                                    "ibkr": round(ibkr_eq, 2),
+                                    "binance": round(binance_eq, 2),
+                                    "total": round(ibkr_eq + binance_eq, 2),
+                                })
+                        except Exception:
+                            continue
+                except Exception:
+                    continue
 
-        if history:
-            # Donnees reelles depuis l'historique du state
-            curve = []
-            for entry in history:
-                eq = _safe_float(entry.get("equity", entry.get("capital", 0)))
-                curve.append({
-                    "timestamp": entry.get("date", entry.get("timestamp", "")),
-                    "ibkr": round(eq * 0.4, 2),     # Approximation 40% IBKR
-                    "binance": round(eq * 0.6, 2),   # 60% crypto
-                    "total": round(eq, 2),
-                })
+        if curve:
             return {
                 "equity_curve": curve,
-                "source": "state_history",
+                "source": "snapshots",
                 "points": len(curve),
             }
 
-        # Donnees fictives pour developpement
-        today = datetime.now(UTC)
-        capital_ibkr = 10_000.0
-        capital_crypto = 15_000.0
-        curve = []
-
-        for i in range(90):
-            dt = (today - timedelta(days=90 - i)).isoformat()
-            # Derive legere positive avec volatilite
-            capital_ibkr *= (1 + np.random.normal(0.0004, 0.005))
-            capital_crypto *= (1 + np.random.normal(0.0006, 0.012))
-            total = capital_ibkr + capital_crypto
-            curve.append({
-                "timestamp": dt,
-                "ibkr": round(capital_ibkr, 2),
-                "binance": round(capital_crypto, 2),
-                "total": round(total, 2),
-            })
-
         return {
-            "equity_curve": curve,
-            "source": "simulated",
-            "points": len(curve),
-            "current": {
-                "ibkr": round(capital_ibkr, 2),
-                "binance": round(capital_crypto, 2),
-                "total": round(capital_ibkr + capital_crypto, 2),
-            },
-            "returns": {
-                "ibkr_pct": round((capital_ibkr - 10_000) / 10_000 * 100, 2),
-                "binance_pct": round((capital_crypto - 15_000) / 15_000 * 100, 2),
-                "total_pct": round(
-                    ((capital_ibkr + capital_crypto) - 25_000) / 25_000 * 100, 2
-                ),
-            },
+            "equity_curve": [],
+            "source": "no_data",
+            "points": 0,
+            "message": "Aucune donnee de snapshot portfolio disponible",
         }
     except Exception as e:
         logger.error("equity-curve error: %s", e)
@@ -2577,6 +2637,7 @@ def nav_overview():
         pnl_live_pct = round(pnl_live / cost_basis_live * 100, 2) if cost_basis_live > 0 else 0
 
         # TWR depuis equity curve history
+        state = _load_state()
         history = state.get("history", [])
         twr = _compute_twr(history, cash_flows) if history else pnl_live_pct
 
@@ -2601,3 +2662,54 @@ def nav_overview():
     except Exception as e:
         logger.error("nav error: %s", e)
         return {"error": str(e)}
+
+
+# =============================================================================
+# D2 plan 9.0 (2026-04-19) — unified strategy status endpoint
+# =============================================================================
+# Dashboard doit refleter la verite RUNTIME calculee (statut computed via
+# core.governance.strategy_status), pas la narrative historique dans des
+# notes YAML. Caller: frontend Overview + runtime_audit.py.
+
+@router.get("/api/strategies/status")
+def strategies_status():
+    """Return computed StrategyStatus for every strategy in quant_registry.
+
+    Response schema:
+      {
+        "generated_at": ISO datetime,
+        "counts": {"ACTIVE": N, "READY": N, "AUTHORIZED": N, "PROMOTABLE": N,
+                   "DISABLED": N, "REJECTED": N, "UNKNOWN": N},
+        "strategies": [
+            {"strategy_id": str, "status": str, "book": str, "grade": str,
+             "is_live": bool, "infra_gaps": [str], "reason": str, ...},
+            ...
+        ]
+      }
+    """
+    try:
+        from core.governance.strategy_status import compute_all_statuses
+        reports = compute_all_statuses()
+        counts = {}
+        for r in reports:
+            key = r.status.value
+            counts[key] = counts.get(key, 0) + 1
+        return {
+            "generated_at": datetime.now(UTC).isoformat(),
+            "counts": counts,
+            "strategies": [r.to_dict() for r in reports],
+        }
+    except Exception as e:
+        logger.error("strategies_status error: %s", e)
+        return {"error": str(e), "generated_at": datetime.now(UTC).isoformat()}
+
+
+@router.get("/api/strategies/status/{strategy_id}")
+def strategy_status_one(strategy_id: str):
+    """Return computed StrategyStatus for a single strategy."""
+    try:
+        from core.governance.strategy_status import compute_status
+        return compute_status(strategy_id).to_dict()
+    except Exception as e:
+        logger.error("strategy_status_one error: %s", e)
+        return {"error": str(e), "strategy_id": strategy_id}
