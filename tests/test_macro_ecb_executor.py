@@ -132,8 +132,14 @@ def _make_mock_ib(positions: list | None = None, fill_price: float = 18005.0,
 
 @pytest.fixture
 def isolated_state(tmp_path, monkeypatch):
-    """Redirect worker.ROOT to a tmp dir so tests don't touch real state files."""
+    """Redirect ROOT to a tmp dir so tests don't touch real state files.
+
+    Post-2026-04-19 (Phase 2 XXL): _make_macro_ecb_executor was extracted to
+    core.worker.cycles.macro_ecb_runner — patch its ROOT too.
+    """
     monkeypatch.setattr(worker, "ROOT", tmp_path)
+    from core.worker.cycles import macro_ecb_runner
+    monkeypatch.setattr(macro_ecb_runner, "ROOT", tmp_path)
     (tmp_path / "data" / "state").mkdir(parents=True, exist_ok=True)
     (tmp_path / "data").mkdir(parents=True, exist_ok=True)
     return tmp_path
