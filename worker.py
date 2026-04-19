@@ -4482,7 +4482,13 @@ def run_crypto_cycle():
             logger.error(f"Erreur import CryptoRiskManager: {e}", exc_info=True)
             return
 
-        risk_mgr = CryptoRiskManager(capital=total_capital)
+        # 2026-04-19: dd_state_path enables persistent baselines via DDBaselines
+        # schema v1 (peak survives reboot-in-DD). Legacy schema auto-migrated.
+        _crypto_dd_path = ROOT / "data" / "crypto_dd_state.json"
+        risk_mgr = CryptoRiskManager(
+            capital=total_capital,
+            dd_state_path=_crypto_dd_path,
+        )
 
         # --- Verifier le kill switch AVANT tout trade ---
         # CRO H-8: verifier l'etat persiste du kill switch (pas les triggers
@@ -4612,80 +4618,37 @@ def run_crypto_cycle():
         dd_equity = dd_equity if dd_equity > 0 else current_equity
         if current_equity > 0:
             risk_mgr.capital = dd_equity
-        # Le CryptoRiskManager est recree a chaque cycle avec capital=20K,
-        # donc _daily_start_equity = 20K. Mais l'equity reelle peut etre
-        # differente (earn fluctue, BTC prix change). On persiste l'etat
-        # drawdown entre les cycles via un fichier JSON.
-        _crypto_dd_path = ROOT / "data" / "crypto_dd_state.json"
-        # Baselines DD utilisent dd_equity (excl earn BTC/ETH volatile)
+        # 2026-04-19 refactor: persistence + period anchor rolling now handled
+        # internally by CryptoRiskManager via dd_state_path (see __init__).
+        # Baselines auto-loaded on init, peak survives reboot-in-DD.
+        # Period anchors (daily/weekly/monthly) auto-rolled on UTC change.
+        # Only specialized logic remains here: spot/earn transfer detection.
         try:
+            _prev_baselines = risk_mgr._baselines
+            _prev_total = current_equity  # placeholder if no prior session data
+            # Read prior total_equity from disk file (legacy field, not in v1 schema)
             if _crypto_dd_path.exists():
-                _dd = json.loads(_crypto_dd_path.read_text(encoding="utf-8"))
-                risk_mgr._peak_equity = _dd.get("peak_equity", dd_equity)
-                risk_mgr._daily_start_equity = _dd.get("daily_start", dd_equity)
-                risk_mgr._hourly_start_equity = _dd.get("hourly_start", dd_equity)
-                risk_mgr._weekly_start_equity = _dd.get("weekly_start", dd_equity)
-                risk_mgr._monthly_start_equity = _dd.get("monthly_start", dd_equity)
-                risk_mgr._last_hourly_reset = _dd.get("last_hourly_reset", time.time())
-                risk_mgr._check_count = _dd.get("warmup_count", 0)
+                try:
+                    _raw = json.loads(_crypto_dd_path.read_text(encoding="utf-8"))
+                    _prev_total = float(_raw.get("total_equity", 0))
+                except (json.JSONDecodeError, OSError, ValueError):
+                    _prev_total = 0
+            _prev_daily = _prev_baselines.daily_start_equity if _prev_baselines.daily_start_equity > 0 else dd_equity
 
-                # FIX spot<->earn transfer detection (raffine 2026-04-18):
-                # Si dd_equity a bouge >3% (avant: 5%, trop laxiste -> faux positifs
-                # a -21.4%) MAIS total_equity est stable (<2% change), c'est une
-                # reclassification spot/earn, pas une vraie DD.
-                # Action: REBASELINE TOUS les baselines incluant peak_equity (not
-                # max-merge, qui gardait l'ancienne base superieure et produisait
-                # des faux DD peak -21%).
-                _prev_total = _dd.get("total_equity", 0)
-                _prev_daily = _dd.get("daily_start", dd_equity)
-                if _prev_total > 0 and _prev_daily > 0:
-                    _dd_pct = (dd_equity - _prev_daily) / _prev_daily
-                    _total_pct = (current_equity - _prev_total) / _prev_total
-                    # Threshold 3% (abaisse de 5%) pour detecter les transferts moderes
-                    if _dd_pct < -0.03 and abs(_total_pct) < 0.02:
-                        logger.warning(
-                            f"  SPOT<->EARN TRANSFER DETECTED: dd_equity {_dd_pct:.1%} "
-                            f"but total_equity {_total_pct:.1%}. "
-                            f"Rebaselining ALL dd baselines (prev_peak=${risk_mgr._peak_equity:,.0f} "
-                            f"-> ${dd_equity:,.0f})."
-                        )
-                        risk_mgr._daily_start_equity = dd_equity
-                        risk_mgr._hourly_start_equity = dd_equity
-                        risk_mgr._weekly_start_equity = dd_equity
-                        risk_mgr._monthly_start_equity = dd_equity
-                        # Peak reset complet (pas max) - la vieille peak etait base
-                        # sur une classification differente, non comparable.
-                        risk_mgr._peak_equity = dd_equity
-
-                # Auto-reset daily/weekly/monthly si le jour/semaine/mois a change
-                last_date = _dd.get("last_date", "")
-                today_str = datetime.now(UTC).strftime("%Y-%m-%d")
-                if last_date != today_str:
-                    risk_mgr._daily_start_equity = dd_equity
-                    logger.info(f"  Crypto DD: daily reset {last_date} -> {today_str}, start=${dd_equity:,.0f}")
-
-                last_week = _dd.get("last_week", "")
-                this_week = datetime.now(UTC).strftime("%Y-W%W")
-                if last_week != this_week:
-                    risk_mgr._weekly_start_equity = dd_equity
-
-                last_month = _dd.get("last_month", "")
-                this_month = datetime.now(UTC).strftime("%Y-%m")
-                if last_month != this_month:
-                    risk_mgr._monthly_start_equity = dd_equity
-            else:
-                risk_mgr._peak_equity = dd_equity
-                risk_mgr._daily_start_equity = dd_equity
-                risk_mgr._hourly_start_equity = dd_equity
-                risk_mgr._weekly_start_equity = dd_equity
-                risk_mgr._monthly_start_equity = dd_equity
-        except Exception as _dde:
-            logger.warning(f"Could not load crypto drawdown state: {_dde}")
-            risk_mgr._peak_equity = dd_equity
-            risk_mgr._daily_start_equity = dd_equity
-            risk_mgr._hourly_start_equity = dd_equity
-            risk_mgr._weekly_start_equity = dd_equity
-            risk_mgr._monthly_start_equity = dd_equity
+            if _prev_total > 0 and _prev_daily > 0 and dd_equity > 0:
+                _dd_pct = (dd_equity - _prev_daily) / _prev_daily
+                _total_pct = (current_equity - _prev_total) / _prev_total
+                # Spot<->Earn transfer signature: dd_equity drops >3% but
+                # total_equity is stable (<2% change). Rebaseline (peak too) since
+                # the prior peak was anchored on a different classification.
+                if _dd_pct < -0.03 and abs(_total_pct) < 0.02:
+                    logger.warning(
+                        f"  SPOT<->EARN TRANSFER DETECTED: dd_equity {_dd_pct:.1%} "
+                        f"but total_equity {_total_pct:.1%} -> rebaseline"
+                    )
+                    risk_mgr.rebaseline(dd_equity, reason="spot_earn_transfer")
+        except Exception as _xfer_err:
+            logger.warning(f"Spot/earn transfer detection error: {_xfer_err}")
 
         # --- Auto-redeem Earn Flexible si cash spot insuffisant pour trader ---
         # Les strats ont besoin de cash spot/margin pour executer.
@@ -4731,25 +4694,12 @@ def run_crypto_cycle():
             earn_total=earn_total,
         )
 
-        # Persister l'etat drawdown pour le prochain cycle
+        # 2026-04-19: state persistence handled internally by CryptoRiskManager
+        # in check_drawdown(). We only enrich with total_equity (specialized field
+        # for spot/earn transfer detection on next boot).
         try:
-            _crypto_dd_path.parent.mkdir(parents=True, exist_ok=True)
-            _now_utc = datetime.now(UTC)
-            _crypto_dd_path.write_text(json.dumps({
-                "peak_equity": risk_mgr._peak_equity,
-                "daily_start": risk_mgr._daily_start_equity,
-                "hourly_start": risk_mgr._hourly_start_equity,
-                "weekly_start": risk_mgr._weekly_start_equity,
-                "monthly_start": risk_mgr._monthly_start_equity,
-                "last_hourly_reset": risk_mgr._last_hourly_reset,
-                "warmup_count": risk_mgr._check_count,
-                "total_equity": current_equity,
-                "dd_equity": dd_equity,
-                "last_date": _now_utc.strftime("%Y-%m-%d"),
-                "last_week": _now_utc.strftime("%Y-W%W"),
-                "last_month": _now_utc.strftime("%Y-%m"),
-                "last_updated": _now_utc.isoformat(),
-            }))
+            risk_mgr._baselines.total_equity = current_equity
+            risk_mgr._persist_dd_state()
         except Exception as _dd_err:
             # CRO H-3: drawdown state persist is critical — circuit breakers depend on it
             logger.critical(f"DRAWDOWN STATE PERSIST FAILED: {_dd_err}")

@@ -41,6 +41,15 @@ from pathlib import Path
 
 import yaml
 
+from core.crypto.dd_baseline_state import (
+    BootState,
+    DDBaselines,
+    init_baselines_from_equity,
+    load_baselines,
+    roll_period_anchors,
+    save_baselines,
+)
+
 logger = logging.getLogger(__name__)
 
 ROOT = Path(__file__).resolve().parent.parent.parent
@@ -476,24 +485,102 @@ class CryptoRiskManager:
         capital: float = 10_000,
         limits: CryptoRiskLimits | None = None,
         ks_state_path: Path | None = None,
+        dd_state_path: Path | None = None,
     ):
         self.capital = capital
         self.limits = limits or CryptoRiskLimits()
         self.kill_switch = CryptoKillSwitch(state_path=ks_state_path)
-        self._peak_equity = capital
-        self._daily_start_equity = capital
-        self._hourly_start_equity = capital
-        self._weekly_start_equity = capital
-        self._monthly_start_equity = capital
+        self._dd_state_path = dd_state_path
         self._last_hourly_reset = time.time()
         self._check_count = 0  # Warmup: skip kill switch first 3 checks
-        # 2026-04-19 fix: baseline_synced=False -> force premier check_drawdown a
-        # caler les baselines sur current_equity reel (pas capital nominal $10K).
-        # Sinon: si capital nominal $10K et current_equity Binance $7-8K (earn
-        # passif exclu trading), ratio 10/8 = 1.25 < 1.30 threshold -> pas de
-        # reset auto -> DD calcul -20% -> kill switch FAUX POSITIF.
-        self._baselines_synced = False
         self._audit_log: list[dict] = []
+
+        # DD baseline boot-state classification (4 states):
+        #   FIRST_BOOT     : no state file -> sync to current equity on 1st check
+        #   STATE_RESTORED : loaded fresh -> trust persisted peak/baselines
+        #   STATE_STALE    : loaded but old -> trust peak, roll period anchors
+        #   STATE_CORRUPT  : load failed -> alert, treat as FIRST_BOOT
+        if dd_state_path is not None:
+            self._dd_boot_state, self._baselines = load_baselines(dd_state_path)
+        else:
+            self._dd_boot_state = BootState.FIRST_BOOT
+            self._baselines = DDBaselines()
+
+        if self._dd_boot_state in (BootState.FIRST_BOOT, BootState.STATE_CORRUPT):
+            # No usable persisted state -> seed baselines from capital nominal.
+            # First check_drawdown() call will sync to real current_equity.
+            self._peak_equity = capital
+            self._daily_start_equity = capital
+            self._weekly_start_equity = capital
+            self._monthly_start_equity = capital
+            self._baselines_synced = False
+            if self._dd_boot_state == BootState.STATE_CORRUPT:
+                logger.critical(
+                    f"DD baseline state CORRUPT at {dd_state_path} — "
+                    f"falling back to FIRST_BOOT behavior, peak history may be lost"
+                )
+        else:
+            # Persisted state loaded -> trust peak. Roll period anchors if changed.
+            self._peak_equity = self._baselines.peak_equity
+            self._daily_start_equity = self._baselines.daily_start_equity
+            self._weekly_start_equity = self._baselines.weekly_start_equity
+            self._monthly_start_equity = self._baselines.monthly_start_equity
+            self._baselines_synced = True
+            logger.info(
+                f"DD baselines {self._dd_boot_state.value} from {dd_state_path}: "
+                f"peak=${self._peak_equity:,.0f}, "
+                f"daily_start=${self._daily_start_equity:,.0f}, "
+                f"daily_anchor={self._baselines.daily_anchor}, "
+                f"last_check_age={time.time() - self._baselines.last_check_ts:.0f}s"
+            )
+
+        # Hourly always session-scoped (never persisted)
+        self._hourly_start_equity = self._peak_equity
+
+    # ------------------------------------------------------------------
+    # DD persistence helpers
+    # ------------------------------------------------------------------
+
+    def _persist_dd_state(self) -> None:
+        """Atomically persist current DD baselines. Safe no-op if no path set."""
+        if self._dd_state_path is None:
+            return
+        self._baselines.peak_equity = self._peak_equity
+        self._baselines.daily_start_equity = self._daily_start_equity
+        self._baselines.weekly_start_equity = self._weekly_start_equity
+        self._baselines.monthly_start_equity = self._monthly_start_equity
+        self._baselines.last_check_ts = time.time()
+        if not self._baselines.session_id:
+            import uuid
+            self._baselines.session_id = str(uuid.uuid4())
+        try:
+            save_baselines(self._dd_state_path, self._baselines)
+        except OSError as exc:
+            # CRO H-3: persist failure is critical, kill chain depends on it
+            logger.critical(f"DRAWDOWN STATE PERSIST FAILED: {exc}")
+
+    def rebaseline(self, equity: float, reason: str = "manual") -> None:
+        """Reset ALL baselines (incl peak) to equity. Use after spot/earn transfer
+        detection or other reclassification events where peak comparison is no
+        longer meaningful. Persists immediately.
+        """
+        if equity <= 0:
+            logger.error(f"rebaseline ignored: invalid equity={equity}")
+            return
+        logger.warning(
+            f"DD REBASELINE ({reason}): peak ${self._peak_equity:,.0f} -> ${equity:,.0f}"
+        )
+        self._peak_equity = equity
+        self._daily_start_equity = equity
+        self._hourly_start_equity = equity
+        self._weekly_start_equity = equity
+        self._monthly_start_equity = equity
+        self._last_hourly_reset = time.time()
+        self._baselines = init_baselines_from_equity(equity)
+        self._baselines_synced = True
+        # After rebaseline, future checks should NOT be in warmup mode
+        self._dd_boot_state = BootState.STATE_RESTORED
+        self._persist_dd_state()
 
     # ------------------------------------------------------------------
     # Check 1: Position size
@@ -685,59 +772,63 @@ class CryptoRiskManager:
         if current_equity <= 0:
             return True, "equity=0 (API error?) — drawdown check skipped"
 
-        # 2026-04-19 fix: premier check apres init -> sync TOUTES baselines sur
-        # current_equity reel. Le capital nominal $10K (config) != current_equity
-        # Binance qui exclut earn passif. Sans ce sync, peak nominal $10K + current
-        # $7-8K = DD -20% faux positif systematique.
+        # First check after init with NO persisted state (FIRST_BOOT or STATE_CORRUPT):
+        # sync ALL baselines to real current_equity (capital nominal $10K may diverge
+        # from real equity on Binance which excludes earn passif).
         if not self._baselines_synced:
             self._peak_equity = current_equity
             self._daily_start_equity = current_equity
             self._hourly_start_equity = current_equity
             self._weekly_start_equity = current_equity
             self._monthly_start_equity = current_equity
+            # Init persisted DD baselines snapshot from current equity (anchors UTC now)
+            self._baselines = init_baselines_from_equity(current_equity)
             self._baselines_synced = True
             logger.info(
                 f"DD baselines synced to current equity ${current_equity:,.0f} "
-                f"(capital nominal was ${self.capital:,.0f}) — first check"
+                f"(capital nominal was ${self.capital:,.0f}) — "
+                f"boot_state={self._dd_boot_state.value}"
             )
+            self._persist_dd_state()
             return True, f"baselines synced to ${current_equity:,.0f} — first check"
 
-        # Guard: reset ALL baselines that are wildly different from current equity.
-        # This catches config/restart mismatches that would trigger false kill switches.
-        # Check each baseline individually (not just daily).
-        # 2026-04-18 fix: threshold 1.5 -> 1.30 pour attraper les transferts
-        # spot<->earn moderes (ex: dd_equity $7.1K -> $5.6K = ratio 1.27, avant
-        # 1.5 threshold) qui echappaient et produisaient des kill switch faux-positifs -21%.
-        _BASELINE_MISMATCH_THRESHOLD = 1.30
-        _baselines = {
-            "daily": self._daily_start_equity,
-            "hourly": self._hourly_start_equity,
-            "weekly": self._weekly_start_equity,
-            "monthly": self._monthly_start_equity,
-            "peak": self._peak_equity,
-        }
-        _reset_needed = False
-        for _bl_name, _bl_val in _baselines.items():
-            if _bl_val > 0 and (
-                current_equity / _bl_val > _BASELINE_MISMATCH_THRESHOLD
-                or _bl_val / current_equity > _BASELINE_MISMATCH_THRESHOLD
-            ):
-                logger.warning(
-                    f"Drawdown baseline mismatch ({_bl_name}): "
-                    f"${_bl_val:,.0f} vs current=${current_equity:,.0f} "
-                    f"(ratio > {_BASELINE_MISMATCH_THRESHOLD}x)"
-                )
-                _reset_needed = True
+        # Persisted state path: roll period anchors if a new day/week/month started.
+        # Peak is NEVER reset here -> reboot in DD keeps historical peak.
+        self._baselines, _rolled = roll_period_anchors(self._baselines, current_equity)
+        if _rolled:
+            for _period in _rolled:
+                if _period == "daily":
+                    self._daily_start_equity = current_equity
+                elif _period == "weekly":
+                    self._weekly_start_equity = current_equity
+                elif _period == "monthly":
+                    self._monthly_start_equity = current_equity
+            logger.info(
+                f"DD period anchors rolled: {_rolled} -> baselines reset to "
+                f"${current_equity:,.0f} (peak ${self._peak_equity:,.0f} preserved)"
+            )
 
-        if _reset_needed:
-            logger.warning("Resetting ALL baselines to current equity")
+        # Sanity guard: only trip if equity is wildly off (>3x in either direction),
+        # which strongly suggests config error or wrong capital denominator —
+        # NOT a real DD. Threshold loosened from 1.30 (false-positive prone) to 3.0
+        # because we now have proper persistence + anchor rolling.
+        _SANITY_MISMATCH_THRESHOLD = 3.0
+        if self._peak_equity > 0 and (
+            current_equity / self._peak_equity > _SANITY_MISMATCH_THRESHOLD
+            or self._peak_equity / current_equity > _SANITY_MISMATCH_THRESHOLD
+        ):
+            logger.critical(
+                f"DD baseline SANITY MISMATCH: peak=${self._peak_equity:,.0f} "
+                f"vs current=${current_equity:,.0f} (>3x). Likely config/denominator "
+                f"bug — alerting and rebaselining."
+            )
             self._daily_start_equity = current_equity
             self._hourly_start_equity = current_equity
             self._weekly_start_equity = current_equity
             self._monthly_start_equity = current_equity
             self._peak_equity = current_equity
-            # Skip DD check this cycle — baselines just reset, not meaningful
-            return True, "baselines reset — skipping DD check this cycle"
+            self._persist_dd_state()
+            return True, "SANITY MISMATCH — baselines rebaselined, DD skipped this cycle"
 
         self._peak_equity = max(self._peak_equity, current_equity)
         dd_pct = (
@@ -791,21 +882,23 @@ class CryptoRiskManager:
             else 0
         )
 
-        # Kill switch check — skip during warmup (first 3 cycles after init)
-        # Baselines from state file may be stale after worker restart.
+        # Kill switch warmup — skip first 3 cycles ONLY when no persisted state.
+        # When state is restored from disk, baselines are trustworthy from cycle #1.
         self._check_count += 1
-        if self._check_count <= 3:
+        _is_fresh_init = self._dd_boot_state in (
+            BootState.FIRST_BOOT, BootState.STATE_CORRUPT,
+        )
+        if _is_fresh_init and self._check_count <= 3:
             logger.info(
-                f"DD warmup {self._check_count}/3: daily={daily_pnl_pct:.1f}% "
+                f"DD warmup {self._check_count}/3 (fresh init): daily={daily_pnl_pct:.1f}% "
                 f"hourly={hourly_pnl_pct:.1f}% DD={dd_pct:.1f}% — SKIPPED"
             )
-            # Stabilize baselines on last warmup cycle
             if self._check_count == 3:
                 self._daily_start_equity = current_equity
                 self._hourly_start_equity = current_equity
                 self._peak_equity = max(self._peak_equity, current_equity)
                 logger.info(f"DD warmup done: baselines stabilized at ${current_equity:,.0f}")
-            # Skip ALL checks during warmup (kill switch + violations)
+            self._persist_dd_state()
             return True, f"warmup {self._check_count}/3 — DD check skipped"
 
         killed, reason = self.kill_switch.check(
@@ -814,6 +907,7 @@ class CryptoRiskManager:
             drawdown_pct=dd_pct,
         )
         if killed:
+            self._persist_dd_state()
             return False, f"KILL SWITCH: {reason}"
 
         violations = []
@@ -833,6 +927,7 @@ class CryptoRiskManager:
             else f"DD={dd_pct:.1f}%, daily={daily_pnl_pct:.1f}%, "
                  f"weekly={weekly_pnl_pct:.1f}%"
         )
+        self._persist_dd_state()
         return ok, msg
 
     # ------------------------------------------------------------------
