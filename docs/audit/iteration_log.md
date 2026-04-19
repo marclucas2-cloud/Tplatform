@@ -113,3 +113,43 @@ Voir docs/audit/final_verdict.md pour justification complete.
 - iteration 2: commits `3973ab1` (G4+G5+G6 code), `cfa7b1c` (tests regression)
 
 **Total session 9.5** : 9 commits locaux (post commit C2+E2 2a7b477) + docs final verdict.
+
+---
+
+## ITERATION 3 — Business audit (2026-04-19 PM)
+
+**Mandat** : auditer pour le business (live rentable + ROC + capital usage + trajectoire 20K -> 100K), pas pour un score abstrait. Livrable : 6 docs, decisions machine-readable.
+
+**Actions executees** :
+1. ✅ Runtime audit VPS -> 0 incoherence, 15 strats, 2 ACTIVE, 9 READY, 2 AUTHORIZED, 2 DISABLED
+2. ✅ Cross-check pytest: 3674 pass, 0 fail, 80 skipped legacy (quarantine residuelle)
+3. ✅ Ecriture `docs/audit/live_readiness_scoreboard.md` — verite par book + strat, score 6.5/10 live-readiness
+4. ✅ Ecriture `docs/audit/ib_binance_live_plan.md` — classification strats, decision sleeve `alt_rel_strength_14_60_7`, checklist semaines
+5. ✅ Ecriture `docs/audit/roc_capital_usage.md` — diagnostic capital occupancy 1.09%, allocation cible 20K, trajectoire 100K
+6. ✅ Ecriture `docs/audit/alpaca_go_25k_rule.md` + implementation `scripts/alpaca_go_25k_gate.py` (exit codes GO=0 / WATCH=1 / NO_GO=2)
+
+**Findings critiques iter3** :
+- **1 position live MCL +$295 unrealized** via CAM (IBKR futures). Rest idle.
+- **Capital occupancy 1.09%** sur $20,855 deployable. Binance 0%.
+- **Trade frequency observee ~0.1-0.2/jour** vs cible ~1/jour (5-10x gap).
+- **Decision sleeve Binance : `alt_rel_strength_14_60_7`** (bat btc_asia car compat Binance France spot + runner production-ready + decorrelation portfolio -0.014 + bull/bear robust).
+- **9/10 paper strats sans journal sur VPS** : a verifier lundi 2026-04-20 si weekend artefact ou fail silencieux.
+- **Gold trend MGC V1** : WF + MC pending, bloque promotion live second moteur IBKR.
+
+**Blockers nouveaux identifies** :
+- B2 : gold_trend_mgc V1 WF manifest a produire
+- B5 : btc_asia_mes_leadlag variante long-only a wirer (Binance France compat)
+- B6 : cron VPS refresh parquets crypto toutes les 15min
+- B9 : paper runners weekday ecriture journal a verifier
+
+**Tests** : pytest 3674 pass (confirme, pas de regression).
+
+**Commits iter3** : (a faire local, pas de push sans validation user)
+- iter3 docs + scripts/alpaca_go_25k_gate.py
+
+**Score iter3** :
+- Plateforme gouvernance : 9.5/10 (maintenu, stable post iter2)
+- Live readiness : **6.5/10** (honnete, gap temps paper + diversification)
+- ROC / capital usage : **4.0/10** (gap occupancy 1% + pas de mesure par strat)
+
+**Mandat respecte** : livrables business-oriented, pas gonflage. Prochaine action user = verifications lundi 2026-04-20 + decision funding EUR 3.6K mib_estx50.

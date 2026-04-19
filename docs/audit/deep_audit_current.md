@@ -1,8 +1,14 @@
 # Deep Audit — Trading Platform
 
-**Date** : 2026-04-19 (iteration 1 complete)
+**Date** : 2026-04-19 (iteration 3 business-focused)
 **Mode** : comite senior impitoyable. Aucune complaisance.
 **Auditeurs virtuels** : CTO + CRO + Quant + Produit + Ops.
+
+**Iter3 addendum** : audit pivote vers business metrics (live rentable + ROC + capital usage). Voir
+`live_readiness_scoreboard.md`, `ib_binance_live_plan.md`, `roc_capital_usage.md`,
+`alpaca_go_25k_rule.md` pour decisions concretes. Ce document reste la base gouvernance
+infrastructure ; le diagnostic live-readiness (6.5/10) n'invalide PAS le score plateforme
+(9.5/10) — ce sont deux axes distincts (qualite gouvernance vs temps paper + diversification).
 
 ---
 
