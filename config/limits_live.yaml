@@ -18,20 +18,20 @@ margin_limits:
   block_margin_pct: 0.85          # Block new trades
 
 circuit_breakers:
-  daily_loss_pct: 0.015           # -$150 -> stop trading today
-  hourly_loss_pct: 0.01           # -$100 -> pause 30 min
-  weekly_loss_pct: 0.03           # -$300 -> reduce sizing 50%
+  daily_loss_pct: 0.05            # -$500 -> stop trading today (was 1.5% — trop serre pour futures)
+  hourly_loss_pct: 0.03           # -$300 -> pause 30 min (was 1% — 1 SL MES = 2%)
+  weekly_loss_pct: 0.08           # -$800 -> reduce sizing 50% (was 3%)
 
 kill_switch:
-  trailing_5d_loss_pct: 0.03      # -$300 sur 5j -> tout fermer
-  max_monthly_loss_pct: 0.05      # -$500 sur le mois -> tout fermer, review
+  trailing_5d_loss_pct: 0.08      # -$800 sur 5j -> tout fermer (was 3%)
+  max_monthly_loss_pct: 0.12      # -$1,200 sur le mois -> tout fermer, review (was 5%)
 
 deleveraging:
-  level_1_dd_pct: 0.009            # -$90 -> reduce 30%
+  level_1_dd_pct: 0.025            # -$250 -> reduce 30% (was 0.9%)
   level_1_action: 0.30
-  level_2_dd_pct: 0.0135           # -$135 -> reduce 50%
+  level_2_dd_pct: 0.04             # -$400 -> reduce 50% (was 1.35%)
   level_2_action: 0.50
-  level_3_dd_pct: 0.018            # -$180 -> close all
+  level_3_dd_pct: 0.06             # -$600 -> close all (was 1.8%)
   level_3_action: 1.00
 
 sector_limits:
@@ -50,7 +50,7 @@ fx_limits:
 futures_limits:
   max_futures_margin_pct: 0.35      # $3,500 margin futures max (35% capital)
   max_single_contract_margin_pct: 0.20  # $2,000 max per contract type
-  allowed_contracts: [MCL, MES, MNQ, MGC]
+  allowed_contracts: [MCL, MES, MNQ, MGC, FIB, FESX]
   max_contracts_per_symbol: 2
 
 # Combined limits
