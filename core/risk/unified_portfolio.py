@@ -87,6 +87,8 @@ class UnifiedPortfolioView:
         self._day_of_week = -1
         self._day_of_year = -1
         self._history: list[dict] = []
+        self._last_ibkr_eq = 0.0
+        self._last_bnb_eq = 0.0
 
     def update(
         self,
@@ -153,13 +155,21 @@ class UnifiedPortfolioView:
         cash_pct = (total_cash / nav_total * 100) if nav_total > 0 else 0
 
         # Drawdown tracking
-        # Guard: if NAV drops to 0 or near 0, it's a broker connectivity issue
-        # not a real drawdown. Skip DD update.
+        # Guard 1: NAV near zero = all brokers down
         if nav_total <= 100:
             dd_from_peak = 0
             logger.warning(f"Unified: NAV=${nav_total:.0f} too low — broker likely down, skipping DD")
+        # Guard 2: a major broker component vanished (went from >$500 to 0 while the other
+        # stays non-zero). Typical scenario: IBKR Gateway down overnight (2FA pending),
+        # Binance still reporting. NAV drops ~50-70% artificially — NOT a real drawdown.
+        elif (self._last_ibkr_eq > 500 and ibkr_eq == 0) or (self._last_bnb_eq > 500 and bnb_eq == 0):
+            dd_from_peak = 0
+            logger.warning(
+                f"Unified: major broker unreachable (ibkr=${ibkr_eq:.0f}, bnb=${bnb_eq:.0f}, "
+                f"last_ibkr=${self._last_ibkr_eq:.0f}, last_bnb=${self._last_bnb_eq:.0f}) — skipping DD"
+            )
         else:
-            # Guard: if peak_nav was set from mixed paper+live, reset it
+            # Guard 3: if peak_nav was set from mixed paper+live, reset it
             if self._peak_nav > 0 and nav_total / self._peak_nav < 0.3:
                 logger.warning(
                     f"Unified: NAV=${nav_total:.0f} vs peak=${self._peak_nav:.0f} "
@@ -172,6 +182,13 @@ class UnifiedPortfolioView:
                 (nav_total - self._peak_nav) / self._peak_nav * 100
                 if self._peak_nav > 0 else 0
             )
+
+        # Track last broker equities for next cycle's guard 2 (only when both > 0,
+        # so we don't lock in "both down" as reference)
+        if ibkr_eq > 0:
+            self._last_ibkr_eq = ibkr_eq
+        if bnb_eq > 0:
+            self._last_bnb_eq = bnb_eq
 
         # Reset daily/weekly tracking
         if today != self._day_of_year:
