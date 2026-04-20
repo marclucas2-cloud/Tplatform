@@ -8,6 +8,8 @@ plus larges que l'audit).
 
 - `TODO_XXL_DECORRELATION_ROC_CAPITAL.md` : plan decorrelation + ROC (research)
 - `TODO_XXL_DESK_PERSO_10_10_CLAUDE.md` : plan desk perso 10/10 (en cours)
+- `TICKET_FEAT_CAM_TRAIL.md` : trailing SL conditionnel pour CAM (2026-04-19, **CLOSED KEEP H0**, H4 backlog)
+- `TICKET_POL_EVENT_FLAG.md` : policy event binaire actif pour strats live (2026-04-19, P2 OPEN)
 - `01_integrite_data.txt` : integrite data user notes
 - `02_expansion_eu_forex.txt` : plan expansion EU/FX
 - `03_alpha_pur_single_stocks.txt` : alpha single stocks
