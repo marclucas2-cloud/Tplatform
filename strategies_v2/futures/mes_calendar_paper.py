@@ -47,6 +47,12 @@ class _MESCalendarBase(StrategyBase):
     def __init__(self) -> None:
         self.data_feed: DataFeed | None = None
         self._last_signal_ts: pd.Timestamp | None = None
+        # Override pour paper runner (wall-clock today). En backtest, on garde
+        # bar.timestamp comme avant (iteration historique). Fix 2026-04-21:
+        # bug observe lundi 2026-04-20 14:00 UTC ou bar.timestamp==vendredi
+        # -> dayofweek=4 -> "pas un jour pattern". Le cycle paper doit
+        # utiliser le vrai jour runtime, pas le dernier bar disponible.
+        self.runtime_today: pd.Timestamp | None = None
 
     @property
     def asset_class(self) -> str:
@@ -59,23 +65,33 @@ class _MESCalendarBase(StrategyBase):
     def set_data_feed(self, feed: DataFeed) -> None:
         self.data_feed = feed
 
+    def set_runtime_today(self, today: pd.Timestamp) -> None:
+        """Paper/live runner appelle ceci avant on_bar pour que la detection
+        pattern utilise le jour actuel et non bar.timestamp (qui peut etre
+        le close de la veille)."""
+        self.runtime_today = pd.Timestamp(today).normalize()
+
     def _is_pattern_day(self, bar_ts: pd.Timestamp) -> bool:
         raise NotImplementedError
 
     def on_bar(self, bar: Bar, portfolio_state: PortfolioState) -> Signal | None:
         if self.data_feed is None:
             return None
-        ts = pd.Timestamp(bar.timestamp).normalize()
-        # Idempotence: un signal max par jour
-        if self._last_signal_ts is not None and ts <= self._last_signal_ts:
+        bar_ts = pd.Timestamp(bar.timestamp).normalize()
+        # Pattern-day check: use runtime_today override (paper/live) si fourni,
+        # sinon bar.timestamp (backtest: iteration historique, toujours OK).
+        check_ts = self.runtime_today if self.runtime_today is not None else bar_ts
+        # Idempotence: un signal max par jour (keyed sur check_ts, sinon on
+        # re-signal tous les backtest ticks le meme jour).
+        if self._last_signal_ts is not None and check_ts <= self._last_signal_ts:
             return None
-        if not self._is_pattern_day(ts):
+        if not self._is_pattern_day(check_ts):
             return None
         # On signale un BUY MES pour la session du jour
         # SL conservatif: 0.5% sous open (intraday move limite)
         # TP optionnel: 0.8% au-dessus (pas force)
         close_now = float(bar.close)
-        self._last_signal_ts = ts
+        self._last_signal_ts = check_ts
         return Signal(
             symbol=self.SYMBOL,
             side="BUY",

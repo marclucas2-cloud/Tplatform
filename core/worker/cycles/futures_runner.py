@@ -325,9 +325,15 @@ def run_futures_cycle(live: bool = False):
                 from strategies_v2.futures.mes_calendar_paper import (
                     MESMondayLong, MESWednesdayLong, MESPreHolidayLong,
                 )
+                import pandas as _cal_pd
+                # Fix 2026-04-21: passer runtime_today pour que la detection
+                # weekday utilise le jour actuel du cycle, pas bar.timestamp
+                # (qui peut etre close vendredi quand cycle tourne lundi 14:00).
+                _runtime_today = _cal_pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
                 for _cal_cls in (MESMondayLong, MESWednesdayLong, MESPreHolidayLong):
                     _cal = _cal_cls()
                     _cal.set_data_feed(feed)
+                    _cal.set_runtime_today(_runtime_today)
                     bar = feed.get_latest_bar("MES")
                     if bar:
                         sig = _cal.on_bar(bar, portfolio_state)
