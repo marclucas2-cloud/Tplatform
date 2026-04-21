@@ -4609,31 +4609,26 @@ def main():
     last_crypto_watchdog = 0   # idem
 
     # Fix 2026-04-21: force rollover DD baseline au boot pour couvrir le cas
-    # ou run_live_risk_cycle tarderait (scheduler 5min retarde). Utilise
-    # equity IBKR actuelle comme baseline daily si date != today. Sans
-    # equity valide, ecrit 0 -> le fichier sera corrige au 1er cycle.
+    # ou run_live_risk_cycle tarderait (scheduler 5min retarde). Lit
+    # equity_state.json IBKR (deja ecrit par boot_preflight) au lieu de
+    # refaire une connection IBKR (clientId conflicts possibles au boot).
     try:
         _boot_equity = 0.0
-        try:
-            import socket
-            with socket.create_connection(
-                (os.getenv("IBKR_HOST", "127.0.0.1"),
-                 int(os.getenv("IBKR_PORT", "4002"))), timeout=2
-            ):
-                pass
-            from core.broker.ibkr_adapter import IBKRBroker
-            _boot_ibkr = IBKRBroker(client_id=4)
+        _eq_path = ROOT / "data" / "state" / "ibkr_futures" / "equity_state.json"
+        if _eq_path.exists():
             try:
-                _boot_acct = _boot_ibkr.get_account_info()
-                _boot_equity = float(_boot_acct.get("equity", 0))
-            finally:
-                _boot_ibkr.disconnect()
-        except Exception:
-            pass
+                _eq_data = json.loads(_eq_path.read_text(encoding="utf-8"))
+                _boot_equity = float(_eq_data.get("equity", 0))
+            except Exception as _eq_exc:
+                logger.warning(f"Boot DD baseline: equity_state.json read error: {_eq_exc}")
         if _boot_equity > 0:
             _ensure_live_dd_baseline(_boot_equity)
+        else:
+            logger.warning(
+                "Boot DD baseline rollover skipped: equity=0 (will retry in live_risk_cycle)"
+            )
     except Exception as _exc:
-        logger.warning(f"Boot DD baseline rollover skipped: {_exc}")
+        logger.warning(f"Boot DD baseline rollover error: {_exc}")
 
     # CRO #4: automated dry-run and smoke test flags
     _dry_run_done_today = False
