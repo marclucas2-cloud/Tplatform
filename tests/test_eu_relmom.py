@@ -54,6 +54,31 @@ class TestLoadEuReturns:
         # Daily returns should be roughly in [-0.1, 0.1] range (normal market)
         assert returns.abs().max().max() < 0.5
 
+    def test_deduplicates_index_and_rejects_epoch_corrupted(self, tmp_path):
+        """Regression bug 2026-04-20: ESTX50 parquet avait 99.9% index == 1970-01-01
+        (epoch) -> reindex error "cannot reindex on an axis with duplicate labels".
+        Fix: dedupe + reject series dont min_date < 2000-01-01."""
+        # ESTX50 + MIB corrompus (1970-01-01 dup), DAX/CAC40 OK
+        good_idx = pd.date_range("2024-01-01", periods=50, freq="B")
+        bad_idx = pd.DatetimeIndex([pd.Timestamp("1970-01-01")] * 50)
+        for sym, idx in [("DAX", good_idx), ("CAC40", good_idx),
+                         ("ESTX50", bad_idx), ("MIB", bad_idx)]:
+            df = pd.DataFrame({"close": np.arange(50) + 100.0}, index=idx)
+            df.to_parquet(tmp_path / f"{sym}_1D.parquet")
+        returns = load_eu_returns(tmp_path)
+        # Only DAX + CAC40 should remain (corrupted skipped, not crashed)
+        assert set(returns.columns) == {"DAX", "CAC40"}
+        assert len(returns) > 10
+
+    def test_raises_only_if_less_than_2_valid_series(self, tmp_path):
+        """Si tous les parquets sont corrompus, on raise comme avant."""
+        bad_idx = pd.DatetimeIndex([pd.Timestamp("1970-01-01")] * 10)
+        for sym in EU_UNIVERSE:
+            df = pd.DataFrame({"close": np.arange(10) + 100.0}, index=bad_idx)
+            df.to_parquet(tmp_path / f"{sym}_1D.parquet")
+        with pytest.raises(ValueError, match="Insufficient"):
+            load_eu_returns(tmp_path)
+
 
 class TestMomentumFormulaEquivalence:
     """Verifie que compute_momentum sur les returns donne le meme resultat

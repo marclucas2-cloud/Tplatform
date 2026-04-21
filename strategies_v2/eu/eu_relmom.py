@@ -31,6 +31,7 @@ Caveats:
 """
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 
 import pandas as pd
@@ -44,15 +45,23 @@ from strategies_v2.us.us_sector_ls import (
     tick,
 )
 
+logger = logging.getLogger(__name__)
+
 EU_UNIVERSE = ["DAX", "CAC40", "ESTX50", "MIB"]
 DEFAULT_LOOKBACK = 40
 DEFAULT_HOLD_DAYS = 3
 DEFAULT_CAPITAL_PER_LEG = 1_000.0
 DEFAULT_RT_COST_PCT = 0.0010
 
+_MIN_VALID_DATE = pd.Timestamp("2000-01-01")
+
 
 def load_eu_returns(data_dir: Path) -> pd.DataFrame:
     """Load EU indices closes from parquet files and compute daily returns.
+
+    Defensif : deduplique l'index (bug observe 2026-04-20 sur ESTX50 ou
+    99.9% des dates == 1970-01-01 epoch) et rejette les series dont l'index
+    date est manifestement corrompu (< 2000-01-01).
 
     Args:
         data_dir: directory containing {SYM}_1D.parquet files
@@ -63,6 +72,7 @@ def load_eu_returns(data_dir: Path) -> pd.DataFrame:
     for symbol in EU_UNIVERSE:
         path = data_dir / f"{symbol}_1D.parquet"
         if not path.exists():
+            logger.warning(f"eu_relmom: {symbol} parquet missing at {path}")
             continue
         df = pd.read_parquet(path)
         idx = pd.to_datetime(df.index)
@@ -70,7 +80,19 @@ def load_eu_returns(data_dir: Path) -> pd.DataFrame:
             idx = idx.tz_localize(None)
         except TypeError:
             pass
-        closes[symbol] = pd.Series(df["close"].values, index=idx.normalize(), name=symbol)
+        idx = idx.normalize()
+        series = pd.Series(df["close"].values, index=idx, name=symbol)
+        # Deduplicate (keep last = most recent value for same date)
+        series = series[~series.index.duplicated(keep="last")]
+        # Reject epoch-corrupted data (yfinance parse fail -> all 1970-01-01)
+        if len(series) == 0 or series.index.min() < _MIN_VALID_DATE:
+            logger.warning(
+                f"eu_relmom: {symbol} parquet corrupted "
+                f"(min_date={series.index.min() if len(series) else 'empty'} "
+                f"< {_MIN_VALID_DATE.date()}) -- skipping"
+            )
+            continue
+        closes[symbol] = series
     if len(closes) < 2:
         raise ValueError(f"Insufficient EU indices loaded: {list(closes.keys())}")
     px = pd.DataFrame(closes).sort_index().ffill().dropna()
