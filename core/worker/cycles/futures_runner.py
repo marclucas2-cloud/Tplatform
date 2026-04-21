@@ -29,6 +29,61 @@ logger = logging.getLogger("worker")
 ROOT = Path(__file__).resolve().parents[3]
 
 
+def _get_canonical_ibkr_account(ib) -> str | None:
+    """Retourne l'account canonique IBKR pour ce cycle.
+
+    Priorite:
+    1. env IBKR_LIVE_ACCOUNT (si defini, source explicite)
+    2. ib.managedAccounts()[0] (premier compte gere par la session)
+    3. None (si echec -> caller garde comportement historique: pas de filtre)
+
+    Raison d'etre: le live gateway (port 4002) peut reporter des positions
+    sur des sub-accounts "DUP*" (duplicated/linked demo) qui polluent
+    `_ibkr_real_pos` et font SKIP les paper strats MES sur position fantome.
+    Bug observe 2026-04-20: MES -1 lot sur DUP573894 bloque 7 paper strats.
+    """
+    env_acct = os.environ.get("IBKR_LIVE_ACCOUNT", "").strip()
+    if env_acct:
+        return env_acct
+    try:
+        managed = ib.managedAccounts() if hasattr(ib, "managedAccounts") else []
+        if managed:
+            return str(managed[0])
+    except Exception as exc:
+        logger.warning(f"_get_canonical_ibkr_account: managedAccounts failed: {exc}")
+    return None
+
+
+def _filter_positions_by_account(positions, canonical_account: str | None) -> dict:
+    """Filtre les positions IBKR pour ne garder que le compte canonique.
+
+    Args:
+        positions: iterable de ib_insync Position objects (avec p.account et p.contract.symbol)
+        canonical_account: account id canonique (ex "U25023333") ou None (pas de filtre)
+
+    Returns:
+        dict {symbol: position_qty} pour les positions actives sur le bon compte.
+    """
+    if canonical_account is None:
+        # Fallback: comportement historique (aucun filtre)
+        return {p.contract.symbol: p.position for p in positions if abs(p.position) > 0}
+
+    out = {}
+    skipped = []
+    for p in positions:
+        if abs(p.position) == 0:
+            continue
+        if p.account != canonical_account:
+            skipped.append((p.account, p.contract.symbol, p.position))
+            continue
+        out[p.contract.symbol] = p.position
+    if skipped:
+        logger.info(
+            f"  Positions skipped (not on canonical account {canonical_account}): {skipped}"
+        )
+    return out
+
+
 def run_futures_cycle(live: bool = False):
     """Futures execution cycle — shared between live and paper.
 
@@ -635,8 +690,10 @@ def run_futures_cycle(live: bool = False):
         # If state says we have a position but IBKR doesn't, the trade was
         # closed (SL/TP hit or manual close) — update journal + remove from state
         _ibkr_real_pos = {}  # initialized empty in case positions() fails
+        # Fix 2026-04-21: filter sub-accounts (DUP*) pour ne garder que le live
+        _canonical_acct = _get_canonical_ibkr_account(ibkr._ib)
         try:
-            _ibkr_real_pos = {p.contract.symbol: p.position for p in ibkr._ib.positions() if abs(p.position) > 0}
+            _ibkr_real_pos = _filter_positions_by_account(ibkr._ib.positions(), _canonical_acct)
             stale_keys = [k for k in _fut_positions if k not in _ibkr_real_pos]
             for k in stale_keys:
                 # Journal UPDATE: the position was closed between last cycle and now.
@@ -867,7 +924,7 @@ def run_futures_cycle(live: bool = False):
         # Refresh IBKR real positions right before entry decisions
         # (initial query at line 1047 may be stale after time-exits above)
         try:
-            _ibkr_real_pos = {p.contract.symbol: p.position for p in ibkr._ib.positions() if abs(p.position) > 0}
+            _ibkr_real_pos = _filter_positions_by_account(ibkr._ib.positions(), _canonical_acct)
         except Exception:
             pass  # keep previous _ibkr_real_pos
 
