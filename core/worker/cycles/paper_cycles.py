@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+from datetime import date, datetime, timezone
 from pathlib import Path
 
 import pandas as pd
@@ -25,6 +26,36 @@ from core.worker.alerts import send_alert as _send_alert
 
 logger = logging.getLogger(__name__)
 ROOT = Path(__file__).resolve().parents[3]
+
+
+# EU major markets holidays 2026 (TARGET + MIB + ESTX50 closed).
+# Source: ECB TARGET2 calendar + Borsa Italiana + Deutsche Borse.
+# Used to skip paper_cycles EU (mib_estx50, eu_relmom) quand marche ferme
+# et yfinance retourne empty (eviter warning pour rien).
+_EU_HOLIDAYS_2026 = frozenset({
+    date(2026, 1, 1),   # New Year
+    date(2026, 4, 3),   # Good Friday
+    date(2026, 4, 6),   # Easter Monday
+    date(2026, 5, 1),   # Labour Day
+    date(2026, 12, 24), # Christmas Eve (half-day, prudence)
+    date(2026, 12, 25), # Christmas
+    date(2026, 12, 26), # Boxing Day
+    date(2026, 12, 31), # New Year's Eve
+})
+
+
+def _is_eu_market_closed(today: date | None = None) -> bool:
+    """True si les marches EU (MIB + ESTX50 + DAX + CAC40) sont fermes.
+
+    Couvre: weekend + holidays listes dans _EU_HOLIDAYS_2026.
+    """
+    today = today or datetime.now(timezone.utc).date()
+    # Weekend
+    if today.weekday() >= 5:
+        return True
+    if today in _EU_HOLIDAYS_2026:
+        return True
+    return False
 
 
 # -----------------------------------------------------------------------------
@@ -41,6 +72,11 @@ def run_mib_estx50_spread_paper_cycle():
     WF corrige: avg Sharpe 3.91, WF 4/5, +EUR22.6K sur 12 trades / 24 mois OOS.
     Promotion live a discuter apres 30j paper data.
     """
+    # Fix 2026-04-21: skip si marches EU fermes (weekend + holidays) pour
+    # eviter yfinance empty data warnings sur jours non-tradables.
+    if _is_eu_market_closed():
+        logger.debug("MIB/ESTX50 SPREAD: EU markets closed (weekend/holiday) — skip")
+        return
     try:
         import yfinance as yf
 
@@ -508,6 +544,11 @@ def run_eu_relmom_paper_cycle():
     Cycle 18h00 Paris weekday (apres close EU 17h30). Calcule tick pour today
     (dernier trading day EU dispo), etat + journal.
     """
+    # Fix 2026-04-21: skip si marches EU fermes (weekend + holidays) pour
+    # eviter reindex/data errors sur jours non-tradables.
+    if _is_eu_market_closed():
+        logger.debug("eu_relmom: EU markets closed (weekend/holiday) — skip")
+        return
     try:
         from strategies_v2.eu.eu_relmom import (
             DEFAULT_CAPITAL_PER_LEG,
