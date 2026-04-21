@@ -2898,7 +2898,23 @@ def run_crypto_cycle():
         # Thresholds from config (wallets.cash = reserve, default 10% of capital)
         MIN_TRADING_CASH = crypto_config.get("wallets", {}).get("cash", int(total_capital * 0.05))
         spot_cash = float(acct.get("cash", 0)) if broker else 0
-        if broker and spot_cash < MIN_TRADING_CASH and earn_positions:
+
+        # Fix 2026-04-21: skip auto-redeem si 0 crypto strat live (post bucket A
+        # drain 2026-04-19, toutes les crypto sont disabled/archived). Sans strat
+        # active, le cash spot ne sera jamais depense -> loop inutile
+        # (auto-redeem $2000 -> auto-subscribe Binance/externe vide spot ->
+        # redeem encore, observe toutes les 9h dans logs).
+        from core.broker.binance_broker import _CRYPTO_STRAT_ID_MAP as _AR_STRAT_MAP
+        _active_crypto_strats = [
+            sid for sid in CRYPTO_STRATEGIES
+            if _AR_STRAT_MAP.get(sid, sid) not in _disabled_whitelist_strategy_ids()
+        ]
+        if not _active_crypto_strats:
+            logger.debug(
+                "Auto-redeem SKIP: 0 crypto strat live active (post bucket A drain), "
+                "capital reste en Earn pour yield passif"
+            )
+        elif broker and spot_cash < MIN_TRADING_CASH and earn_positions:
             usdc_earn = next(
                 (ep for ep in earn_positions if ep.get("asset") == "USDC"),
                 None,

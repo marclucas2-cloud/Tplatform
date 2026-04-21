@@ -302,6 +302,39 @@ def main():
 
     stats = execute_plan(alpaca, to_close, to_open, dry_run=args.dry_run)
     logger.info(f"Done: {stats}")
+
+    # Fix 2026-04-21: persist Alpaca broker positions dans state local pour
+    # que reconciliation_cycle ait une source de verite coherente. Sans ca,
+    # les 11 positions Alpaca paper apparaissent comme "only_in_broker"
+    # warnings repetes 96x/24h (checkup 2026-04-20 endofday).
+    if alpaca is not None and not args.dry_run:
+        try:
+            fresh_positions = alpaca.get_positions()
+            state_path = ROOT / "data" / "state" / "alpaca_us" / "positions.json"
+            state_path.parent.mkdir(parents=True, exist_ok=True)
+            positions_dict: Dict[str, dict] = {}
+            for p in fresh_positions:
+                sym = p.get("symbol") if isinstance(p, dict) else getattr(p, "symbol", None)
+                if not sym:
+                    continue
+                qty = p.get("qty") if isinstance(p, dict) else getattr(p, "qty", 0)
+                avg = p.get("avg_entry_price") if isinstance(p, dict) else getattr(p, "avg_entry_price", 0)
+                positions_dict[sym] = {
+                    "qty": float(qty),
+                    "avg_entry_price": float(avg) if avg else 0.0,
+                }
+            state_path.write_text(json.dumps({
+                "positions": positions_dict,
+                "last_sync": datetime.now(UTC).isoformat(),
+                "source": "us_stocks_daily",
+            }, indent=2))
+            logger.info(
+                f"State sync: {len(positions_dict)} positions wrote to "
+                f"{state_path.relative_to(ROOT)}"
+            )
+        except Exception as e:
+            logger.warning(f"State sync failed: {e}")
+
     return 0
 
 
