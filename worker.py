@@ -17,6 +17,7 @@ import sys
 import threading
 import time
 from datetime import UTC, datetime
+from functools import lru_cache
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 
@@ -38,6 +39,37 @@ logging.basicConfig(
     handlers=[logging.StreamHandler(sys.stdout)],
 )
 logger = logging.getLogger("worker")
+
+
+@lru_cache(maxsize=1)
+def _disabled_whitelist_strategy_ids() -> frozenset[str]:
+    """Retourne le set des canonical strategy_id au status=disabled dans
+    config/live_whitelist.yaml.
+
+    Cache au boot (invalidation sur restart worker, coherent avec reload
+    de config). Defense pour eviter cycles qui invoquent des strats
+    disabled (ex: STRAT-005 btc_dominance_rotation_v2 REJECTED 2026-04-19
+    log 96x/24h "pas de signal" malgre status=disabled).
+    """
+    try:
+        import yaml
+        data = yaml.safe_load(
+            (ROOT / "config" / "live_whitelist.yaml").read_text(encoding="utf-8")
+        ) or {}
+        disabled = set()
+        for _book, entries in data.items():
+            if not isinstance(entries, list):
+                continue
+            for entry in entries:
+                if isinstance(entry, dict) and entry.get("status") == "disabled":
+                    sid = entry.get("strategy_id")
+                    if sid:
+                        disabled.add(sid)
+        return frozenset(disabled)
+    except Exception as exc:
+        logger.warning(f"_disabled_whitelist_strategy_ids: {exc}")
+        return frozenset()
+
 
 log_dir = ROOT / "logs" / "worker"
 log_dir.mkdir(parents=True, exist_ok=True)
@@ -2905,6 +2937,7 @@ def run_crypto_cycle():
 
         # --- Boucle sur les 8 strategies ---
         import pandas as pd
+        from core.broker.binance_broker import _CRYPTO_STRAT_ID_MAP
 
         n_signals = 0
         n_orders = 0      # Real BUY/SELL trades only
@@ -2913,7 +2946,19 @@ def run_crypto_cycle():
         # CRO M-4: track signals per symbol to detect conflicts
         _cycle_signals: dict[str, list[str]] = {}  # symbol -> [strat_id:side]
 
+        # Fix 2026-04-21: skip strats 'disabled' dans live_whitelist pour
+        # eviter pollution logs (ex: STRAT-005 btc_dominance_rotation_v2
+        # REJECTED 2026-04-19 invoque 96x/24h avec "pas de signal").
+        _disabled_canonical = _disabled_whitelist_strategy_ids()
+
         for strat_id, strat_data in CRYPTO_STRATEGIES.items():
+            # Map STRAT-XXX -> canonical ID -> check disabled
+            _canonical = _CRYPTO_STRAT_ID_MAP.get(strat_id, strat_id)
+            if _canonical in _disabled_canonical:
+                # Silent skip (log at DEBUG only, not INFO -> no log spam)
+                logger.debug(f"  [{strat_id}] {_canonical} status=disabled in whitelist — skip")
+                continue
+
             config = strat_data["config"]
             signal_fn = strat_data["signal_fn"]
             strat_name = config.get("name", strat_id)
