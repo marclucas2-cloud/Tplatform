@@ -41,6 +41,48 @@ logging.basicConfig(
 logger = logging.getLogger("worker")
 
 
+def _ensure_live_dd_baseline(current_equity: float) -> float:
+    """Assure que live_risk_dd_state.json a une baseline daily pour aujourd'hui.
+
+    Comportement:
+    - Si fichier absent ou date != today -> ecrit baseline=current_equity + date=today
+    - Si fichier present et date == today -> retourne baseline existante (no-op)
+    - En cas d'erreur I/O -> retourne current_equity (fallback, pas de crash)
+
+    Bug observe 2026-04-21: fichier avait date='2026-04-20' meme apres restart
+    worker en UTC 2026-04-21 -> rollover ne se produisait que si
+    run_live_risk_cycle tournait (cycle 5 min). Si scheduler retarde/skip,
+    baseline reste perimee -> DD calcul avec ancien equity. Extrait ici en
+    helper testable + appele aussi au boot.
+
+    Returns:
+        daily_start_equity: baseline utilisable pour DD calc cette journee.
+    """
+    live_dd_path = ROOT / "data" / "live_risk_dd_state.json"
+    today_str = datetime.now(UTC).strftime("%Y-%m-%d")
+    try:
+        live_dd_path.parent.mkdir(parents=True, exist_ok=True)
+        if live_dd_path.exists():
+            saved = json.loads(live_dd_path.read_text(encoding="utf-8"))
+            saved_eq = saved.get("daily_start_equity")
+            saved_date = saved.get("date", "")
+            if saved_date == today_str and saved_eq and float(saved_eq) > 0:
+                return float(saved_eq)
+        # Rollover: new day OR missing file OR corrupted
+        live_dd_path.write_text(json.dumps({
+            "daily_start_equity": current_equity,
+            "date": today_str,
+        }))
+        logger.info(
+            f"live_risk_dd_state rolled over: date={today_str} "
+            f"baseline=${current_equity:.2f}"
+        )
+        return current_equity
+    except Exception as exc:
+        logger.warning(f"_ensure_live_dd_baseline: {exc} (fallback to current equity)")
+        return current_equity
+
+
 @lru_cache(maxsize=1)
 def _disabled_whitelist_strategy_ids() -> frozenset[str]:
     """Retourne le set des canonical strategy_id au status=disabled dans
@@ -1869,31 +1911,7 @@ def run_live_risk_cycle():
         # PnL calculation using actual daily starting equity.
         # FIX: use dedicated file (not paper_portfolio_state.json which is paper)
         equity = portfolio.get("equity", risk_mgr.capital)
-        daily_start_equity = equity  # fallback
-        _live_dd_path = ROOT / "data" / "live_risk_dd_state.json"
-        try:
-            _live_dd_path.parent.mkdir(parents=True, exist_ok=True)
-            if _live_dd_path.exists():
-                _ldd = json.loads(_live_dd_path.read_text(encoding="utf-8"))
-                _saved_eq = _ldd.get("daily_start_equity")
-                _saved_date = _ldd.get("date", "")
-                today_str = datetime.now(UTC).strftime("%Y-%m-%d")
-                if _saved_date == today_str and _saved_eq and float(_saved_eq) > 0:
-                    daily_start_equity = float(_saved_eq)
-                else:
-                    # New day or first check — set baseline
-                    _live_dd_path.write_text(json.dumps({
-                        "daily_start_equity": equity,
-                        "date": today_str,
-                    }))
-                    daily_start_equity = equity
-            else:
-                _live_dd_path.write_text(json.dumps({
-                    "daily_start_equity": equity,
-                    "date": datetime.now(UTC).strftime("%Y-%m-%d"),
-                }))
-        except Exception as _e:
-            logger.warning(f"Could not load live daily_start_equity: {_e}")
+        daily_start_equity = _ensure_live_dd_baseline(equity)
 
         daily_pnl_pct = (equity - daily_start_equity) / daily_start_equity if daily_start_equity > 0 else 0
 
@@ -4589,6 +4607,33 @@ def main():
     last_heartbeat = time.time()
     last_bracket_watchdog = 0  # Run immediately on first loop iteration
     last_crypto_watchdog = 0   # idem
+
+    # Fix 2026-04-21: force rollover DD baseline au boot pour couvrir le cas
+    # ou run_live_risk_cycle tarderait (scheduler 5min retarde). Utilise
+    # equity IBKR actuelle comme baseline daily si date != today. Sans
+    # equity valide, ecrit 0 -> le fichier sera corrige au 1er cycle.
+    try:
+        _boot_equity = 0.0
+        try:
+            import socket
+            with socket.create_connection(
+                (os.getenv("IBKR_HOST", "127.0.0.1"),
+                 int(os.getenv("IBKR_PORT", "4002"))), timeout=2
+            ):
+                pass
+            from core.broker.ibkr_adapter import IBKRBroker
+            _boot_ibkr = IBKRBroker(client_id=4)
+            try:
+                _boot_acct = _boot_ibkr.get_account_info()
+                _boot_equity = float(_boot_acct.get("equity", 0))
+            finally:
+                _boot_ibkr.disconnect()
+        except Exception:
+            pass
+        if _boot_equity > 0:
+            _ensure_live_dd_baseline(_boot_equity)
+    except Exception as _exc:
+        logger.warning(f"Boot DD baseline rollover skipped: {_exc}")
 
     # CRO #4: automated dry-run and smoke test flags
     _dry_run_done_today = False
