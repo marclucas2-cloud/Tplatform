@@ -57,16 +57,19 @@ CSV_HEADERS = [
 ]
 
 
-def _fetch_ibkr_live_equity() -> float:
-    """Fetch IBKR live account equity in USD. Returns 0.0 on failure.
+def _fetch_ibkr_live_equity() -> float | None:
+    """Fetch IBKR live account equity in USD.
+
+    Returns None on failure (fetch impossible) to distinguish from 0.0 (vrai zero).
+    Caller doit fail-closed sur None pour eviter d'ecrire un snapshot partiel
+    (sinon daily_return=-52% fantome quand IB Gateway offline nocturne).
 
     Uses a dedicated clientId (200) to avoid conflict with the running worker
-    (which uses 1, 3, 10, 77, 80-89, 310-329). If IB Gateway is already
-    saturated or unreachable, returns 0.0 and caller fails-closed.
+    (which uses 1, 3, 10, 77, 80-89, 310-329).
     """
     if os.getenv("IBKR_PAPER", "true").lower() == "true":
         logger.info("IBKR_PAPER=true - skipping IBKR live fetch")
-        return 0.0
+        return None
     try:
         from core.broker.ibkr_adapter import IBKRBroker
         broker = IBKRBroker(client_id=200)
@@ -81,17 +84,20 @@ def _fetch_ibkr_live_equity() -> float:
                 return float(v)
     except Exception as e:
         logger.warning(f"IBKR live equity fetch failed: {e}")
-    return 0.0
+    return None
 
 
-def _fetch_binance_live_equity() -> float:
-    """Fetch Binance live equity in USD (spot USDC + margin + earn). 0.0 on failure."""
+def _fetch_binance_live_equity() -> float | None:
+    """Fetch Binance live equity in USD (spot USDC + margin + earn).
+
+    Returns None on failure (caller fail-closed, cf. _fetch_ibkr_live_equity).
+    """
     if os.getenv("BINANCE_TESTNET", "false").lower() == "true":
         logger.info("BINANCE_TESTNET=true - skipping Binance live fetch")
-        return 0.0
+        return None
     if not os.getenv("BINANCE_API_KEY") or not os.getenv("BINANCE_API_SECRET"):
         logger.info("BINANCE creds missing - skipping")
-        return 0.0
+        return None
     try:
         from core.broker.binance_broker import BinanceBroker
         bnb = BinanceBroker()
@@ -103,7 +109,7 @@ def _fetch_binance_live_equity() -> float:
                 return float(v)
     except Exception as e:
         logger.warning(f"Binance live equity fetch failed: {e}")
-    return 0.0
+    return None
 
 
 def _read_history() -> list[dict]:
@@ -203,8 +209,24 @@ def take_snapshot(target_date: date | None = None, force: bool = False) -> dict:
 
     ibkr_eq = _fetch_ibkr_live_equity()
     binance_eq = _fetch_binance_live_equity()
-    total_eq = ibkr_eq + binance_eq
 
+    # Fail-closed : si l'un des 2 brokers ne repond pas (None), REFUS snapshot.
+    # Sinon on ecrit un snapshot partiel (ex: ibkr=0 nocturne IB Gateway) qui
+    # genere un daily_return faux (-52% fantome vs veille somme-complete).
+    if ibkr_eq is None or binance_eq is None:
+        missing = []
+        if ibkr_eq is None:
+            missing.append("IBKR")
+        if binance_eq is None:
+            missing.append("Binance")
+        logger.error(
+            f"Broker fetch incomplete: {', '.join(missing)} returned None - "
+            f"snapshot refused (fail-closed, evite daily_return fantome)"
+        )
+        return {"error": "partial_fetch", "date": date_str,
+                "ibkr": ibkr_eq, "binance": binance_eq, "missing": missing}
+
+    total_eq = ibkr_eq + binance_eq
     if total_eq <= 0:
         logger.error("Both brokers returned 0.0 equity — snapshot refused (fail-closed)")
         return {"error": "no_equity", "date": date_str, "ibkr": ibkr_eq, "binance": binance_eq}

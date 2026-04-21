@@ -98,6 +98,37 @@ def test_fail_closed_on_zero_equity(tmp_tracker, monkeypatch):
     assert not tmp_tracker.CSV_PATH.exists()
 
 
+def test_fail_closed_on_ibkr_none_refuses_partial_snapshot(tmp_tracker, monkeypatch):
+    """Regression bug 20/04: IB Gateway nocturne off -> IBKR retournait 0.0 silently,
+    snapshot ecrit ibkr=0+binance=$9874=$9874, daily_return_pct=-52.65% fantome.
+    Fix: fetch retourne None, snapshot refused."""
+    monkeypatch.setattr(tmp_tracker, "_fetch_ibkr_live_equity", lambda: None)
+    monkeypatch.setattr(tmp_tracker, "_fetch_binance_live_equity", lambda: 9874.54)
+    result = tmp_tracker.take_snapshot(date(2026, 4, 20))
+    assert result.get("error") == "partial_fetch"
+    assert "IBKR" in result.get("missing", [])
+    assert not tmp_tracker.CSV_PATH.exists()
+
+
+def test_fail_closed_on_binance_none_refuses_partial_snapshot(tmp_tracker, monkeypatch):
+    """Symetrique: si Binance fetch fail -> refus snapshot."""
+    monkeypatch.setattr(tmp_tracker, "_fetch_ibkr_live_equity", lambda: 11274.93)
+    monkeypatch.setattr(tmp_tracker, "_fetch_binance_live_equity", lambda: None)
+    result = tmp_tracker.take_snapshot(date(2026, 4, 20))
+    assert result.get("error") == "partial_fetch"
+    assert "Binance" in result.get("missing", [])
+    assert not tmp_tracker.CSV_PATH.exists()
+
+
+def test_normal_snapshot_when_both_brokers_ok(tmp_tracker, monkeypatch):
+    """Regression: passage normal avec les 2 brokers OK ecrit bien le snapshot."""
+    monkeypatch.setattr(tmp_tracker, "_fetch_ibkr_live_equity", lambda: 11274.93)
+    monkeypatch.setattr(tmp_tracker, "_fetch_binance_live_equity", lambda: 9864.65)
+    result = tmp_tracker.take_snapshot(date(2026, 4, 20))
+    assert "row" in result
+    assert abs(result["row"]["total_equity_usd"] - 21139.58) < 0.01
+
+
 def test_summary_computes_cagr_sharpe(tmp_tracker, monkeypatch):
     # 10 days with realistic daily-return variance (mean ~+0.6%, std ~1%)
     returns = [0.015, -0.005, 0.010, 0.020, -0.008, 0.012, 0.005, 0.008, -0.004, 0.010]
