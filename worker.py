@@ -1677,6 +1677,14 @@ def run_fx_paper_cycle():
     Uses IBKR paper gateway (~EUR 1M) on port 4003.
     Frequency: every 5 min during EU+US FX hours (09:00-22:00 Paris).
     """
+    # Fix 2026-04-21: si FX desactive (ESMA EU leverage limits bloque le live),
+    # skip tout le cycle. Sinon 40 warnings/24h "no current event loop in
+    # thread 'cycle_fx_paper'" + "IBKR paper port 4003 not connected" pour
+    # rien (pas de FX possible en live non plus). Coherent avec _run_fx_carry
+    # et _run_always_on_carry qui skippent deja sur ce flag.
+    if os.getenv("IBKR_FX_ENABLED", "false").lower() != "true":
+        logger.debug("FX PAPER SKIP — IBKR_FX_ENABLED=false (ESMA EU)")
+        return
     if not _ibkr_lock.acquire(blocking=False):
         logger.warning("FX PAPER SKIP — IBKR lock held")
         return
