@@ -110,10 +110,16 @@ def run_reconciliation_cycle(
                             f"{label} [{book_id}] {dtype}: "
                             f"symbols={syms}. Manual reconcile needed."
                         )
-                    try:
-                        alert_callback(msg, severity)
-                    except Exception as exc:
-                        logger.warning(f"alert_callback error: {exc}")
+                    # Paper_only divergence is expected: simulation locale vs
+                    # positions broker auto-fillees. On garde JSONL + syslog
+                    # pour tracabilite mais on evite Telegram (spam ~180/24h).
+                    if is_paper_book:
+                        logger.warning(f"ALERT_WARN: {msg}")
+                    else:
+                        try:
+                            alert_callback(msg, severity)
+                        except Exception as exc:
+                            logger.warning(f"alert_callback error: {exc}")
                     # F2 plan 9.0: persist incident in JSONL timeline for post-mortem
                     try:
                         from core.monitoring.incident_report import log_incident_auto

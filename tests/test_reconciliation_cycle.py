@@ -148,6 +148,50 @@ class TestReconciliationCycleOrchestration:
 
         assert alerts == []
 
+    def test_paper_only_divergence_skips_alert_callback(self, isolated_recon_dir):
+        """Paper_only books: divergence expected (local sim vs broker), skip Telegram."""
+        alerts = []
+
+        def fake(book_id):
+            return {
+                "book": book_id,
+                "divergences": [
+                    {"type": "only_in_broker", "symbols": ["APA", "HOOD"]},
+                    {"type": "only_in_local", "symbols": ["SPY"]},
+                ],
+            }
+
+        # Force alpaca_us recognized as paper_only
+        with patch("core.governance.reconciliation_cycle.reconcile_book", side_effect=fake), \
+             patch("core.governance.reconciliation_cycle._is_paper_only", return_value=True):
+            run_reconciliation_cycle(
+                books=("alpaca_us",),
+                alert_callback=lambda msg, lvl: alerts.append((msg, lvl)),
+            )
+
+        # No Telegram alert for paper_only divergence (spam prevention)
+        assert alerts == [], f"paper_only should not send alert_callback, got: {alerts}"
+
+    def test_live_book_still_alerts_on_divergence(self, isolated_recon_dir):
+        """Regression: live books (non paper_only) MUST still alert Telegram."""
+        alerts = []
+
+        def fake(book_id):
+            return {
+                "book": book_id,
+                "divergences": [{"type": "only_in_broker", "symbols": ["BTCUSDT"]}],
+            }
+
+        with patch("core.governance.reconciliation_cycle.reconcile_book", side_effect=fake), \
+             patch("core.governance.reconciliation_cycle._is_paper_only", return_value=False):
+            run_reconciliation_cycle(
+                books=("binance_crypto",),
+                alert_callback=lambda msg, lvl: alerts.append((msg, lvl)),
+            )
+
+        assert len(alerts) == 1
+        assert alerts[0][1] == "critical"
+
     def test_state_file_corrupted_alert(self, isolated_recon_dir):
         alerts = []
         def fake(book_id):
