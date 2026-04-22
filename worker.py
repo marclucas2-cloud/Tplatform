@@ -2909,6 +2909,16 @@ def run_crypto_cycle():
             sid for sid in CRYPTO_STRATEGIES
             if _AR_STRAT_MAP.get(sid, sid) not in _disabled_whitelist_strategy_ids()
         ]
+        # Phase 2 desk productif 2026-04-22: les sleeves live_micro ne sont pas
+        # dans CRYPTO_STRATEGIES (cycle dedie paper_cycles). Les ajouter ici pour
+        # que l'auto-redeem USDC se declenche quand signal BUY arrive.
+        try:
+            from core.governance.quant_registry import load_registry as _qr_load
+            for _sid, _entry in _qr_load().items():
+                if _entry.book == "binance_crypto" and _entry.status == "live_micro":
+                    _active_crypto_strats.append(_sid)
+        except Exception as _lm_e:
+            logger.debug(f"live_micro crypto check in auto-redeem failed: {_lm_e}")
         if not _active_crypto_strats:
             logger.debug(
                 "Auto-redeem SKIP: 0 crypto strat live active (post bucket A drain), "
