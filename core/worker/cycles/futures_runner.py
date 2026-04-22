@@ -325,12 +325,25 @@ def run_futures_cycle(live: bool = False):
                 from strategies_v2.futures.mes_calendar_paper import (
                     MESMondayLong, MESWednesdayLong, MESPreHolidayLong,
                 )
+                # Phase 3.1 desk productif 2026-04-22: skip frozen strats
+                from core.governance.live_whitelist import is_strategy_frozen as _is_frozen
+                _cal_classes_active = []
+                for _cal_cls, _cal_sid in (
+                    (MESMondayLong, "mes_monday_long_oc"),
+                    (MESWednesdayLong, "mes_wednesday_long_oc"),
+                    (MESPreHolidayLong, "mes_pre_holiday_long"),
+                ):
+                    if _is_frozen(_cal_sid):
+                        logger.debug(f"    {_cal_sid}: FROZEN, skip signal gen")
+                        continue
+                    _cal_classes_active.append(_cal_cls)
+
                 import pandas as _cal_pd
                 # Fix 2026-04-21: passer runtime_today pour que la detection
                 # weekday utilise le jour actuel du cycle, pas bar.timestamp
                 # (qui peut etre close vendredi quand cycle tourne lundi 14:00).
                 _runtime_today = _cal_pd.Timestamp.now(tz="UTC").tz_localize(None).normalize()
-                for _cal_cls in (MESMondayLong, MESWednesdayLong, MESPreHolidayLong):
+                for _cal_cls in _cal_classes_active:
                     _cal = _cal_cls()
                     _cal.set_data_feed(feed)
                     _cal.set_runtime_today(_runtime_today)

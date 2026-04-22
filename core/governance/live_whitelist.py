@@ -147,6 +147,26 @@ def is_strategy_live_allowed(strategy_id: str, book: str | None = None) -> bool:
     return False
 
 
+def is_strategy_frozen(strategy_id: str) -> bool:
+    """True si la strategie est en status=frozen dans quant_registry.
+
+    Phase 3.1 desk productif 2026-04-22: les sleeves groupe C sont mises hors
+    rotation business sans etre disabled/rejetees. Les cycles runtime doivent
+    early-return si frozen pour liberer la bande passante mentale.
+
+    Frozen != disabled: frozen est re-activable (retour paper_only ou live_micro)
+    sans perte d'historique, alors que disabled implique rejet structurel.
+    """
+    try:
+        from core.governance.quant_registry import get_entry
+        entry = get_entry(strategy_id)
+        if entry is None:
+            return False
+        return entry.status == "frozen"
+    except Exception:
+        return False
+
+
 def get_strategy_entry(strategy_id: str, book: str | None = None) -> dict | None:
     """Return the full whitelist entry for a strategy (for audit/introspection)."""
     try:

@@ -150,7 +150,8 @@ ibkr_futures:
     '
 - strategy_id: mes_pre_holiday_long
   book: ibkr_futures
-  status: paper_only
+  status: frozen  # Phase 3.1 desk productif 2026-04-22 - hors rotation (anomalie rare, re-activable)
+  frozen_at: "2026-04-22"
   runtime_entrypoint: scripts/research/backtest_futures_calendar.py:variant_pre_holiday
   runtime_module: scripts.research.backtest_futures_calendar
   wf_source: docs/research/wf_reports/INT-A_tier1_validation.md
@@ -277,7 +278,8 @@ ibkr_fx:
 ibkr_eu:
 - strategy_id: eu_relmom_40_3
   book: ibkr_eu
-  status: paper_only
+  status: frozen  # Phase 3.1 desk productif 2026-04-22 - shorts EU sans plan, re-WF long-only differe
+  frozen_at: "2026-04-22"
   runtime_entrypoint: worker.py:run_eu_relmom_paper_cycle (18h00 Paris)
   runtime_module: strategies_v2.eu.eu_relmom
   wf_source: docs/research/wf_reports/T3A-03_eu_indices_relmom.md + INT-B_discovery_batch.md
@@ -295,7 +297,8 @@ ibkr_eu:
     Start paper: 2026-04-18.\n"
 - strategy_id: mib_estx50_spread
   book: ibkr_eu
-  status: paper_only
+  status: frozen  # Phase 3.1 desk productif 2026-04-22 - freeze tant que funding EUR 3.6K non effectue (cf chiffrage 22/04 NO_GO)
+  frozen_at: "2026-04-22"
   runtime_entrypoint: worker.py:run_mib_estx50_spread_paper_cycle (17h45 Paris)
   runtime_module: core.runtime.spread_paper_runner
   wf_source: reports/research/wf_mib_estx50_corrected.json (2026-04-18)
@@ -320,7 +323,8 @@ ibkr_eu:
 alpaca_us:
 - strategy_id: us_stocks_daily
   book: alpaca_us
-  status: paper_only
+  status: frozen  # Phase 3.1 desk productif 2026-04-22 - Alpaca gate NO_GO, PDT $25K non finance
+  frozen_at: "2026-04-22"
   runtime_entrypoint: worker.py:run_intraday (market='US')
   sizing_policy: N/A - paper
   notes: 'Paper trading sur $100K Alpaca simule. Promotion live conditionnee

@@ -72,6 +72,11 @@ def run_mib_estx50_spread_paper_cycle():
     WF corrige: avg Sharpe 3.91, WF 4/5, +EUR22.6K sur 12 trades / 24 mois OOS.
     Promotion live a discuter apres 30j paper data.
     """
+    # Phase 3.1 desk productif 2026-04-22: skip si frozen
+    from core.governance.live_whitelist import is_strategy_frozen
+    if is_strategy_frozen("mib_estx50_spread"):
+        logger.debug("mib_estx50_spread: FROZEN, skip cycle (re-activable via quant_registry)")
+        return
     # Fix 2026-04-21: skip si marches EU fermes (weekend + holidays) pour
     # eviter yfinance empty data warnings sur jours non-tradables.
     if _is_eu_market_closed():
@@ -582,6 +587,11 @@ def run_eu_relmom_paper_cycle():
     Cycle 18h00 Paris weekday (apres close EU 17h30). Calcule tick pour today
     (dernier trading day EU dispo), etat + journal.
     """
+    # Phase 3.1 desk productif 2026-04-22: skip si frozen
+    from core.governance.live_whitelist import is_strategy_frozen
+    if is_strategy_frozen("eu_relmom_40_3"):
+        logger.debug("eu_relmom_40_3: FROZEN, skip cycle")
+        return
     # Fix 2026-04-21: skip si marches EU fermes (weekend + holidays) pour
     # eviter reindex/data errors sur jours non-tradables.
     if _is_eu_market_closed():

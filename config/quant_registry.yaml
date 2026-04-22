@@ -108,7 +108,9 @@ strategies:
 
   - strategy_id: mes_pre_holiday_long
     book: ibkr_futures
-    status: paper_only
+    status: frozen          # Phase 3.1 desk productif 2026-04-22: hors rotation (rare anomalie, PO=GARDER_PAPER optionalite, Marc=groupe C freeze)
+    frozen_at: "2026-04-22"
+    frozen_reason: "Phase 3.1 bande passante mentale - re-activable"
     paper_start_at: "2026-04-16"
     live_start_at: null
     wf_manifest_path: data/research/wf_manifests/mes_pre_holiday_long_2026-04-19_backfill.json
@@ -185,7 +187,9 @@ strategies:
 
   - strategy_id: eu_relmom_40_3
     book: ibkr_eu
-    status: paper_only
+    status: frozen          # Phase 3.1 desk productif 2026-04-22 (shorts EU sans plan, re-WF long-only differe)
+    frozen_at: "2026-04-22"
+    frozen_reason: "shorts indices EU CFD/mini non planifies - re-activable si WF long-only valide"
     paper_start_at: "2026-04-18"
     live_start_at: null
     wf_manifest_path: data/research/wf_manifests/eu_relmom_40_3_2026-04-19_backfill.json
@@ -196,7 +200,9 @@ strategies:
 
   - strategy_id: mib_estx50_spread
     book: ibkr_eu
-    status: paper_only
+    status: frozen          # Phase 3.1 desk productif 2026-04-22: freeze tant que funding EUR 3.6K non effectue (cf chiffrage 22/04 NO_GO)
+    frozen_at: "2026-04-22"
+    frozen_reason: "Margin EUR 13.5K requis vs dispo 9.9K - re-activable si Marc funde le gap"
     paper_start_at: "2026-04-18"
     live_start_at: null
     wf_manifest_path: data/research/wf_manifests/mib_estx50_spread_2026-04-19_backfill.json
@@ -226,7 +232,9 @@ strategies:
 
   - strategy_id: us_stocks_daily
     book: alpaca_us
-    status: paper_only
+    status: frozen                  # Phase 3.1 desk productif 2026-04-22: meta-wrapper gel\u00e9 tant que Alpaca gate NO_GO
+    frozen_at: "2026-04-22"
+    frozen_reason: "Meta-orchestrator alpaca_us, PDT waiver $25K non finance - re-activable post depot"
     role: infra_orchestrator        # 2026-04-22 PO verdict: meta-wrapper, pas strategie canonique autonome
     is_canonical_strategy: false    # exclu du comptage "strats actives/ready"
     paper_start_at: "2026-04-18"

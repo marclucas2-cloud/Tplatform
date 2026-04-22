@@ -1251,6 +1251,14 @@ def run_us_stocks_daily_cycle():
     Broker: Alpaca in PAPER mode (guard enforced via PAPER_TRADING=true).
     """
     import subprocess
+    # Phase 3.1 desk productif 2026-04-22: skip si frozen
+    try:
+        from core.governance.live_whitelist import is_strategy_frozen
+        if is_strategy_frozen("us_stocks_daily"):
+            logger.debug("us_stocks_daily: FROZEN, skip cycle (Alpaca gate NO_GO)")
+            return
+    except Exception:
+        pass
     logger.info("=== US STOCKS DAILY CYCLE ===")
     download = ROOT / "scripts" / "download_us_data_alpaca.py"
     runner = ROOT / "scripts" / "run_us_stocks_daily.py"

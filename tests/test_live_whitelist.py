@@ -90,13 +90,14 @@ def test_us_sector_ls_40_5_is_paper_only():
     assert entry["runtime_module"] == "strategies_v2.us.us_sector_ls"
 
 
-def test_eu_relmom_40_3_is_paper_only():
-    """T3-A3 INT-B 2026-04-18 promotion: paper_only log-only.
-    Book ibkr_eu paper-only. Ne doit PAS etre live_allowed."""
+def test_eu_relmom_40_3_is_frozen():
+    """T3-A3 INT-B 2026-04-18 -> FROZEN 2026-04-22 (Phase 3.1 desk productif).
+    Book ibkr_eu frozen tant que shorts EU sans plan. Re-activable si
+    WF long-only valide grade B+."""
     assert is_strategy_live_allowed("eu_relmom_40_3", "ibkr_eu") is False
     entry = get_strategy_entry("eu_relmom_40_3", "ibkr_eu")
     assert entry is not None
-    assert entry["status"] == "paper_only"
+    assert entry["status"] == "frozen"
     assert entry["runtime_module"] == "strategies_v2.eu.eu_relmom"
 
 
