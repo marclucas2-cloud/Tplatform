@@ -136,156 +136,78 @@ Critere : ratio OOS/IS > 0.5 ET >= 50% fenetres profitables.
 (OpEx 10.41, Gap 5.22, Crypto V2 3.49) sont les plus severement rejetees en OOS.
 C'est le signe classique de l'overfitting. 9 strategies archivees dans archive/rejected/.
 
-### 2.6 Strategies EU — migrees vers section 2.8
+### 2.6 Catalogue canonique V16 (22/04/2026) — SOURCE UNIQUE
 
-Les strats EU historiques (EU Gap, BCE Momentum, Auto Sector, Brent Lag) etaient conçues pour le pipeline Alpaca US, jamais cablees en live. Les backtests individuels (Sharpe 8-14) n'ont pas ete valides en portefeuille combine.
+**15 sleeves canoniques** + 16 archived_rejected. Cette table supersede 2.8-2.11 (logique V15.3 conservee comme memoire historique). Source de verite = `config/quant_registry.yaml` + `config/live_whitelist.yaml`.
 
-**Survivantes migrees en 2.8** : EU Gap Open (ESTX50 futures) et Sector Rotation (DAX/CAC40 indices). Validees par backtest portefeuille 3 ans.
+| # | strategy_id | book | status | grade | paper_start | live_start | thesis (1-line) | blocker / next action |
+|---|-------------|------|--------|:-----:|:-----------:|:-----------:|-----------------|----------------------|
+| 1 | `cross_asset_momentum` | ibkr_futures | **live_core** | A | — | 2026-04-07 | Rotation cross-asset (MCL/MGC/MES) cadence 20j | Next rebal ~2026-05-07 |
+| 2 | `gold_oil_rotation` | ibkr_futures | **live_core** | S | — | 2026-04-08 | Long gold / short oil si spread >= 2% | Signal dormant (spread < 2%) |
+| 3 | `btc_asia_mes_leadlag_q80_v80_long_only` | binance_crypto | **live_micro** | B | 2026-04-20 | 2026-04-23 | MES US D-1 predit BTC Asia D (long only) | Premier fill possible dai, review J+14 = 2026-05-07 |
+| 4 | `gold_trend_mgc` | ibkr_futures | paper_only | A | 2026-04-17 | — | Trend following MGC (gold futures) | Arming fast-track earliest 2026-04-30, puis live_micro candidate #2 |
+| 5 | `mes_monday_long_oc` | ibkr_futures | paper_only | B | 2026-04-16 | — | Anomalie calendaire lundi open-close | Promotion earliest 2026-05-16 |
+| 6 | `mes_wednesday_long_oc` | ibkr_futures | paper_only | B | 2026-04-16 | — | Anomalie mercredi open-close | Review 2026-06-01 (MC DD 28.3% borderline) |
+| 7 | `mcl_overnight_mon_trend10` | ibkr_futures | paper_only | B | 2026-04-18 | — | MCL weekend gap + trend overnight | Re-WF Friday required, earliest 2026-05-30 |
+| 8 | `alt_rel_strength_14_60_7` | binance_crypto | paper_only | B | 2026-04-18 | — | Altcoins relative strength vs BTC (14d lookback) | 30j paper + infra gaps fix, earliest 2026-05-18 |
+| 9 | `us_sector_ls_40_5` | alpaca_us | paper_only | B | 2026-04-18 | — | Long/short US sectors top-5 vs bottom-5 | Gate Alpaca NO_GO_paper_too_short, earliest 30j + $25K PDT |
+| 10 | `mes_pre_holiday_long` | ibkr_futures | **frozen** | B | 2026-04-16 | — | Long MES veille US holidays | Frozen 2026-04-22 : rare, re-activable si volume insuff prouve |
+| 11 | `eu_relmom_40_3` | ibkr_eu | **frozen** | B | 2026-04-18 | — | Relative momentum DAX/CAC40/ESTX50 | Frozen : shorts EU sans plan, re-WF long-only TODO |
+| 12 | `us_stocks_daily` | alpaca_us | **frozen** | meta | 2026-04-18 | — | Meta-orchestrator Alpaca (role=infra_orchestrator) | Frozen : PDT $25K non finance, not a canonical alpha |
+| 13 | `mib_estx50_spread` | ibkr_eu | **frozen** | S | 2026-04-18 | — | Spread MIB/ESTX50 z-score entry | Frozen : margin EUR 13.5K requis vs dispo 9.9K (cf chiffrage NO_GO 22/04) |
+| 14 | `fx_carry_momentum_filter` | ibkr_fx | **disabled** | — | — | — | FX carry avec filtre momentum | ESMA EU leverage limits (reglementaire permanent) |
+| 15 | `btc_dominance_rotation_v2` | binance_crypto | **disabled** | REJECTED | — | — | Rotation BTC/alts via dominance | WF REJECTED Sharpe -6.08, logic broken |
 
-**Non migrees** : BCE Momentum (8 events/an = trop rare), Brent Lag (negatif en portefeuille), EU Close->US (necessite Alpaca live).
+**Archived_rejected (16)** : bucket A 11 crypto (19/04) + bucket C 4 EU (19/04) + bucket D 1 btc_asia_q70_v80 duplicate (22/04). Liste complete dans `config/quant_registry.yaml::archived_rejected`.
 
-### 2.7 Forex — MORT (IBIE France interdit levier FX retail)
+### 2.7 Forex — MORT (permanent, pas de regression)
 
-**16 strats codees, 0 executable.** IBIE (Interactive Brokers Ireland) ne permet pas le levier FX pour les clients retail francais. Confirme par le support IBKR le 8 avril 2026. Ordres FX passent en statut "Inactive" immediatement.
-
-**Options futures** : broker FX alternatif (Pepperstone, IC Markets, Darwinex — ESMA 30:1). Decision reportee.
-
-**Data FX conservee** : 134,940 candles (8 paires, 1H/4H/1D, 2-5 ans depuis IBKR). Reutilisable si broker FX ajoute.
-
-### 2.8 Futures + EU Indices — Portefeuille diversifie (backtest 3 ans, 2023-2026)
-
-**4 strategies LIVE** (backtest portefeuille combine, toutes positives) :
-
-| Strategie | Sym | PnL 3 ans | Trades | WR | Avg/trade | Sharpe | Statut |
-|-----------|-----|:---------:|:------:|:--:|:---------:|:------:|:------:|
-| Sector Rotation EU | DAX/CAC40 | **+$3,416** | 53 | 58% | $64 | 1.17 | **LIVE** |
-| Gold-Equity Div | MES+MGC | **+$2,078** | 44 | 41% | $47 | 1.17 | **LIVE** |
-| Overnight Buy-Close | MES | **+$895** | 523 | 50% | $2 | 0.29 | **LIVE** |
-| EU Gap Open | ESTX50 | **+$452** | 8 | 50% | $56 | 0.65 | **LIVE** |
-
-**Portefeuille backtest combine** : +$6,840, Sharpe 0.83, WF 3/6, PF 1.30, MaxDD -$2,914.
-**Correlations** : toutes < 0.12 (excellente decorrelation).
-**ROC attendu** : ~22.8%/an ($185/mois).
-
-**Systeme de priorite** : EU Gap (9) > Gold-Eq (7) > Sector (6) > Overnight (5).
-**Execution** : OCA SL+TP, software SL/TP 5min, SL recalcule depuis fill, max 3 positions.
-
-**9 strategies DISABLED** (backtest portefeuille negatif) :
-
-| Strategie | PnL 3 ans | Raison rejet |
-|-----------|:---------:|--------------|
-| TSMOM MES | -$5,118 | WR 35%, trade trop souvent, saigne le portfolio |
-| MES Trend+MR | -$2,240 | WR 35%, RSI2 trigger trop souvent |
-| Brent Lag MCL | -$825 | Negatif en portefeuille (positif isole) |
-| VIX Mean Reversion | -$414 | SL trop serre, WR 36% |
-| 3-Day Stretch | — | SHORT mecanique en bull = catastrophique |
-| MES Trend | — | Sharpe faible (0.5) |
-| Overnight MNQ | — | Doublon MES |
-| TSMOM multi | — | Trop de symboles pour 10K |
-| MIB/ESTX50 Spread | +$57K isole | **PAPER** (24 trades < 30 = pas significatif) |
-
-### 2.10 Crypto Binance France — Portefeuille INDEPENDANT ($10K post-realloc, Margin + Spot + Earn)
-
-**Capital** : $10K post-realloc 31 mars (etait $23.8K, surplus retirer en EUR pour IBKR+Alpaca).
-**3 wallets** : Spot $2.5K | Earn $5K (BTC+USDC) | Cash $1K | Margin $1.5K
-**Paires USDT bloquees** (TRD_GRP_002) → mapping auto USDT→USDC. Fees BNB -25%.
-
-| # | Strategie | Type | Mode | Alloc | Levier |
-|---|-----------|------|------|:-----:|:------:|
-| 1 | BTC/ETH Dual Momentum | Trend | Margin | **20%** | 2x |
-| 2 | Altcoin Relative Strength | Cross-sec | Margin | **15%** | 1.5x |
-| 3 | BTC Mean Reversion Intra | MR | Spot | **12%** | 1x |
-| 4 | Volatility Breakout | Vol | Margin | **10%** | 2x |
-| 5 | BTC Dominance Rotation V2 | Macro | Spot | **10%** | 1x |
-| 6 | Borrow Rate Carry | Carry | Earn | **13%** | 0x |
-| 7 | Liquidation Momentum | Event | Margin | **10%** | 3x |
-| 8 | Weekend Gap Reversal | Calendar | Spot | **10%** | 1x |
-| 9 | Funding Rate Divergence | Contrarian | Margin | **8%** | 2x |
-| 10 | Stablecoin Supply Flow | Macro | Spot | **7%** | 1x |
-| 11 | ETH/BTC Ratio Breakout | Pairs | Margin | **6%** | 1.5x |
-| 12 | Monthly Turn-of-Month | Calendar | Spot | **5%** | 1x |
-
-**Data Crypto collectee** : 130,604 candles (12 symboles, 1H/4H/1D, 2-3 ans Binance) + borrow rates 10 assets 30j + BTC dominance 365j CoinGecko
-
-| Regime | Trend | AltRS | MR | Vol | Dom | Carry | Liq | Weekend | Cash |
-|--------|:-----:|:-----:|:--:|:---:|:---:|:-----:|:---:|:-------:|:----:|
-| BULL | 20% | 15% | 12% | 10% | 10% | 13% | 10% | 10% | 10% |
-| BEAR | 20% | 10% | 15% | 10% | 15% | 15% | 15% | 0% | 10% |
-| CHOP | 5% | 10% | 20% | 15% | 10% | 20% | 10% | 10% | 10% |
-
-**Risk management crypto V2 (12 checks)** : Position max 15% | Strategie max 30% | Gross long 80%, short 40%, net 60% | Levier BTC/ETH 2.5x, alt 1.5x, portfolio 1.8x | Borrow rate<0.1%/j, total<50%, cout mensuel<2% | DD daily 5%, weekly 10%, monthly 15%, max 20% | Margin health (reduce@1.5, close@1.3) | Cout emprunts auto-close >2%/mois | Earn max 100% | Perte position max 8% | Correlation BTC<70% | Reserve cash min 10%
-
-**Kill switch V2 (6 triggers)** : Daily -5% | Hourly -3% | Max DD -20% | API down 10min | Margin level <1.2 | Borrow rate spike 3x en 1h
-Actions : close shorts -> cancel orders -> close longs -> repay borrows -> redeem earn -> alert -> convert USDT
-
-### 2.11 Strategies P2/P3 (8 avancees, toutes CODE)
-
-FX Cross-Pair Momentum, EURO STOXX 50 Trend, Calendar Spread ES, Protective Puts Overlay, EUR/NOK Carry, Lead-Lag Cross-Timezone, FOMC Reaction, BCE Press Conference.
+16 strats FX codees mais **0 executable** : IBIE (Interactive Brokers Ireland) interdit levier FX pour retail france (ESMA). Confirme support IBKR 2026-04-08. Decision : `fx_carry_momentum_filter` est la SEULE entree registry (status=disabled), les 15 autres strats FX historiques sont archivees. Data FX conservee (134K candles) reutilisable si broker alternatif ajoute (ESMA 30:1).
 
 ---
 
-## 3. ALLOCATION V5 — DIVERSIFIEE MULTI-MARCHE + CRYPTO
+## 3. ALLOCATION & CAPITAL V16 (22/04/2026)
 
-### Structure cible V5.1
+### 3.1 Capital par book (source : runtime VPS 22/04)
 
-**Portefeuille IBKR (EUR 10K) — REEL V15.2 :**
+| Book | Mode | Capital deployable | Capital expose | Capital idle | Nb sleeves canoniques | Nb live* | Runtime entrypoint |
+|------|------|:-----------------:|:--------------:|:------------:|:---------------------:|:--------:|-------------------|
+| **ibkr_futures** | live_allowed | $11,280 | $0 (position MCL CAM fermee 19/04) | 100% | 7 | 2 live_core | `core/worker/cycles/futures_runner.py` |
+| **binance_crypto** | live_micro_allowed | $9,983 (earn $9,983 + spot auto-redeem $2K) | $0 (signal q80 NONE 22/04) | 100% | 3 | 1 live_micro | `core/worker/cycles/paper_cycles.py` + `core/runtime/btc_asia_q80_live_micro_runner.py` |
+| **ibkr_eu** | paper_only | EUR 9,900 (~$10,600) | $0 (frozen) | 100% | 2 | 0 | N/A (both frozen) |
+| **alpaca_us** | paper_only | $99,840 (paper) | paper only | N/A | 2 | 0 | `scripts/run_us_stocks_daily.py` (frozen) |
+| **ibkr_fx** | disabled | — | — | — | 1 | 0 | disabled ESMA |
+| **TOTAL live** | — | **$21,283** (IBKR + Binance) | **$0** (pas de position ouverte) | 100% | 15 | **3** | — |
 
-| Bucket | Allocation | Strategies | Statut |
-|--------|:---------:|-----------|:------:|
-| EU Indices | **35%** | Sector Rotation (DAX/CAC40), EU Gap (ESTX50) | **LIVE** |
-| Futures MES | **30%** | Overnight MES, Gold-Equity Div (MES+MGC) | **LIVE** |
-| Cash/Margin | **35%** | Reserve margin futures + buffer | — |
-| ~~FX Swing~~ | ~~18%~~ | ~~7 paires FX~~ | **MORT** (IBIE interdit levier FX) |
-| ~~US Intraday~~ | ~~25%~~ | ~~DoW, Corr Hedge~~ | **PAPER** (Alpaca, pas de capital live) |
+*Nb live = live_core + live_micro (inclut paper dans la colonne sleeves).
 
-**Portefeuille Crypto INDEPENDANT ($10K post-realloc, Binance France V2) :**
+### 3.2 Sizing par sleeve (policy reel V16)
 
-| Bucket | Mode | Alloc BULL | Alloc BEAR | Alloc CHOP | Wallet |
-|--------|------|:----------:|:----------:|:----------:|:------:|
-| BTC/ETH Dual Momentum | Margin | **20%** | 20% | 5% | margin |
-| Altcoin Relative Strength | Margin | 15% | 10% | 10% | spot |
-| BTC Mean Reversion | Spot | 12% | 15% | **20%** | margin |
-| Volatility Breakout | Margin | 10% | 10% | 15% | spot |
-| BTC Dominance | Spot | 10% | 15% | 10% | spot |
-| Borrow Rate Carry | Earn | 13% | **15%** | **20%** | earn |
-| Liquidation Momentum | Margin | 10% | **15%** | 10% | margin |
-| Weekend Gap | Spot | 10% | 0% | 10% | spot |
+| Sleeve | Book | Policy sizing | Capital utilisable | Kill trigger | Prochain milestone |
+|--------|------|--------------|-------------------|--------------|-------------------|
+| `cross_asset_momentum` | ibkr_futures | 1 contrat par leg, risk budget 5% portfolio | ~$300 risk/trade | DD portfolio -5% | Rebal 2026-05-07 |
+| `gold_oil_rotation` | ibkr_futures | 1 spread position, risk budget 5% | ~$300 risk/trade | DD portfolio -5% | Signal spread >= 2% (dormant) |
+| `btc_asia_q80_long_only` | binance_crypto | **notional $200 USDC strict** (live_micro grade B cap) | $200 | **DD absolu -$50** auto-kill sleeve | J+14 review 2026-05-07 (pyramid lift) |
+| `gold_trend_mgc` V1 | ibkr_futures | 1 contrat MGC (=~$200 margin) | $300 (future live_micro grade A cap) | DD -$30 si live_micro | Arming fast-track 2026-04-30 |
+| `mes_monday_long_oc` | ibkr_futures | 1 contrat MES paper | paper only | paper only | Promotion 2026-05-16 |
+| `mes_wednesday_long_oc` | ibkr_futures | 1 contrat paper | paper only | paper only | Review 2026-06-01 (borderline) |
+| `mcl_overnight_mon_trend10` | ibkr_futures | 1 contrat MCL paper | paper only | paper only | Re-WF Friday + earliest 2026-05-30 |
+| `alt_rel_strength_14_60_7` | binance_crypto | notional fixe $500 gross (paper) | paper only | paper only | Earliest 2026-05-18 |
+| `us_sector_ls_40_5` | alpaca_us | portfolio rebal mensuel paper | paper only (gate $25K NO_GO) | paper only | 30j paper + gate Alpaca |
+| `mes_pre_holiday_long` / `eu_relmom` / `us_stocks_daily` / `mib_estx50_spread` | — | **FROZEN** (cycles runtime skip) | 0 | N/A | Re-activable via `status: frozen -> paper_only` dans quant_registry |
 
-**REGLE : Les deux portefeuilles sont INDEPENDANTS.** Pas de transfert automatique, kill switch separes.
+### 3.3 Cadres capital (pas de Kelly agressif actuel)
 
-### Allocation cross-timezone (CET) — avec crypto
+Post audit 19/04 + doctrine desk productif 22/04 : **plus de scaling Kelly agressif** tant que 30j live non prouve. Caps par grade + kill criteria explicites > fractions Kelly theoriques.
 
-| Creneau | Marches actifs | Capital IBKR | Capital Crypto |
-|---------|---------------|:------------:|:--------------:|
-| 00h-09h | FX + Futures + Crypto | 20% | **40%** |
-| 09h-15h30 | EU + FX + Futures + Crypto | 40% | **50%** |
-| 15h30-17h30 | **OVERLAP** (EU+US+FX+Futures+Crypto) | **70%** | **60%** |
-| 17h30-22h | US + FX + Futures + Crypto | 60% | **50%** |
-| 22h-00h | FX + Futures + Crypto | 25% | **30%** |
+| Phase | Capital | Approche sizing |
+|-------|---------|-----------------|
+| Actuel (22/04) | $21K | 2 live_core risk-budget 5% + 1 live_micro cap $200 |
+| M1 (21/05) | $21K | Si PnL live net >= 0 sur btc_asia q80 30j : promotion live_probation (caps $400-500) ; sinon rollback paper |
+| M2 (21/06) | $21K ou +$25K Alpaca si gate GO | Revue complete caps + ouverture live_probation sur 2-3 sleeves max |
+| M3 (21/07) | $25-45K | Scale conditionne a 60j+ PnL live > 0, Sharpe rolling > 0.5, 0 incident P0 |
 
-**Couverture ~22h/24h** (vs 18h sans crypto).
-
-### Allocation dynamique par regime (ALLOC-002)
-
-| Regime | US Equity | EU Equity | FX | Futures Trend | Shorts | Cash |
-|--------|:---------:|:---------:|:--:|:------------:|:------:|:----:|
-| BULL | 45% | 20% | 12% | 12% | 4% | 5% |
-| NEUTRAL | 35% | 20% | 18% | 8% | 7% | 7% |
-| BEAR | 15% | 10% | 25% | 5% | 15% | 15% |
-
-Transition lissee : 20%/jour vers la cible (anti-whipsaw).
-
-### Sizing live ($10K-$25K)
-
-| Capital | Phase | Methode | Levier max |
-|---------|-------|---------|:----------:|
-| $10K (soft launch) | **SOFT_LAUNCH** | **1/8 Kelly tier1, 1/16 Kelly borderline** | **1.0x** |
-| $10K (mois 1) | PHASE_1 | Quart-Kelly tier1, 1/8 Kelly borderline | 1.5x |
-| $15K (mois 2) | PHASE_2 | Quart-Kelly | 2.0x |
-| $20K (mois 3) | PHASE_3 | Tiers-Kelly | 2.5x |
-| $25K (mois 4+) | PHASE_4 | Half-Kelly | 3.0x |
-
-**Volume live cible Phase 1** : Sem 1 = 6 strats (5 FX + EU Gap), 32-42 trades/mois, 1/8 Kelly. Sem 2+ = +MCL +MES, 52-70 trades/mois. Borderline US en PAPER ONLY.
+**Principe directeur 22/04** : pas d'expansion tant que la vérité live 30j ne confirme pas l'edge. Policy alignee sur [feedback_prove_profitability_first](https://github.com/marclucas2-cloud/Tplatform) memory.
 
 ---
 
