@@ -116,6 +116,31 @@ def _find_backtest_manifest(strategy_id: str) -> dict | None:
         return None
 
 
+def _load_resolved_incidents() -> set[str]:
+    """Load timestamps of resolved incidents from data/incidents/resolutions.jsonl.
+
+    Resolution file is append-only, each line = {resolved_incident_timestamp, resolution_commit, ...}.
+    Returns set of resolved timestamps (for efficient membership check).
+    """
+    resolutions_path = ROOT / "data" / "incidents" / "resolutions.jsonl"
+    resolved: set[str] = set()
+    if not resolutions_path.exists():
+        return resolved
+    with open(resolutions_path, encoding="utf-8") as f:
+        for line in f:
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                row = json.loads(line)
+                ts = row.get("resolved_incident_timestamp")
+                if ts:
+                    resolved.add(ts)
+            except json.JSONDecodeError:
+                continue
+    return resolved
+
+
 def _count_incidents_open_p0p1(
     *, since_iso: str | None = None, book_filter: str | None = None
 ) -> int:
@@ -124,12 +149,16 @@ def _count_incidents_open_p0p1(
     Filters:
       - since_iso: only count incidents with timestamp >= since_iso (paper_start_at).
       - book_filter: only count if context.book matches (e.g. "alpaca_us").
+      - Excludes incidents listed in data/incidents/resolutions.jsonl.
     """
     incidents_dir = ROOT / "data" / "incidents"
     if not incidents_dir.exists():
         return 0
+    resolved_ts = _load_resolved_incidents()
     count = 0
     for p in incidents_dir.glob("*.jsonl"):
+        if p.name == "resolutions.jsonl":
+            continue
         for entry in _load_jsonl(p):
             sev = (entry.get("severity") or "").upper()
             status = (entry.get("status") or "").lower()
@@ -138,6 +167,8 @@ def _count_incidents_open_p0p1(
             if status not in ("open", ""):
                 continue
             ts = entry.get("timestamp") or ""
+            if ts in resolved_ts:
+                continue
             if since_iso and ts and ts < since_iso:
                 continue
             if book_filter:

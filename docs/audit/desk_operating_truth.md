@@ -1,3 +1,14 @@
+> ⚠️ **STALE SNAPSHOT (2026-04-19) — NE PAS UTILISER COMME SOURCE DE VERITE**
+>
+> Audit 2026-04-21 a identifie contradictions: position MCL (§1) fermee dimanche 19/04 22:00 UTC (+$605.46 realized TP), incidents P0/P1 reels divergent (§8 claim "0 ouvert" vs alpaca_go_25k_gate VPS = 1 incident open).
+>
+> **Source de verite courante**: `python scripts/desk_truth_snapshot.py` (daily auto via systemd timer, cf. Phase 1.6 plan 2026-04-22).
+> **Fallback manuel**: `runtime_audit --strict` + `alpaca_go_25k_gate.py` + `live_pnl_tracker --summary` sur VPS.
+>
+> Ce document reste utile comme **reference doctrinale** (gates, statuts, process). **Ne consulter les chiffres que comme snapshot 19/04**, pas comme etat courant.
+
+---
+
 # Desk Operating Truth — H10 T10
 
 **Point d'entree operateur.** Synthese finale TODO XXL hygiene.

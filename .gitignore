@@ -100,6 +100,7 @@ data/backups/*
 !data/backups/README.md
 data/incidents/*
 !data/incidents/README.md
+!data/incidents/resolutions.jsonl
 data/orchestrator/*
 !data/orchestrator/README.md
 data/reconciliation/*
@@ -130,4 +131,19 @@ reports/research/thesis_test_strat.md
 # Temp workspace (one-shot scripts, brouillons, non reproducibles minor)
 # Strategies completes extraites -> scripts/research/
 temp/
+
+# === Phase 0.3 drift cleanup 2026-04-22 ===
+# Live PnL tracker = source de verite journaliere, les CSV/JSONL/JSON doivent etre versionnes
+!data/live_pnl/*.csv
+!data/live_pnl/*.jsonl
+!data/live_pnl/*.json
+data/live_pnl/*.bak_*
+
+# Debug scripts one-shot (ephemeres, pas de valeur durable)
+scripts/_debug_*.py
+
+# Crypto runtime state (regenere au boot, pas de valeur historique dans git)
+data/crypto/fidelity.jsonl
+data/crypto/signal_funnel.jsonl
+data/crypto/strat_quarantine.json
 tmp/
