@@ -148,19 +148,11 @@ strategies:
     is_live: false
     infra_gaps: ["strat_hebdo_4_trades_max_en_30j_pas_10", "data_stale_btcusdt_alts_parquets"]
 
-  - strategy_id: btc_asia_mes_leadlag_q70_v80
-    book: binance_crypto
-    status: paper_only
-    paper_start_at: "2026-04-18"
-    live_start_at: null
-    wf_manifest_path: data/research/wf_manifests/btc_asia_mes_leadlag_q70_v80_2026-04-19_backfill.json
-    grade: B
-    last_wf_run_at: "2026-04-19"
-    is_live: false
-    infra_gaps:
-      - data_stale_btcusdt_1h_parquet
-      - mode_both_long_short_incompatible_binance_france_spot
-      - variante_long_only_q80_v80_a_wirer_pour_live
+  # btc_asia_mes_leadlag_q70_v80 archive 2026-04-22 (PO verdict)
+  # - Duplicate du q80_v80_long_only (meme WF manifest)
+  # - Variante mode=both (long+short) incompatible spot Binance France
+  # - 0 chemin vers live. q80_long_only est la variante tradable conservee.
+  # Cycle runtime continue de logger q80_long_only; la partie q70 reste log-only ref.
 
   - strategy_id: btc_asia_mes_leadlag_q80_v80_long_only
     book: binance_crypto
@@ -222,6 +214,8 @@ strategies:
   - strategy_id: us_stocks_daily
     book: alpaca_us
     status: paper_only
+    role: infra_orchestrator        # 2026-04-22 PO verdict: meta-wrapper, pas strategie canonique autonome
+    is_canonical_strategy: false    # exclu du comptage "strats actives/ready"
     paper_start_at: "2026-04-18"
     live_start_at: null
     wf_manifest_path: null   # Meta-strategie portfolio, pas WF unique
@@ -230,6 +224,7 @@ strategies:
     last_wf_run_at: null
     is_live: false
     infra_gaps: ["pdt_waiver_requis_capital_25k_min", "aggregate_portfolio_pas_wf_unique"]
+    notes_2026_04_22: "PO review Marc 2026-04-22: us_stocks_daily est un orchestrateur portfolio (appelle us_sector_ls_40_5 + autres sous-strats Alpaca), pas une source d'alpha autonome. Retire du scoreboard 'strategies actives/ready'. Le code reste comme wrapper pour run_us_stocks_daily.py."
 
   - strategy_id: us_sector_ls_40_5
     book: alpaca_us
@@ -269,3 +264,6 @@ archived_rejected:
   - vix_mean_reversion       # INSUFFICIENT_TRADES (0/5)
   - gold_equity_divergence   # INSUFFICIENT_TRADES (0/5)
   - sector_rotation_eu       # INSUFFICIENT_TRADES (1/5)
+
+  # Bucket D — 1 binance_crypto DUPLICATE (variante non-tradable France)
+  - btc_asia_mes_leadlag_q70_v80  # Archive 2026-04-22 post PO review: duplicate du q80_long_only

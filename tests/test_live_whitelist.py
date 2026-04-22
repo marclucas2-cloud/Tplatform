@@ -71,14 +71,13 @@ def test_alt_rel_strength_14_60_7_is_paper_only():
     assert entry["runtime_module"] == "core.runtime.alt_rel_strength_runner.AltRelStrengthRunner"
 
 
-def test_btc_asia_mes_leadlag_q70_v80_is_paper_only():
-    """T3-A2 INT-B 2026-04-18 promotion: paper_only log-only retrospective.
-    Cross-asset MES->BTC. Ne doit PAS etre live_allowed."""
+def test_btc_asia_mes_leadlag_q70_v80_archived():
+    """T3-A2 INT-B 2026-04-18 -> ARCHIVED 2026-04-22 (PO verdict Marc).
+    Duplicate du q80_long_only, variante mode=both incompatible Binance France spot.
+    Ne doit plus etre dans live_whitelist (ni live_allowed, ni paper_only)."""
     assert is_strategy_live_allowed("btc_asia_mes_leadlag_q70_v80", "binance_crypto") is False
     entry = get_strategy_entry("btc_asia_mes_leadlag_q70_v80", "binance_crypto")
-    assert entry is not None
-    assert entry["status"] == "paper_only"
-    assert entry["runtime_module"] == "strategies.crypto.btc_asia_mes_leadlag"
+    assert entry is None, "q70_v80 doit etre retire de live_whitelist (archive 2026-04-22)"
 
 
 def test_us_sector_ls_40_5_is_paper_only():

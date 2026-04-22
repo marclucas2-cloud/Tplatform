@@ -192,12 +192,12 @@
 | eu_relmom_40_3 | ibkr_eu | **READY (book paper-only)** | grade B mais book mode=paper_only |
 | mib_estx50_spread | ibkr_eu | **READY (capital gap)** | grade S mais book paper_only + margin EUR 3.6K manque |
 | fx_carry_momentum_filter | ibkr_fx | **DISABLED** | ESMA reglementaire |
-| us_stocks_daily | alpaca_us | **AUTHORIZED (meta)** | wf_exempt_reason=meta_portfolio, book paper_only + PDT |
+| us_stocks_daily | alpaca_us | **INFRA_ORCHESTRATOR** (2026-04-22 degrade PO) | meta-wrapper, exclu du scoreboard strat canoniques |
 | us_sector_ls_40_5 | alpaca_us | **READY** | grade B + re-WF ETF pending + book paper_only |
 
-**Cardinal** : 2 ACTIVE + 12 READY (dont 5 blockers infra) + 1 AUTHORIZED + 1 DISABLED reglementaire (fx_carry) + 1 DISABLED REJECTED (btc_dominance).
+**Cardinal** (post 2026-04-22 PO cleanup): 2 ACTIVE + 11 READY (dont 5 blockers infra) + 1 INFRA_ORCHESTRATOR (us_stocks_daily) + 1 DISABLED reglementaire (fx_carry) + 1 DISABLED REJECTED (btc_dominance).
 
-**Note** : 15 archives REJECTED (bucket A drain + bucket C).
+**Note** : 16 archives REJECTED (bucket A drain 11 + bucket C 4 + bucket D 2026-04-22 btc_asia_mes_leadlag_q70_v80 duplicate).
 
 ---
 
