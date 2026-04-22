@@ -146,16 +146,20 @@ def _count_incidents_open_p0p1(
 ) -> int:
     """Count open P0/P1/critical incidents, optionally scoped by time + book.
 
-    Filters:
-      - since_iso: only count incidents with timestamp >= since_iso (paper_start_at).
-      - book_filter: only count if context.book matches (e.g. "alpaca_us").
-      - Excludes incidents listed in data/incidents/resolutions.jsonl.
+    Filters (dans l'ordre):
+      1. Exclus les incidents listes dans data/incidents/resolutions.jsonl
+         (incidents explicitement fermes par resolution manifest).
+      2. Phase 3.2 2026-04-22: TTL 72h (core.governance.incidents_ttl).
+         Un incident > 72h SANS re-trigger dans la fenetre est auto-exclu
+         (considere resolu par epuisement naturel).
+      3. since_iso: si fourni, exclus les incidents avant cette date.
+      4. book_filter: si fourni, exclus les incidents d'un autre book.
     """
     incidents_dir = ROOT / "data" / "incidents"
     if not incidents_dir.exists():
         return 0
     resolved_ts = _load_resolved_incidents()
-    count = 0
+    raw = []
     for p in incidents_dir.glob("*.jsonl"):
         if p.name == "resolutions.jsonl":
             continue
@@ -169,13 +173,26 @@ def _count_incidents_open_p0p1(
             ts = entry.get("timestamp") or ""
             if ts in resolved_ts:
                 continue
-            if since_iso and ts and ts < since_iso:
+            raw.append(entry)
+
+    # Phase 3.2: TTL 72h auto-exclusion
+    try:
+        from core.governance.incidents_ttl import filter_active_incidents
+        active = filter_active_incidents(raw)
+    except ImportError:
+        # fallback si module absent (env minimal)
+        active = [dict(e, _ts_parsed=None) for e in raw]
+
+    count = 0
+    for entry in active:
+        ts = entry.get("timestamp") or ""
+        if since_iso and ts and ts < since_iso:
+            continue
+        if book_filter:
+            ctx_book = (entry.get("context") or {}).get("book")
+            if ctx_book and ctx_book != book_filter:
                 continue
-            if book_filter:
-                ctx_book = (entry.get("context") or {}).get("book")
-                if ctx_book and ctx_book != book_filter:
-                    continue
-            count += 1
+        count += 1
     return count
 
 

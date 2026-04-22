@@ -400,8 +400,10 @@ LIVE_MICRO_MAX_RECENT_INCIDENTS_24H = 0
 def _count_recent_incidents_24h(book: str | None = None) -> int:
     """Count open P0/P1/CRITICAL incidents in last 24h for a given book (if provided).
 
-    Uses same resolutions manifest convention as alpaca_go_25k_gate so that
-    resolved/expired incidents don't pollute this gate either.
+    Uses:
+      - resolutions.jsonl: incidents explicitement fermes (exclus).
+      - Phase 3.2 2026-04-22: TTL 72h (core.governance.incidents_ttl). Un incident
+        > 72h SANS re-trigger dans la fenetre est auto-exclu (resolu par epuisement).
     """
     incidents_dir = ROOT / "data" / "incidents"
     if not incidents_dir.exists():
@@ -426,8 +428,8 @@ def _count_recent_incidents_24h(book: str | None = None) -> int:
         except OSError:
             pass
 
-    cutoff = datetime.now(UTC) - timedelta(hours=24)
-    count = 0
+    # Collecte brute P0/P1/CRITICAL non-resolved (toutes dates)
+    raw: list[dict] = []
     for p in incidents_dir.glob("*.jsonl"):
         if p.name == "resolutions.jsonl":
             continue
@@ -450,21 +452,26 @@ def _count_recent_incidents_24h(book: str | None = None) -> int:
                     ts = row.get("timestamp") or ""
                     if ts in resolved_ts:
                         continue
-                    try:
-                        dt = datetime.fromisoformat(ts)
-                        if dt.tzinfo is None:
-                            dt = dt.replace(tzinfo=UTC)
-                    except (ValueError, TypeError):
-                        continue
-                    if dt < cutoff:
-                        continue
-                    if book:
-                        ctx_book = (row.get("context") or {}).get("book")
-                        if ctx_book and ctx_book != book:
-                            continue
-                    count += 1
+                    raw.append(row)
         except OSError:
             continue
+
+    # Phase 3.2: filter par TTL 72h (chaines inactives auto-exclues)
+    from core.governance.incidents_ttl import filter_active_incidents
+    active = filter_active_incidents(raw)
+
+    # Filtre book + fenetre 24h originale conservee (gate voulait 24h au depart)
+    cutoff_24h = datetime.now(UTC) - timedelta(hours=24)
+    count = 0
+    for row in active:
+        ts_parsed = row.get("_ts_parsed")
+        if ts_parsed is None or ts_parsed < cutoff_24h:
+            continue
+        if book:
+            ctx_book = (row.get("context") or {}).get("book")
+            if ctx_book and ctx_book != book:
+                continue
+        count += 1
     return count
 
 
