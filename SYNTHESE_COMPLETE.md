@@ -1,27 +1,47 @@
-# SYNTHESE COMPLETE — TRADING PLATFORM V15.3 (PORTEFEUILLE DIVERSIFIE + MACRO ECB)
-## Portefeuille Quantitatif — 3 classes d'actifs, 55 strategies codees, 4 LIVE + 3 CODE (MacroECB DAX/CAC40/ESTX50)
-### Date : 10 avril 2026 | 3,523 tests | ~146 fichiers test | CRO 9.0/10 APPROUVE
+# SYNTHESE COMPLETE — TRADING PLATFORM V16.0 (DESK PRODUCTIF — LIVE_MICRO + CATALOGUE CLEAN)
+## Portefeuille Quantitatif — 3 classes d'actifs, 15 strats canoniques (2 live_core + 1 live_micro + 6 paper_only + 4 frozen + 2 disabled + 16 archived)
+### Date : 22 avril 2026 | 3,799 tests | ~150 fichiers test | CRO 9.0/10 APPROUVE | Live_micro armed (first real fill possible daily 10h30 Paris)
 
 ---
 
 ## 1. RESUME EXECUTIF
 
-| Indicateur | V15.2 | **V15.3 (+MacroECB)** |
+| Indicateur | V15.3 (10/04) | **V16.0 (22/04)** |
 |-----------|:---:|:---:|
-| Strategies codees | 54 | **55** (+MacroECB multi-instrument) |
-| Strategies LIVE | 4 | **4** (3 MacroECB en CODE_REVIEW, deploiement V15.4) |
-| Strategies DISABLED | 9 | **9** (inchanges) |
-| Capital deploye | EUR 18.6K | **EUR 18.6K** |
-| ROC backtest 3 ans | 22.8%/an | **31.7%/an** (+8.9pts grace a MacroECB) |
-| PnL backtest 3 ans | +$6,840 | **+$9,591** (+$2,751) |
-| Avg trade | $11 | **$15** |
-| PF portefeuille | 1.30 | **1.36** |
-| Sharpe portefeuille | 0.83 | **1.00** (+20%) |
-| MaxDD | -$2,914 | **-$3,031** (+4%) |
-| Mois profitables | 65% | **62%** |
-| Tests | 3,509 | **3,523** (+14 MacroECB) |
+| Strats canoniques (non-archivees) | 55 codees | **15** (bucket drains: A 19/04 + C + D 22/04) |
+| LIVE_CORE | 4 | **2** (cross_asset_momentum grade A + gold_oil_rotation grade S) |
+| LIVE_MICRO (nouveau status) | 0 | **1** (btc_asia_q80_long_only, $200 USDC, kill DD -$50) |
+| PAPER_ONLY | — | **6** (gold_trend_mgc, mes_monday, mes_wednesday, mcl_overnight, alt_rel_strength, us_sector_ls) |
+| FROZEN (nouveau status) | 0 | **4** (mes_pre_holiday, eu_relmom, us_stocks_daily, mib_estx50) |
+| DISABLED | 9 | **2** (fx_carry ESMA + btc_dominance REJECTED) |
+| ARCHIVED_REJECTED | — | **16** (bucket A=11 + C=4 + D=1 q70_v80 duplicate 22/04) |
+| Capital live deployable | EUR 18.6K | **$21,283** (IBKR $11,280 + Binance $9,983 earn + $0 spot apres auto-redeem $2K) |
+| Capital expose actuel | $600 (4 pos) | **$0** (btc_asia signal NONE 22/04, CAM dort 20j cadence) |
+| PnL live 7j reel | backtest only | **+$429 (+2.06%)** (TP MCL CAM 19/04 +$605 realized) |
+| Tests | 3,523 | **3,799** (+276 Phase 1+2+3 + TTL + frozen + metrics + weekly review) |
+| CRO audit | 9.0/10 | **9.0/10** (audit 21/04 + validation runtime 22/04) |
 
-**V15.2->V15.3 : Ajout MacroECB event-driven, portfolio Sharpe 0.83 -> 1.00.**
+**V15.3->V16.0 : Desk productif doctrine (live_micro + catalogue clean + runtime-truth).**
+
+**1. Bascule operationnelle majeure (22/04)** : le desk passe de "prepare le trading" a "trade + se concentre + rapporte". Premier sleeve live_micro arme (btc_asia_q80_long_only, BTCUSDC $200 real money, kill DD -$50 hard, no pyramid J+14, max 1 position, rate limit 1 nouvelle sleeve/7j). Premier cycle live execute 22/04 10h30 Paris = event entry_skipped (signal NONE, plumbing propre valide).
+
+**2. Reduction structurelle catalogue** : 55 strats codees -> 15 canoniques. Drains operes (19/04 bucket A 11 crypto REJECTED, bucket C 4 EU, bucket D 22/04 btc_asia_q70 duplicate) + freeze 4 sleeves sans chemin vers live a court terme (pas de disabled = re-activables). Catalogue plus lisible = moins de bruit mental pour decisions capital.
+
+**3. Nouvelle infrastructure desk-productif (22/04)** :
+   - `core/governance/live_micro_sizing.py` : caps par grade (S=$500/$50, A=$300/$30, B=$200/$20), guardrails no-pyramid J+14, rate limit 1 sleeve/7j
+   - `core/governance/incidents_ttl.py` : TTL 72h auto-exclusion incidents isoles (chaines (sev,book,cat) inactives purged)
+   - `core/runtime/btc_asia_q80_live_micro_runner.py` : runner dedie entry/exit + kill DD + Telegram alerts + journal dedie
+   - `scripts/weekly_desk_review.py` + systemd timer dim 22h UTC : report hebdo auto + Telegram 5 metriques
+   - live_pnl_tracker summary.json etend : max_dd_live_pct + trades_count_30d + capital_exposure snapshot
+
+**4. Gates assouplis mais non supprimes** : separation governance_gate/capital_gate, sizing caps par grade au lieu de blocages absolus, TTL 72h sur incidents (plus de pollution historique sur decisions capital actuelles), promotion_gate.can_go_live_micro() (7j paper + grade>=B + 0 incident 24h vs 30j standard).
+
+**5. Metrics desk (post 22/04)** :
+   - Capital exposed avg : 0% (snapshot courant, en attente premier fill)
+   - Trades live 30j : 0 (post-fermeture MCL 19/04, signal q80 n'a pas fire)
+   - Incidents actifs (TTL 72h) : 7 residus chaine MCL reconciliation (auto-exclu ~22/04 22h UTC)
+   - Services VPS : 6/6 active
+   - Runtime_audit --strict : exit 0
 
 **1. Decouverte cle** : 6 strategies EU intraday testees sur 5 ans de data 5min/15min IBKR (2021-2026, 601K bars), une seule a un edge robuste apres couts : **Macro ECB Event Momentum**. Les 5 autres (ORB, Mean Reversion RSI, Lunch Effect, US Open Impact, Pairs DAX/ESTX50) ont edge < couts apres tuning.
 
@@ -326,6 +346,29 @@ atomic state write (tmpfile + os.replace sur 3 fichiers d'etat).
 
 NOTE : A calibrer par Monte Carlo apres 100+ trades live par strategie.
 
+### V16 — Live_micro sizing caps + TTL 72h incidents (22/04)
+
+**Live_micro caps par grade (core/governance/live_micro_sizing.py)** :
+
+| Grade | Max notional USD | Max risk USD (10% stop) | Usage actuel |
+|---|---|---|---|
+| S | 500 | 50 | inutilise (mib_estx50_spread frozen) |
+| A | 300 | 30 | inutilise (gold_trend_mgc still paper) |
+| B | 200 | 20 | **btc_asia_q80_long_only** (1 sleeve active) |
+
+**Garde-fous anti-dispersion** :
+- **No pyramid before J+14** : si >=1 position ouverte + live_start_at < 14j, refuse nouveau entry. Review quinzaine avant scaling.
+- **Rate limit 1 sleeve/7j** : max 1 nouvelle promotion vers live_micro par rolling 7 jours, evite de reouvrir la dispersion catalogue.
+- **Kill DD -$50 hard** (btc_asia_q80) : au premier hit auto-ecrit `_kill_switch.json`, sleeve auto-disabled, Telegram critical. Re-activation manuelle requise.
+- **Unknown grade = rejet** : pas de fallback permissif si grade null/REJECTED.
+
+**TTL 72h incidents (core/governance/incidents_ttl.py)** :
+- Incident < 72h = actif (inchange)
+- Incident > 72h SANS re-trigger meme (severity, book, category) dans la fenetre = AUTO-EXCLU
+- Incident > 72h AVEC re-trigger = chaine reste active tant que max(ts) < 72h
+- Impact : gates (promotion_gate + alpaca_go_25k_gate) ne bloquent plus sur historique obsolete
+- Scope : P0 + P1 + CRITICAL (warnings non concernes)
+
 ### V10 — Portfolio-Aware Risk Engine (8 modules)
 
 | Module | Fichier | Role | Seuils |
@@ -456,6 +499,12 @@ Intraday US : 16 testees, 4 validated, 3 borderline, 9 rejected. Overnight : 9/9
 | **V13 Deploy** | **PRET** | deploy.sh (shadow→promote→rollback), pre_deploy_check.py |
 | **V13 ResponseSnapshots** | **PRET** | Snapshots API broker, retention 7j |
 | **V13 CyclesDashboard** | **PRET** | GET /api/cycles, health + system + queue |
+| **V16 live_micro_sizing** | **ACTIF** | Caps par grade (S/A/B = $500/$300/$200), no pyramid J+14, rate limit 1/7j |
+| **V16 incidents_ttl** | **ACTIF** | TTL 72h auto-exclusion chaines isolees, utilise par promotion + alpaca_gate |
+| **V16 btc_asia_q80 runner** | **ACTIF** | Live_micro BTCUSDC $200, kill DD -$50, state + journal + Telegram |
+| **V16 weekly_desk_review** | **ACTIF** | systemd timer dim 22h UTC, report md + Telegram 5 metriques |
+| **V16 quant_registry frozen** | **ACTIF** | 4 sleeves groupe C hors rotation (re-activables, pas disabled) |
+| **V16 resolutions.jsonl** | **ACTIF** | Manifest incidents fermes append-only (exclus des gates) |
 
 **Fiscalite crypto FR (V12 automatise)** : TradeTaxClassifier classe chaque trade. PFU 30% sur cessions vers EUR. Echanges crypto-crypto non imposables. Formulaire 2086 (PV crypto) + 3916-bis (comptes etranger = Binance, IBKR, Alpaca). Methode PMP.
 
@@ -465,13 +514,24 @@ Intraday US : 16 testees, 4 validated, 3 borderline, 9 rejected. Overnight : 9/9
 
 ## 8. TESTS ET QUALITE
 
-| Metrique | V12.5 | **V13.0** |
+| Metrique | V15.3 (10/04) | **V16.0 (22/04)** |
 |----------|:--:|:------:|
-| Tests total | 2,998 | **3,297** (+299) |
+| Tests total | 3,523 | **3,799** (+276: TTL+frozen+live_micro+metrics+weekly+runner) |
 | Echecs | 0 | **0** |
-| Fichiers test | ~116 | **~130** (+14) |
-| Lignes de code | ~185,000 | **~195,000** |
-| Fichiers Python | ~545 | **~575** (+30 modules robustesse) |
+| Skipped | — | **1** (lightgbm/pandas optionnel) |
+| Fichiers test | ~146 | **~150** (+4 Phase 1+2+3) |
+| Lignes de code | ~195,000 | **~200,000** (+~2500 Phase 1+2+3) |
+| Fichiers Python | ~575 | **~585** (+6 modules governance/runtime/scripts Phase 1-3) |
+
+**Tests desk productif Phase 1-3 (2026-04-22)** :
+- test_live_micro_sizing.py (22) : caps par grade, pyramid J+14, rate limit 1/7j
+- test_live_micro_gate.py (7) : can_go_live_micro + pre_order_guard live_micro enforcement
+- test_btc_asia_q80_live_micro_runner.py (11) : state I/O, kill flag, extract_fill_details, journal, skip paths
+- test_worker_skip_frozen.py (11) : is_strategy_frozen + early-return 4 cycles
+- test_incidents_ttl_72h.py (18) : filter_active, _incident_key, _parse_ts
+- test_live_pnl_metrics_extended.py (10) : trades_count_30d, capital_exposure snapshot
+- test_weekly_desk_review.py (18) : week_slice, build_report, render md/telegram
+- **Total nouveau 97 tests** (reste 179 deltas = ajustements dependances + tests recouvrants)
 
 | Category | Tests |
 |----------|:-----:|
@@ -619,6 +679,21 @@ Audit CRO : **9.5/10** (12/12 domaines PASS, 67 fixes cumules)
 | **10 avril PM** | **PIVOT EU+FUTURES : Sector Rotation DAX/CAC40 ($64/trade, Sharpe 1.17) + EU Gap ESTX50 ($56/trade) + Gold-Equity Div ($47/trade). Backtest portefeuille 4 strats combine : +$6,840 (22.8%/an), WF 3/6 PASS, PF 1.30, corr < 0.12. Deploy live.** |
 | **10 avril soir** | **DOWNLOAD EU INTRADAY 5Y : 601K bars 5min/15min DAX/CAC40/ESTX50 via IBKR Index, 4h13 sur Hetzner. 6 strats EU intraday testees (ORB DAX, MR RSI, Lunch Effect, US Open Impact, Pairs, Macro ECB). 5/6 REJETEES (edge<couts). Une seule gagnante : MacroECB.** |
 | **10 avril nuit** | **V15.3 MACROECB MULTI-INSTRUMENT : 3 indices (DAX +$172/tr, CAC40 +$87, ESTX50 +$45), 69 trades 5 ans, +$7,004, Sharpe 3.18, WF 4/6 yearly. Portfolio combine 4 LIVE+3 MacroECB : 22.8%/an -> 31.7%/an, Sharpe 0.83->1.00 (+20%), MaxDD -2914->-3031 (+4%). Code livre : strategies_v2/futures/macro_ecb.py + core/worker/cycles/macro_ecb_cycle.py + 14 tests PASS. CODE_REVIEW pour deploiement V15.4.** |
+| 15 avril | Session debug : bug FrozenInstanceError, overnight MES sweep 85 combos KO. IBKR paper gateway (port 4003) active = data historical futures gratuit. Cross-Asset Momentum (CAM) + Gold-Oil Rotation + Gold Trend MGC identifiees BEAR-capable (alpha pur). Decision : risk budget futures = 5% risk-if-stopped (pas count contracts). |
+| 16 avril | Chain de 5 bugs debugge en session, 1er fill crypto, trade MGC live, campagne T1/T2 discovery complete, gold_trend_mgc V1 valide. |
+| 17 avril | Audit deep plateforme 7.2 -> 9.0. Trailing MGC V2 +$718. MCL live CAM. Guards always-on sur pre_order_guard. Kill switch fix. |
+| 18 avril | Audit P0/P1 cloture. MIB/ESTX50 paper. Re-WF crypto demote 7 strats live (REJECTED). Governance fail-closed binance/alpaca. |
+| **19 avril AM** | **Audit comite senior 6.5/10 FRAGILE. Phase 1 obligatoire avant nouveau dev. 18 strats a killer.** |
+| **19 avril PM** | **Drain bucket A : 11 strats crypto archived_rejected (btc_eth_dual_momentum, vol_breakout, weekend_gap, liquidation_momentum, trend_short_btc, mr_scalp_btc, liquidation_spike, funding_rate_arb, basis_carry_crypto, triangular_arb, ld_earn_yield_harvest). Drain bucket C : 4 strats EU archived (eu_gap_open, vix_mean_reversion, gold_equity_divergence, sector_rotation_eu). Post-drain : 2 live_core IBKR futures (CAM + GOR) + candidates paper_only. TP MCL CAM ferme dimanche 22h UTC +$605.46 realized. Plan 9.0 ambitieux : 11 commits, quant_registry canonique, boot preflight, StrategyStatus unifie, runtime_audit, incident JSONL. Doctrine live_fast_track_probation grade A/S STRICT defini (gold_trend_mgc V1 seule candidate). Tests 3722 -> 3744 (+22). Score plateforme 6.5 -> 8.5.** |
+| 20 avril | Ops review : checkup 24h, 0 incident, DD baseline rollover. |
+| **21 avril AM** | **CRO audit 9.0/10 : 9 HAUTES fixes session (Telegram spam, live_pnl fail-closed, eu_relmom dedup, futures_runner account filter, mes_calendar runtime_today, worker skip disabled, fx_paper ESMA, paper_cycles EU holiday guard, live_risk_dd rollover). 42 tests ajoutes. 0 regression.** |
+| **21 avril PM** | **Hotfix Binance auto-redeem oscillation (skip si 0 crypto live) + Alpaca state sync persistence. Rapport checkup end-of-day.** |
+| **22 avril AM (tot)** | **Phase 0 cleanup verite : banniere STALE sur desk_operating_truth.md (snapshot 19/04 obsolete). resolutions.jsonl nouveau manifest append-only incidents resolus (alpaca_us SPY 19/04 -> resolved). .gitignore etendu live_pnl + debug/crypto temp. CSV daily_equity.csv ligne 1 daily_return_pct 111.86% -> 0.0 (artefact partial fetch pre-fix-92ebd7e). Commit 48acb71.** |
+| **22 avril AM** | **Phase 2 PO cleanup catalogue (post PO review 5 sleeves) : archive btc_asia_mes_leadlag_q70_v80 (duplicate q80_long_only, incompat Binance FR spot short). Degrade us_stocks_daily AUTHORIZED -> role=infra_orchestrator + is_canonical_strategy=false (meta-wrapper, pas alpha autonome). Cardinal 16 -> 14 canoniques. Commit 6bb3a4a. Chiffrage mib_estx50_spread funding : NO_GO court terme (ratio edge/risk 0.67, window 4 WF = EUR -8,437 > 100% EUR capital, MaxDD EUR 14,395 > 13,500 margin requis). Commit 534f4e4.** |
+| **22 avril PM** | **Phase 1 desk productif : infrastructure live_micro (nouveaux status live_micro + frozen, nouveau mode book live_micro_allowed). core/governance/live_micro_sizing.py (caps par grade, no pyramid J+14, rate limit 1/7j). core/governance/promotion_gate.can_go_live_micro() (grade>=B, paper>=7j, 0 incident 24h). pre_order_guard enforce caps si status=live_micro. 29 tests. Commits 48acb71+6bb3a4a+534f4e4+dc094b9. Tests 3744 -> 3773.** |
+| **22 avril PM** | **Phase 2 desk productif : wire btc_asia_mes_leadlag_q80_v80_long_only LIVE_MICRO BTCUSDC $200 USDC, kill DD -$50 hard, max 1 position, no pyramid. Runner dedie core/runtime/btc_asia_q80_live_micro_runner.py (entry/exit + kill auto + Telegram + journal). Hotfix auto-redeem USDC pour detecter live_micro crypto sleeves (sinon spot=$0). Premier cycle 22/04 10h30 Paris = entry_skipped reason=signal_side=NONE (plumbing propre valide). Commits 15a5f2e+6dc6580. Close-out docs/ops/btc_asia_q80_live_micro_launch_2026-04-23.md.** |
+| **22 avril soir** | **Phase 3.1 freeze groupe C : mes_pre_holiday_long + eu_relmom_40_3 + us_stocks_daily + mib_estx50_spread passes en status=frozen (hors rotation business, re-activable != disabled). Helper is_strategy_frozen() + guards dans 4 cycles runtime (futures_runner, paper_cycles, worker.py us_stocks). 11 tests. Commit ffe85ce. Phase 3.2 TTL 72h incidents : core/governance/incidents_ttl.py (filter_active_incidents par groupe (sev, book, cat)). Integre promotion_gate + alpaca_go_25k_gate. 18 tests. Commit 02e3403.** |
+| **22 avril soir** | **Phase 3.3 metrics etendus live_pnl_tracker summary.json (max_dd_live_pct + trades_count_30d + capital_exposure snapshot) + Phase 3.4 weekly_desk_review.py (report md + Telegram 5 metriques) + systemd timer dim 22h UTC. 28 tests. Commit 533c6f0. Tests finaux 3799 pass 1 skip 0 fail. Timer armed Sun 2026-04-26 22h UTC. Dry-run valide (Telegram push ok). Desk passe de "autorise le trading" a "trade + se concentre + rapporte". Premier fill live_micro possible des demain (~10% proba/jour signal long-only q80).** |
 
 ---
 
@@ -655,19 +730,41 @@ Audit CRO : **9.5/10** (12/12 domaines PASS, 67 fixes cumules)
 
 ### Prochain pas
 
-**ACTIF depuis 10 avril :**
-- IBKR EUR 9.9K live : **4 strats** (Overnight MES + EU Gap ESTX50 + Sector Rotation DAX/CAC40 + Gold-Equity Div MES), cycle 16h CET
-- Binance $8.7K live : 11 strats crypto codees, 0 signal (vol ratio trop bas, attend correctement)
-- ROC attendu : **~22.8%/an** (backtest 3 ans, $185/mois)
+**ACTIF depuis 22 avril (post drain bucket A + C + D + freeze groupe C) :**
+- **IBKR live $11,280** (U25023333) : **2 live_core** (cross_asset_momentum grade A + gold_oil_rotation grade S). CAM position MCL fermee 19/04 +$605 realized, prochain rebal cadence 20j = ~2026-05-07. GOR signal dormant (spread gold/oil < 2%).
+- **Binance live $9,983** (earn + margin, spot auto-redeemable $2K) : **1 live_micro** (btc_asia_q80_long_only, $200 USDC BTCUSDC, signal ~1x/10j statistiquement).
+- **Alpaca paper $99,840** : paper observation seulement (us_sector_ls_40_5 gate NO_GO $25K PDT).
+- **6 paper_only** en maturation : gold_trend_mgc (grade A, fast-track earliest 30/04), mes_monday (earliest 16/05), mes_wednesday (review 01/06), mcl_overnight, alt_rel_strength (earliest 18/05), us_sector_ls.
+- **4 frozen** : mes_pre_holiday_long, eu_relmom_40_3, us_stocks_daily, mib_estx50_spread (re-activables sans rejet).
+- **ROC attendu court terme** : non-mesurable (sample insuffisant), baseline pour 30j observation. Realiste M1 : +$200-500 si premier fill q80 positif + CAM rebal OK.
 
-**Regle de deploiement (lecon V15.1)** :
-- Tout candidat doit passer le **backtest portefeuille combine 3 ans** avec toutes les strats deja actives
-- Plus JAMAIS de deploiement sur backtest isole
+**Doctrine desk productif V16.0** :
+- **Live_micro caps par grade** (B=$200, A=$300, S=$500) empeche burn capital avant validation
+- **No pyramid avant J+14 review** : discipline quinzaine pour chaque sleeve promue
+- **Rate limit 1 sleeve/7j** : anti-dispersion catalogue
+- **TTL 72h incidents** : gates ne bloquent plus sur historique obsolete
+- **Freeze != disabled** : groupe C hors rotation business, re-activable quand conditions changent
+- **Metriques production** : PnL live 30j + trades 30j + capital_exposure + DD live > scores readiness
 
-**Prochaines etapes :**
-- Valider les premieres semaines live (ROC reel vs backtest)
-- Crypto : attendre breakout vol (les strats existent, le marche non)
-- Explorer strats futures swing 2-5j sur MCL (corr -0.34 avec MES, $10/pt)
-- MIB/ESTX50 Spread en paper monitoring (besoin > 30 trades pour significativite)
+**Criteres passage live_micro -> live_probation** (earliest 2026-05-21 btc_asia q80) :
+- 30j live_micro PnL net >= 0 apres couts
+- 0 incident P0/P1 pendant 14j avant review
+- Divergence paper/live < 1 sigma vs backtest
+- Kill DD non trigger
+- Marc manual greenlight
 
-**V13.0 operationnel :** CycleRunners actifs (9 cycles, error boundaries), MetricsPipeline SQLite, EventLogger JSONL, AnomalyDetector configure, /health Telegram enrichi. 22 modules robustesse PRETS pour integration Phase 2.
+**Prochaines etapes programmees** :
+- **2026-04-23 10h30 Paris** : cycle 2 q80 live_micro (premier fill reel possible si signal BUY, ~10% proba/jour)
+- **2026-04-26 22h UTC** : premier systemd weekly_desk_review auto (Telegram push + report/weekly/)
+- **2026-04-30** : arming fast-track gold_trend_mgc V1 (candidat #2 live_micro apres 14j paper)
+- **2026-05-07** : rebal CAM cadence 20j (probable re-entry MCL ou rotation)
+- **2026-05-21** : review J+30 q80 live_micro, decision live_probation OU rollback paper_only
+- **2026-06-01** : review mes_wednesday (MC DD 28.3% borderline, 45j surveillance)
+
+**V16.0 operationnel** : Runner live_micro + incidents TTL 72h + weekly review systemd timer + metrics etendus + 4 sleeves groupe C freezees. Premier sleeve live_micro = btc_asia_q80_long_only, armed 2026-04-22, premier event journal (entry_skipped signal=NONE) validates plumbing. **Prochaine vraie question : est-ce qu'on convertit ce setup en evidence live utile quand le signal arrive ?**
+
+---
+
+### AUDIT CRO V16.0 — Score 9.0/10 (inchange post desk-productif)
+
+12 domaines tous PASS (CRO audit 21/04 confirme post validation runtime 22/04). Caveat unique : samples paper+live trop courts pour conclusions ROC, necessite 30j+ de history live avant ajustement scores ROC/capital_usage.
