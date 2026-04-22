@@ -61,15 +61,55 @@ class CrossAssetMomentum(StrategyBase):
     def set_data_feed(self, feed: DataFeed) -> None:
         self.data_feed = feed
 
-    def get_top_pick(self) -> str | None:
-        """Return the symbol this strategy WOULD pick today, ignoring rebal cooldown.
+    def get_top_pick(
+        self,
+        bar: Bar | None = None,
+        portfolio_state: PortfolioState | None = None,
+    ) -> str | None:
+        """Return the symbol CAM currently CLAIMS for reservation.
 
-        Used by other strategies for first-refusal: they must not take a symbol
-        that Cross-Asset Mom would want, even if CAM is not firing today.
-        Returns None if no asset meets the min_momentum threshold.
+        Phase 3.5 desk productif 2026-04-22 (decision Marc): une live_core ne
+        doit pas etre neutralisee par une reservation virtuelle d'une autre
+        live_core. CAM reserve un symbole SEULEMENT si:
+          (a) elle porte deja une position live sur ce symbole, OU
+          (b) elle est eligible a entrer aujourd'hui (rebal window ouverte).
+
+        Si CAM est en cooldown et n'a aucune position, retourne None =>
+        GOR et mcl_overnight peuvent trader MCL librement.
+
+        Args:
+            bar: dernier bar (optionnel, utilise pour tester fenetre rebal).
+                 Si None, on considere CAM comme "theoriquement active".
+            portfolio_state: etat portefeuille (optionnel). Si fournit, on
+                 cherche une position active detenue par CAM via son name.
+
+        Returns:
+            str | None: symbole reserve si conditions remplies, sinon None.
         """
         if self.data_feed is None:
             return None
+
+        # Case (a): CAM porte une position active => reserver ce symbole
+        if portfolio_state is not None:
+            try:
+                for pos_sym, pos in getattr(portfolio_state, "positions", {}).items():
+                    # pos peut etre un dict ou objet; chercher strategy_name ou strategy
+                    _strat = getattr(pos, "strategy_name", None) or getattr(pos, "strategy", None)
+                    if _strat is None and isinstance(pos, dict):
+                        _strat = pos.get("strategy_name") or pos.get("strategy")
+                    if _strat == self.name and pos_sym in self.UNIVERSE:
+                        return pos_sym
+            except Exception:
+                pass
+
+        # Case (b): CAM est eligible a entrer aujourd'hui (cooldown expire)
+        if bar is not None and self._last_rebal_ts is not None:
+            days_since = (bar.timestamp - self._last_rebal_ts).days
+            if days_since < self.rebal_days:
+                # Cooldown encore actif + pas de position => ne reserve rien
+                return None
+
+        # Eligible a entrer: calcule top pick theorique
         returns = {}
         for sym in self.UNIVERSE:
             bars = self.data_feed.get_bars(sym, self.lookback_days + 2)

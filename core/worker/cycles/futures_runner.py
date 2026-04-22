@@ -193,12 +193,17 @@ def run_futures_cycle(live: bool = False):
         # et tournent donc a la fois en paper (port 4003) et live (port 4002).
         # User decision 15 avril 2026.
 
-        # LIVE-capable 1: Cross-Asset Momentum (PRIORITE MAX, first-refusal)
+        # LIVE-capable 1: Cross-Asset Momentum (PRIORITE MAX, first-refusal revisee)
         # corr MES = 0.003, 5/5 WF, alpha each year 2021-2026 (incl 2 bears).
-        # Option 1 (backtest 15 avril 2026): CAM reserve ses symboles preferes.
-        # Meme si CAM ne fire pas aujourd'hui (rebal cooldown), elle bloque les
-        # autres strats qui voudraient prendre le symbole qu'elle choisirait.
-        # Backtest: Sharpe 0.85 -> 1.06 (+25%), WR 44% -> 48%, 2022 -$1647 -> -$1369.
+        #
+        # Phase 3.5 desk productif 2026-04-22 (decision Marc):
+        # CAM ne reserve un symbole que si elle PORTE DEJA une position live
+        # OU si elle est eligible a entrer aujourd'hui (rebal window ouverte).
+        # En cooldown sans position, CAM ne reserve rien => GOR et mcl_overnight
+        # peuvent trader MCL librement.
+        # Backtest 15/04: CAM first-refusal avait donne Sharpe 0.85 -> 1.06 (+25%),
+        # mais au prix de bloquer GOR (live_core) dans ~90% des cas => net
+        # desk-level negatif. Nouvelle regle: live_core ne neutralise pas live_core.
         _cam_top_pick = None
         try:
             from strategies_v2.futures.cross_asset_momentum import CrossAssetMomentum
@@ -206,14 +211,17 @@ def run_futures_cycle(live: bool = False):
             _cam_strat.set_data_feed(feed)
             bar = feed.get_latest_bar("MES")
             if bar:
-                _cam_top_pick = _cam_strat.get_top_pick()
+                # Note: get_top_pick(bar, portfolio_state) retourne None si CAM
+                # est en cooldown + sans position. Sinon retourne le symbole
+                # reserve (position active OU top momentum si eligible).
+                _cam_top_pick = _cam_strat.get_top_pick(bar=bar, portfolio_state=portfolio_state)
                 sig = _cam_strat.on_bar(bar, portfolio_state)
                 if sig:
                     signals.append(("Cross-Asset Mom", sig))
                     logger.info(f"    Cross-Asset Mom ({_mode}): BUY {sig.symbol}")
                 else:
                     logger.info(f"    Cross-Asset Mom ({_mode}): pas de rebal "
-                                f"(top pick: {_cam_top_pick or 'none'})")
+                                f"(top pick: {_cam_top_pick or 'none (cooldown+no position)'})")
         except Exception as e:
             logger.error(f"    Cross-Asset Mom error: {e}")
 
@@ -264,60 +272,20 @@ def run_futures_cycle(live: bool = False):
             except Exception as e:
                 logger.error(f"    Gold-Oil Rotation error: {e}")
 
-        # STRATS "REJECTED" QUI TOURNENT EN PAPER UNIQUEMENT
+        # PAPER STRATS - UNIQUEMENT SLEEVES CANONIQUES V16
         # ============================================================
-        # Decision user 15 avril 2026: activer en paper toutes les strats
-        # meme celles rejetees pour collecter de la vraie data live et
-        # challenger les backtests. Live reste disabled pour ces strats.
+        # Refonte 2026-04-22 (Phase 3.5 desk productif): le paper block ne
+        # contient PLUS les 13+ strats legacy (MES Trend/Trend+MR/3-Day/Overnight
+        # MES V2/Overnight MNQ/TSMOM/M2K ORB/MCL Brent Lag/MGC VIX Hedge/Thursday
+        # Rally/Friday-Monday MNQ/Multi-TF Mom/BB Squeeze/RS MES/MNQ). Toutes
+        # ces strats ont ete retirees du catalogue canonique (V15.3 "9 DISABLED
+        # backtest portefeuille negatif" + drains bucket A/C). Les garder hard-
+        # codees ici creait un drift code <> registry qui polluait logs +
+        # executait des fills paper sur compte DUP573894 (observe 22/04).
+        # Seules les sleeves paper_only presentes dans quant_registry/live_whitelist
+        # sont conservees: mes_monday, mes_wednesday, mes_pre_holiday (MES calendar)
+        # + mcl_overnight_mon_trend10. Ajouts futurs passent par le registry.
         if not live:
-            # 1. MES Trend
-            try:
-                from strategies_v2.futures.mes_trend import MESTrend
-                strat = MESTrend()
-                strat.set_data_feed(feed)
-                bar = feed.get_latest_bar("MES")
-                if bar:
-                    sig = strat.on_bar(bar, portfolio_state)
-                    if sig:
-                        signals.append(("MES Trend", sig))
-                        logger.info(f"    MES Trend (paper): {sig.side} @ {bar.close:.2f}")
-                    else:
-                        logger.info("    MES Trend (paper): pas de signal")
-            except Exception as e:
-                logger.error(f"    MES Trend error: {e}")
-
-            # 2. MES Trend+MR
-            try:
-                from strategies_v2.futures.mes_trend_mr import MESTrendMR
-                strat = MESTrendMR()
-                strat.set_data_feed(feed)
-                bar = feed.get_latest_bar("MES")
-                if bar:
-                    sig = strat.on_bar(bar, portfolio_state)
-                    if sig:
-                        signals.append(("MES Trend+MR", sig))
-                        logger.info(f"    MES Trend+MR (paper): {sig.side} @ {bar.close:.2f}")
-                    else:
-                        logger.info("    MES Trend+MR (paper): pas de signal")
-            except Exception as e:
-                logger.error(f"    MES Trend+MR error: {e}")
-
-            # 3. MES 3-Day Stretch
-            try:
-                from strategies_v2.futures.mes_3day_stretch import MES3DayStretch
-                strat = MES3DayStretch()
-                strat.set_data_feed(feed)
-                bar = feed.get_latest_bar("MES")
-                if bar:
-                    sig = strat.on_bar(bar, portfolio_state)
-                    if sig:
-                        signals.append(("MES 3-Day Stretch", sig))
-                        logger.info(f"    MES 3-Day Stretch (paper): {sig.side} @ {bar.close:.2f}")
-                    else:
-                        logger.info("    MES 3-Day Stretch (paper): pas de signal")
-            except Exception as e:
-                logger.error(f"    MES 3-Day Stretch error: {e}")
-
             # 3a-bis. MES calendar paper strats (T1-A INT-C promotion 2026-04-16)
             # Promus en paper_only via INT-A WF/MC validation (cf docs/research/wf_reports/INT-A_tier1_validation.md).
             # Transition paper -> live_probation apres 30j sans divergence > 2 sigma.
@@ -381,311 +349,34 @@ def run_futures_cycle(live: bool = False):
                 except Exception as e:
                     logger.error(f"    MCL overnight mon trend paper error: {e}")
 
-            # 3b. Overnight MES V2 — params validates par sweep V2 (640 combos) + WF 3/3
-            #     SL=60 TP=120 EMA=50 none → Sharpe 1.69, +$7,272, 163 trades 5Y
-            #     WF 4/5 profitable, IS 1.41 → OOS 1.68 (OOS > IS, robuste)
-            #     Paper only: observation avant live decision.
-            try:
-                from strategies_v2.futures.overnight_buy_close import OvernightBuyClose
-                strat = OvernightBuyClose(
-                    symbol="MES",
-                    sl_points=60,
-                    tp_points=120,
-                    ema_period=50,
-                )
-                strat.set_data_feed(feed)
-                bar = feed.get_latest_bar("MES")
-                if bar:
-                    sig = strat.on_bar(bar, portfolio_state)
-                    if sig:
-                        signals.append(("Overnight MES V2", sig))
-                        logger.info(f"    Overnight MES V2 (paper SL60/TP120/EMA50): {sig.side} @ {bar.close:.2f}")
-                    else:
-                        logger.info("    Overnight MES V2 (paper): pas de signal (below EMA50)")
-            except Exception as e:
-                logger.error(f"    Overnight MES V2 error: {e}")
+            # NOTE 2026-04-22 (Phase 3.5 desk productif):
+            # Blocs supprimes de la rotation paper (retrait catalogue V16):
+            #   - Overnight MES V2 (OvernightBuyClose) / Overnight MNQ
+            #   - TSMOM MES/MNQ / M2K ORB / MCL Brent Lag / MGC VIX Hedge
+            #   - Thursday Rally MES+MNQ / Friday-Monday MNQ / Multi-TF Mom MES
+            #   - BB Squeeze MES / RS MES/MNQ rotation
+            #   - VIX Mean Reversion (deja ARCHIVED 2026-04-19)
+            # Raison: drift code <> registry. Ces strats n'etaient PAS dans
+            # quant_registry.yaml ni live_whitelist.yaml, pourtant executees
+            # a chaque cycle paper avec fills sur DUP573894 (paper ghost acct).
+            # Les fichiers strategies_v2/futures/*.py restent presents comme
+            # ref historique. Pour reactiver une strat: passage par registry.
 
-            # 4. Overnight MNQ — extended sweep 280 combos V2 best:
-            #    SL=140 TP=300 EMA=40 → Sharpe 1.01, +$16,589, 273 trades 5Y
-            #    WF 4/5 profitable, IS 2.77 → OOS 1.96 (ratio 0.71, robuste)
-            #    84% robust neighborhood → pas du data mining
-            try:
-                from strategies_v2.futures.overnight_buy_close import OvernightBuyClose
-                strat = OvernightBuyClose(
-                    symbol="MNQ",
-                    sl_points=140,
-                    tp_points=300,
-                    ema_period=40,
-                )
-                strat.set_data_feed(feed)
-                bar = feed.get_latest_bar("MNQ")
-                if bar:
-                    sig = strat.on_bar(bar, portfolio_state)
-                    if sig:
-                        signals.append(("Overnight MNQ", sig))
-                        logger.info(f"    Overnight MNQ (paper SL140/TP300/EMA40): {sig.side} @ {bar.close:.2f}")
-                    else:
-                        logger.info("    Overnight MNQ (paper): pas de signal (below EMA40)")
-            except Exception as e:
-                logger.error(f"    Overnight MNQ error: {e}")
-
-            # 5. TSMOM Multi (MES, MNQ)
-            for tsmom_sym in ["MES", "MNQ"]:
-                if tsmom_sym not in data_sources:
-                    continue
-                try:
-                    from strategies_v2.futures.tsmom_multi import TSMOMMulti
-                    strat_ts = TSMOMMulti(symbol=tsmom_sym)
-                    strat_ts.set_data_feed(feed)
-                    bar_ts = feed.get_latest_bar(tsmom_sym)
-                    if bar_ts:
-                        sig = strat_ts.on_bar(bar_ts, portfolio_state)
-                        if sig:
-                            signals.append((f"TSMOM {tsmom_sym}", sig))
-                            logger.info(f"    TSMOM {tsmom_sym} (paper): {sig.side} @ {bar_ts.close:.2f}")
-                        else:
-                            logger.info(f"    TSMOM {tsmom_sym} (paper): pas de signal")
-                except Exception as e:
-                    logger.error(f"    TSMOM {tsmom_sym} error: {e}")
-
-            # 6. M2K ORB
-            if "M2K" in data_sources:
-                try:
-                    from strategies_v2.futures.m2k_orb import M2KORB
-                    strat = M2KORB()
-                    strat.set_data_feed(feed)
-                    bar = feed.get_latest_bar("M2K")
-                    if bar:
-                        sig = strat.on_bar(bar, portfolio_state)
-                        if sig:
-                            signals.append(("M2K ORB", sig))
-                            logger.info(f"    M2K ORB (paper): {sig.side} @ {bar.close:.2f}")
-                        else:
-                            logger.info("    M2K ORB (paper): pas de signal")
-                except Exception as e:
-                    logger.error(f"    M2K ORB error: {e}")
-
-            # 7. MCL Brent Lag
-            if "MCL" in data_sources:
-                try:
-                    from strategies_v2.futures.mcl_brent_lag import MCLBrentLag
-                    strat = MCLBrentLag()
-                    strat.set_data_feed(feed)
-                    bar = feed.get_latest_bar("MCL")
-                    if bar:
-                        sig = strat.on_bar(bar, portfolio_state)
-                        if sig:
-                            signals.append(("MCL Brent Lag", sig))
-                            logger.info(f"    MCL Brent Lag (paper): {sig.side} @ {bar.close:.2f}")
-                        else:
-                            logger.info("    MCL Brent Lag (paper): pas de signal")
-                except Exception as e:
-                    logger.error(f"    MCL Brent Lag error: {e}")
-
-            # 8. MGC VIX Hedge
-            if "MGC" in data_sources and "VIX" in data_sources:
-                try:
-                    from strategies_v2.futures.mgc_vix_hedge import MGCVixHedge
-                    strat = MGCVixHedge()
-                    strat.set_data_feed(feed)
-                    bar = feed.get_latest_bar("MGC")
-                    if bar:
-                        sig = strat.on_bar(bar, portfolio_state)
-                        if sig:
-                            signals.append(("MGC VIX Hedge", sig))
-                            logger.info(f"    MGC VIX Hedge (paper): {sig.side} @ {bar.close:.2f}")
-                        else:
-                            logger.info("    MGC VIX Hedge (paper): pas de signal")
-                except Exception as e:
-                    logger.error(f"    MGC VIX Hedge error: {e}")
-
-            # (Cross-Asset Mom + Gold Trend MGC moved out of paper-only block — now LIVE+paper)
-
-            # 9f. Thursday Rally MES + MNQ
-            for sym in ["MES", "MNQ"]:
-                if sym not in data_sources: continue
-                try:
-                    from strategies_v2.futures.thursday_rally import ThursdayRally
-                    strat = ThursdayRally(symbol=sym)
-                    strat.set_data_feed(feed)
-                    bar = feed.get_latest_bar(sym)
-                    if bar:
-                        sig = strat.on_bar(bar, portfolio_state)
-                        if sig:
-                            signals.append((f"Thursday Rally {sym}", sig))
-                            logger.info(f"    Thursday Rally {sym} (paper): BUY @ {bar.close:.2f}")
-                except Exception as e:
-                    logger.error(f"    Thursday Rally {sym} error: {e}")
-
-            # 9c. Friday-Monday MNQ — weekend effect, n=266 5Y Sharpe 1.76
-            # WF 4/5 profitable, OOS 1.86 > IS 0.03 (OOS overperform)
-            if "MNQ" in data_sources:
-                try:
-                    from strategies_v2.futures.friday_monday_mnq import FridayMondayMNQ
-                    strat = FridayMondayMNQ()
-                    strat.set_data_feed(feed)
-                    bar = feed.get_latest_bar("MNQ")
-                    if bar:
-                        sig = strat.on_bar(bar, portfolio_state)
-                        if sig:
-                            signals.append(("Friday-Monday MNQ", sig))
-                            logger.info(f"    Friday-Monday MNQ (paper): BUY @ {bar.close:.2f}")
-                        else:
-                            logger.info("    Friday-Monday MNQ (paper): pas vendredi")
-                except Exception as e:
-                    logger.error(f"    Friday-Monday MNQ error: {e}")
-
-            # 9d. Multi-TF Momentum MES — weekly confirm + daily trigger
-            # n=58 (small sample) but Sharpe 2.01 + WF 3/5 prof OOS 2.85
-            if "MES" in data_sources:
-                try:
-                    from strategies_v2.futures.multi_tf_mom_mes import MultiTFMomMES
-                    strat = MultiTFMomMES()
-                    strat.set_data_feed(feed)
-                    bar = feed.get_latest_bar("MES")
-                    if bar:
-                        sig = strat.on_bar(bar, portfolio_state)
-                        if sig:
-                            signals.append(("Multi-TF Mom MES", sig))
-                            logger.info(f"    Multi-TF Mom MES (paper): BUY @ {bar.close:.2f}")
-                        else:
-                            logger.info("    Multi-TF Mom MES (paper): conditions non alignees")
-                except Exception as e:
-                    logger.error(f"    Multi-TF Mom MES error: {e}")
-
-            # 9a. BB Squeeze MES — event-driven rare, 7/year but Sharpe 7 pure
-            # n=37, +$7904, 4/5 WF profitable, ratio 0.84
-            if "MES" in data_sources:
-                try:
-                    from strategies_v2.futures.bb_squeeze_mes import BBSqueezeMES
-                    strat = BBSqueezeMES()
-                    strat.set_data_feed(feed)
-                    bar = feed.get_latest_bar("MES")
-                    if bar:
-                        sig = strat.on_bar(bar, portfolio_state)
-                        if sig:
-                            signals.append(("BB Squeeze MES", sig))
-                            logger.info(f"    BB Squeeze MES (paper): BREAKOUT @ {bar.close:.2f}")
-                        else:
-                            logger.info("    BB Squeeze MES (paper): pas de squeeze+breakout")
-                except Exception as e:
-                    logger.error(f"    BB Squeeze MES error: {e}")
-
-            # 9b. RS MES/MNQ Rotation — validated 5Y, 3/3 gates Sharpe OOS 2.28
-            # Buy stronger of MES/MNQ over 3-day lookback, hold 5 days.
-            # n=212, +$19,231 total, WR 58%, 4/5 WF profitable, OOS>IS (ultra robust)
-            if "MES" in data_sources and "MNQ" in data_sources:
-                try:
-                    from strategies_v2.futures.rs_mes_mnq_rotate import RSMesMnqRotate
-                    strat = RSMesMnqRotate(lookback=3)
-                    strat.set_data_feed(feed)
-                    bar = feed.get_latest_bar("MES")
-                    if bar:
-                        sig = strat.on_bar(bar, portfolio_state)
-                        if sig:
-                            signals.append(("RS MES/MNQ", sig))
-                            logger.info(f"    RS MES/MNQ rotate (paper): {sig.side} {sig.symbol} @ {bar.close:.2f}")
-                        else:
-                            logger.info("    RS MES/MNQ rotate (paper): spread < 0.5%")
-                except Exception as e:
-                    logger.error(f"    RS MES/MNQ error: {e}")
-
-            # 9. VIX Mean Reversion — ARCHIVED 2026-04-19 (Bucket C-2 RE-WF
-            # INSUFFICIENT_TRADES 0/5 windows sur 5.3 ans data event-driven).
-            # Code dans strategies_v2/_archive/futures/vix_mean_reversion.py.
+            # (Cross-Asset Mom + Gold Trend MGC handled in live-capable block above)
         else:
-            # LIVE MODE — only keep the validated ones, all others disabled
-            logger.info("    LIVE mode: MES Trend/Trend+MR/Stretch/Overnight/TSMOM/M2K/MCL/MGC all DISABLED")
-        for tsmom_sym in []:
-            if tsmom_sym not in data_sources:
-                continue
-            try:
-                from strategies_v2.futures.tsmom_multi import TSMOMMulti
-                strat_ts = TSMOMMulti(symbol=tsmom_sym)
-                strat_ts.set_data_feed(feed)
-                bar_ts = feed.get_latest_bar(tsmom_sym)
-                if bar_ts:
-                    sig = strat_ts.on_bar(bar_ts, portfolio_state)
-                    if sig:
-                        signals.append((f"TSMOM {tsmom_sym}", sig))
-                        logger.info(f"    TSMOM {tsmom_sym}: {sig.side} @ {bar_ts.close:.2f} str={sig.strength:.2f}")
-                    else:
-                        logger.info(f"    TSMOM {tsmom_sym}: pas de signal")
-            except Exception as e:
-                logger.error(f"    TSMOM {tsmom_sym} error: {e}")
-
-        # 6b. EU Gap Open — ARCHIVED 2026-04-19 (Bucket C residuel post-XXL)
-        # WF REJECTED 2026-03-31 (output/wf_eu_results/wf_eu_summary.json).
-        # Code dans strategies_v2/_archive/futures/eu_gap_open.py si reactivation.
-
-        # 6c. Sector Rotation EU — ARCHIVED 2026-04-19 (Bucket C-2 RE-WF
-        # INSUFFICIENT_TRADES 1/5 windows, median Sharpe +0.12 marginal).
-        # Code dans strategies_v2/_archive/futures/sector_rotation_eu.py.
-
-        # 6d. Gold-Equity Divergence — ARCHIVED 2026-04-19 (Bucket C-2 RE-WF
-        # INSUFFICIENT_TRADES 0/5 windows, median Sharpe -0.15 negative).
-        # Code dans strategies_v2/_archive/futures/gold_equity_divergence.py.
-
-        # 7. Commodity Seasonality (MCL, MGC) — paper monitoring
-        for season_sym in ["MCL", "MGC"]:
-            if season_sym not in data_sources:
-                continue
-            try:
-                from strategies_v2.futures.commodity_season import CommoditySeason
-                strat_cs = CommoditySeason(symbol=season_sym)
-                strat_cs.set_data_feed(feed)
-                bar_cs = feed.get_latest_bar(season_sym)
-                if bar_cs:
-                    sig = strat_cs.on_bar(bar_cs, portfolio_state)
-                    if sig:
-                        signals.append((f"Season {season_sym}", sig))
-                        logger.info(f"    Season {season_sym}: {sig.side} @ {bar_cs.close:.2f}")
-                    else:
-                        logger.info(f"    Season {season_sym}: hors fenetre saisonniere")
-            except Exception as e:
-                logger.error(f"    Season {season_sym} error: {e}")
-
-        # 8. MES/MNQ Pairs
-        if "MNQ" in data_sources:
-            try:
-                from strategies_v2.futures.mes_mnq_pairs import MESMNQPairs
-                strat = MESMNQPairs()
-                strat.set_data_feed(feed)
-                bar = feed.get_latest_bar("MES")
-                if bar:
-                    sig = strat.on_bar(bar, portfolio_state)
-                    if sig:
-                        signals.append(("MES/MNQ Pairs", sig))
-                        logger.info(f"    MES/MNQ Pairs: {sig.side} MES @ {bar.close:.2f} z-score signal str={sig.strength:.2f}")
-                    else:
-                        logger.info("    MES/MNQ Pairs: pas de signal (z-score dans le range)")
-                else:
-                    logger.info("    MES/MNQ Pairs: pas de bar MES")
-            except Exception as e:
-                logger.error(f"    MES/MNQ Pairs error: {e}")
-        else:
-            logger.info("    MES/MNQ Pairs: SKIP — pas de data MNQ")
-
-        # 9. MIB/ESTX50 Spread (Relative Value) — paper only
-        if "MIB" in data_sources and "ESTX50" in data_sources:
-            try:
-                from strategies_v2.futures.mib_estx50_spread import MIBEstx50Spread
-                strat_spread = MIBEstx50Spread()
-                strat_spread.set_data_feed(feed)
-                bar_mib = feed.get_latest_bar("MIB")
-                if bar_mib:
-                    sig = strat_spread.on_bar(bar_mib, portfolio_state)
-                    if sig:
-                        signals.append(("MIB/ESTX50 Spread", sig))
-                        logger.info(f"    MIB/ESTX50 Spread: {sig.side} MIB @ {bar_mib.close:.2f} str={sig.strength:.2f}")
-                    else:
-                        logger.info("    MIB/ESTX50 Spread: pas de signal (z-score dans le range)")
-                else:
-                    logger.info("    MIB/ESTX50 Spread: pas de bar MIB")
-            except Exception as e:
-                logger.error(f"    MIB/ESTX50 Spread error: {e}")
-        else:
-            logger.info("    MIB/ESTX50 Spread: SKIP — data MIB/ESTX50 manquante")
+            # LIVE MODE : uniquement les sleeves live_core (CAM + GOR).
+            # Plus de mention de strats legacy (retirees Phase 3.5 2026-04-22).
+            pass
+        # NOTE 2026-04-22 (Phase 3.5 desk productif) - cleanup code<>registry drift:
+        # Blocs supprimes de la rotation futures_runner (non presents dans registry V16):
+        #   - `for tsmom_sym in []:` (dead code, empty loop)
+        #   - TSMOM Multi / EU Gap Open / Sector Rotation EU / Gold-Equity Divergence
+        #     (archived_rejected bucket C 2026-04-19)
+        #   - Commodity Season MCL/MGC (jamais promu au registry)
+        #   - MES/MNQ Pairs (jamais promu)
+        #   - MIB/ESTX50 Spread (frozen, deja execute par run_mib_estx50_spread_paper_cycle
+        #     dans core/worker/cycles/paper_cycles.py - pas besoin de 2e path)
+        # Toutes les archives restent dans strategies_v2/_archive/ comme ref historique.
 
         logger.info(f"  FUTURES PAPER: {len(signals)} signal(s)")
         _log_event("cycle_end", "futures_paper", {
