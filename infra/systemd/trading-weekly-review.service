@@ -1,0 +1,23 @@
+[Unit]
+Description=Trading Platform Weekly Desk Review (Phase 3.4 2026-04-22)
+After=network.target
+# Depends on trading-worker for fresh state files; weekly run should follow sunday snapshot
+Wants=trading-worker.service
+
+[Service]
+Type=oneshot
+User=root
+WorkingDirectory=/opt/trading-platform
+ExecStart=/opt/trading-platform/.venv/bin/python /opt/trading-platform/scripts/weekly_desk_review.py
+Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=/opt/trading-platform/.env
+
+# Logging
+StandardOutput=append:/opt/trading-platform/logs/weekly_review.log
+StandardError=append:/opt/trading-platform/logs/weekly_review.log
+
+# Let it take up to 2 min (CSV read + telegram API)
+TimeoutStartSec=120
+
+[Install]
+WantedBy=multi-user.target

@@ -146,10 +146,143 @@ def _append_jsonl(entry: dict) -> None:
         f.write(json.dumps(entry, default=str) + "\n")
 
 
+def _count_live_trades_in_window(days: int = 30) -> dict:
+    """Count closed live trades in last N days.
+
+    Phase 3.3 desk productif 2026-04-22. Sources scanees:
+      - data/state/btc_asia_mes_leadlag_q80_live_micro/journal.jsonl (live_micro)
+      - data/state/*/live_journal.jsonl (patterns futures/alpaca si wire)
+
+    Compte les events {"event": "exit"} (trade ferme = entry + exit).
+    Ne compte pas entry_skipped, entry_rejected, exec_error.
+    """
+    from datetime import timedelta as _td
+
+    cutoff = datetime.now(UTC) - _td(days=days)
+    state_dir = ROOT / "data" / "state"
+    if not state_dir.exists():
+        return {"count": 0, "by_strategy": {}, "window_days": days}
+
+    patterns = [
+        "*_live_micro/journal.jsonl",
+        "*_live/journal.jsonl",
+        "*/live_journal.jsonl",
+    ]
+    by_strategy: dict[str, int] = {}
+    total = 0
+    seen_files: set = set()
+    for pat in patterns:
+        for journal_path in state_dir.glob(pat):
+            if str(journal_path) in seen_files:
+                continue
+            seen_files.add(str(journal_path))
+            try:
+                with open(journal_path, encoding="utf-8") as f:
+                    for line in f:
+                        line = line.strip()
+                        if not line:
+                            continue
+                        try:
+                            entry = json.loads(line)
+                        except json.JSONDecodeError:
+                            continue
+                        if entry.get("event") != "exit":
+                            continue
+                        ts = entry.get("ts_utc") or entry.get("timestamp")
+                        if not ts:
+                            continue
+                        try:
+                            dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                            if dt.tzinfo is None:
+                                dt = dt.replace(tzinfo=UTC)
+                        except (ValueError, TypeError):
+                            continue
+                        if dt < cutoff:
+                            continue
+                        sid = entry.get("strategy_id") or journal_path.parent.name
+                        by_strategy[sid] = by_strategy.get(sid, 0) + 1
+                        total += 1
+            except OSError:
+                continue
+    return {"count": total, "by_strategy": by_strategy, "window_days": days}
+
+
+def _compute_capital_exposure_snapshot(total_equity_usd: float) -> dict:
+    """Instantaneous capital exposure snapshot.
+
+    Sum notional USD across known open live positions:
+      - btc_asia_q80_live_micro positions (if status=live_micro + positions.json)
+      - ibkr_futures positions_live.json (CAM/GOR live)
+
+    Retourne exposed_usd + exposed_pct + idle_pct + per-book breakdown.
+    Note: c'est un instantanne, pas une moyenne. La moyenne J30 viendra de
+    l'historique CSV quand la colonne exposed_usd sera populee quotidiennement.
+    """
+    exposed_usd = 0.0
+    per_book: dict[str, float] = {}
+
+    # btc_asia_q80 live_micro
+    try:
+        p = ROOT / "data" / "state" / "btc_asia_mes_leadlag_q80_live_micro" / "positions.json"
+        if p.exists():
+            positions = json.loads(p.read_text(encoding="utf-8")) or {}
+            lm_usd = 0.0
+            for pos in positions.values():
+                qty = float(pos.get("qty", 0))
+                entry_price = float(pos.get("entry_price", 0))
+                lm_usd += abs(qty * entry_price)
+            exposed_usd += lm_usd
+            if lm_usd > 0:
+                per_book["binance_crypto_live_micro"] = round(lm_usd, 2)
+    except Exception:
+        pass
+
+    # ibkr_futures live positions
+    try:
+        p = ROOT / "data" / "state" / "ibkr_futures" / "positions_live.json"
+        if p.exists():
+            positions = json.loads(p.read_text(encoding="utf-8")) or {}
+            fut_usd = 0.0
+            for pos in positions.values():
+                # Futures notional = multiplier * price * qty (approx)
+                mult = float(pos.get("multiplier", 1))
+                entry_price = float(pos.get("entry_price", 0))
+                qty = abs(float(pos.get("qty", 0)))
+                fut_usd += mult * entry_price * qty
+            exposed_usd += fut_usd
+            if fut_usd > 0:
+                per_book["ibkr_futures_live"] = round(fut_usd, 2)
+    except Exception:
+        pass
+
+    pct = (exposed_usd / total_equity_usd * 100) if total_equity_usd > 0 else 0.0
+    return {
+        "exposed_usd": round(exposed_usd, 2),
+        "exposed_pct": round(pct, 2),
+        "idle_pct": round(100.0 - pct, 2) if total_equity_usd > 0 else 0.0,
+        "per_book_usd": per_book,
+    }
+
+
 def _compute_running_stats(rows: list[dict]) -> dict:
-    """Compute CAGR, annualized Sharpe, MaxDD over the full history."""
+    """Compute CAGR, annualized Sharpe, MaxDD over the full history.
+
+    Phase 3.3 extended: trades_count_30d + capital_exposed snapshot + max_dd_live_pct.
+    """
     if len(rows) < 2:
-        return {"n_days": len(rows), "insufficient": True}
+        # Phase 3.3: meme avec <2 rows on peut deja calculer exposure instantanee
+        last_eq = 0.0
+        if rows:
+            try:
+                last_eq = float(rows[-1].get("total_equity_usd", 0))
+            except (ValueError, TypeError):
+                pass
+        return {
+            "n_days": len(rows),
+            "insufficient": True,
+            "trades_count_30d": _count_live_trades_in_window(30),
+            "capital_exposure": _compute_capital_exposure_snapshot(last_eq),
+        }
 
     equities = [float(r["total_equity_usd"]) for r in rows if r.get("total_equity_usd")]
     if len(equities) < 2:
@@ -193,6 +326,9 @@ def _compute_running_stats(rows: list[dict]) -> dict:
         "cagr_pct": cagr * 100,
         "sharpe_annual": sharpe,
         "max_dd_pct": max_dd * 100,
+        "max_dd_live_pct": max_dd * 100,  # Phase 3.3 alias clarte
+        "trades_count_30d": _count_live_trades_in_window(30),
+        "capital_exposure": _compute_capital_exposure_snapshot(equities[-1]),
         "last_updated": datetime.now(UTC).isoformat(),
     }
 

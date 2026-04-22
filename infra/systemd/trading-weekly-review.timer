@@ -1,0 +1,14 @@
+[Unit]
+Description=Trading Platform Weekly Desk Review Timer (dim 22h UTC)
+Requires=trading-weekly-review.service
+
+[Timer]
+# Dimanche 22h00 UTC = 00h Paris lundi (CEST ete) / 23h Paris dim (CET hiver)
+OnCalendar=Sun *-*-* 22:00:00 UTC
+Persistent=true
+# Accuracy 1 min (timer fires within 1 minute of scheduled time)
+AccuracySec=1min
+# If VPS was down at firing time, run asap on boot (Persistent=true + catch-up)
+
+[Install]
+WantedBy=timers.target
