@@ -29,14 +29,20 @@ metadata:
 # Schema par strategie:
 #   strategy_id: string                # match live_whitelist.yaml canonique
 #   book: string                       # binance_crypto | ibkr_futures | ibkr_eu | alpaca_us
-#   status: string                     # disabled | paper_only | live_probation | live_core
-#   paper_start_at: YYYY-MM-DD         # OBLIGATOIRE si status in (paper_only, live_probation)
-#   live_start_at: YYYY-MM-DD | null   # Date premiere promotion live (si applicable)
+#   status: string                     # disabled | frozen | paper_only | live_micro | live_probation | live_core
+#   paper_start_at: YYYY-MM-DD         # OBLIGATOIRE si status in (paper_only, live_probation, live_micro)
+#   live_start_at: YYYY-MM-DD | null   # Date premiere promotion live (si applicable, y compris live_micro)
 #   wf_manifest_path: string           # path vers json manifest OBLIGATOIRE
 #   grade: string                      # S | A | B | REJECTED
 #   last_wf_run_at: YYYY-MM-DD
 #   is_live: bool                      # strat tourne en live ACTUELLEMENT
 #   infra_gaps: list[string]           # blockers connus (data stale, short variant, margin)
+#
+# Statuts ajoutes 2026-04-22 (desk productif plan):
+#   - frozen        : hors rotation business (groupe C), re-activable. Runtime cycles skip.
+#   - live_micro    : argent reel, size caps par grade (B=$200, A=$300, S=$500).
+#                     Caps enforced par core/governance/live_micro_sizing.py.
+#                     No pyramiding avant J+14 review. Max 1 nouvelle sleeve live_micro par 7j.
 
 strategies:
 

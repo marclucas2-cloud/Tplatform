@@ -38,7 +38,10 @@ books:
   - book_id: "binance_crypto"
     broker: "binance"
     asset_scope: ["BTC", "ETH", "BNB", "USDC margin", "USDC spot", "altcoins majors"]
-    mode_authorized: "live_allowed"   # disabled | paper_only | live_allowed
+    mode_authorized: "live_micro_allowed"   # disabled | paper_only | live_micro_allowed | live_allowed
+    # 2026-04-22: live_micro_allowed = permet ordres reels small-size via status=live_micro,
+    # caps appliques par core/governance/live_micro_sizing.py (B=$200/$20, A=$300/$30, S=$500/$50).
+    # Promotion live_allowed (taille complete) reste gated par check_promotion() standard.
     capital_budget_usd: 10000          # capital cible (allocation max)
     risk_budget:
       daily_loss_pct: 0.05             # cf data/kill_switch_state.json (override actif)

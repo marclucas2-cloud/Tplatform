@@ -82,6 +82,12 @@ def pre_order_guard(
     symbol: Optional[str] = None,
     paper_mode: bool = False,
     _bypass_for_test: bool = False,
+    notional_usd: Optional[float] = None,
+    risk_usd: Optional[float] = None,
+    strategy_grade: Optional[str] = None,
+    strategy_status: Optional[str] = None,
+    live_start_at: Optional[str] = None,
+    open_positions_count: int = 0,
 ) -> None:
     """Validate that an order request is authorized.
 
@@ -91,6 +97,12 @@ def pre_order_guard(
         symbol: optional symbol for logging context
         paper_mode: if True, less strict (paper-only books OK to trade)
         _bypass_for_test: TEST USE ONLY, raises if not in pytest env
+        notional_usd: (live_micro only) notional USD of the order for sizing cap check
+        risk_usd: (live_micro only) risk-if-stopped USD for risk cap check
+        strategy_grade: (live_micro only) "B", "A" or "S" for caps lookup
+        strategy_status: (live_micro only) if "live_micro", triggers sizing caps enforcement
+        live_start_at: (live_micro only) ISO date for J+14 pyramiding guard
+        open_positions_count: (live_micro only) number of currently open positions for this sleeve
 
     Raises:
         GuardError: if any check fails. Order MUST NOT be sent.
@@ -133,11 +145,13 @@ def pre_order_guard(
             book=book, strategy_id=strategy_id,
         )
 
-    # 3. Live mode: book must allow it
-    if not paper_mode and mode != "live_allowed":
+    # 3. Live mode: book must allow it (live_allowed OR live_micro_allowed).
+    # live_micro_allowed (2026-04-22) = book supports small real-money via live_micro
+    # status. Sizing caps enforced downstream by live_micro_sizing.enforce_sizing().
+    if not paper_mode and mode not in ("live_allowed", "live_micro_allowed"):
         raise GuardError(
             f"book mode_authorized={mode} mais paper_mode=False (live order). "
-            f"Pour trader live, mode_authorized doit etre 'live_allowed'.",
+            f"Pour trader live, mode_authorized doit etre 'live_allowed' ou 'live_micro_allowed'.",
             book=book, strategy_id=strategy_id,
         )
 
@@ -283,6 +297,40 @@ def pre_order_guard(
                 f"book_health check raised unexpected exception: {type(e).__name__}: {e}",
                 book=book, strategy_id=strategy_id,
             ) from e
+
+    # 8. Live micro enforcement (2026-04-22 desk productif policy).
+    # Si la strat est en status=live_micro, enforcer les caps sizing + no-pyramid J+14.
+    # Les 4 kwargs (strategy_status, strategy_grade, notional_usd, live_start_at) sont
+    # requis par les callers live_micro; silent pass si non fournis (back-compat live_core).
+    if not paper_mode and strategy_status == "live_micro":
+        from core.governance.live_micro_sizing import (
+            LiveMicroViolation,
+            can_pyramid,
+            enforce_sizing,
+        )
+
+        if notional_usd is None or strategy_grade is None:
+            raise GuardError(
+                "live_micro requires notional_usd + strategy_grade kwargs (sizing cap enforcement). "
+                "Caller must pass these or status must not be live_micro.",
+                book=book, strategy_id=strategy_id,
+            )
+        try:
+            enforce_sizing(strategy_grade, notional_usd, risk_usd=risk_usd)
+        except LiveMicroViolation as e:
+            raise GuardError(
+                f"live_micro sizing violation: {e.reason} detail={e.detail}",
+                book=book, strategy_id=strategy_id,
+            ) from e
+
+        ok_pyramid, reason_pyramid = can_pyramid(
+            live_start_at, open_positions_count,
+        )
+        if not ok_pyramid:
+            raise GuardError(
+                f"live_micro pyramiding blocked: {reason_pyramid}",
+                book=book, strategy_id=strategy_id,
+            )
 
     # All checks passed — log debug only (no spam)
     logger.debug(

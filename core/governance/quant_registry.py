@@ -24,7 +24,7 @@ REGISTRY_PATH = ROOT / "config" / "quant_registry.yaml"
 class QuantEntry:
     strategy_id: str
     book: str
-    status: str                                 # disabled | paper_only | live_probation | live_core
+    status: str                                 # disabled | frozen | paper_only | live_micro | live_probation | live_core
     paper_start_at: date | None                 # parsed from YYYY-MM-DD
     live_start_at: date | None
     wf_manifest_path: Path | None               # absolute path if set

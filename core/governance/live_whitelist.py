@@ -23,9 +23,12 @@ ROOT = Path(__file__).resolve().parent.parent.parent
 WHITELIST_PATH = ROOT / "config" / "live_whitelist.yaml"
 
 # Statuses that allow live execution
-LIVE_STATUSES = {"live_core", "live_probation"}
+# live_micro added 2026-04-22 (desk productif plan): small real money, size caps
+# per core/governance/live_micro_sizing.py grade.
+LIVE_STATUSES = {"live_core", "live_probation", "live_micro"}
 # Statuses that forbid live execution
-BLOCK_STATUSES = {"paper_only", "disabled"}
+# frozen added 2026-04-22: hors rotation business, pas rejete (re-activable).
+BLOCK_STATUSES = {"paper_only", "disabled", "frozen"}
 
 # In-memory cache with mtime invalidation
 _cache: dict[str, Any] = {

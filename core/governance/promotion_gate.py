@@ -392,6 +392,177 @@ def _latest_wf_grade(strategy_id: str) -> str | None:
     return None
 
 
+LIVE_MICRO_MIN_PAPER_DAYS = 7
+LIVE_MICRO_MIN_GRADE = "B"
+LIVE_MICRO_MAX_RECENT_INCIDENTS_24H = 0
+
+
+def _count_recent_incidents_24h(book: str | None = None) -> int:
+    """Count open P0/P1/CRITICAL incidents in last 24h for a given book (if provided).
+
+    Uses same resolutions manifest convention as alpaca_go_25k_gate so that
+    resolved/expired incidents don't pollute this gate either.
+    """
+    incidents_dir = ROOT / "data" / "incidents"
+    if not incidents_dir.exists():
+        return 0
+
+    resolved_ts: set[str] = set()
+    resolutions_path = incidents_dir / "resolutions.jsonl"
+    if resolutions_path.exists():
+        try:
+            with open(resolutions_path, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                        ts = row.get("resolved_incident_timestamp")
+                        if ts:
+                            resolved_ts.add(ts)
+                    except json.JSONDecodeError:
+                        continue
+        except OSError:
+            pass
+
+    cutoff = datetime.now(UTC) - timedelta(hours=24)
+    count = 0
+    for p in incidents_dir.glob("*.jsonl"):
+        if p.name == "resolutions.jsonl":
+            continue
+        try:
+            with open(p, encoding="utf-8") as f:
+                for line in f:
+                    line = line.strip()
+                    if not line:
+                        continue
+                    try:
+                        row = json.loads(line)
+                    except json.JSONDecodeError:
+                        continue
+                    sev = (row.get("severity") or "").upper()
+                    if sev not in ("P0", "P1", "CRITICAL"):
+                        continue
+                    status = (row.get("status") or "").lower()
+                    if status not in ("open", ""):
+                        continue
+                    ts = row.get("timestamp") or ""
+                    if ts in resolved_ts:
+                        continue
+                    try:
+                        dt = datetime.fromisoformat(ts)
+                        if dt.tzinfo is None:
+                            dt = dt.replace(tzinfo=UTC)
+                    except (ValueError, TypeError):
+                        continue
+                    if dt < cutoff:
+                        continue
+                    if book:
+                        ctx_book = (row.get("context") or {}).get("book")
+                        if ctx_book and ctx_book != book:
+                            continue
+                    count += 1
+        except OSError:
+            continue
+    return count
+
+
+def can_go_live_micro(
+    strategy_id: str,
+    all_registry_entries: list[dict] | None = None,
+) -> PromotionResult:
+    """Lightweight gate for paper_only -> live_micro promotion.
+
+    Conditions (ALL must pass):
+      1. strategy found in live_whitelist
+      2. current status == "paper_only" (can't promote from frozen/disabled/live_*)
+      3. grade >= B (excludes null/unknown)
+      4. age_paper_days >= 7 (vs 30 for standard promotion)
+      5. 0 critical incident in last 24h scoped to the strategy's book
+      6. rate limit: max 1 new live_micro sleeve per rolling 7 days
+
+    Returns PromotionResult. Caller still needs explicit Marc greenlight.
+    """
+    from core.governance.live_micro_sizing import (
+        can_promote_new_live_micro,
+    )
+
+    entry, book_id = _load_whitelist_entry(strategy_id)
+    if entry is None:
+        return PromotionResult(
+            strategy_id=strategy_id,
+            current_status="UNKNOWN",
+            target_status="live_micro",
+            checks=[CheckResult(
+                name="whitelist_lookup",
+                passed=False,
+                message=f"strategy_id not found in {WHITELIST_PATH.name}",
+            )],
+        )
+
+    current = entry.get("status", "unknown")
+    result = PromotionResult(
+        strategy_id=strategy_id,
+        current_status=current,
+        target_status="live_micro",
+    )
+
+    # 2. Only paper_only -> live_micro allowed
+    result.checks.append(CheckResult(
+        name="current_status",
+        passed=(current == "paper_only"),
+        message=f"current_status={current} (expected paper_only)",
+    ))
+
+    # 3. Grade requirement
+    grade = _latest_wf_grade(strategy_id)
+    passed_grade = grade in ("B", "A", "S")
+    result.checks.append(CheckResult(
+        name="wf_grade",
+        passed=passed_grade,
+        message=f"grade={grade} (need >= {LIVE_MICRO_MIN_GRADE})",
+    ))
+
+    # 4. Paper age >= 7j
+    age_check = _check_paper_age(strategy_id, entry, LIVE_MICRO_MIN_PAPER_DAYS)
+    age_check.name = "age_paper_days_7j"
+    result.checks.append(age_check)
+
+    # 5. 0 critical incident 24h scoped to book
+    incidents_24h = _count_recent_incidents_24h(book=book_id)
+    result.checks.append(CheckResult(
+        name="incidents_24h",
+        passed=incidents_24h <= LIVE_MICRO_MAX_RECENT_INCIDENTS_24H,
+        message=(
+            f"incidents_24h={incidents_24h} "
+            f"(max={LIVE_MICRO_MAX_RECENT_INCIDENTS_24H}, book={book_id})"
+        ),
+    ))
+
+    # 6. Rate limit 1 new sleeve per rolling 7d
+    entries_for_rate_check = all_registry_entries
+    if entries_for_rate_check is None:
+        try:
+            from core.governance.quant_registry import load_registry
+            qr = load_registry()
+            entries_for_rate_check = [
+                {"status": e.status, "live_start_at": e.live_start_at}
+                for e in qr.values()
+            ]
+        except Exception:
+            entries_for_rate_check = []
+
+    ok_rate, reason_rate = can_promote_new_live_micro(entries_for_rate_check)
+    result.checks.append(CheckResult(
+        name="rate_limit_1_per_week",
+        passed=ok_rate,
+        message=reason_rate,
+    ))
+
+    return result
+
+
 def check_promotion(
     strategy_id: str,
     target: str = "live_probation",
