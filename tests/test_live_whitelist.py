@@ -152,11 +152,16 @@ def test_list_live_strategies_futures():
 def test_list_live_strategies_all_books():
     live = list_live_strategies()
     # P0.2 audit 2026-04-18: TOUTES les crypto demoted en paper_only post re-WF.
-    # Reste live: 2 futures live_core (CAM + GoldOilRotation). Total = 2.
+    # Reste live: 2 futures live_core (CAM + GoldOilRotation).
+    # Phase 2 desk productif 2026-04-22: +1 live_micro crypto (btc_asia_q80_long_only).
     assert len(live) >= 2
     fx_entries = [e for e in live if e["_book"] == "ibkr_fx"]
     assert len(fx_entries) == 0  # FX disabled ESMA
     eu_entries = [e for e in live if e["_book"] == "ibkr_eu"]
     assert len(eu_entries) == 0  # EU paper_only
     crypto_entries = [e for e in live if e["_book"] == "binance_crypto"]
-    assert len(crypto_entries) == 0  # P0.2 demote: toutes crypto paper_only
+    # 1 crypto live_micro attendu (btc_asia_q80_long_only phase 2 2026-04-22),
+    # 0 crypto live_core/live_probation.
+    crypto_ids = {e["strategy_id"] for e in crypto_entries}
+    assert crypto_ids == {"btc_asia_mes_leadlag_q80_v80_long_only"}
+    assert crypto_entries[0]["status"] == "live_micro"

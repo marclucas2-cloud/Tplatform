@@ -235,23 +235,26 @@ binance_crypto:
 # Cf. archived_rejected dans config/quant_registry.yaml.
 - strategy_id: btc_asia_mes_leadlag_q80_v80_long_only
   book: binance_crypto
-  status: paper_only
-  runtime_entrypoint: worker.py:run_btc_asia_mes_leadlag_paper_cycle (10h30 Paris, parallele q70 both)
+  status: live_micro                          # Phase 2 desk productif 2026-04-22 (GO Marc)
+  live_start_at: "2026-04-23"
+  runtime_entrypoint: core.runtime.btc_asia_q80_live_micro_runner.run_live_micro_cycle (10h30 Paris, apres paper retrospective journal)
   runtime_module: strategies.crypto.btc_asia_mes_leadlag
   wf_source: docs/research/wf_reports/T3A-02_mes_btc_asia_leadlag.md (variante q80_v80 long_only)
-  sizing_policy: notional_fixed_10k_usd (paper, log-only)
-  max_risk_usd: 800
+  sizing_policy: notional_fixed_200_usdc (live_micro real money, grade B cap)
+  max_risk_usd: 20
+  max_notional_usd: 200
   kill_criteria:
-    drawdown_absolute: -10%
-    drawdown_rolling_90d: -8%
-    sharpe_rolling_60d: -0.5
-    divergence_vs_backtest: 1x_std
-  notes: 'B5 iter3 wire (2026-04-19). Variante long-only compat Binance France
-    spot. Sharpe backtest +1.08, WF 4/5. Journalise en parallele dans
-    data/state/btc_asia_mes_leadlag_q80_long_only/paper_journal.jsonl.
-    Start paper: 2026-04-20 (weekday apres wire).
-    Promotion live_probation si 30j paper + divergence contenue + PnL paper >=0.
-    Candidate principal vs q70 both pour live Binance.'
+    drawdown_absolute_usd: -50          # KILL DD hard -$50 => auto-kill sleeve (state flag)
+    max_hold_hours: 24
+    no_pyramid_before_j: 14
+    consecutive_losses: 3                # TODO Phase 2.1 tracking (pas encore cable)
+  notes: 'Phase 2 desk productif (2026-04-22): premier sleeve live_micro valide par Marc.
+    Caps: $200 USDC notional, $20 risk, kill DD -$50, max 1 position, no pyramid avant J+14.
+    Runner: core.runtime.btc_asia_q80_live_micro_runner (entry/exit + telegram + journal dedie).
+    State: data/state/btc_asia_mes_leadlag_q80_live_micro/{positions.json, journal.jsonl, _kill_switch.json}.
+    Rollback immediat => rm _kill_switch.json + status=paper_only dans quant_registry et ici.
+    Paper journal retrospective reste conserve en parallele pour baseline comparatif.
+    Promotion live_probation si 30j live_micro + PnL net>=0 + 0 incident + divergence contenue.'
 ibkr_fx:
 - strategy_id: fx_carry_momentum_filter
   book: ibkr_fx

@@ -162,15 +162,22 @@ strategies:
 
   - strategy_id: btc_asia_mes_leadlag_q80_v80_long_only
     book: binance_crypto
-    status: paper_only
+    status: live_micro          # Phase 2 desk productif 2026-04-22 (GO Marc)
     paper_start_at: "2026-04-20"
-    live_start_at: null
+    live_start_at: "2026-04-23"  # premier cycle live_micro 10h30 Paris 2026-04-23
     wf_manifest_path: data/research/wf_manifests/btc_asia_mes_leadlag_q70_v80_2026-04-19_backfill.json
     grade: B
     last_wf_run_at: "2026-04-19"
-    is_live: false
+    is_live: true                # promu live_micro 2026-04-23
     infra_gaps: []
-    notes: "B5 iter3 wire parallele au q70_v80 both. Compat Binance France spot (long only). Sharpe backtest +1.08."
+    notes: "B5 iter3 wire parallele au q70_v80 both. Compat Binance France spot (long only). Sharpe backtest +1.08. Phase 2 desk productif: live_micro BTCUSDC $200 notional, kill DD -$50, max 1 position, no pyramid avant J+14."
+    live_micro_config:
+      notional_usd: 200
+      risk_usd: 20
+      kill_dd_usd: 50
+      max_hold_hours: 24
+      symbol: BTCUSDC
+      runner: core.runtime.btc_asia_q80_live_micro_runner.run_live_micro_cycle
 
   # ═══════════════════════════════════════════════════════════════════════════
   # IBKR EU — 0 live + 2 paper_only (post-drain bucket C)

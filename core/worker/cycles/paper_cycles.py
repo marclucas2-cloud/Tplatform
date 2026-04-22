@@ -390,6 +390,44 @@ def run_btc_asia_mes_leadlag_paper_cycle():
                     f"btc_asia_mes_leadlag_q80_long_only paper: {signal_lo.side} "
                     f"@ {target_date.date()} pnl ${trade_lo.pnl_usd:+.0f}"
                 )
+
+            # === PHASE 2 desk productif 2026-04-22 ===
+            # Si le sleeve q80_long_only est promu live_micro, delegue au runner dedie.
+            # Le runner gere exits (kill DD/max_hold), entries (avec garde-fous caps +
+            # pyramid), journal dedie + Telegram alerts. Paper journal ci-dessus reste
+            # conserve comme baseline comparative.
+            try:
+                from core.governance.quant_registry import get_entry
+                _q80_entry = get_entry("btc_asia_mes_leadlag_q80_v80_long_only")
+                if _q80_entry and _q80_entry.status == "live_micro":
+                    from core.runtime.btc_asia_q80_live_micro_runner import (
+                        run_live_micro_cycle,
+                    )
+                    _live_start = (
+                        _q80_entry.live_start_at.isoformat()
+                        if _q80_entry.live_start_at else ""
+                    )
+                    _sig_details = {
+                        "target_date": target_date.isoformat(),
+                        "side": signal_lo.side,
+                        "mes_sig": signal_lo.mes_sig,
+                        "mes_vol": signal_lo.mes_vol,
+                        "signal_thr": signal_lo.signal_thr,
+                        "vol_thr": signal_lo.vol_thr,
+                    }
+                    _summary = run_live_micro_cycle(
+                        signal_side=signal_lo.side,
+                        signal_details=_sig_details,
+                        live_start_at_iso=_live_start,
+                    )
+                    logger.info(
+                        f"btc_asia_q80 live_micro cycle: {_summary}"
+                    )
+            except Exception as _live_err:
+                logger.error(
+                    f"btc_asia_q80 live_micro cycle error: {_live_err}",
+                    exc_info=True,
+                )
     except ImportError as ie:
         logger.warning(f"btc_asia_mes_leadlag: missing dep: {ie}")
     except Exception as e:
