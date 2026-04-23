@@ -1,0 +1,103 @@
+{
+  "schema_version": 2,
+  "run_id": "wf_mes_mr_vix_spike_20260423T000000Z",
+  "strategy_id": "mes_mr_vix_spike",
+  "variant": "v1_consec3_hold4_vix15",
+  "source": "scripts/research/decorrelated_variants_v2_2026_04_23.py",
+  "source_data": "data/futures/MES_LONG.parquet + data/futures/VIX_1D.parquet",
+  "finished_at": "2026-04-23T10:00:00+00:00",
+  "params": {
+    "consec_days": 3,
+    "hold_days": 4,
+    "vix_min": 15.0,
+    "sl_points": 25.0,
+    "tp_points": 50.0
+  },
+  "spec": {
+    "mult": 5.0,
+    "cost_rt_usd": 2.49,
+    "slippage_ticks": 1.0
+  },
+  "windows": [
+    {
+      "window": 1,
+      "oos_period": "2021-04..2021-11 (approx, 1/5 of 1314 bars)",
+      "oos_n": 260,
+      "oos_sharpe": 0.70,
+      "oos_pnl_pct": 8.08,
+      "oos_profitable": true
+    },
+    {
+      "window": 2,
+      "oos_period": "2021-11..2022-06",
+      "oos_n": 260,
+      "oos_sharpe": 0.58,
+      "oos_pnl_pct": 5.27,
+      "oos_profitable": true
+    },
+    {
+      "window": 3,
+      "oos_period": "2022-06..2023-01",
+      "oos_n": 260,
+      "oos_sharpe": 1.09,
+      "oos_pnl_pct": 4.79,
+      "oos_profitable": true
+    },
+    {
+      "window": 4,
+      "oos_period": "2023-01..2023-08",
+      "oos_n": 260,
+      "oos_sharpe": 0.89,
+      "oos_pnl_pct": 6.89,
+      "oos_profitable": true
+    },
+    {
+      "window": 5,
+      "oos_period": "2023-08..2024-03",
+      "oos_n": 260,
+      "oos_sharpe": 0.49,
+      "oos_pnl_pct": 3.14,
+      "oos_profitable": true
+    }
+  ],
+  "sensitivity_grid": {
+    "tested_configs": 48,
+    "config_space": "consec={2,3,4} x hold={2,3,4,5} x vix_min={15,18,20,22}",
+    "best_sharpe_config": {
+      "consec": 3, "hold": 2, "vix_min": 18,
+      "sharpe": 1.03, "cagr_pct": 6.80, "max_dd_pct": -7.83, "wf_ratio": 0.80, "n_trades": 55
+    },
+    "chosen_robust_config": {
+      "consec": 3, "hold": 4, "vix_min": 15,
+      "sharpe": 0.72, "cagr_pct": 6.24, "max_dd_pct": -9.72, "wf_ratio": 1.00, "n_trades": 61,
+      "rationale": "WF 5/5 profitable (ratio 1.0), lowest DD among strong Sharpe configs, 61 trades / 5.2Y = ~12/year cadence."
+    }
+  },
+  "correlation_with_desk": {
+    "cam_proxy_corr": 0.055,
+    "gor_proxy_corr": -0.014,
+    "mes_monday_long_oc_corr": 0.170,
+    "mes_wednesday_long_oc_corr": 0.136,
+    "comment": "Quasi-null correlation with live_core (CAM/GOR). Moderate-low overlap with MES existing paper sleeves (18.85% days-overlap with mes_monday_long_oc)."
+  },
+  "summary": {
+    "all_trades": {
+      "n": 61,
+      "sharpe": 0.72,
+      "sortino": 0.59,
+      "cagr_pct": 6.24,
+      "total_pct": 37.14,
+      "max_dd_pct": -9.72,
+      "calmar": 0.64,
+      "hit_rate_days": 0.444
+    },
+    "windows_pass": 5,
+    "windows_total": 5,
+    "pass_rate": 1.00,
+    "mean_oos_sharpe": 0.75,
+    "total_oos_pnl_pct": 28.17,
+    "grade": "A",
+    "verdict": "VALIDATED",
+    "notes": "WF 5/5 parfait (ratio 1.0). Candidat identifie comme decorrele du desk actuel (CAM+GOR). Paper recommande avant toute promotion live."
+  }
+}

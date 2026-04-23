@@ -1,0 +1,477 @@
+{
+  "metrics": {
+    "v1_mes_mr_vix_spike": {
+      "full": {
+        "n_days": 1314,
+        "n_years": 5.21,
+        "sharpe": 0.71,
+        "sortino": 0.473,
+        "cagr_pct": 5.24,
+        "total_pct": 30.54,
+        "max_dd_pct": -11.48,
+        "hit_rate": 0.432,
+        "n_trades": 55,
+        "calmar": 0.46
+      },
+      "is": {
+        "n_days": 919,
+        "n_years": 3.65,
+        "sharpe": 0.717,
+        "sortino": 0.5,
+        "cagr_pct": 5.56,
+        "total_pct": 21.83,
+        "max_dd_pct": -11.48,
+        "hit_rate": 0.429,
+        "n_trades": null,
+        "calmar": 0.48
+      },
+      "oos": {
+        "n_days": 395,
+        "n_years": 1.57,
+        "sharpe": 0.7,
+        "sortino": 0.406,
+        "cagr_pct": 4.5,
+        "total_pct": 7.15,
+        "max_dd_pct": -5.47,
+        "hit_rate": 0.443,
+        "n_trades": null,
+        "calmar": 0.82
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 4,
+        "ratio": 0.8,
+        "validated": true,
+        "windows": [
+          {
+            "w": 1,
+            "sharpe": 0.19,
+            "pnl_pct": 2.09,
+            "profit": "True"
+          },
+          {
+            "w": 2,
+            "sharpe": 0.55,
+            "pnl_pct": 3.46,
+            "profit": "True"
+          },
+          {
+            "w": 3,
+            "sharpe": 1.36,
+            "pnl_pct": 4.91,
+            "profit": "True"
+          },
+          {
+            "w": 4,
+            "sharpe": 1.4,
+            "pnl_pct": 9.59,
+            "profit": "True"
+          },
+          {
+            "w": 5,
+            "sharpe": -0.19,
+            "pnl_pct": -0.87,
+            "profit": "False"
+          }
+        ]
+      }
+    },
+    "v2_mgc_long_risk_off": {
+      "full": {
+        "n_days": 1314,
+        "n_years": 5.21,
+        "sharpe": 0.68,
+        "sortino": 0.519,
+        "cagr_pct": 8.45,
+        "total_pct": 52.63,
+        "max_dd_pct": -16.13,
+        "hit_rate": 0.529,
+        "n_trades": 48,
+        "calmar": 0.52
+      },
+      "is": {
+        "n_days": 919,
+        "n_years": 3.65,
+        "sharpe": 0.499,
+        "sortino": 0.409,
+        "cagr_pct": 4.14,
+        "total_pct": 15.94,
+        "max_dd_pct": -12.72,
+        "hit_rate": 0.519,
+        "n_trades": null,
+        "calmar": 0.33
+      },
+      "oos": {
+        "n_days": 395,
+        "n_years": 1.57,
+        "sharpe": 0.982,
+        "sortino": 0.815,
+        "cagr_pct": 19.17,
+        "total_pct": 31.65,
+        "max_dd_pct": -16.13,
+        "hit_rate": 0.544,
+        "n_trades": null,
+        "calmar": 1.19
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 4,
+        "ratio": 0.8,
+        "validated": true,
+        "windows": [
+          {
+            "w": 1,
+            "sharpe": -0.61,
+            "pnl_pct": -5.18,
+            "profit": "False"
+          },
+          {
+            "w": 2,
+            "sharpe": 0.68,
+            "pnl_pct": 4.22,
+            "profit": "True"
+          },
+          {
+            "w": 3,
+            "sharpe": 1.12,
+            "pnl_pct": 9.51,
+            "profit": "True"
+          },
+          {
+            "w": 4,
+            "sharpe": 2.14,
+            "pnl_pct": 27.14,
+            "profit": "True"
+          },
+          {
+            "w": 5,
+            "sharpe": 0.45,
+            "pnl_pct": 9.04,
+            "profit": "True"
+          }
+        ]
+      }
+    },
+    "v3_mcl_mon_overnight": {
+      "full": {
+        "n_days": 2832,
+        "n_years": 11.24,
+        "sharpe": -7.284,
+        "sortino": -8.488,
+        "cagr_pct": -100.0,
+        "total_pct": -100.0,
+        "max_dd_pct": -100.0,
+        "hit_rate": 0.0,
+        "n_trades": 280,
+        "calmar": -1.0
+      },
+      "is": {
+        "n_days": 1982,
+        "n_years": 7.87,
+        "sharpe": -7.418,
+        "sortino": -8.736,
+        "cagr_pct": -100.0,
+        "total_pct": -100.0,
+        "max_dd_pct": -100.0,
+        "hit_rate": 0.0,
+        "n_trades": null,
+        "calmar": -1.0
+      },
+      "oos": {
+        "n_days": 850,
+        "n_years": 3.37,
+        "sharpe": -7.404,
+        "sortino": -17.915,
+        "cagr_pct": -99.95,
+        "total_pct": -100.0,
+        "max_dd_pct": -100.0,
+        "hit_rate": 0.0,
+        "n_trades": null,
+        "calmar": -1.0
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 0,
+        "ratio": 0.0,
+        "validated": false,
+        "windows": [
+          {
+            "w": 1,
+            "sharpe": -8.29,
+            "pnl_pct": -2029.55,
+            "profit": "False"
+          },
+          {
+            "w": 2,
+            "sharpe": -7.09,
+            "pnl_pct": -2307.71,
+            "profit": "False"
+          },
+          {
+            "w": 3,
+            "sharpe": -8.0,
+            "pnl_pct": -1791.51,
+            "profit": "False"
+          },
+          {
+            "w": 4,
+            "sharpe": -6.78,
+            "pnl_pct": -1023.51,
+            "profit": "False"
+          },
+          {
+            "w": 5,
+            "sharpe": -7.77,
+            "pnl_pct": -1516.91,
+            "profit": "False"
+          }
+        ]
+      }
+    },
+    "v4_alt_relmom_dd_stop": {
+      "full": {
+        "n_days": 818,
+        "n_years": 3.25,
+        "sharpe": 0.369,
+        "sortino": 0.419,
+        "cagr_pct": 5.47,
+        "total_pct": 18.87,
+        "max_dd_pct": -66.49,
+        "hit_rate": 0.471,
+        "n_trades": 70,
+        "calmar": 0.08
+      },
+      "is": {
+        "n_days": 572,
+        "n_years": 2.27,
+        "sharpe": 0.84,
+        "sortino": 1.0,
+        "cagr_pct": 38.67,
+        "total_pct": 110.02,
+        "max_dd_pct": -66.49,
+        "hit_rate": 0.508,
+        "n_trades": null,
+        "calmar": 0.58
+      },
+      "oos": {
+        "n_days": 246,
+        "n_years": 0.98,
+        "sharpe": -1.235,
+        "sortino": -1.183,
+        "cagr_pct": -44.18,
+        "total_pct": -43.4,
+        "max_dd_pct": -45.56,
+        "hit_rate": 0.347,
+        "n_trades": null,
+        "calmar": -0.97
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 2,
+        "ratio": 0.4,
+        "validated": false,
+        "windows": [
+          {
+            "w": 1,
+            "sharpe": -1.49,
+            "pnl_pct": -30.09,
+            "profit": "False"
+          },
+          {
+            "w": 2,
+            "sharpe": 1.74,
+            "pnl_pct": 70.43,
+            "profit": "True"
+          },
+          {
+            "w": 3,
+            "sharpe": 0.62,
+            "pnl_pct": 18.13,
+            "profit": "True"
+          },
+          {
+            "w": 4,
+            "sharpe": -0.15,
+            "pnl_pct": -4.47,
+            "profit": "False"
+          },
+          {
+            "w": 5,
+            "sharpe": -1.55,
+            "pnl_pct": -21.9,
+            "profit": "False"
+          }
+        ]
+      }
+    },
+    "v5_mes_down_week_mr": {
+      "full": {
+        "n_days": 2833,
+        "n_years": 11.24,
+        "sharpe": -0.114,
+        "sortino": -0.045,
+        "cagr_pct": -1.71,
+        "total_pct": -17.6,
+        "max_dd_pct": -42.66,
+        "hit_rate": 0.442,
+        "n_trades": 71,
+        "calmar": -0.04
+      },
+      "is": {
+        "n_days": 1983,
+        "n_years": 7.87,
+        "sharpe": -0.314,
+        "sortino": -0.126,
+        "cagr_pct": -4.0,
+        "total_pct": -27.47,
+        "max_dd_pct": -42.66,
+        "hit_rate": 0.419,
+        "n_trades": null,
+        "calmar": -0.09
+      },
+      "oos": {
+        "n_days": 850,
+        "n_years": 3.37,
+        "sharpe": 0.485,
+        "sortino": 0.207,
+        "cagr_pct": 3.85,
+        "total_pct": 13.6,
+        "max_dd_pct": -13.15,
+        "hit_rate": 0.505,
+        "n_trades": null,
+        "calmar": 0.29
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 2,
+        "ratio": 0.4,
+        "validated": false,
+        "windows": [
+          {
+            "w": 1,
+            "sharpe": -0.28,
+            "pnl_pct": -2.51,
+            "profit": "False"
+          },
+          {
+            "w": 2,
+            "sharpe": -1.01,
+            "pnl_pct": -35.31,
+            "profit": "False"
+          },
+          {
+            "w": 3,
+            "sharpe": 0.9,
+            "pnl_pct": 14.85,
+            "profit": "True"
+          },
+          {
+            "w": 4,
+            "sharpe": -0.74,
+            "pnl_pct": -8.05,
+            "profit": "False"
+          },
+          {
+            "w": 5,
+            "sharpe": 0.62,
+            "pnl_pct": 12.75,
+            "profit": "True"
+          }
+        ]
+      }
+    },
+    "_proxy_CAM": {
+      "full": {
+        "n_days": 2201,
+        "n_years": 8.73,
+        "sharpe": 0.76,
+        "sortino": 0.861,
+        "cagr_pct": 18.7,
+        "total_pct": 347.0,
+        "max_dd_pct": -34.39,
+        "hit_rate": 0.548,
+        "n_trades": null,
+        "calmar": 0.54
+      }
+    },
+    "_proxy_GOR": {
+      "full": {
+        "n_days": 2832,
+        "n_years": 11.24,
+        "sharpe": 0.84,
+        "sortino": 1.063,
+        "cagr_pct": 22.11,
+        "total_pct": 843.74,
+        "max_dd_pct": -39.72,
+        "hit_rate": 0.541,
+        "n_trades": null,
+        "calmar": 0.56
+      }
+    }
+  },
+  "correlation": {
+    "v1_mes_mr_vix_spike": {
+      "v1_mes_mr_vix_spike": 1.0,
+      "v2_mgc_long_risk_off": -0.021528443485793716,
+      "v3_mcl_mon_overnight": -0.028408067891174532,
+      "v4_alt_relmom_dd_stop": 0.10955982227807334,
+      "v5_mes_down_week_mr": 0.3117689292527422,
+      "_proxy_CAM": 0.05477052344363985,
+      "_proxy_GOR": -0.014355403748875532
+    },
+    "v2_mgc_long_risk_off": {
+      "v1_mes_mr_vix_spike": -0.021528443485793716,
+      "v2_mgc_long_risk_off": 1.0,
+      "v3_mcl_mon_overnight": -0.013080361367474893,
+      "v4_alt_relmom_dd_stop": -0.04893929213937742,
+      "v5_mes_down_week_mr": 0.005343022478700185,
+      "_proxy_CAM": 0.35808265208630174,
+      "_proxy_GOR": 0.3752748372869451
+    },
+    "v3_mcl_mon_overnight": {
+      "v1_mes_mr_vix_spike": -0.028408067891174532,
+      "v2_mgc_long_risk_off": -0.013080361367474893,
+      "v3_mcl_mon_overnight": 1.0,
+      "v4_alt_relmom_dd_stop": 0.0007057993530367805,
+      "v5_mes_down_week_mr": -0.008334142137920273,
+      "_proxy_CAM": 0.03644273493058298,
+      "_proxy_GOR": 0.014544228369517895
+    },
+    "v4_alt_relmom_dd_stop": {
+      "v1_mes_mr_vix_spike": 0.10955982227807334,
+      "v2_mgc_long_risk_off": -0.04893929213937742,
+      "v3_mcl_mon_overnight": 0.0007057993530367805,
+      "v4_alt_relmom_dd_stop": 1.0,
+      "v5_mes_down_week_mr": 0.06258022371856406,
+      "_proxy_CAM": -0.015691213385301044,
+      "_proxy_GOR": -0.056631574160868524
+    },
+    "v5_mes_down_week_mr": {
+      "v1_mes_mr_vix_spike": 0.3117689292527422,
+      "v2_mgc_long_risk_off": 0.005343022478700185,
+      "v3_mcl_mon_overnight": -0.008334142137920273,
+      "v4_alt_relmom_dd_stop": 0.06258022371856406,
+      "v5_mes_down_week_mr": 1.0,
+      "_proxy_CAM": 0.029529232826400166,
+      "_proxy_GOR": 0.013465061568101726
+    },
+    "_proxy_CAM": {
+      "v1_mes_mr_vix_spike": 0.05477052344363985,
+      "v2_mgc_long_risk_off": 0.35808265208630174,
+      "v3_mcl_mon_overnight": 0.03644273493058298,
+      "v4_alt_relmom_dd_stop": -0.015691213385301044,
+      "v5_mes_down_week_mr": 0.029529232826400166,
+      "_proxy_CAM": 1.0,
+      "_proxy_GOR": 0.6511957433453416
+    },
+    "_proxy_GOR": {
+      "v1_mes_mr_vix_spike": -0.014355403748875532,
+      "v2_mgc_long_risk_off": 0.3752748372869451,
+      "v3_mcl_mon_overnight": 0.014544228369517895,
+      "v4_alt_relmom_dd_stop": -0.056631574160868524,
+      "v5_mes_down_week_mr": 0.013465061568101726,
+      "_proxy_CAM": 0.6511957433453416,
+      "_proxy_GOR": 1.0
+    }
+  }
+}

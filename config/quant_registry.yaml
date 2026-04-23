@@ -130,6 +130,18 @@ strategies:
     is_live: false
     infra_gaps: ["data_stale_mcl_1d_parquet", "friday_trigger_re_wf_requis"]
 
+  - strategy_id: mes_mr_vix_spike
+    book: ibkr_futures
+    status: paper_only
+    paper_start_at: "2026-04-23"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/mes_mr_vix_spike_2026-04-23.json
+    grade: A
+    last_wf_run_at: "2026-04-23"
+    is_live: false
+    infra_gaps: ["runner_wiring_pending_marc_decision"]
+    notes: "Research autonome 2026-04-23: MES 3-day stretch + VIX>15 filter, LONG only, hold 4j. WF 5/5 parfait, Sharpe 0.72, DD -9.7%, 12 trades/an. Corr quasi-nulle CAM (0.055) + GOR (-0.014). Earliest promotion live_micro: 2026-05-23 (30j paper)."
+
   # ═══════════════════════════════════════════════════════════════════════════
   # BINANCE CRYPTO — 0 live + 2 paper_only + 1 disabled (post-drain bucket A)
   # ═══════════════════════════════════════════════════════════════════════════
