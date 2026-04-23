@@ -1,0 +1,417 @@
+{
+  "metrics": {
+    "c1_mes_estx50_divergence": {
+      "full": {
+        "n_days": 1286,
+        "n_years": 5.1,
+        "sharpe": 0.773,
+        "sortino": 0.635,
+        "cagr_pct": 8.36,
+        "total_pct": 50.62,
+        "max_dd_pct": -14.3,
+        "hit_rate": 0.456,
+        "n_trades": 55,
+        "calmar": 0.58
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 3,
+        "ratio": 0.6,
+        "validated": true,
+        "windows": [
+          {
+            "w": 1,
+            "sharpe": -0.45,
+            "pnl_pct": -7.08,
+            "profit": "False"
+          },
+          {
+            "w": 2,
+            "sharpe": 2.16,
+            "pnl_pct": 20.6,
+            "profit": "True"
+          },
+          {
+            "w": 3,
+            "sharpe": 3.14,
+            "pnl_pct": 18.03,
+            "profit": "True"
+          },
+          {
+            "w": 4,
+            "sharpe": 0.4,
+            "pnl_pct": 3.69,
+            "profit": "True"
+          },
+          {
+            "w": 5,
+            "sharpe": -0.3,
+            "pnl_pct": -2.09,
+            "profit": "False"
+          }
+        ]
+      }
+    },
+    "c2_m2k_weekly_trend": {
+      "full": {
+        "n_days": 1314,
+        "n_years": 5.21,
+        "sharpe": -0.281,
+        "sortino": -0.319,
+        "cagr_pct": -5.45,
+        "total_pct": -25.36,
+        "max_dd_pct": -41.22,
+        "hit_rate": 0.461,
+        "n_trades": 65,
+        "calmar": -0.13
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 2,
+        "ratio": 0.4,
+        "validated": false,
+        "windows": [
+          {
+            "w": 1,
+            "sharpe": -1.62,
+            "pnl_pct": -23.96,
+            "profit": "False"
+          },
+          {
+            "w": 2,
+            "sharpe": -0.23,
+            "pnl_pct": -3.32,
+            "profit": "False"
+          },
+          {
+            "w": 3,
+            "sharpe": 0.08,
+            "pnl_pct": 0.95,
+            "profit": "True"
+          },
+          {
+            "w": 4,
+            "sharpe": -0.54,
+            "pnl_pct": -7.27,
+            "profit": "False"
+          },
+          {
+            "w": 5,
+            "sharpe": 1.09,
+            "pnl_pct": 13.54,
+            "profit": "True"
+          }
+        ]
+      }
+    },
+    "c3_mcl_mgc_ratio_z": {
+      "full": {
+        "n_days": 2832,
+        "n_years": 11.24,
+        "sharpe": -0.301,
+        "sortino": -0.177,
+        "cagr_pct": -3.85,
+        "total_pct": -35.68,
+        "max_dd_pct": -151.47,
+        "hit_rate": 0.472,
+        "n_trades": 139,
+        "calmar": -0.03
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 4,
+        "ratio": 0.8,
+        "validated": true,
+        "windows": [
+          {
+            "w": 1,
+            "sharpe": 0.42,
+            "pnl_pct": 9.42,
+            "profit": "True"
+          },
+          {
+            "w": 2,
+            "sharpe": -0.91,
+            "pnl_pct": -427.99,
+            "profit": "False"
+          },
+          {
+            "w": 3,
+            "sharpe": 1.08,
+            "pnl_pct": 43.53,
+            "profit": "True"
+          },
+          {
+            "w": 4,
+            "sharpe": 0.4,
+            "pnl_pct": 17.08,
+            "profit": "True"
+          },
+          {
+            "w": 5,
+            "sharpe": 0.24,
+            "pnl_pct": 9.92,
+            "profit": "True"
+          }
+        ]
+      }
+    },
+    "c4_mgc_rsi_pullback": {
+      "full": {
+        "n_days": 2831,
+        "n_years": 11.23,
+        "sharpe": -0.053,
+        "sortino": -0.013,
+        "cagr_pct": -0.18,
+        "total_pct": -2.06,
+        "max_dd_pct": -10.23,
+        "hit_rate": 0.4,
+        "n_trades": 15,
+        "calmar": -0.02
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 2,
+        "ratio": 0.4,
+        "validated": false,
+        "windows": [
+          {
+            "w": 1,
+            "sharpe": -0.18,
+            "pnl_pct": -0.45,
+            "profit": "False"
+          },
+          {
+            "w": 2,
+            "sharpe": 0.0,
+            "pnl_pct": 0.0,
+            "profit": "False"
+          },
+          {
+            "w": 3,
+            "sharpe": -0.66,
+            "pnl_pct": -5.49,
+            "profit": "False"
+          },
+          {
+            "w": 4,
+            "sharpe": 0.54,
+            "pnl_pct": 2.68,
+            "profit": "True"
+          },
+          {
+            "w": 5,
+            "sharpe": 0.38,
+            "pnl_pct": 2.46,
+            "profit": "True"
+          }
+        ]
+      }
+    },
+    "c5_eth_btc_rotation": {
+      "full": {
+        "n_days": 1182,
+        "n_years": 4.69,
+        "sharpe": 0.197,
+        "sortino": 0.21,
+        "cagr_pct": 1.24,
+        "total_pct": 5.97,
+        "max_dd_pct": -58.27,
+        "hit_rate": 0.449,
+        "n_trades": 59,
+        "calmar": 0.02
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 2,
+        "ratio": 0.4,
+        "validated": false,
+        "windows": [
+          {
+            "w": 1,
+            "sharpe": -1.17,
+            "pnl_pct": -18.8,
+            "profit": "False"
+          },
+          {
+            "w": 2,
+            "sharpe": 0.08,
+            "pnl_pct": 1.47,
+            "profit": "True"
+          },
+          {
+            "w": 3,
+            "sharpe": -2.01,
+            "pnl_pct": -43.26,
+            "profit": "False"
+          },
+          {
+            "w": 4,
+            "sharpe": 1.81,
+            "pnl_pct": 71.77,
+            "profit": "True"
+          },
+          {
+            "w": 5,
+            "sharpe": -0.3,
+            "pnl_pct": -7.85,
+            "profit": "False"
+          }
+        ]
+      }
+    },
+    "c6_alt_oversold_bounce": {
+      "full": {
+        "n_days": 818,
+        "n_years": 3.25,
+        "sharpe": 0.088,
+        "sortino": 0.035,
+        "cagr_pct": 0.11,
+        "total_pct": 0.36,
+        "max_dd_pct": -21.83,
+        "hit_rate": 0.383,
+        "n_trades": 18,
+        "calmar": 0.01
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 1,
+        "ratio": 0.2,
+        "validated": false,
+        "windows": [
+          {
+            "w": 1,
+            "sharpe": -2.35,
+            "pnl_pct": -6.53,
+            "profit": "False"
+          },
+          {
+            "w": 2,
+            "sharpe": -0.1,
+            "pnl_pct": -1.2,
+            "profit": "False"
+          },
+          {
+            "w": 3,
+            "sharpe": 0.72,
+            "pnl_pct": 5.78,
+            "profit": "True"
+          },
+          {
+            "w": 4,
+            "sharpe": -2.01,
+            "pnl_pct": -7.6,
+            "profit": "False"
+          },
+          {
+            "w": 5,
+            "sharpe": 0.0,
+            "pnl_pct": 0.0,
+            "profit": "False"
+          }
+        ]
+      }
+    }
+  },
+  "correlation": {
+    "c1_mes_estx50_divergence": {
+      "c1_mes_estx50_divergence": 1.0,
+      "c2_m2k_weekly_trend": 0.29742077392218336,
+      "c3_mcl_mgc_ratio_z": 0.055244664259763744,
+      "c4_mgc_rsi_pullback": 0.0034664685415067955,
+      "c5_eth_btc_rotation": 0.08978811361816073,
+      "c6_alt_oversold_bounce": 0.03234418822610842,
+      "_proxy_CAM": -0.004821928919101358,
+      "_proxy_GOR": -0.10184529753857532,
+      "_proxy_btc_asia": 0.08284441374152403
+    },
+    "c2_m2k_weekly_trend": {
+      "c1_mes_estx50_divergence": 0.29742077392218336,
+      "c2_m2k_weekly_trend": 1.0,
+      "c3_mcl_mgc_ratio_z": 0.10352905776905598,
+      "c4_mgc_rsi_pullback": 0.012815866762428525,
+      "c5_eth_btc_rotation": 0.17640021210089185,
+      "c6_alt_oversold_bounce": 0.013185282338459222,
+      "_proxy_CAM": 0.1711968970093114,
+      "_proxy_GOR": 0.009449269717354467,
+      "_proxy_btc_asia": 0.21036506493279994
+    },
+    "c3_mcl_mgc_ratio_z": {
+      "c1_mes_estx50_divergence": 0.055244664259763744,
+      "c2_m2k_weekly_trend": 0.10352905776905598,
+      "c3_mcl_mgc_ratio_z": 1.0,
+      "c4_mgc_rsi_pullback": 0.007619652761201419,
+      "c5_eth_btc_rotation": -0.00610226948063055,
+      "c6_alt_oversold_bounce": 0.01872404528743769,
+      "_proxy_CAM": 0.04054989723689429,
+      "_proxy_GOR": 0.034507295820579195,
+      "_proxy_btc_asia": 0.07637827778217522
+    },
+    "c4_mgc_rsi_pullback": {
+      "c1_mes_estx50_divergence": 0.0034664685415067955,
+      "c2_m2k_weekly_trend": 0.012815866762428525,
+      "c3_mcl_mgc_ratio_z": 0.007619652761201419,
+      "c4_mgc_rsi_pullback": 1.0,
+      "c5_eth_btc_rotation": -0.04445515910714289,
+      "c6_alt_oversold_bounce": 0.0005827825573727213,
+      "_proxy_CAM": 0.08377913534461859,
+      "_proxy_GOR": 0.06679052208555097,
+      "_proxy_btc_asia": 0.014014453166017992
+    },
+    "c5_eth_btc_rotation": {
+      "c1_mes_estx50_divergence": 0.08978811361816073,
+      "c2_m2k_weekly_trend": 0.17640021210089185,
+      "c3_mcl_mgc_ratio_z": -0.00610226948063055,
+      "c4_mgc_rsi_pullback": -0.04445515910714289,
+      "c5_eth_btc_rotation": 1.0,
+      "c6_alt_oversold_bounce": 0.02626804943449816,
+      "_proxy_CAM": -0.00901308645440089,
+      "_proxy_GOR": -0.06621105757412522,
+      "_proxy_btc_asia": 0.3582000065587827
+    },
+    "c6_alt_oversold_bounce": {
+      "c1_mes_estx50_divergence": 0.03234418822610842,
+      "c2_m2k_weekly_trend": 0.013185282338459222,
+      "c3_mcl_mgc_ratio_z": 0.01872404528743769,
+      "c4_mgc_rsi_pullback": 0.0005827825573727213,
+      "c5_eth_btc_rotation": 0.02626804943449816,
+      "c6_alt_oversold_bounce": 1.0,
+      "_proxy_CAM": 0.011039460006121677,
+      "_proxy_GOR": -0.020925645180452826,
+      "_proxy_btc_asia": 0.1392804645320034
+    },
+    "_proxy_CAM": {
+      "c1_mes_estx50_divergence": -0.004821928919101358,
+      "c2_m2k_weekly_trend": 0.1711968970093114,
+      "c3_mcl_mgc_ratio_z": 0.04054989723689429,
+      "c4_mgc_rsi_pullback": 0.08377913534461859,
+      "c5_eth_btc_rotation": -0.00901308645440089,
+      "c6_alt_oversold_bounce": 0.011039460006121677,
+      "_proxy_CAM": 1.0,
+      "_proxy_GOR": 0.6511957433453416,
+      "_proxy_btc_asia": 0.03989782874052168
+    },
+    "_proxy_GOR": {
+      "c1_mes_estx50_divergence": -0.10184529753857532,
+      "c2_m2k_weekly_trend": 0.009449269717354467,
+      "c3_mcl_mgc_ratio_z": 0.034507295820579195,
+      "c4_mgc_rsi_pullback": 0.06679052208555097,
+      "c5_eth_btc_rotation": -0.06621105757412522,
+      "c6_alt_oversold_bounce": -0.020925645180452826,
+      "_proxy_CAM": 0.6511957433453416,
+      "_proxy_GOR": 1.0,
+      "_proxy_btc_asia": 0.030518882318389173
+    },
+    "_proxy_btc_asia": {
+      "c1_mes_estx50_divergence": 0.08284441374152403,
+      "c2_m2k_weekly_trend": 0.21036506493279994,
+      "c3_mcl_mgc_ratio_z": 0.07637827778217522,
+      "c4_mgc_rsi_pullback": 0.014014453166017992,
+      "c5_eth_btc_rotation": 0.3582000065587827,
+      "c6_alt_oversold_bounce": 0.1392804645320034,
+      "_proxy_CAM": 0.03989782874052168,
+      "_proxy_GOR": 0.030518882318389173,
+      "_proxy_btc_asia": 1.0
+    }
+  }
+}

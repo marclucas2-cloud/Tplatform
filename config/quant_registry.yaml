@@ -142,6 +142,42 @@ strategies:
     infra_gaps: ["runner_wiring_pending_marc_decision"]
     notes: "Research autonome 2026-04-23: MES 3-day stretch + VIX>15 filter, LONG only, hold 4j. WF 5/5 parfait, Sharpe 0.72, DD -9.7%, 12 trades/an. Corr quasi-nulle CAM (0.055) + GOR (-0.014). Earliest promotion live_micro: 2026-05-23 (30j paper)."
 
+  - strategy_id: mes_estx50_divergence
+    book: ibkr_futures
+    status: paper_only
+    paper_start_at: "2026-04-23"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/mes_estx50_divergence_2026-04-23.json
+    grade: A
+    last_wf_run_at: "2026-04-23"
+    is_live: false
+    infra_gaps: ["runner_wiring_pending_marc_decision"]
+    notes: "Research mission 2026-04-23 afternoon. LONG MES seulement quand Z(log(MES/ESTX50), 25d) <= -1.5 (intermarket divergence US-EU). WF 5/5 parfait (sensitivity sweet spot), Sharpe 0.95, CAGR 8.9%, DD -10.4%, 10 trades/an sur 5Y. Corr CAM -0.005 / GOR -0.102 (quasi-nulle/anti-corr). Earliest promotion live_micro: 2026-05-23."
+
+  - strategy_id: mgc_mes_ratio_rotation
+    book: ibkr_futures
+    status: paper_only
+    paper_start_at: "2026-04-23"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/mgc_mes_ratio_rotation_2026-04-23.json
+    grade: B
+    last_wf_run_at: "2026-04-23"
+    is_live: false
+    infra_gaps: ["runner_wiring_pending_marc_decision", "dd_32pct_surveillance"]
+    notes: "Research mission 2026-04-23 afternoon. Ratio Z-score MGC/MES (gold/equity MR). LONG MGC si Z<=-1.5, LONG MES si Z>=+1.5 (alternate). WF 4/5 sur 11Y data, Sharpe 0.36 modeste mais decorrelation parfaite: CAM -0.064 / GOR -0.029 (meme instrument MGC mais mecanisme different: MR ratio vs momentum). 13 trades/an. DD -32% elevée - a surveiller. Earliest promotion live_micro: 2026-05-23."
+
+  - strategy_id: gold_q4_seasonality
+    book: ibkr_futures
+    status: paper_retrospective      # cadence trop rare (1 trade/an) pour runtime actif
+    paper_start_at: "2026-04-23"
+    live_start_at: null
+    wf_manifest_path: null
+    grade: B
+    last_wf_run_at: "2026-04-23"
+    is_live: false
+    infra_gaps: ["low_cadence_1_trade_per_year_runtime_not_wired"]
+    notes: "Research mission 2026-04-23 afternoon. Saisonnalite gold Q4 (long MGC oct-nov-dec). WF 4/5 sur 11Y, Sharpe 0.39, CAGR 2.73%, 11 trades/11Y = 1/an. Corr quasi-nulle desk. Mecanisme documente (flight-to-quality end-of-year, fiscal year-end hedging). Non cable runtime car cadence insuffisante pour apprentissage paper actif. Dossier conserve pour reference historique + utilisation future si desk veut overlay saisonnier."
+
   # ═══════════════════════════════════════════════════════════════════════════
   # BINANCE CRYPTO — 0 live + 2 paper_only + 1 disabled (post-drain bucket A)
   # ═══════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,55 @@
+{
+  "schema_version": 2,
+  "run_id": "wf_mgc_mes_ratio_rotation_20260423T180000Z",
+  "strategy_id": "mgc_mes_ratio_rotation",
+  "variant": "v1_lb30_z15_stop30_hold20",
+  "source": "scripts/research/new_paper_v3_2026_04_23.py",
+  "source_data": "data/futures/MGC_LONG.parquet + data/futures/MES_LONG.parquet",
+  "finished_at": "2026-04-23T18:00:00+00:00",
+  "params": {
+    "lookback": 30,
+    "z_entry": 1.5,
+    "z_exit": 0.3,
+    "z_stop": 3.0,
+    "max_hold_days": 20,
+    "sl_pct": 0.03
+  },
+  "spec": {
+    "cost_rt_usd_per_flip": 2.49,
+    "mult_mgc": 10.0,
+    "mult_mes": 5.0
+  },
+  "windows": [
+    {"window": 1, "oos_sharpe": 0.04, "oos_pnl_pct": 0.62, "oos_profitable": true},
+    {"window": 2, "oos_sharpe": -0.06, "oos_pnl_pct": -2.58, "oos_profitable": false},
+    {"window": 3, "oos_sharpe": 0.87, "oos_pnl_pct": 21.21, "oos_profitable": true},
+    {"window": 4, "oos_sharpe": 0.56, "oos_pnl_pct": 12.07, "oos_profitable": true},
+    {"window": 5, "oos_sharpe": 0.78, "oos_pnl_pct": 23.92, "oos_profitable": true}
+  ],
+  "correlation_with_desk": {
+    "cam_proxy_corr": -0.064,
+    "gor_proxy_corr": -0.029,
+    "btc_asia_proxy_corr": 0.120,
+    "comment": "Quasi-orthogonale au desk. GOR momentum vs ce MR Z-score = different mechanism malgre MGC en commun."
+  },
+  "summary": {
+    "all_trades": {
+      "n": 143,
+      "sharpe": 0.36,
+      "sortino": 0.35,
+      "cagr_pct": 4.34,
+      "total_pct": 61.27,
+      "max_dd_pct": -32.18,
+      "calmar": 0.13,
+      "hit_rate_days": 0.493
+    },
+    "windows_pass": 4,
+    "windows_total": 5,
+    "pass_rate": 0.80,
+    "mean_oos_sharpe": 0.44,
+    "total_oos_pnl_pct": 55.24,
+    "grade": "B",
+    "verdict": "VALIDATED",
+    "notes": "Sharpe modeste (0.36) mais WF 4/5 solide sur 11Y data. DD -32% eleve - a surveiller. Mecanisme orthogonal (gold/equity MR vs GOR momentum). Utile pour diversification desk plus que pour alpha isole. 13 trades/an bonne cadence."
+  }
+}

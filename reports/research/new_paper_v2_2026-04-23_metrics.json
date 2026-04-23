@@ -1,0 +1,210 @@
+{
+  "metrics": {
+    "v7_mes_stressed_bounce": {
+      "full": {
+        "n_days": 1314,
+        "n_years": 5.21,
+        "sharpe": 0.63,
+        "sortino": 0.342,
+        "cagr_pct": 5.04,
+        "total_pct": 29.21,
+        "max_dd_pct": -15.2,
+        "hit_rate": 0.417,
+        "n_trades": 20,
+        "calmar": 0.33
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 2,
+        "ratio": 0.4,
+        "validated": false,
+        "windows": [
+          {
+            "w": 1,
+            "sharpe": -0.27,
+            "pnl_pct": -3.22,
+            "profit": "False"
+          },
+          {
+            "w": 2,
+            "sharpe": 1.64,
+            "pnl_pct": 10.04,
+            "profit": "True"
+          },
+          {
+            "w": 3,
+            "sharpe": 0.0,
+            "pnl_pct": 0.0,
+            "profit": "False"
+          },
+          {
+            "w": 4,
+            "sharpe": 1.47,
+            "pnl_pct": 17.0,
+            "profit": "True"
+          },
+          {
+            "w": 5,
+            "sharpe": 0.0,
+            "pnl_pct": 0.0,
+            "profit": "False"
+          }
+        ]
+      }
+    },
+    "v8_gold_q4_seasonality": {
+      "full": {
+        "n_days": 2831,
+        "n_years": 11.23,
+        "sharpe": 0.386,
+        "sortino": 0.243,
+        "cagr_pct": 2.73,
+        "total_pct": 35.29,
+        "max_dd_pct": -22.51,
+        "hit_rate": 0.533,
+        "n_trades": 11,
+        "calmar": 0.12
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 4,
+        "ratio": 0.8,
+        "validated": true,
+        "windows": [
+          {
+            "w": 1,
+            "sharpe": -0.17,
+            "pnl_pct": -1.65,
+            "profit": "False"
+          },
+          {
+            "w": 2,
+            "sharpe": 0.93,
+            "pnl_pct": 9.3,
+            "profit": "True"
+          },
+          {
+            "w": 3,
+            "sharpe": 0.29,
+            "pnl_pct": 4.43,
+            "profit": "True"
+          },
+          {
+            "w": 4,
+            "sharpe": 1.37,
+            "pnl_pct": 20.48,
+            "profit": "True"
+          },
+          {
+            "w": 5,
+            "sharpe": 0.55,
+            "pnl_pct": 11.5,
+            "profit": "True"
+          }
+        ]
+      }
+    },
+    "v9_mes_m2k_pair": {
+      "full": {
+        "n_days": 2202,
+        "n_years": 8.74,
+        "sharpe": -0.271,
+        "sortino": -0.238,
+        "cagr_pct": -2.3,
+        "total_pct": -18.37,
+        "max_dd_pct": -25.86,
+        "hit_rate": 0.446,
+        "n_trades": 88,
+        "calmar": -0.09
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 3,
+        "ratio": 0.6,
+        "validated": true,
+        "windows": [
+          {
+            "w": 1,
+            "sharpe": 0.33,
+            "pnl_pct": 4.0,
+            "profit": "True"
+          },
+          {
+            "w": 2,
+            "sharpe": 0.45,
+            "pnl_pct": 6.37,
+            "profit": "True"
+          },
+          {
+            "w": 3,
+            "sharpe": -0.92,
+            "pnl_pct": -8.75,
+            "profit": "False"
+          },
+          {
+            "w": 4,
+            "sharpe": -1.1,
+            "pnl_pct": -13.25,
+            "profit": "False"
+          },
+          {
+            "w": 5,
+            "sharpe": 0.51,
+            "pnl_pct": 4.58,
+            "profit": "True"
+          }
+        ]
+      }
+    }
+  },
+  "correlation": {
+    "v7_mes_stressed_bounce": {
+      "v7_mes_stressed_bounce": 1.0,
+      "v8_gold_q4_seasonality": 0.023439937164902034,
+      "v9_mes_m2k_pair": 0.014124534725263947,
+      "_proxy_CAM": 0.04275366524963107,
+      "_proxy_GOR": 0.024341621285990517,
+      "_proxy_btc_asia": 0.0020473949546763034
+    },
+    "v8_gold_q4_seasonality": {
+      "v7_mes_stressed_bounce": 0.023439937164902034,
+      "v8_gold_q4_seasonality": 1.0,
+      "v9_mes_m2k_pair": 0.001594672016977314,
+      "_proxy_CAM": 0.11460088213334824,
+      "_proxy_GOR": 0.1904779677387496,
+      "_proxy_btc_asia": -0.026302261341404547
+    },
+    "v9_mes_m2k_pair": {
+      "v7_mes_stressed_bounce": 0.014124534725263947,
+      "v8_gold_q4_seasonality": 0.001594672016977314,
+      "v9_mes_m2k_pair": 1.0,
+      "_proxy_CAM": 0.025426640101959844,
+      "_proxy_GOR": 0.00042857028226308294,
+      "_proxy_btc_asia": -0.04669912164031507
+    },
+    "_proxy_CAM": {
+      "v7_mes_stressed_bounce": 0.04275366524963107,
+      "v8_gold_q4_seasonality": 0.11460088213334824,
+      "v9_mes_m2k_pair": 0.025426640101959844,
+      "_proxy_CAM": 1.0,
+      "_proxy_GOR": 0.6511957433453416,
+      "_proxy_btc_asia": 0.03989782874052168
+    },
+    "_proxy_GOR": {
+      "v7_mes_stressed_bounce": 0.024341621285990517,
+      "v8_gold_q4_seasonality": 0.1904779677387496,
+      "v9_mes_m2k_pair": 0.00042857028226308294,
+      "_proxy_CAM": 0.6511957433453416,
+      "_proxy_GOR": 1.0,
+      "_proxy_btc_asia": 0.030518882318389173
+    },
+    "_proxy_btc_asia": {
+      "v7_mes_stressed_bounce": 0.0020473949546763034,
+      "v8_gold_q4_seasonality": -0.026302261341404547,
+      "v9_mes_m2k_pair": -0.04669912164031507,
+      "_proxy_CAM": 0.03989782874052168,
+      "_proxy_GOR": 0.030518882318389173,
+      "_proxy_btc_asia": 1.0
+    }
+  }
+}

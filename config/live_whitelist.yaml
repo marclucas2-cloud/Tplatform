@@ -227,6 +227,68 @@ ibkr_futures:
     Earliest promotion live_micro: 2026-05-23 (30j paper).
     Start paper: 2026-04-23.
     "
+- strategy_id: mes_estx50_divergence
+  book: ibkr_futures
+  status: paper_only
+  runtime_entrypoint: PENDING_MARC_DECISION (research autonome 2026-04-23 afternoon - non cable runtime)
+  runtime_module: strategies_v2.futures.mes_estx50_divergence.MESEstx50Divergence
+  wf_source: scripts/research/c1_mes_only_variant_2026_04_23.py (sensitivity 27 configs)
+  sizing_policy: fixed_1_contract
+  max_risk_usd: 250
+  universe:
+  - MES
+  - ESTX50
+  lookback: 25
+  z_entry: 1.5
+  z_exit: 0.5
+  max_hold_days: 15
+  sl_points: 30.0
+  kill_criteria:
+    drawdown_absolute: -12%
+    drawdown_rolling_60d: -8%
+    sharpe_rolling_60d: -0.5
+  notes: "Research autonome 2026-04-23 afternoon.
+    LONG MES seul quand Z(log(MES/ESTX50), 25d) <= -1.5 (US-EU intermarket divergence).
+    Backtest 5Y: 48 trades (~10/an), Sharpe 0.95, DD -10.4%, WF 5/5 parfait.
+    Sensitivity 27 configs grille: sweet spot stable LB=25 z=1.5 hold=15.
+    Corr CAM -0.005 GOR -0.102 btc_asia 0.083 (quasi-nulle/anti-corr).
+    Runtime NON cable - decision Marc. Earliest live_micro: 2026-05-23.
+    Start paper: 2026-04-23.
+    "
+
+- strategy_id: mgc_mes_ratio_rotation
+  book: ibkr_futures
+  status: paper_only
+  runtime_entrypoint: PENDING_MARC_DECISION (research autonome 2026-04-23 afternoon - non cable runtime)
+  runtime_module: strategies_v2.futures.mgc_mes_ratio_rotation.MGCMESRatioRotation
+  wf_source: scripts/research/new_paper_v3_2026_04_23.py
+  sizing_policy: fixed_1_contract
+  max_risk_usd: 300
+  universe:
+  - MGC
+  - MES
+  lookback: 30
+  z_entry: 1.5
+  z_exit: 0.3
+  z_stop: 3.0
+  max_hold_days: 20
+  sl_pct: 0.03
+  kill_criteria:
+    drawdown_absolute: -15%
+    drawdown_rolling_90d: -12%
+    sharpe_rolling_60d: -0.5
+    divergence_dd_32pct_warning: true
+  notes: "Research autonome 2026-04-23 afternoon.
+    Z-score MR sur log(MGC/MES) ratio (gold/equity). Alternate LONG MGC (Z<=-1.5) / LONG MES (Z>=+1.5).
+    Backtest 11Y: 143 trades (~13/an), Sharpe 0.36, CAGR 4.34%, DD -32%, WF 4/5 sur 11Y.
+    Mecanisme different de GOR (momentum MGC/MCL) -> corr quasi-nulle avec desk actuel.
+    CAM -0.064 GOR -0.029 btc_asia 0.120.
+    Sharpe modeste mais WF solide et decorrelation parfaite.
+    Utile pour diversification desk plus que alpha isole.
+    DD -32% eleve - necessite surveillance paper + peut-etre stop plus strict en live.
+    Runtime NON cable - decision Marc. Earliest live_micro: 2026-05-23.
+    Start paper: 2026-04-23.
+    "
 binance_crypto:
 - strategy_id: btc_dominance_rotation_v2
   book: binance_crypto
