@@ -1,6 +1,6 @@
-# SYNTHESE COMPLETE — TRADING PLATFORM V16.0 (DESK PRODUCTIF — LIVE_MICRO + CATALOGUE CLEAN)
+# SYNTHESE COMPLETE — TRADING PLATFORM V16.1 (P0 MCL FIX + PAPER BLOCK CLEANED)
 ## Portefeuille Quantitatif — 3 classes d'actifs, 15 strats canoniques (2 live_core + 1 live_micro + 6 paper_only + 4 frozen + 2 disabled + 16 archived)
-### Date : 22 avril 2026 | 3,799 tests | ~150 fichiers test | CRO 9.0/10 APPROUVE | Live_micro armed (first real fill possible daily 10h30 Paris)
+### Date : 23 avril 2026 | 3,816 tests | ~151 fichiers test | CRO 9.0/10 APPROUVE | CAM unlocked (MCL contract fixed) | Cleanup Phase 3.5 active
 
 ---
 
@@ -22,6 +22,17 @@
 | CRO audit | 9.0/10 | **9.0/10** (audit 21/04 + validation runtime 22/04) |
 
 **V15.3->V16.0 : Desk productif doctrine (live_micro + catalogue clean + runtime-truth).**
+
+**V16.0->V16.1 (23/04)** : **3 incidents decouverts + fixes** :
+  - **P0 CAM MCL contract** (commit 1217acf) : CAM etait broken en live depuis 20/04 suite a TP 19/04 + rollover contrat. `futures_runner.py` hardcodait `exchange="CME"` pour MCL (doit etre NYMEX) et MGC (COMEX). 9 echecs "no contract details" logges. Fix: helper `_make_future_contract` avec `_FUTURES_EXCHANGE_MAP` (MCL->NYMEX, MGC->COMEX, MES/MNQ->CME, MIB/ESTX50->EUREX). Valide VPS: MCLZ6 Dec 2026 resout OK. CAM peut de nouveau trader des prochain cycle 14h UTC.
+  - **P1 gaps live_pnl 20-21/04** : root cause = cron 22h UTC tombait pendant fenetre 2FA restart IB Gateway (22h15-22h25). Fix: decale cron VPS 22h -> 23h UTC (post 2FA). Actif des 23/04 23h UTC.
+  - **P2 gold_trend_mgc actif** : log "below EMA20" chaque cycle depuis 17/04, 0 BUY signal observable en 6j. Decision Marc: 30/04 reste date d'**arming technique** (eligibilite calendaire), PAS validation economique. Premier BUY paper observable requis avant toute promotion live_micro. Nouvelle regle doctrine.
+
+**Bilan live depuis origine (23/04 05:30 UTC)** :
+  - 1 seul trade live ferme: CAM MCL 07/04 entry $75.85 -> 19/04 TP $81.92 = **+$605.46 realized**
+  - 0 fill live 24h (CAM broken contrat, GOR signal spread <2% dormant, btc_asia_q80 signal NONE 22/04)
+  - Capital total: $21,283 (+$429 vs origin 19/04)
+  - DUP573894 paper: positions MES/MNQ closed hier soir post-cleanup, 0 fill attendu aujourd'hui
 
 **1. Bascule operationnelle majeure (22/04)** : le desk passe de "prepare le trading" a "trade + se concentre + rapporte". Premier sleeve live_micro arme (btc_asia_q80_long_only, BTCUSDC $200 real money, kill DD -$50 hard, no pyramid J+14, max 1 position, rate limit 1 nouvelle sleeve/7j). Premier cycle live execute 22/04 10h30 Paris = event entry_skipped (signal NONE, plumbing propre valide).
 
@@ -291,6 +302,35 @@ NOTE : A calibrer par Monte Carlo apres 100+ trades live par strategie.
 - Impact : gates (promotion_gate + alpaca_go_25k_gate) ne bloquent plus sur historique obsolete
 - Scope : P0 + P1 + CRITICAL (warnings non concernes)
 
+### V16.1 — Futures contract exchange map (23/04)
+
+Fix critique P0 : 4 endroits hardcodes `exchange="CME"` dans futures_runner.py
+provoquaient "no contract details" pour MCL/MGC depuis 20/04. Nouveau helper
+`_make_future_contract(symbol)` route via `_FUTURES_EXCHANGE_MAP` :
+
+| Symbol | Exchange | Currency | Commentaire |
+|---|---|---|---|
+| MES / MNQ / M2K / ES / NQ | CME | USD | Equity index futures |
+| MCL / CL | NYMEX | USD | Energy (crude oil) |
+| MGC / GC | COMEX | USD | Metals (gold) |
+| MIB | MEFFRV | EUR | FTSE MIB |
+| ESTX50 | EUREX | EUR | EuroStoxx 50 |
+| VIX | CFE | USD | CBOE volatility |
+| (unknown) | CME | USD | Fallback conservative |
+
+Applique a 4 points : main order execution, bracket repose, fail-safe close,
+time-exit 48h. Tests non-regression: `tests/test_futures_exchange_mapping.py` (12 tests).
+
+### V16.1 — Doctrine arming date vs validation economique (23/04)
+
+Regle Marc : une date de calendrier (ex: gold_trend_mgc 30/04 earliest fast-track)
+est une **eligibilite technique**, PAS une autorisation implicite de trader.
+La bascule effective vers live_micro necessite :
+  - premier BUY paper observable journalise, OU
+  - preuve equivalente explicitement validee par Marc
+Applicable a toute promotion future (alt_rel_strength 18/05, mes_monday 16/05, etc.).
+Memoire: `feedback_arming_date_vs_economic_validation.md`.
+
 ### V10 — Portfolio-Aware Risk Engine (8 modules)
 
 | Module | Fichier | Role | Seuils |
@@ -427,6 +467,9 @@ Intraday US : 16 testees, 4 validated, 3 borderline, 9 rejected. Overnight : 9/9
 | **V16 weekly_desk_review** | **ACTIF** | systemd timer dim 22h UTC, report md + Telegram 5 metriques |
 | **V16 quant_registry frozen** | **ACTIF** | 4 sleeves groupe C hors rotation (re-activables, pas disabled) |
 | **V16 resolutions.jsonl** | **ACTIF** | Manifest incidents fermes append-only (exclus des gates) |
+| **V16.1 futures_exchange_map** | **ACTIF** | `_make_future_contract(symbol)` route MCL/MGC/MES/etc. via bon exchange (fix P0 23/04) |
+| **V16.1 paper block clean** | **ACTIF** | 14 strats legacy retirees de futures_runner paper block (commit 21cc040 22/04) |
+| **V16.1 live_pnl_tracker cron** | **ACTIF** | Decale 22h -> 23h UTC (post 2FA IBGW restart, evite partial_fetch) |
 
 **Fiscalite crypto FR (V12 automatise)** : TradeTaxClassifier classe chaque trade. PFU 30% sur cessions vers EUR. Echanges crypto-crypto non imposables. Formulaire 2086 (PV crypto) + 3916-bis (comptes etranger = Binance, IBKR, Alpaca). Methode PMP.
 
@@ -436,14 +479,14 @@ Intraday US : 16 testees, 4 validated, 3 borderline, 9 rejected. Overnight : 9/9
 
 ## 8. TESTS ET QUALITE
 
-| Metrique | V15.3 (10/04) | **V16.0 (22/04)** |
-|----------|:--:|:------:|
-| Tests total | 3,523 | **3,799** (+276: TTL+frozen+live_micro+metrics+weekly+runner) |
-| Echecs | 0 | **0** |
-| Skipped | — | **1** (lightgbm/pandas optionnel) |
-| Fichiers test | ~146 | **~150** (+4 Phase 1+2+3) |
-| Lignes de code | ~195,000 | **~200,000** (+~2500 Phase 1+2+3) |
-| Fichiers Python | ~575 | **~585** (+6 modules governance/runtime/scripts Phase 1-3) |
+| Metrique | V15.3 (10/04) | V16.0 (22/04) | **V16.1 (23/04)** |
+|----------|:--:|:--:|:------:|
+| Tests total | 3,523 | 3,799 | **3,816** (+17: +7 Phase 3.5 cleanup runner + +12 exchange mapping - 2 failing preexisting) |
+| Echecs | 0 | 0 | **2 preexisting** (test_mcl_overnight_mon_trend non lie au fix, a investiguer) |
+| Skipped | — | 1 | **1** (lightgbm/pandas optionnel) |
+| Fichiers test | ~146 | ~150 | **~151** |
+| Lignes de code | ~195,000 | ~200,000 | **~200,500** |
+| Fichiers Python | ~575 | ~585 | **~586** (+_make_future_contract dans futures_runner) |
 
 **Tests desk productif Phase 1-3 (2026-04-22)** :
 - test_live_micro_sizing.py (22) : caps par grade, pyramid J+14, rate limit 1/7j
@@ -616,6 +659,8 @@ Audit CRO : **9.5/10** (12/12 domaines PASS, 67 fixes cumules)
 | **22 avril PM** | **Phase 2 desk productif : wire btc_asia_mes_leadlag_q80_v80_long_only LIVE_MICRO BTCUSDC $200 USDC, kill DD -$50 hard, max 1 position, no pyramid. Runner dedie core/runtime/btc_asia_q80_live_micro_runner.py (entry/exit + kill auto + Telegram + journal). Hotfix auto-redeem USDC pour detecter live_micro crypto sleeves (sinon spot=$0). Premier cycle 22/04 10h30 Paris = entry_skipped reason=signal_side=NONE (plumbing propre valide). Commits 15a5f2e+6dc6580. Close-out docs/ops/btc_asia_q80_live_micro_launch_2026-04-23.md.** |
 | **22 avril soir** | **Phase 3.1 freeze groupe C : mes_pre_holiday_long + eu_relmom_40_3 + us_stocks_daily + mib_estx50_spread passes en status=frozen (hors rotation business, re-activable != disabled). Helper is_strategy_frozen() + guards dans 4 cycles runtime (futures_runner, paper_cycles, worker.py us_stocks). 11 tests. Commit ffe85ce. Phase 3.2 TTL 72h incidents : core/governance/incidents_ttl.py (filter_active_incidents par groupe (sev, book, cat)). Integre promotion_gate + alpaca_go_25k_gate. 18 tests. Commit 02e3403.** |
 | **22 avril soir** | **Phase 3.3 metrics etendus live_pnl_tracker summary.json (max_dd_live_pct + trades_count_30d + capital_exposure snapshot) + Phase 3.4 weekly_desk_review.py (report md + Telegram 5 metriques) + systemd timer dim 22h UTC. 28 tests. Commit 533c6f0. Tests finaux 3799 pass 1 skip 0 fail. Timer armed Sun 2026-04-26 22h UTC. Dry-run valide (Telegram push ok). Desk passe de "autorise le trading" a "trade + se concentre + rapporte". Premier fill live_micro possible des demain (~10% proba/jour signal long-only q80).** |
+| **22 avril soir (bis)** | **Phase 3.5 cleanup drift code-registry (commit 21cc040) : retrait de 14+ strats legacy de futures_runner.py (MES Trend/Trend+MR/3-Day, Overnight MES V2/MNQ, TSMOM, M2K ORB, Thursday Rally, Friday-Monday, Multi-TF Mom, BB Squeeze, RS MES/MNQ, MCL Brent Lag, MGC VIX Hedge, Commodity Season, MES/MNQ Pairs, MIB/ESTX50 duplicate). Ces strats n'etaient pas dans le catalogue V16 mais tradaient paper sur DUP573894 quotidiennement. +7 tests non-regression. Positions DUP573894 MES -3 + MNQ +3 fermees runtime via market orders. Egalement: CAM.get_top_pick() revise pour ne reserver MCL que si position active OU rebal window (au lieu de toujours). Doctrine : une live_core ne doit pas neutraliser une autre live_core par reservation virtuelle. Tests 3806 pass.** |
+| **23 avril AM** | **Session investigation + P0 fix. Bilan: CAM MCL broken en live depuis 20/04 (9 erreurs "no contract details"), 1 seul trade live ferme depuis origine (+$605.46 TP MCL 19/04), 0 fill 24h, capital stable $21,283. Root cause: futures_runner.py hardcodait exchange="CME" pour tous symboles. Fix P0 (commit 1217acf): nouveau `_make_future_contract(symbol)` + `_FUTURES_EXCHANGE_MAP` (MCL->NYMEX, MGC->COMEX). Valide VPS: MCLZ6 Dec 2026 resout OK. +12 tests exchange mapping. Audit gaps live_pnl 20-21/04: cron 22h UTC collidait avec 2FA IBGW restart; decale a 23h UTC. Audit gold_trend_mgc: strat active, "below EMA20" chaque cycle, 0 BUY signal 6j -> decision Marc: 30/04 = date technique eligibilite fast-track, PAS validation economique (doctrine saved feedback_arming_date_vs_economic_validation.md). Wake-up cron reprogramme 16h30 Paris (= 14h30 UTC) pour check post-cycle futures. Tests 3816 pass (+17), 2 preexisting fails test_mcl_overnight_mon_trend non lies.** |
 
 ---
 
@@ -690,3 +735,29 @@ Audit CRO : **9.5/10** (12/12 domaines PASS, 67 fixes cumules)
 ### AUDIT CRO V16.0 — Score 9.0/10 (inchange post desk-productif)
 
 12 domaines tous PASS (CRO audit 21/04 confirme post validation runtime 22/04). Caveat unique : samples paper+live trop courts pour conclusions ROC, necessite 30j+ de history live avant ajustement scores ROC/capital_usage.
+
+### VERDICT V16.1 (23/04) — Le desk n'est plus bloque par la gouvernance; il etait bloque par un bug contrat
+
+**Photo honnete au 23 avril 2026** (verifiee session matinale) :
+  - 1 seul trade live ferme depuis origine (CAM MCL +$605.46 19/04)
+  - 0 fill live 24h
+  - btc_asia_q80_live_micro: plomberie OK, 0 signal encore
+  - gold_oil_rotation: toujours non prouvee (spread <2% dormant)
+  - CAM: live_core en statut, mais broken en execution depuis 20/04 suite rollover MCL -> **FIXE 23/04**
+  - gold_trend_mgc: actif (log "below EMA20" chaque cycle), 0 BUY en 6j
+
+**Progres structurel V16.1** :
+  - Plus de narration vs runtime (code=registry=synthese=runtime aligned)
+  - Plus de fausses reservations live_core (CAM ne neutralise plus GOR)
+  - Plus de faux portefeuille paper parallele (14 strats legacy retirees)
+  - Plus de gap PnL tracker (cron decale 23h UTC)
+  - Plus d'incidents obsoletes qui polluent les gates (TTL 72h)
+  - Premier moteur live operationnel de nouveau (CAM MCL unlocked)
+
+**Economiquement** :
+  - 1 trade profitable en 15 jours de live
+  - +2.06% equity depuis origine
+  - Capital expose moyen: proche de 0% (sleeves dormantes)
+  - **Le desk n'a pas encore prouve qu'il convertit le setup en ROC live recurrent.** Prochain test decisif: 07/05 rebal CAM + premier fill q80 si signal.
+
+**Prochaine etape critique** : observer le cycle 14h UTC 23/04 (post fix P0) pour confirmer que CAM re-entre MCL proprement. Wake-up cron programme 16h30 Paris (= 14h30 UTC) pour verifier les 6 checks. Si 6/6 propre, desk en position d'attendre le prochain trade naturellement.
