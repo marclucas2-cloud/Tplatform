@@ -29,6 +29,42 @@ logger = logging.getLogger("worker")
 ROOT = Path(__file__).resolve().parents[3]
 
 
+# P0 fix 2026-04-23: MCL/MGC contract resolution bug depuis 20/04
+# (9 echecs "no contract details for MCL" post TP fill 19/04).
+# Root cause: hardcode exchange="CME" pour tous symboles, or MCL=NYMEX et MGC=COMEX.
+# Source de verite: ibkr_bracket.py::exchange_map (reference utilisee par bracket).
+_FUTURES_EXCHANGE_MAP: dict[str, str] = {
+    # CME Equity index futures
+    "MES": "CME", "MNQ": "CME", "M2K": "CME", "ES": "CME", "NQ": "CME",
+    # NYMEX Energy
+    "MCL": "NYMEX", "CL": "NYMEX",
+    # COMEX Metals
+    "MGC": "COMEX", "GC": "COMEX",
+    # EUREX European
+    "MIB": "MEFFRV", "ESTX50": "EUREX",
+    # CBOE Volatility
+    "VIX": "CFE",
+}
+
+
+def _make_future_contract(symbol: str, currency: str = "USD"):
+    """Retourne un ib_insync.Future avec le bon exchange par symbole.
+
+    Utilise _FUTURES_EXCHANGE_MAP pour eviter le bug "no contract details"
+    observe sur MCL (resolution echoue quand exchange=CME au lieu de NYMEX
+    post contract roll 20/04/2026).
+
+    Fallback CME si symbole inconnu (conservative pour equity index).
+    Currency USD par defaut; caller peut override (EUR pour MIB/ESTX50).
+    """
+    from ib_insync import Future as _IbFuture
+    exchange = _FUTURES_EXCHANGE_MAP.get(symbol.upper(), "CME")
+    # EU indices en EUR (override currency pour MIB / ESTX50)
+    if symbol.upper() in ("MIB", "ESTX50"):
+        currency = "EUR"
+    return _IbFuture(symbol=symbol, exchange=exchange, currency=currency)
+
+
 def _get_canonical_ibkr_account(ib) -> str | None:
     """Retourne l'account canonique IBKR pour ce cycle.
 
@@ -507,7 +543,7 @@ def run_futures_cycle(live: bool = False):
                     if _rb_sl > 0 and _rb_tp > 0:
                         # Attempt repose
                         try:
-                            _rb_fut = IbFuture(pos_sym, exchange="CME")
+                            _rb_fut = _make_future_contract(pos_sym)
                             _rb_details = ibkr._ib.reqContractDetails(_rb_fut)
                             if _rb_details:
                                 _rb_contract = _rb_details[0].contract
@@ -540,7 +576,7 @@ def run_futures_cycle(live: bool = False):
                             f"Closing position at market to enforce SL obligatoire rule."
                         )
                         try:
-                            _fs_fut = IbFuture(pos_sym, exchange="CME")
+                            _fs_fut = _make_future_contract(pos_sym)
                             _fs_details = ibkr._ib.reqContractDetails(_fs_fut)
                             if _fs_details:
                                 _fs_contract = _fs_details[0].contract
@@ -595,8 +631,8 @@ def run_futures_cycle(live: bool = False):
             pos_sym = pos_info.get("symbol", pos_key)
             close_side = "SELL" if pos_info.get("side") == "BUY" else "BUY"
             try:
-                from ib_insync import Future as IbFuture, MarketOrder as IbMarketOrder
-                fut_contract = IbFuture(pos_sym, exchange="CME")
+                from ib_insync import MarketOrder as IbMarketOrder
+                fut_contract = _make_future_contract(pos_sym)
                 details = ibkr._ib.reqContractDetails(fut_contract)
                 if details:
                     fut_contract = details[0].contract
@@ -783,10 +819,10 @@ def run_futures_cycle(live: bool = False):
                 )
                 continue
             try:
-                _fut = IbFuture(sym, exchange="CME")
+                _fut = _make_future_contract(sym)
                 _details = ibkr._ib.reqContractDetails(_fut)
                 if not _details:
-                    logger.warning(f"    {name}: no contract details for {sym}")
+                    logger.warning(f"    {name}: no contract details for {sym} (exchange={_fut.exchange})")
                     continue
                 _contract = _details[0].contract
 
