@@ -581,6 +581,7 @@ def run_futures_cycle(live: bool = False):
                             if _fs_details:
                                 _fs_contract = _fs_details[0].contract
                                 _fs_order = _FailMarketOrder(_rb_side, _rb_qty)
+                                _fs_order.tif = "DAY"  # P0 FIX 2026-04-23: explicit TIF (cf Error 10349)
                                 _fs_order.outsideRth = True
                                 _fs_trade = ibkr._ib.placeOrder(_fs_contract, _fs_order)
                                 time.sleep(4); ibkr._ib.sleep(2)
@@ -650,6 +651,7 @@ def run_futures_cycle(live: bool = False):
                     time.sleep(1); ibkr._ib.sleep(0.5)
 
                 order = IbMarketOrder(close_side, int(pos_info.get("qty", 1)))
+                order.tif = "DAY"  # P0 FIX 2026-04-23: explicit TIF (cf Error 10349)
                 trade = ibkr._ib.placeOrder(fut_contract, order)
                 time.sleep(3); ibkr._ib.sleep(2)
                 logger.info(
@@ -846,7 +848,14 @@ def run_futures_cycle(live: bool = False):
                     _osm_order = None
 
                 # Step 1: Market entry
+                # P0 FIX 2026-04-23: force explicit TIF=DAY to prevent IBKR
+                # Error 10349 "Order TIF was set to DAY based on order preset".
+                # Without explicit TIF, IB Gateway rewrites MKT orders via the
+                # account order preset, which causes the order to be cancelled
+                # on U25023333 canonical live (while paper DUP573894 silently
+                # resubmits and fills). Explicit DAY makes it deterministic.
                 _entry_order = IbMarketOrder(sig.side, qty)
+                _entry_order.tif = "DAY"
                 _entry_trade = ibkr._ib.placeOrder(_contract, _entry_order)
                 time.sleep(4); ibkr._ib.sleep(2)
                 _fill_price = _entry_trade.orderStatus.avgFillPrice or 0

@@ -369,7 +369,9 @@ class IBKRBroker(BaseBroker):
             raise BrokerError(f"IBKR: qty invalide pour {symbol}: {qty}")
 
         # Ordre principal (market)
+        # P0 FIX 2026-04-23: explicit TIF=DAY (cf Error 10349)
         parent_order = MarketOrder(action, qty)
+        parent_order.tif = "DAY"
         parent_order.transmit = not (stop_loss or take_profit)
 
         trade = self._ib.placeOrder(contract, parent_order)
@@ -437,6 +439,7 @@ class IBKRBroker(BaseBroker):
         action = "SELL" if pos.position > 0 else "BUY"
         qty = abs(pos.position)
         order = MarketOrder(action, qty)
+        order.tif = "DAY"  # P0 FIX 2026-04-23: explicit TIF (cf Error 10349)
         trade = self._ib.placeOrder(contract, order)
 
         logger.info(f"IBKR: position {symbol} fermee ({action} {qty})")

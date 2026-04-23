@@ -101,7 +101,11 @@ def make_macro_ecb_executor(mode: str, ibkr_lock: threading.Lock | None = None):
 
             qty = 1
 
+            # P0 FIX 2026-04-23: explicit TIF=DAY to prevent IBKR Error 10349
+            # "Order TIF was set to DAY based on order preset" which cancels
+            # live orders on U25023333 canonical account.
             entry = IbMarketOrder(sig.side, qty)
+            entry.tif = "DAY"
             trade = ib.placeOrder(contract, entry)
             time.sleep(4); ib.sleep(2)
             fill_price = trade.orderStatus.avgFillPrice or 0
