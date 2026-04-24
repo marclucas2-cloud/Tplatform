@@ -385,6 +385,63 @@ def run_futures_cycle(live: bool = False):
                 except Exception as e:
                     logger.error(f"    MCL overnight mon trend paper error: {e}")
 
+            # 3a-quater. mes_mr_vix_spike paper (research mission 2026-04-23 AM)
+            # Source: scripts/research/decorrelated_variants_v2_2026_04_23.py
+            # + sensitivity grid v1_sensitivity_2026_04_23.py (48 configs).
+            # Config retenue (robuste): consec=3, hold=4, vix_min=15.
+            # WF 5/5 parfait sur grille, Sharpe 0.72, DD -9.7%, 12 trades/an.
+            # Corr CAM 0.055 / GOR -0.014 (quasi-nulle).
+            # Paper start 2026-04-24 (runtime). Earliest live_micro: 2026-05-24.
+            if _cam_top_pick == "MES":
+                logger.info("    mes_mr_vix_spike (paper): SKIP — CAM reserved MES")
+            else:
+                try:
+                    from strategies_v2.futures.mes_mr_vix_spike import (
+                        MESMeanReversionVIXSpike,
+                    )
+                    _mvs = MESMeanReversionVIXSpike()
+                    _mvs.set_data_feed(feed)
+                    bar = feed.get_latest_bar("MES")
+                    _mvs_journal_dir = ROOT / "data" / "state" / "mes_mr_vix_spike"
+                    _mvs_journal_dir.mkdir(parents=True, exist_ok=True)
+                    _mvs_journal = _mvs_journal_dir / "journal.jsonl"
+                    if bar:
+                        sig = _mvs.on_bar(bar, portfolio_state)
+                        _mvs_event = {
+                            "ts_utc": pd.Timestamp.now(tz="UTC").isoformat(),
+                            "strategy_id": "mes_mr_vix_spike",
+                            "bar_close": float(bar.close),
+                            "bar_ts": str(bar.timestamp),
+                        }
+                        if sig:
+                            signals.append((_mvs.name, sig))
+                            logger.info(
+                                f"    {_mvs.name} (paper): BUY @ {bar.close:.2f} "
+                                f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f}"
+                            )
+                            _mvs_event.update({
+                                "event": "signal_emit",
+                                "side": sig.side,
+                                "sl": float(sig.stop_loss),
+                                "tp": float(sig.take_profit),
+                                "strength": float(sig.strength),
+                            })
+                        else:
+                            logger.info(
+                                f"    {_mvs.name} (paper): pas signal "
+                                f"(3-day stretch OR VIX<15 not met)"
+                            )
+                            _mvs_event["event"] = "no_signal"
+                        try:
+                            with _mvs_journal.open("a", encoding="utf-8") as _f:
+                                _f.write(json.dumps(_mvs_event) + "\n")
+                        except Exception as _je:
+                            logger.warning(
+                                f"    mes_mr_vix_spike journal write failed: {_je}"
+                            )
+                except Exception as e:
+                    logger.error(f"    mes_mr_vix_spike paper error: {e}")
+
             # NOTE 2026-04-22 (Phase 3.5 desk productif):
             # Blocs supprimes de la rotation paper (retrait catalogue V16):
             #   - Overnight MES V2 (OvernightBuyClose) / Overnight MNQ
@@ -757,6 +814,8 @@ def run_futures_cycle(live: bool = False):
             "mes_pre_holiday_long":   "mes_pre_holiday_long",
             # T3-A1 INT-B 2026-04-18 paper promotion
             "mcl_overnight_mon_trend10": "mcl_overnight_mon_trend10",
+            # Research mission 2026-04-23 AM paper promotion
+            "mes_mr_vix_spike":          "mes_mr_vix_spike",
         }
 
         for name, sig in signals:

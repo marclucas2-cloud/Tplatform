@@ -198,7 +198,7 @@ ibkr_futures:
 - strategy_id: mes_mr_vix_spike
   book: ibkr_futures
   status: paper_only
-  runtime_entrypoint: PENDING_MARC_DECISION (research autonome 2026-04-23 - non cable runtime)
+  runtime_entrypoint: core/worker/cycles/futures_runner.py run_futures_cycle paper bloc 3a-quater (2026-04-24)
   runtime_module: strategies_v2.futures.mes_mr_vix_spike.MESMeanReversionVIXSpike
   wf_source: scripts/research/decorrelated_variants_v2_2026_04_23.py + scripts/research/v1_sensitivity_2026_04_23.py
   sizing_policy: fixed_1_contract
