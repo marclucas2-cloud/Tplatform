@@ -426,6 +426,47 @@ alpaca_us:
     a PDT compat + capital > $25K + 30 jours de paper stable.
 
     Start paper: 2026-04-18 (Phase C residuel marker pour promotion_check.py).'
+- strategy_id: macro_top1_rotation
+  book: alpaca_us
+  status: paper_only
+  runtime_entrypoint: worker.py:run_macro_top1_rotation_cycle (16h30 Paris / 10h30 ET daily weekday)
+  runtime_module: strategies_v2.us.macro_top1_rotation.MacroTop1Rotation
+  wf_source: scripts/research/target_alpha_us_sectors_and_new_assets_2026_04_24.py + review Claude sensitivity grid
+  sizing_policy: long_only_top1_2000_notional_simulation
+  max_risk_usd: 0  # simulation locale, pas d'ordre broker
+  universe:
+  - SPY
+  - TLT
+  - GLD
+  - DBC
+  - UUP
+  - IEF
+  - HYG
+  - QQQ
+  lookback_days: 60
+  hold_days: 21
+  kill_criteria:
+    drawdown_absolute: -10%
+    sharpe_rolling_60d: -0.5
+  notes: "Mission paper plug 2026-04-24 (target-alpha US sectors & new assets).
+
+    Rotation mensuelle long-only top-1 sur 8 ETFs macro cross-asset.
+
+    Config retenue: LB=60 jours, HD=21 jours, simulation locale pure
+    (pas d ordre broker). Journal JSONL + state dedies data/state/macro_top1_rotation/.
+
+    Review Claude + sensitivity grid 12 configs: 9/12 Sharpe > 0.5
+    AND WF ratio >= 0.80. Config originale (ChatGPT) retenue pour
+    cadence realiste (~12 rotations/an) vs LB=30/HD=10 sweet-spot
+    Sharpe 0.83 mais 2x turnover.
+
+    Data: data/research/target_alpha_us_sectors_2026_04_24_prices.parquet
+    (yfinance 2018-2026). Stale-tolerance 7j avant warning log.
+
+    Earliest promotion live_micro: 2026-05-24 (30j paper minimum).
+
+    Start paper runtime: 2026-04-24.
+    "
 - strategy_id: us_sector_ls_40_5
   book: alpaca_us
   status: paper_only

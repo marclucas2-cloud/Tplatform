@@ -306,6 +306,18 @@ strategies:
     is_live: false
     infra_gaps: ["shorts_sectors_pdt_rule_borrow_cost", "re_wf_etf_data_requis_vs_500_tickers"]
 
+  - strategy_id: macro_top1_rotation
+    book: alpaca_us
+    status: paper_only
+    paper_start_at: "2026-04-24"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/macro_top1_rotation_2026-04-24.json
+    grade: B
+    last_wf_run_at: "2026-04-24"
+    is_live: false
+    infra_gaps: ["paper_simulation_locale_pas_d_ordre_broker_reel"]
+    notes: "Mission paper plug target-alpha 2026-04-24. Long-only top-1 rotation mensuelle sur 8 ETFs macro (SPY/TLT/GLD/DBC/UUP/IEF/HYG/QQQ). Config LB=60, HD=21. Sharpe 0.676, DD -5.94%, WF 4/5 sur 2018-2026. Sensitivity grid 12 configs confirme robustesse (9/12 OK). Runtime: runner dedie worker 16h30 Paris, simulation locale pure (journal+state, pas d ordre broker). Earliest promotion live_micro: 2026-05-24."
+
 # =============================================================================
 # Strategies archivees post-drain 19 avril (NE PLUS PROMOUVOIR)
 # =============================================================================

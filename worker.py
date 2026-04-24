@@ -1717,6 +1717,13 @@ from core.worker.cycles.futures_runner import (  # noqa: E402
     run_futures_cycle as _run_futures_cycle,
 )
 
+# 2026-04-24 (mission paper plug target-alpha): macro_top1_rotation paper runner.
+# Long-only monthly ETF rotation (8 macros), simulation locale pure (pas d'ordre broker).
+# Research non-prod source: scripts/research/target_alpha_us_sectors_and_new_assets_2026_04_24.py
+from core.worker.cycles.macro_top1_rotation_runner import (  # noqa: E402
+    run_macro_top1_rotation_cycle,
+)
+
 def run_fx_paper_cycle():
     """FX Paper Trading — run validated FX strategies on IBKR paper (port 4003).
 
@@ -4835,6 +4842,12 @@ def main():
                                          alert_callback=_cycle_alert,
                                          metrics_callback=_cycle_metrics_cb,
                                          timeout_seconds=900.0),
+        # Mission paper plug 2026-04-24: macro_top1_rotation long-only ETF rotation.
+        # Simulation locale pure (pas d'ordre broker), journal + state dedies.
+        "macro_top1_rotation": CycleRunner("macro_top1_rotation", run_macro_top1_rotation_cycle,
+                                             alert_callback=_cycle_alert,
+                                             metrics_callback=_cycle_metrics_cb,
+                                             timeout_seconds=60.0),
     }
     logger.info(f"  CycleRunners initialized: {list(_runners.keys())}")
 
@@ -5020,6 +5033,17 @@ def main():
             run_us_stocks_daily_cycle._done_today = True
         if is_weekday() and now_paris.hour < 16:
             run_us_stocks_daily_cycle._done_today = False
+
+        # === MACRO_TOP1_ROTATION PAPER CYCLE (weekday 16h30 Paris = 10h30 ET) ===
+        # Mission paper plug target-alpha 2026-04-24.
+        # Fires 30 min apres us_stocks_daily pour laisser le temps au cache ETF
+        # (si jamais un refresh automatique est ajoute) d etre frais.
+        # Pure simulation locale: pas d ordre broker. Journal JSONL + state file.
+        if is_weekday() and now_paris.hour == 16 and now_paris.minute >= 30 and not getattr(run_macro_top1_rotation_cycle, '_done_today', False):
+            _runners["macro_top1_rotation"].run()
+            run_macro_top1_rotation_cycle._done_today = True
+        if is_weekday() and now_paris.hour < 16:
+            run_macro_top1_rotation_cycle._done_today = False
 
         # === MACRO ECB EVENT DRIVEN (lun-ven, 14h50 Paris, jours BCE only) ===
         # Le module skip lui-meme les jours non-BCE; on declenche tous les jours

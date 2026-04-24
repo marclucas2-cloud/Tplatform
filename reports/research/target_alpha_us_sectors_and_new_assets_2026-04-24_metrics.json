@@ -1,0 +1,1099 @@
+{
+  "download_universe": [
+    "DBC",
+    "GLD",
+    "HYG",
+    "IEF",
+    "QQQ",
+    "SPY",
+    "TLT",
+    "UUP",
+    "XLB",
+    "XLC",
+    "XLE",
+    "XLF",
+    "XLI",
+    "XLK",
+    "XLP",
+    "XLRE",
+    "XLU",
+    "XLV",
+    "XLY"
+  ],
+  "price_range": {
+    "start": "2018-01-02",
+    "end": "2026-04-23",
+    "rows": 2088
+  },
+  "results": {
+    "etf_sector_ls_mom_20_5": {
+      "standalone": {
+        "n_days": 2088,
+        "n_years": 8.29,
+        "total_pnl": -1063.93,
+        "sharpe": -0.467,
+        "cagr_pct": -1.35,
+        "max_dd_pct": -12.94,
+        "active_days": 2067
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 1,
+        "ratio": 0.2,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": -0.172,
+            "pnl": -84.07,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": 0.562,
+            "pnl": 228.89,
+            "profitable": true
+          },
+          {
+            "window": 3,
+            "sharpe": -0.67,
+            "pnl": -283.42,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -1.153,
+            "pnl": -357.5,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.707,
+            "pnl": -241.51,
+            "profitable": false
+          }
+        ]
+      },
+      "score": {
+        "candidate_id": "etf_sector_ls_mom_20_5",
+        "delta_sharpe": -0.018,
+        "delta_cagr": -0.2,
+        "delta_maxdd": -1.43,
+        "delta_calmar": -0.008,
+        "delta_roc": -0.00534,
+        "corr_to_portfolio": 0.009,
+        "max_corr_to_strat": 0.085,
+        "tail_overlap": 0.033,
+        "worst_day_overlap": 1,
+        "diversification_benefit": 0.991,
+        "capital_utilization_benefit": 0.135,
+        "marginal_score": 0.151,
+        "verdict": "KEEP_FOR_RESEARCH",
+        "penalties": [],
+        "details": {
+          "baseline": {
+            "sharpe": 1.163,
+            "cagr": 28.58,
+            "max_dd": -83.29,
+            "calmar": 0.343,
+            "total_pnl": 69471.0
+          },
+          "combined": {
+            "sharpe": 1.145,
+            "cagr": 28.38,
+            "max_dd": -84.72,
+            "calmar": 0.335,
+            "total_pnl": 68441.0
+          },
+          "n_days": 2078
+        }
+      },
+      "trade_days": 414
+    },
+    "etf_sector_ls_mom_40_5": {
+      "standalone": {
+        "n_days": 2088,
+        "n_years": 8.29,
+        "total_pnl": -921.82,
+        "sharpe": -0.386,
+        "cagr_pct": -1.16,
+        "max_dd_pct": -12.48,
+        "active_days": 2047
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 1,
+        "ratio": 0.2,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.785,
+            "pnl": 417.26,
+            "profitable": true
+          },
+          {
+            "window": 2,
+            "sharpe": -0.604,
+            "pnl": -254.79,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -0.305,
+            "pnl": -140.26,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -1.574,
+            "pnl": -487.55,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.153,
+            "pnl": -54.25,
+            "profitable": false
+          }
+        ]
+      },
+      "score": {
+        "candidate_id": "etf_sector_ls_mom_40_5",
+        "delta_sharpe": -0.016,
+        "delta_cagr": -0.18,
+        "delta_maxdd": -2.85,
+        "delta_calmar": -0.013,
+        "delta_roc": -0.00451,
+        "corr_to_portfolio": 0.002,
+        "max_corr_to_strat": 0.089,
+        "tail_overlap": 0.033,
+        "worst_day_overlap": 1,
+        "diversification_benefit": 0.998,
+        "capital_utilization_benefit": 0.129,
+        "marginal_score": 0.153,
+        "verdict": "KEEP_FOR_RESEARCH",
+        "penalties": [],
+        "details": {
+          "baseline": {
+            "sharpe": 1.163,
+            "cagr": 28.58,
+            "max_dd": -83.29,
+            "calmar": 0.343,
+            "total_pnl": 69471.0
+          },
+          "combined": {
+            "sharpe": 1.147,
+            "cagr": 28.4,
+            "max_dd": -86.14,
+            "calmar": 0.33,
+            "total_pnl": 68566.0
+          },
+          "n_days": 2078
+        }
+      },
+      "trade_days": 410
+    },
+    "etf_sector_ls_rev_5_3": {
+      "standalone": {
+        "n_days": 2088,
+        "n_years": 8.29,
+        "total_pnl": -2224.29,
+        "sharpe": -0.968,
+        "cagr_pct": -2.99,
+        "max_dd_pct": -22.71,
+        "active_days": 2082
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 1,
+        "ratio": 0.2,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.173,
+            "pnl": 80.31,
+            "profitable": true
+          },
+          {
+            "window": 2,
+            "sharpe": -1.828,
+            "pnl": -741.69,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -0.505,
+            "pnl": -226.12,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -1.125,
+            "pnl": -343.69,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -1.846,
+            "pnl": -652.68,
+            "profitable": false
+          }
+        ]
+      },
+      "score": {
+        "candidate_id": "etf_sector_ls_rev_5_3",
+        "delta_sharpe": -0.036,
+        "delta_cagr": -0.43,
+        "delta_maxdd": -2.93,
+        "delta_calmar": -0.016,
+        "delta_roc": -0.01291,
+        "corr_to_portfolio": -0.005,
+        "max_corr_to_strat": 0.078,
+        "tail_overlap": 0.0,
+        "worst_day_overlap": 0,
+        "diversification_benefit": 0.995,
+        "capital_utilization_benefit": 0.138,
+        "marginal_score": 0.13,
+        "verdict": "KEEP_FOR_RESEARCH",
+        "penalties": [],
+        "details": {
+          "baseline": {
+            "sharpe": 1.163,
+            "cagr": 28.58,
+            "max_dd": -83.29,
+            "calmar": 0.343,
+            "total_pnl": 69471.0
+          },
+          "combined": {
+            "sharpe": 1.127,
+            "cagr": 28.15,
+            "max_dd": -86.22,
+            "calmar": 0.327,
+            "total_pnl": 67336.0
+          },
+          "n_days": 2078
+        }
+      },
+      "trade_days": 695
+    },
+    "etf_sector_top1_long_40_5": {
+      "standalone": {
+        "n_days": 2088,
+        "n_years": 8.29,
+        "total_pnl": 1487.6,
+        "sharpe": 0.364,
+        "cagr_pct": 1.69,
+        "max_dd_pct": -8.38,
+        "active_days": 2039
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 5,
+        "ratio": 1.0,
+        "validated": true,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.142,
+            "pnl": 133.88,
+            "profitable": true
+          },
+          {
+            "window": 2,
+            "sharpe": 1.085,
+            "pnl": 749.04,
+            "profitable": true
+          },
+          {
+            "window": 3,
+            "sharpe": 0.498,
+            "pnl": 415.81,
+            "profitable": true
+          },
+          {
+            "window": 4,
+            "sharpe": 0.096,
+            "pnl": 45.21,
+            "profitable": true
+          },
+          {
+            "window": 5,
+            "sharpe": 0.252,
+            "pnl": 144.69,
+            "profitable": true
+          }
+        ]
+      },
+      "score": {
+        "candidate_id": "etf_sector_top1_long_40_5",
+        "delta_sharpe": 0.011,
+        "delta_cagr": 0.28,
+        "delta_maxdd": -0.81,
+        "delta_calmar": 0.0,
+        "delta_roc": 0.00735,
+        "corr_to_portfolio": 0.133,
+        "max_corr_to_strat": 0.115,
+        "tail_overlap": 0.067,
+        "worst_day_overlap": 2,
+        "diversification_benefit": 0.867,
+        "capital_utilization_benefit": 0.128,
+        "marginal_score": 0.167,
+        "verdict": "PROMOTE_PAPER",
+        "penalties": [],
+        "details": {
+          "baseline": {
+            "sharpe": 1.163,
+            "cagr": 28.58,
+            "max_dd": -83.29,
+            "calmar": 0.343,
+            "total_pnl": 69471.0
+          },
+          "combined": {
+            "sharpe": 1.174,
+            "cagr": 28.86,
+            "max_dd": -84.1,
+            "calmar": 0.343,
+            "total_pnl": 70905.0
+          },
+          "n_days": 2078
+        }
+      },
+      "trade_days": 410
+    },
+    "defensive_vs_cyclical_regime": {
+      "standalone": {
+        "n_days": 2088,
+        "n_years": 8.29,
+        "total_pnl": -199.89,
+        "sharpe": -0.171,
+        "cagr_pct": -0.24,
+        "max_dd_pct": -3.41,
+        "active_days": 1888
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 2,
+        "ratio": 0.4,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": -0.404,
+            "pnl": -97.86,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": 0.722,
+            "pnl": 137.51,
+            "profitable": true
+          },
+          {
+            "window": 3,
+            "sharpe": -0.034,
+            "pnl": -7.31,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": 0.66,
+            "pnl": 109.18,
+            "profitable": true
+          },
+          {
+            "window": 5,
+            "sharpe": -0.826,
+            "pnl": -171.8,
+            "profitable": false
+          }
+        ]
+      },
+      "score": {
+        "candidate_id": "defensive_vs_cyclical_regime",
+        "delta_sharpe": -0.004,
+        "delta_cagr": -0.05,
+        "delta_maxdd": -1.22,
+        "delta_calmar": -0.005,
+        "delta_roc": 0.00027,
+        "corr_to_portfolio": 0.003,
+        "max_corr_to_strat": 0.075,
+        "tail_overlap": 0.033,
+        "worst_day_overlap": 1,
+        "diversification_benefit": 0.997,
+        "capital_utilization_benefit": 0.111,
+        "marginal_score": 0.164,
+        "verdict": "KEEP_FOR_RESEARCH",
+        "penalties": [],
+        "details": {
+          "baseline": {
+            "sharpe": 1.163,
+            "cagr": 28.58,
+            "max_dd": -83.29,
+            "calmar": 0.343,
+            "total_pnl": 69471.0
+          },
+          "combined": {
+            "sharpe": 1.159,
+            "cagr": 28.53,
+            "max_dd": -84.51,
+            "calmar": 0.338,
+            "total_pnl": 69235.0
+          },
+          "n_days": 2078
+        }
+      },
+      "trade_days": 49
+    },
+    "pair_xle_xlk_ratio": {
+      "standalone": {
+        "n_days": 2088,
+        "n_years": 8.29,
+        "total_pnl": 1087.46,
+        "sharpe": 0.532,
+        "cagr_pct": 1.25,
+        "max_dd_pct": -3.53,
+        "active_days": 1420
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 5,
+        "ratio": 1.0,
+        "validated": true,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.922,
+            "pnl": 369.9,
+            "profitable": true
+          },
+          {
+            "window": 2,
+            "sharpe": 0.866,
+            "pnl": 374.03,
+            "profitable": true
+          },
+          {
+            "window": 3,
+            "sharpe": 0.32,
+            "pnl": 124.2,
+            "profitable": true
+          },
+          {
+            "window": 4,
+            "sharpe": 0.018,
+            "pnl": 4.88,
+            "profitable": true
+          },
+          {
+            "window": 5,
+            "sharpe": 1.03,
+            "pnl": 309.23,
+            "profitable": true
+          }
+        ]
+      },
+      "score": {
+        "candidate_id": "pair_xle_xlk_ratio",
+        "delta_sharpe": 0.016,
+        "delta_cagr": 0.19,
+        "delta_maxdd": -0.87,
+        "delta_calmar": -0.001,
+        "delta_roc": 0.00503,
+        "corr_to_portfolio": 0.018,
+        "max_corr_to_strat": 0.029,
+        "tail_overlap": 0.1,
+        "worst_day_overlap": 3,
+        "diversification_benefit": 0.982,
+        "capital_utilization_benefit": 0.09,
+        "marginal_score": 0.175,
+        "verdict": "PROMOTE_PAPER",
+        "penalties": [],
+        "details": {
+          "baseline": {
+            "sharpe": 1.163,
+            "cagr": 28.58,
+            "max_dd": -83.29,
+            "calmar": 0.343,
+            "total_pnl": 69471.0
+          },
+          "combined": {
+            "sharpe": 1.179,
+            "cagr": 28.77,
+            "max_dd": -84.16,
+            "calmar": 0.342,
+            "total_pnl": 70471.0
+          },
+          "n_days": 2078
+        }
+      },
+      "trade_days": 366
+    },
+    "pair_xlf_xlu_ratio": {
+      "standalone": {
+        "n_days": 2088,
+        "n_years": 8.29,
+        "total_pnl": -540.0,
+        "sharpe": -0.402,
+        "cagr_pct": -0.67,
+        "max_dd_pct": -7.25,
+        "active_days": 1317
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 2,
+        "ratio": 0.4,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": -1.368,
+            "pnl": -404.41,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": 0.009,
+            "pnl": 2.08,
+            "profitable": true
+          },
+          {
+            "window": 3,
+            "sharpe": 0.433,
+            "pnl": 100.65,
+            "profitable": true
+          },
+          {
+            "window": 4,
+            "sharpe": -0.169,
+            "pnl": -31.31,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.31,
+            "pnl": -59.23,
+            "profitable": false
+          }
+        ]
+      },
+      "score": {
+        "candidate_id": "pair_xlf_xlu_ratio",
+        "delta_sharpe": -0.009,
+        "delta_cagr": -0.11,
+        "delta_maxdd": -0.55,
+        "delta_calmar": -0.003,
+        "delta_roc": 0.00302,
+        "corr_to_portfolio": 0.001,
+        "max_corr_to_strat": 0.091,
+        "tail_overlap": 0.0,
+        "worst_day_overlap": 0,
+        "diversification_benefit": 0.999,
+        "capital_utilization_benefit": 0.085,
+        "marginal_score": 0.165,
+        "verdict": "KEEP_FOR_RESEARCH",
+        "penalties": [],
+        "details": {
+          "baseline": {
+            "sharpe": 1.163,
+            "cagr": 28.58,
+            "max_dd": -83.29,
+            "calmar": 0.343,
+            "total_pnl": 69471.0
+          },
+          "combined": {
+            "sharpe": 1.154,
+            "cagr": 28.47,
+            "max_dd": -83.84,
+            "calmar": 0.34,
+            "total_pnl": 68923.0
+          },
+          "n_days": 2078
+        }
+      },
+      "trade_days": 423
+    },
+    "macro_top1_rotation": {
+      "standalone": {
+        "n_days": 2088,
+        "n_years": 8.29,
+        "total_pnl": 2251.35,
+        "sharpe": 0.676,
+        "cagr_pct": 2.48,
+        "max_dd_pct": -5.94,
+        "active_days": 2011
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 4,
+        "ratio": 0.8,
+        "validated": true,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.969,
+            "pnl": 637.92,
+            "profitable": true
+          },
+          {
+            "window": 2,
+            "sharpe": 0.775,
+            "pnl": 433.86,
+            "profitable": true
+          },
+          {
+            "window": 3,
+            "sharpe": 0.921,
+            "pnl": 510.92,
+            "profitable": true
+          },
+          {
+            "window": 4,
+            "sharpe": -0.16,
+            "pnl": -71.38,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": 1.505,
+            "pnl": 1015.56,
+            "profitable": true
+          }
+        ]
+      },
+      "score": {
+        "candidate_id": "macro_top1_rotation",
+        "delta_sharpe": 0.027,
+        "delta_cagr": 0.42,
+        "delta_maxdd": -1.85,
+        "delta_calmar": -0.002,
+        "delta_roc": 0.02094,
+        "corr_to_portfolio": 0.125,
+        "max_corr_to_strat": 0.095,
+        "tail_overlap": 0.067,
+        "worst_day_overlap": 2,
+        "diversification_benefit": 0.875,
+        "capital_utilization_benefit": 0.123,
+        "marginal_score": 0.199,
+        "verdict": "PROMOTE_PAPER",
+        "penalties": [],
+        "details": {
+          "baseline": {
+            "sharpe": 1.163,
+            "cagr": 28.58,
+            "max_dd": -83.29,
+            "calmar": 0.343,
+            "total_pnl": 69471.0
+          },
+          "combined": {
+            "sharpe": 1.19,
+            "cagr": 29.0,
+            "max_dd": -85.14,
+            "calmar": 0.341,
+            "total_pnl": 71639.0
+          },
+          "n_days": 2078
+        }
+      },
+      "trade_days": 97
+    },
+    "macro_risk_switch": {
+      "standalone": {
+        "n_days": 2088,
+        "n_years": 8.29,
+        "total_pnl": 1521.16,
+        "sharpe": 0.672,
+        "cagr_pct": 1.72,
+        "max_dd_pct": -7.21,
+        "active_days": 1887
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 4,
+        "ratio": 0.8,
+        "validated": true,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.488,
+            "pnl": 247.45,
+            "profitable": true
+          },
+          {
+            "window": 2,
+            "sharpe": 1.143,
+            "pnl": 447.78,
+            "profitable": true
+          },
+          {
+            "window": 3,
+            "sharpe": -0.359,
+            "pnl": -145.87,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": 1.892,
+            "pnl": 631.23,
+            "profitable": true
+          },
+          {
+            "window": 5,
+            "sharpe": 0.87,
+            "pnl": 314.9,
+            "profitable": true
+          }
+        ]
+      },
+      "score": {
+        "candidate_id": "macro_risk_switch",
+        "delta_sharpe": 0.017,
+        "delta_cagr": 0.28,
+        "delta_maxdd": -0.52,
+        "delta_calmar": 0.001,
+        "delta_roc": 0.01135,
+        "corr_to_portfolio": 0.152,
+        "max_corr_to_strat": 0.154,
+        "tail_overlap": 0.1,
+        "worst_day_overlap": 3,
+        "diversification_benefit": 0.848,
+        "capital_utilization_benefit": 0.111,
+        "marginal_score": 0.172,
+        "verdict": "PROMOTE_PAPER",
+        "penalties": [],
+        "details": {
+          "baseline": {
+            "sharpe": 1.163,
+            "cagr": 28.58,
+            "max_dd": -83.29,
+            "calmar": 0.343,
+            "total_pnl": 69471.0
+          },
+          "combined": {
+            "sharpe": 1.18,
+            "cagr": 28.86,
+            "max_dd": -83.81,
+            "calmar": 0.344,
+            "total_pnl": 70909.0
+          },
+          "n_days": 2078
+        }
+      },
+      "trade_days": 49
+    },
+    "stock_sector_ls_20_5": {
+      "standalone": {
+        "n_days": 1274,
+        "n_years": 5.06,
+        "total_pnl": 679.27,
+        "sharpe": 0.496,
+        "cagr_pct": 1.31,
+        "max_dd_pct": -4.42,
+        "active_days": 1255
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 4,
+        "ratio": 0.8,
+        "validated": true,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.056,
+            "pnl": 17.03,
+            "profitable": true
+          },
+          {
+            "window": 2,
+            "sharpe": 0.436,
+            "pnl": 84.81,
+            "profitable": true
+          },
+          {
+            "window": 3,
+            "sharpe": 1.602,
+            "pnl": 244.61,
+            "profitable": true
+          },
+          {
+            "window": 4,
+            "sharpe": -1.337,
+            "pnl": -287.74,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": 1.497,
+            "pnl": 370.92,
+            "profitable": true
+          }
+        ]
+      },
+      "score": {
+        "candidate_id": "stock_sector_ls_20_5",
+        "delta_sharpe": 0.017,
+        "delta_cagr": 0.39,
+        "delta_maxdd": 1.02,
+        "delta_calmar": 0.013,
+        "delta_roc": 0.00587,
+        "corr_to_portfolio": 0.013,
+        "max_corr_to_strat": 0.045,
+        "tail_overlap": 0.033,
+        "worst_day_overlap": 1,
+        "diversification_benefit": 0.987,
+        "capital_utilization_benefit": 0.137,
+        "marginal_score": 0.188,
+        "verdict": "PROMOTE_PAPER",
+        "penalties": [],
+        "details": {
+          "baseline": {
+            "sharpe": 0.912,
+            "cagr": 33.26,
+            "max_dd": -71.61,
+            "calmar": 0.464,
+            "total_pnl": 32546.0
+          },
+          "combined": {
+            "sharpe": 0.929,
+            "cagr": 33.65,
+            "max_dd": -70.59,
+            "calmar": 0.477,
+            "total_pnl": 33179.0
+          },
+          "n_days": 1271
+        }
+      },
+      "trade_days": 0
+    },
+    "stock_sector_ls_40_5": {
+      "standalone": {
+        "n_days": 1274,
+        "n_years": 5.06,
+        "total_pnl": 533.23,
+        "sharpe": 0.392,
+        "cagr_pct": 1.03,
+        "max_dd_pct": -2.15,
+        "active_days": 1235
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 5,
+        "ratio": 1.0,
+        "validated": true,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.779,
+            "pnl": 256.13,
+            "profitable": true
+          },
+          {
+            "window": 2,
+            "sharpe": 0.399,
+            "pnl": 65.9,
+            "profitable": true
+          },
+          {
+            "window": 3,
+            "sharpe": 0.084,
+            "pnl": 13.38,
+            "profitable": true
+          },
+          {
+            "window": 4,
+            "sharpe": 0.063,
+            "pnl": 14.73,
+            "profitable": true
+          },
+          {
+            "window": 5,
+            "sharpe": 0.971,
+            "pnl": 233.89,
+            "profitable": true
+          }
+        ]
+      },
+      "score": {
+        "candidate_id": "stock_sector_ls_40_5",
+        "delta_sharpe": 0.014,
+        "delta_cagr": 0.33,
+        "delta_maxdd": 1.32,
+        "delta_calmar": 0.014,
+        "delta_roc": 0.00779,
+        "corr_to_portfolio": 0.02,
+        "max_corr_to_strat": 0.042,
+        "tail_overlap": 0.067,
+        "worst_day_overlap": 2,
+        "diversification_benefit": 0.98,
+        "capital_utilization_benefit": 0.137,
+        "marginal_score": 0.19,
+        "verdict": "PROMOTE_PAPER",
+        "penalties": [],
+        "details": {
+          "baseline": {
+            "sharpe": 0.912,
+            "cagr": 33.26,
+            "max_dd": -71.61,
+            "calmar": 0.464,
+            "total_pnl": 32546.0
+          },
+          "combined": {
+            "sharpe": 0.926,
+            "cagr": 33.59,
+            "max_dd": -70.29,
+            "calmar": 0.478,
+            "total_pnl": 33086.0
+          },
+          "n_days": 1271
+        }
+      },
+      "trade_days": 0
+    }
+  },
+  "correlation": {
+    "etf_sector_ls_mom_20_5": {
+      "etf_sector_ls_mom_20_5": 1.0,
+      "etf_sector_ls_mom_40_5": 0.5828919020159471,
+      "etf_sector_ls_rev_5_3": -0.3545059501263053,
+      "etf_sector_top1_long_40_5": 0.22901220070016157,
+      "defensive_vs_cyclical_regime": 0.17088368442247803,
+      "pair_xle_xlk_ratio": 0.5300957773487872,
+      "pair_xlf_xlu_ratio": 0.3230169102263507,
+      "macro_top1_rotation": 0.036058892910686965,
+      "macro_risk_switch": -0.0765141621954927,
+      "stock_sector_ls_20_5": 0.6314312213829433,
+      "stock_sector_ls_40_5": 0.46483832250192375
+    },
+    "etf_sector_ls_mom_40_5": {
+      "etf_sector_ls_mom_20_5": 0.5828919020159471,
+      "etf_sector_ls_mom_40_5": 1.0,
+      "etf_sector_ls_rev_5_3": -0.23890995439098747,
+      "etf_sector_top1_long_40_5": 0.46963622062461213,
+      "defensive_vs_cyclical_regime": 0.245845517630983,
+      "pair_xle_xlk_ratio": 0.4460336977750463,
+      "pair_xlf_xlu_ratio": 0.30459674526499486,
+      "macro_top1_rotation": 0.17651529898362112,
+      "macro_risk_switch": 0.024302299200766684,
+      "stock_sector_ls_20_5": 0.4587451925478263,
+      "stock_sector_ls_40_5": 0.6486464329991654
+    },
+    "etf_sector_ls_rev_5_3": {
+      "etf_sector_ls_mom_20_5": -0.3545059501263053,
+      "etf_sector_ls_mom_40_5": -0.23890995439098747,
+      "etf_sector_ls_rev_5_3": 1.0,
+      "etf_sector_top1_long_40_5": -0.008757227975387773,
+      "defensive_vs_cyclical_regime": -0.11237881257310794,
+      "pair_xle_xlk_ratio": -0.469862734829035,
+      "pair_xlf_xlu_ratio": -0.35424217611132336,
+      "macro_top1_rotation": 0.035138486540604204,
+      "macro_risk_switch": 0.0739815960535052,
+      "stock_sector_ls_20_5": -0.2759585784222458,
+      "stock_sector_ls_40_5": -0.20940187663084578
+    },
+    "etf_sector_top1_long_40_5": {
+      "etf_sector_ls_mom_20_5": 0.22901220070016157,
+      "etf_sector_ls_mom_40_5": 0.46963622062461213,
+      "etf_sector_ls_rev_5_3": -0.008757227975387773,
+      "etf_sector_top1_long_40_5": 1.0,
+      "defensive_vs_cyclical_regime": 0.13098426595208112,
+      "pair_xle_xlk_ratio": 0.18049304551619302,
+      "pair_xlf_xlu_ratio": 0.075751993369924,
+      "macro_top1_rotation": 0.24896895546296816,
+      "macro_risk_switch": 0.37519949582692574,
+      "stock_sector_ls_20_5": 0.24241291889750052,
+      "stock_sector_ls_40_5": 0.34262670080108176
+    },
+    "defensive_vs_cyclical_regime": {
+      "etf_sector_ls_mom_20_5": 0.17088368442247803,
+      "etf_sector_ls_mom_40_5": 0.245845517630983,
+      "etf_sector_ls_rev_5_3": -0.11237881257310794,
+      "etf_sector_top1_long_40_5": 0.13098426595208112,
+      "defensive_vs_cyclical_regime": 1.0,
+      "pair_xle_xlk_ratio": 0.08161927771115599,
+      "pair_xlf_xlu_ratio": 0.18569952541683715,
+      "macro_top1_rotation": 0.11787218948352603,
+      "macro_risk_switch": 0.39175693798131384,
+      "stock_sector_ls_20_5": 0.0796336734360144,
+      "stock_sector_ls_40_5": 0.1976819662625971
+    },
+    "pair_xle_xlk_ratio": {
+      "etf_sector_ls_mom_20_5": 0.5300957773487872,
+      "etf_sector_ls_mom_40_5": 0.4460336977750463,
+      "etf_sector_ls_rev_5_3": -0.469862734829035,
+      "etf_sector_top1_long_40_5": 0.18049304551619302,
+      "defensive_vs_cyclical_regime": 0.08161927771115599,
+      "pair_xle_xlk_ratio": 1.0,
+      "pair_xlf_xlu_ratio": 0.22440759731921933,
+      "macro_top1_rotation": 0.04919198865600903,
+      "macro_risk_switch": -0.05422916453920676,
+      "stock_sector_ls_20_5": 0.4072066434629478,
+      "stock_sector_ls_40_5": 0.2882360641611484
+    },
+    "pair_xlf_xlu_ratio": {
+      "etf_sector_ls_mom_20_5": 0.3230169102263507,
+      "etf_sector_ls_mom_40_5": 0.30459674526499486,
+      "etf_sector_ls_rev_5_3": -0.35424217611132336,
+      "etf_sector_top1_long_40_5": 0.075751993369924,
+      "defensive_vs_cyclical_regime": 0.18569952541683715,
+      "pair_xle_xlk_ratio": 0.22440759731921933,
+      "pair_xlf_xlu_ratio": 1.0,
+      "macro_top1_rotation": -0.0036315722923106093,
+      "macro_risk_switch": -0.026309832375679677,
+      "stock_sector_ls_20_5": 0.2583646132194835,
+      "stock_sector_ls_40_5": 0.22536671427923005
+    },
+    "macro_top1_rotation": {
+      "etf_sector_ls_mom_20_5": 0.036058892910686965,
+      "etf_sector_ls_mom_40_5": 0.17651529898362112,
+      "etf_sector_ls_rev_5_3": 0.035138486540604204,
+      "etf_sector_top1_long_40_5": 0.24896895546296816,
+      "defensive_vs_cyclical_regime": 0.11787218948352603,
+      "pair_xle_xlk_ratio": 0.04919198865600903,
+      "pair_xlf_xlu_ratio": -0.0036315722923106093,
+      "macro_top1_rotation": 1.0,
+      "macro_risk_switch": 0.4044209413047756,
+      "stock_sector_ls_20_5": 0.1039644956618818,
+      "stock_sector_ls_40_5": 0.17420259071168537
+    },
+    "macro_risk_switch": {
+      "etf_sector_ls_mom_20_5": -0.0765141621954927,
+      "etf_sector_ls_mom_40_5": 0.024302299200766684,
+      "etf_sector_ls_rev_5_3": 0.0739815960535052,
+      "etf_sector_top1_long_40_5": 0.37519949582692574,
+      "defensive_vs_cyclical_regime": 0.39175693798131384,
+      "pair_xle_xlk_ratio": -0.05422916453920676,
+      "pair_xlf_xlu_ratio": -0.026309832375679677,
+      "macro_top1_rotation": 0.4044209413047756,
+      "macro_risk_switch": 1.0,
+      "stock_sector_ls_20_5": -0.07922045408476562,
+      "stock_sector_ls_40_5": 0.01974152902585019
+    },
+    "stock_sector_ls_20_5": {
+      "etf_sector_ls_mom_20_5": 0.6314312213829433,
+      "etf_sector_ls_mom_40_5": 0.4587451925478263,
+      "etf_sector_ls_rev_5_3": -0.2759585784222458,
+      "etf_sector_top1_long_40_5": 0.24241291889750052,
+      "defensive_vs_cyclical_regime": 0.0796336734360144,
+      "pair_xle_xlk_ratio": 0.4072066434629478,
+      "pair_xlf_xlu_ratio": 0.2583646132194835,
+      "macro_top1_rotation": 0.1039644956618818,
+      "macro_risk_switch": -0.07922045408476562,
+      "stock_sector_ls_20_5": 1.0,
+      "stock_sector_ls_40_5": 0.5704174914312207
+    },
+    "stock_sector_ls_40_5": {
+      "etf_sector_ls_mom_20_5": 0.46483832250192375,
+      "etf_sector_ls_mom_40_5": 0.6486464329991654,
+      "etf_sector_ls_rev_5_3": -0.20940187663084578,
+      "etf_sector_top1_long_40_5": 0.34262670080108176,
+      "defensive_vs_cyclical_regime": 0.1976819662625971,
+      "pair_xle_xlk_ratio": 0.2882360641611484,
+      "pair_xlf_xlu_ratio": 0.22536671427923005,
+      "macro_top1_rotation": 0.17420259071168537,
+      "macro_risk_switch": 0.01974152902585019,
+      "stock_sector_ls_20_5": 0.5704174914312207,
+      "stock_sector_ls_40_5": 1.0
+    }
+  }
+}

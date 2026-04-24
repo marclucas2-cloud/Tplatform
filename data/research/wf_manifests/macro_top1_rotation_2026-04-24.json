@@ -1,0 +1,63 @@
+{
+  "schema_version": 2,
+  "run_id": "wf_macro_top1_rotation_20260424T000000Z",
+  "strategy_id": "macro_top1_rotation",
+  "variant": "v1_lb60_hd21_long_only",
+  "source": "scripts/research/target_alpha_us_sectors_and_new_assets_2026_04_24.py (ChatGPT) + review/sensitivity by Claude 2026-04-24",
+  "source_data": "data/research/target_alpha_us_sectors_2026_04_24_prices.parquet (yfinance 2018-2026, 8 macro ETFs)",
+  "finished_at": "2026-04-24T08:30:00+00:00",
+  "params": {
+    "lookback_days": 60,
+    "hold_days": 21,
+    "universe": ["SPY", "TLT", "GLD", "DBC", "UUP", "IEF", "HYG", "QQQ"],
+    "sizing": "long_only_top1_full_notional",
+    "notional_usd": 2000
+  },
+  "spec": {
+    "cost_rt_pct": 0.0010,
+    "borrow_annual_pct": 0.0050,
+    "no_short_legs": true
+  },
+  "windows": [
+    {"window": 1, "oos_sharpe": null, "oos_pnl": null, "oos_profitable": true, "note": "WF ratio 0.80 global, detail par fenetre dans metrics.json"},
+    {"window": 2, "oos_profitable": true},
+    {"window": 3, "oos_profitable": true},
+    {"window": 4, "oos_profitable": true},
+    {"window": 5, "oos_profitable": false, "note": "1 fenetre OOS negative"}
+  ],
+  "sensitivity_grid": {
+    "tested_configs": 12,
+    "config_space": "lookback={30,60,90,120} x hold_days={10,21,42}",
+    "robust_count": "9/12 configs Sharpe > 0.5 AND WF ratio >= 0.80",
+    "best_sharpe_config": {
+      "lookback": 30, "hold_days": 10,
+      "sharpe": 0.830, "cagr_pct": null, "max_dd_pct": -3.5, "wf_ratio": 1.00,
+      "rationale": "Sweet spot Sharpe MAIS turnover eleve (206 trade_days sur 2088 = ~10 rebal/mois). Ecarte pour robustesse vs overfit."
+    },
+    "chosen_config": {
+      "lookback": 60, "hold_days": 21,
+      "sharpe": 0.676, "max_dd_pct": -5.94, "wf_ratio": 0.80, "trade_days": 97,
+      "rationale": "Config ChatGPT originale. Monthly rebalance (21 busdays ~ 1 mois), proche academiques momentum 3-12m. Cadence realiste pour paper (~12 rotations/an)."
+    }
+  },
+  "correlation_with_desk": {
+    "cam_proxy_corr": null,
+    "gor_proxy_corr": null,
+    "note": "Desk futures+crypto; macro_top1 sur ETF US long-only -> correlation structurellement faible. A mesurer proprement post paper quand returns series disponible."
+  },
+  "summary": {
+    "all_trades": {
+      "n": 97,
+      "sharpe": 0.676,
+      "cagr_pct": null,
+      "max_dd_pct": -5.94,
+      "n_years": 8.24
+    },
+    "windows_pass": 4,
+    "windows_total": 5,
+    "pass_rate": 0.80,
+    "grade": "B",
+    "verdict": "VALIDATED",
+    "notes": "Candidate issue de la mission ChatGPT target_alpha 2026-04-24. Revue independante par Claude avec sensitivity grid 12 configs confirme robustesse. Long-only, 8 ETFs macro tres liquides, zero short/borrow complexity. Paper cable avec simulation locale pure (pas d ordre broker) pour premiere phase d observation."
+  }
+}

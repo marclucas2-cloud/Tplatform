@@ -1,6 +1,6 @@
 # T3-B1 - US sector long/short rotation
 
-**Run** : 2026-04-18 07:54 UTC
+**Run** : 2026-04-24 06:12 UTC
 **Universe** : 11 sectors, 1274 daily observations
 **Sizing** : $1,000 per leg, 0.10% RT cost
 

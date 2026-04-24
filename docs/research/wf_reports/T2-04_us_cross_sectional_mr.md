@@ -1,6 +1,6 @@
 # T2-D — US cross-sectional mean reversion
 
-**Run** : 2026-04-16 06:24 UTC
+**Run** : 2026-04-24 06:12 UTC
 **Univers** : 30 tickers SP500
 **Methodologie** : top 5 oversold long, top 5 overbought short (RSI14), hold 5d
 **Data range** : 2018-01-02 -> 2026-04-15 (2082d)
