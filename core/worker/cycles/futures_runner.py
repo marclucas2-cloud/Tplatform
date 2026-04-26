@@ -47,6 +47,46 @@ _FUTURES_EXCHANGE_MAP: dict[str, str] = {
 }
 
 
+def _load_futures_daily_frame(path: Path):
+    """Load a daily parquet while preserving a valid DatetimeIndex.
+
+    Root cause fixed 2026-04-25:
+    some refreshed parquet files kept a legacy ``datetime`` column populated
+    with NaT on new rows. The runtime loader was blindly overriding a perfectly
+    valid DatetimeIndex with that stale/NaT column, then dropping the new rows.
+
+    Rule:
+    - keep the existing DatetimeIndex if it is already valid
+    - fall back to ``datetime`` column only when the index is not usable
+    - strip the legacy ``datetime`` column afterwards to avoid future misuse
+    """
+    import pandas as pd
+
+    df = pd.read_parquet(path)
+    df.columns = [c.lower() for c in df.columns]
+
+    has_valid_dt_index = (
+        isinstance(df.index, pd.DatetimeIndex) and df.index.notna().any()
+    )
+    if has_valid_dt_index:
+        pass
+    elif "datetime" in df.columns:
+        df.index = pd.to_datetime(df["datetime"], errors="coerce")
+    else:
+        df.index = pd.to_datetime(df.index, errors="coerce")
+
+    if "datetime" in df.columns:
+        df = df.drop(columns=["datetime"])
+
+    # Cron data_refresh can introduce duplicates / NaT / disorder.
+    # Drop NaT, dedupe (keep last), sort, strip tz before DataFeed validation.
+    df = df[df.index.notna()]
+    df = df[~df.index.duplicated(keep="last")].sort_index()
+    if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is not None:
+        df.index = df.index.tz_localize(None)
+    return df
+
+
 def _make_future_contract(symbol: str, currency: str = "USD"):
     """Retourne un ib_insync.Future avec le bon exchange par symbole.
 
@@ -187,20 +227,7 @@ def run_futures_cycle(live: bool = False):
         for sym in ["MES", "MNQ", "M2K", "MIB", "ESTX50", "VIX", "MGC", "MCL", "DAX", "CAC40"]:
             fpath = data_dir / f"{sym}_1D.parquet"
             if fpath.exists():
-                df = pd.read_parquet(fpath)
-                df.columns = [c.lower() for c in df.columns]
-                if "datetime" in df.columns:
-                    df.index = pd.to_datetime(df["datetime"])
-                elif not isinstance(df.index, pd.DatetimeIndex):
-                    df.index = pd.to_datetime(df.index)
-                # Cron data_refresh peut introduire doublons/NaT/disorder.
-                # Drop NaT, dedupe (keep last), sort, strip tz — obligatoire avant
-                # DataFeed validation (is_monotonic_increasing) sinon cycle KO.
-                df = df[df.index.notna()]
-                df = df[~df.index.duplicated(keep="last")].sort_index()
-                if df.index.tz is not None:
-                    df.index = df.index.tz_localize(None)
-                data_sources[sym] = df
+                data_sources[sym] = _load_futures_daily_frame(fpath)
 
         if "MES" not in data_sources:
             logger.warning("  FUTURES PAPER SKIP — no MES daily data")

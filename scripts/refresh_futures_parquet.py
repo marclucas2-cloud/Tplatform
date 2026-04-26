@@ -7,6 +7,7 @@ Target: les fichiers que le worker lit au _run_futures_cycle.
   - M2K_1D.parquet <- RTY=F  (Russell 2000)
   - MGC_1D.parquet <- GC=F   (Gold)
   - MCL_1D.parquet <- CL=F   (WTI Crude)
+  - VIX_1D.parquet <- ^VIX   (fear filter used by paper futures)
 
 Methode:
   1. Charge le parquet existant
@@ -36,11 +37,11 @@ SYMBOL_MAP = {
     "M2K": "RTY=F",
     "MGC": "GC=F",
     "MCL": "CL=F",
+    "VIX": "^VIX",
 }
 
 # Also refresh EU indices + VIX if present (used by paper strats)
 OPTIONAL_MAP = {
-    "VIX":    "^VIX",
     "DAX":    "^GDAXI",
     "CAC40":  "^FCHI",
     "ESTX50": "^STOXX50E",
@@ -53,10 +54,21 @@ def load_existing(path: Path):
         return None
     df = pd.read_parquet(path)
     df.columns = [c.lower() for c in df.columns]
-    df.index = pd.to_datetime(df.index)
-    if df.index.tz is not None:
+    has_valid_dt_index = (
+        isinstance(df.index, pd.DatetimeIndex) and df.index.notna().any()
+    )
+    if has_valid_dt_index:
+        pass
+    elif "datetime" in df.columns:
+        df.index = pd.to_datetime(df["datetime"], errors="coerce")
+    else:
+        df.index = pd.to_datetime(df.index, errors="coerce")
+    if "datetime" in df.columns:
+        df = df.drop(columns=["datetime"])
+    df = df[df.index.notna()]
+    if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is not None:
         df.index = df.index.tz_localize(None)
-    return df.sort_index()
+    return df[~df.index.duplicated(keep="last")].sort_index()
 
 
 def fetch_yf(ticker: str, days_back: int = 45) -> pd.DataFrame | None:
@@ -109,6 +121,9 @@ def refresh_one(symbol: str, ticker: str) -> tuple[bool, str]:
         combined = pd.concat([existing, new_bars])
         combined = combined[~combined.index.duplicated(keep="last")].sort_index()
         n_added = len(new_bars)
+
+    if "datetime" in combined.columns:
+        combined = combined.drop(columns=["datetime"])
 
     # Atomic write: tmp + rename
     tmp_path = parquet_path.with_suffix(".parquet.tmp")

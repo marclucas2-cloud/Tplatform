@@ -89,6 +89,7 @@ class TestMESMRVixSpikeStrategy:
         s = self._get_strategy()
         from core.backtester_v2.types import Bar
         feed = MagicMock()
+        feed.timestamp = pd.Timestamp("2026-04-24")
         mes_bars = pd.DataFrame([
             {"open": 5000, "high": 5010, "low": 4980, "close": 4990},
             {"open": 4990, "high": 4995, "low": 4970, "close": 4975},
@@ -109,6 +110,34 @@ class TestMESMRVixSpikeStrategy:
         assert sig.stop_loss == pytest.approx(4950 - 25.0)
         assert sig.take_profit == pytest.approx(4950 + 50.0)
         assert sig.strategy_name == "mes_mr_vix_spike"
+
+    def test_no_signal_on_stale_bar_relative_to_feed_timestamp(self):
+        s = self._get_strategy()
+        from core.backtester_v2.types import Bar
+        feed = MagicMock()
+        feed.timestamp = pd.Timestamp("2026-04-25")
+        mes_bars = pd.DataFrame([
+            {"open": 5000, "high": 5010, "low": 4980, "close": 4990},
+            {"open": 4990, "high": 4995, "low": 4970, "close": 4975},
+            {"open": 4975, "high": 4980, "low": 4955, "close": 4960},
+        ])
+        vix_bars = pd.DataFrame([{"open": 18, "high": 20, "low": 17, "close": 19.5}])
+
+        def side_effect(sym, n):
+            return mes_bars if sym == "MES" else vix_bars
+
+        feed.get_bars.side_effect = side_effect
+        s.set_data_feed(feed)
+        bar = Bar(
+            timestamp=pd.Timestamp("2026-04-08"),
+            symbol="MES",
+            open=4960,
+            high=4965,
+            low=4945,
+            close=4950,
+            volume=100,
+        )
+        assert s.on_bar(bar, MagicMock()) is None
 
 
 class TestRegistryIntegration:

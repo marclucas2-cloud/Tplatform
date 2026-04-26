@@ -60,6 +60,7 @@ class MESMeanReversionVIXSpike(StrategyBase):
     VIX_SYMBOL = "VIX"
     TICK_SIZE = 0.25
     TICK_VALUE = 1.25
+    MAX_BAR_AGE_DAYS = 3
 
     def __init__(
         self,
@@ -95,6 +96,19 @@ class MESMeanReversionVIXSpike(StrategyBase):
         self, bar: Bar, portfolio_state: PortfolioState
     ) -> Signal | None:
         if self.data_feed is None:
+            return None
+
+        bar_ts = pd.Timestamp(bar.timestamp).normalize()
+        decision_ts = getattr(self.data_feed, "timestamp", None)
+        try:
+            now = pd.Timestamp(decision_ts)
+        except Exception:
+            now = pd.Timestamp.utcnow().tz_localize(None).normalize()
+        else:
+            if now.tzinfo is not None:
+                now = now.tz_localize(None)
+            now = now.normalize()
+        if (now - bar_ts).days > self.MAX_BAR_AGE_DAYS:
             return None
 
         sym = self.SYMBOL
