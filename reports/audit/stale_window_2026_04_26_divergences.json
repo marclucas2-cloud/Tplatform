@@ -1,0 +1,408 @@
+{
+  "window": "2026-03-27 -> 2026-04-24",
+  "n_business_days": 21,
+  "stale_data_picture": {
+    "MES": "2026-04-08 00:00:00",
+    "MNQ": "2026-04-08 00:00:00",
+    "MGC": "2026-03-27 00:00:00",
+    "MCL": "2026-03-27 00:00:00",
+    "M2K": "fresh",
+    "VIX": "2026-04-09 00:00:00"
+  },
+  "CAM": {
+    "n_divergent_days": 11,
+    "divergence_pct": 52.4,
+    "records": [
+      {
+        "date": "2026-03-27",
+        "stale_pick": null,
+        "fresh_pick": null,
+        "divergent": false
+      },
+      {
+        "date": "2026-03-30",
+        "stale_pick": null,
+        "fresh_pick": null,
+        "divergent": false
+      },
+      {
+        "date": "2026-03-31",
+        "stale_pick": null,
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-01",
+        "stale_pick": null,
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-02",
+        "stale_pick": null,
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-03",
+        "stale_pick": null,
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-06",
+        "stale_pick": null,
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-07",
+        "stale_pick": null,
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-08",
+        "stale_pick": null,
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-09",
+        "stale_pick": "M2K",
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-10",
+        "stale_pick": "M2K",
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-13",
+        "stale_pick": "M2K",
+        "fresh_pick": "M2K",
+        "divergent": false
+      },
+      {
+        "date": "2026-04-14",
+        "stale_pick": "M2K",
+        "fresh_pick": "M2K",
+        "divergent": false
+      },
+      {
+        "date": "2026-04-15",
+        "stale_pick": "M2K",
+        "fresh_pick": "M2K",
+        "divergent": false
+      },
+      {
+        "date": "2026-04-16",
+        "stale_pick": "M2K",
+        "fresh_pick": "M2K",
+        "divergent": false
+      },
+      {
+        "date": "2026-04-17",
+        "stale_pick": "M2K",
+        "fresh_pick": "M2K",
+        "divergent": false
+      },
+      {
+        "date": "2026-04-20",
+        "stale_pick": "M2K",
+        "fresh_pick": "M2K",
+        "divergent": false
+      },
+      {
+        "date": "2026-04-21",
+        "stale_pick": "M2K",
+        "fresh_pick": "M2K",
+        "divergent": false
+      },
+      {
+        "date": "2026-04-22",
+        "stale_pick": "M2K",
+        "fresh_pick": "M2K",
+        "divergent": false
+      },
+      {
+        "date": "2026-04-23",
+        "stale_pick": "M2K",
+        "fresh_pick": "MNQ",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-24",
+        "stale_pick": "M2K",
+        "fresh_pick": "MNQ",
+        "divergent": true
+      }
+    ]
+  },
+  "GOR": {
+    "n_divergent_days": 13,
+    "divergence_pct": 61.9,
+    "records": [
+      {
+        "date": "2026-03-27",
+        "stale_pick": "MCL",
+        "fresh_pick": "MCL",
+        "divergent": false
+      },
+      {
+        "date": "2026-03-30",
+        "stale_pick": "MGC",
+        "fresh_pick": "MGC",
+        "divergent": false
+      },
+      {
+        "date": "2026-03-31",
+        "stale_pick": "MGC",
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-01",
+        "stale_pick": "MGC",
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-02",
+        "stale_pick": "MGC",
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-03",
+        "stale_pick": "MGC",
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-06",
+        "stale_pick": "MGC",
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-07",
+        "stale_pick": "MGC",
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-08",
+        "stale_pick": "MGC",
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-09",
+        "stale_pick": "MGC",
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-10",
+        "stale_pick": "MGC",
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-13",
+        "stale_pick": "MGC",
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-14",
+        "stale_pick": "MGC",
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-15",
+        "stale_pick": "MGC",
+        "fresh_pick": "MCL",
+        "divergent": true
+      },
+      {
+        "date": "2026-04-16",
+        "stale_pick": "MGC",
+        "fresh_pick": "MGC",
+        "divergent": false
+      },
+      {
+        "date": "2026-04-17",
+        "stale_pick": "MGC",
+        "fresh_pick": "MGC",
+        "divergent": false
+      },
+      {
+        "date": "2026-04-20",
+        "stale_pick": "MGC",
+        "fresh_pick": "MGC",
+        "divergent": false
+      },
+      {
+        "date": "2026-04-21",
+        "stale_pick": "MGC",
+        "fresh_pick": "MGC",
+        "divergent": false
+      },
+      {
+        "date": "2026-04-22",
+        "stale_pick": "MGC",
+        "fresh_pick": "MGC",
+        "divergent": false
+      },
+      {
+        "date": "2026-04-23",
+        "stale_pick": "MGC",
+        "fresh_pick": "MGC",
+        "divergent": false
+      },
+      {
+        "date": "2026-04-24",
+        "stale_pick": "MGC",
+        "fresh_pick": "MCL",
+        "divergent": true
+      }
+    ]
+  },
+  "gold_trend_mgc": {
+    "n_divergent_days": 10,
+    "divergence_pct": 47.6,
+    "records": [
+      {
+        "date": "2026-03-27",
+        "stale_long": false,
+        "fresh_long": false,
+        "divergent": false
+      },
+      {
+        "date": "2026-03-30",
+        "stale_long": false,
+        "fresh_long": false,
+        "divergent": false
+      },
+      {
+        "date": "2026-03-31",
+        "stale_long": false,
+        "fresh_long": false,
+        "divergent": false
+      },
+      {
+        "date": "2026-04-01",
+        "stale_long": false,
+        "fresh_long": false,
+        "divergent": false
+      },
+      {
+        "date": "2026-04-02",
+        "stale_long": false,
+        "fresh_long": true,
+        "divergent": true
+      },
+      {
+        "date": "2026-04-03",
+        "stale_long": false,
+        "fresh_long": false,
+        "divergent": false
+      },
+      {
+        "date": "2026-04-06",
+        "stale_long": false,
+        "fresh_long": false,
+        "divergent": false
+      },
+      {
+        "date": "2026-04-07",
+        "stale_long": false,
+        "fresh_long": false,
+        "divergent": false
+      },
+      {
+        "date": "2026-04-08",
+        "stale_long": false,
+        "fresh_long": false,
+        "divergent": false
+      },
+      {
+        "date": "2026-04-09",
+        "stale_long": false,
+        "fresh_long": true,
+        "divergent": true
+      },
+      {
+        "date": "2026-04-10",
+        "stale_long": false,
+        "fresh_long": true,
+        "divergent": true
+      },
+      {
+        "date": "2026-04-13",
+        "stale_long": false,
+        "fresh_long": true,
+        "divergent": true
+      },
+      {
+        "date": "2026-04-14",
+        "stale_long": false,
+        "fresh_long": true,
+        "divergent": true
+      },
+      {
+        "date": "2026-04-15",
+        "stale_long": false,
+        "fresh_long": true,
+        "divergent": true
+      },
+      {
+        "date": "2026-04-16",
+        "stale_long": false,
+        "fresh_long": true,
+        "divergent": true
+      },
+      {
+        "date": "2026-04-17",
+        "stale_long": false,
+        "fresh_long": true,
+        "divergent": true
+      },
+      {
+        "date": "2026-04-20",
+        "stale_long": false,
+        "fresh_long": true,
+        "divergent": true
+      },
+      {
+        "date": "2026-04-21",
+        "stale_long": false,
+        "fresh_long": true,
+        "divergent": true
+      },
+      {
+        "date": "2026-04-22",
+        "stale_long": false,
+        "fresh_long": false,
+        "divergent": false
+      },
+      {
+        "date": "2026-04-23",
+        "stale_long": false,
+        "fresh_long": false,
+        "divergent": false
+      },
+      {
+        "date": "2026-04-24",
+        "stale_long": false,
+        "fresh_long": false,
+        "divergent": false
+      }
+    ]
+  }
+}
