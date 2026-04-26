@@ -42,6 +42,12 @@ QUANT_REGISTRY = ROOT / "config" / "quant_registry.yaml"
 MAX_PARQUET_AGE_HOURS_LIVE = 48.0
 MAX_PARQUET_AGE_HOURS_PAPER = 168.0
 
+# Content freshness: max age in DAYS of the last visible bar via the safe loader.
+# Catches the "file rewritten daily but bars frozen" bug observed 2026-03-27 -> 2026-04-24
+# where mtime stayed fresh while content stalled. Stricter than mtime check.
+MAX_PARQUET_CONTENT_AGE_DAYS_LIVE = 4
+MAX_PARQUET_CONTENT_AGE_DAYS_PAPER = 10
+
 
 @dataclass
 class PreflightCheck:
@@ -149,6 +155,63 @@ def _check_parquet_freshness(
                           message=f"{parquet_path.name} fresh ({age_hours:.1f}h old)")
 
 
+def _check_parquet_content_freshness(
+    parquet_path: Path,
+    max_age_days: int,
+    tag: str,
+) -> PreflightCheck:
+    """Check the AGE of the last visible bar in the parquet (not the file mtime).
+
+    Catches the "file rewritten daily but content stale" bug (legacy ``datetime``
+    column populated with NaT for new rows -> safe loader visible last bar
+    stalls while file mtime stays fresh).
+
+    Severity = critical because a stale content silently corrupts every sleeve
+    that depends on this parquet for the entire stale window.
+    """
+    if not parquet_path.exists():
+        return PreflightCheck(
+            name=f"data_content::{tag}",
+            passed=True,
+            severity="info",
+            message=f"{parquet_path.name} absent (skipped)",
+        )
+    try:
+        from core.data.parquet_safe_loader import parquet_content_age_days
+        age_days = parquet_content_age_days(parquet_path)
+    except Exception as exc:
+        return PreflightCheck(
+            name=f"data_content::{tag}",
+            passed=False,
+            severity="warning",
+            message=f"{parquet_path.name} loader exception: {exc}",
+        )
+    if age_days is None:
+        return PreflightCheck(
+            name=f"data_content::{tag}",
+            passed=False,
+            severity="warning",
+            message=f"{parquet_path.name} empty or unreadable",
+        )
+    if age_days > max_age_days:
+        return PreflightCheck(
+            name=f"data_content::{tag}",
+            passed=False,
+            severity="critical",
+            message=(
+                f"{parquet_path.name} CONTENT STALE: last visible bar "
+                f"{age_days}d old (max {max_age_days}d for {tag}). File "
+                f"mtime can be fresh while bars are frozen — safe loader sees "
+                f"frozen content. Audit refresh script + datetime column."
+            ),
+        )
+    return PreflightCheck(
+        name=f"data_content::{tag}",
+        passed=True,
+        message=f"{parquet_path.name} content fresh (last bar {age_days}d old)",
+    )
+
+
 def _check_ibkr_gateway_tcp(host: str, port: int) -> PreflightCheck:
     """E1: quick TCP probe to IB Gateway. 3s timeout to keep preflight snappy."""
     import socket
@@ -211,18 +274,29 @@ def boot_preflight(
             is_paper = (mode != "live_allowed")
             result.checks.append(_check_equity_state(book_id, is_paper))
 
-    # Data freshness (A5): check the few parquets backing live strategies
+    # Data freshness (A5): check the few parquets backing live strategies.
+    # Two checks per parquet:
+    # 1. mtime freshness (file written recently)
+    # 2. CONTENT freshness via safe loader (last visible bar fresh) — catches the
+    #    "file rewritten but bars frozen" bug observed 2026-03-27 -> 2026-04-24.
     if check_data_freshness:
         critical_parquets = [
-            # (path relative to ROOT, tag, live=True means 48h max)
+            # (path relative to ROOT, tag, live=True means 48h mtime / 4d content max)
             ("data/futures/MES_1D.parquet", "MES_1D", True),
             ("data/futures/MES_LONG.parquet", "MES_LONG", True),
+            ("data/futures/MNQ_1D.parquet", "MNQ_1D", True),
+            ("data/futures/M2K_1D.parquet", "M2K_1D", True),
             ("data/futures/MGC_1D.parquet", "MGC_1D", True),
             ("data/futures/MCL_1D.parquet", "MCL_1D", True),
+            ("data/futures/VIX_1D.parquet", "VIX_1D", True),
         ]
         for rel, tag, is_live in critical_parquets:
             path = ROOT / rel
             max_hours = MAX_PARQUET_AGE_HOURS_LIVE if is_live else MAX_PARQUET_AGE_HOURS_PAPER
+            max_days = (
+                MAX_PARQUET_CONTENT_AGE_DAYS_LIVE if is_live
+                else MAX_PARQUET_CONTENT_AGE_DAYS_PAPER
+            )
             # Skip if file simply doesn't exist yet (fresh install / CI env)
             if not path.exists():
                 result.checks.append(PreflightCheck(
@@ -233,6 +307,7 @@ def boot_preflight(
                 ))
                 continue
             result.checks.append(_check_parquet_freshness(path, max_hours, tag))
+            result.checks.append(_check_parquet_content_freshness(path, max_days, tag))
 
     # IBKR gateway TCP probe (E1)
     if check_ibkr_gateway:

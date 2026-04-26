@@ -50,41 +50,15 @@ _FUTURES_EXCHANGE_MAP: dict[str, str] = {
 def _load_futures_daily_frame(path: Path):
     """Load a daily parquet while preserving a valid DatetimeIndex.
 
-    Root cause fixed 2026-04-25:
-    some refreshed parquet files kept a legacy ``datetime`` column populated
-    with NaT on new rows. The runtime loader was blindly overriding a perfectly
-    valid DatetimeIndex with that stale/NaT column, then dropping the new rows.
-
-    Rule:
-    - keep the existing DatetimeIndex if it is already valid
-    - fall back to ``datetime`` column only when the index is not usable
-    - strip the legacy ``datetime`` column afterwards to avoid future misuse
+    Wrapper conservatif autour du helper canonique
+    ``core.data.parquet_safe_loader.load_daily_parquet_safe``. Garde une fonction
+    locale pour ne pas casser les imports/tests existants, mais delegue toute la
+    logique au module canonique afin de bannir le pattern toxique
+    "datetime legacy override + drop NaT" qui a corrompu silencieusement les
+    decisions desk pendant 2026-03-27 -> 2026-04-24.
     """
-    import pandas as pd
-
-    df = pd.read_parquet(path)
-    df.columns = [c.lower() for c in df.columns]
-
-    has_valid_dt_index = (
-        isinstance(df.index, pd.DatetimeIndex) and df.index.notna().any()
-    )
-    if has_valid_dt_index:
-        pass
-    elif "datetime" in df.columns:
-        df.index = pd.to_datetime(df["datetime"], errors="coerce")
-    else:
-        df.index = pd.to_datetime(df.index, errors="coerce")
-
-    if "datetime" in df.columns:
-        df = df.drop(columns=["datetime"])
-
-    # Cron data_refresh can introduce duplicates / NaT / disorder.
-    # Drop NaT, dedupe (keep last), sort, strip tz before DataFeed validation.
-    df = df[df.index.notna()]
-    df = df[~df.index.duplicated(keep="last")].sort_index()
-    if isinstance(df.index, pd.DatetimeIndex) and df.index.tz is not None:
-        df.index = df.index.tz_localize(None)
-    return df
+    from core.data.parquet_safe_loader import load_daily_parquet_safe
+    return load_daily_parquet_safe(path)
 
 
 def _make_future_contract(symbol: str, currency: str = "USD"):

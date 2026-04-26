@@ -1,0 +1,106 @@
+{
+  "schema_version": 2,
+  "run_id": "wf_gold_trend_mgc_v1_20260426T070136Z",
+  "strategy_id": "gold_trend_mgc",
+  "variant": "v1_sl04_tp08",
+  "source": "scripts/wf_gold_trend_mgc_v1.py",
+  "source_data": "data/futures/MGC_1D.parquet",
+  "finished_at": "2026-04-26T07:01:36.136051+00:00",
+  "params": {
+    "ema_period": 20,
+    "sl_pct": 0.004,
+    "tp_pct": 0.008,
+    "max_hold_days": 10
+  },
+  "spec": {
+    "mult": 10.0,
+    "cost_rt": 2.49
+  },
+  "windows": [
+    {
+      "window": 1,
+      "is_period": "1970-01-01..1970-01-01",
+      "oos_period": "1970-01-01..1970-01-01",
+      "is_n": 10,
+      "is_sharpe": 1.853,
+      "is_total": 301.1,
+      "oos_n": 20,
+      "oos_sharpe": 1.106,
+      "oos_total": 388.2,
+      "oos_profitable": true
+    },
+    {
+      "window": 2,
+      "is_period": "1970-01-01..1970-01-01",
+      "oos_period": "1970-01-01..1970-01-01",
+      "is_n": 25,
+      "is_sharpe": -5.386,
+      "is_total": -1375.33,
+      "oos_n": 31,
+      "oos_sharpe": 0.814,
+      "oos_total": 282.76,
+      "oos_profitable": true
+    },
+    {
+      "window": 3,
+      "is_period": "1970-01-01..1970-01-01",
+      "oos_period": "1970-01-01..1970-01-01",
+      "is_n": 46,
+      "is_sharpe": 0.746,
+      "is_total": 370.71,
+      "oos_n": 44,
+      "oos_sharpe": 1.481,
+      "oos_total": 779.96,
+      "oos_profitable": true
+    },
+    {
+      "window": 4,
+      "is_period": "1970-01-01..1970-01-01",
+      "oos_period": "1970-01-01..1970-01-01",
+      "is_n": 50,
+      "is_sharpe": 1.241,
+      "is_total": 965.91,
+      "oos_n": 40,
+      "oos_sharpe": -1.756,
+      "oos_total": -1101.83,
+      "oos_profitable": false
+    },
+    {
+      "window": 5,
+      "is_period": "1970-01-01..1970-01-01",
+      "oos_period": "1970-01-01..2026-04-23",
+      "is_n": 75,
+      "is_sharpe": 1.756,
+      "is_total": 2568.25,
+      "oos_n": 47,
+      "oos_sharpe": -4.328,
+      "oos_total": -3366.55,
+      "oos_profitable": false
+    }
+  ],
+  "monte_carlo": {
+    "n_sims": 2000,
+    "p_dd_gt_30": 0.925,
+    "p_dd_gt_40": 0.548,
+    "p_dd_gt_50": 0.211,
+    "median_dd": 0.4115
+  },
+  "summary": {
+    "all_trades": {
+      "n": 388,
+      "sharpe": -0.031,
+      "total": -186.82,
+      "wr": 0.33,
+      "max_dd_usd": -4188.41
+    },
+    "windows_pass": 3,
+    "windows_total": 5,
+    "pass_rate": 0.6,
+    "mean_oos_sharpe": -0.537,
+    "total_oos_pnl_usd": -3017.46,
+    "dsr_pvalue": 0.515432,
+    "mc_p_dd_gt_30": 0.925,
+    "grade": "REJECTED",
+    "verdict": "REJECTED"
+  }
+}

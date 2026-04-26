@@ -1,0 +1,255 @@
+{
+  "CAM": {
+    "n_divergent_days_simulated": 11,
+    "total_pnl_diff_stale_minus_fresh_usd": -519.0,
+    "interpretation": "Negatif = stale CAM aurait perdu vs fresh; Positif = stale CAM aurait gagne plus vs fresh.",
+    "daily": [
+      {
+        "date": "2026-03-31",
+        "stale_pick": null,
+        "fresh_pick": "MCL",
+        "stale_overnight_pnl": 0.0,
+        "fresh_overnight_pnl": -126.0,
+        "missed_or_gained_by_stale": 126.0
+      },
+      {
+        "date": "2026-04-01",
+        "stale_pick": null,
+        "fresh_pick": "MCL",
+        "stale_overnight_pnl": 0.0,
+        "fresh_overnight_pnl": 1142.0,
+        "missed_or_gained_by_stale": -1142.0
+      },
+      {
+        "date": "2026-04-02",
+        "stale_pick": null,
+        "fresh_pick": "MCL",
+        "stale_overnight_pnl": 0.0,
+        "fresh_overnight_pnl": 87.0,
+        "missed_or_gained_by_stale": -87.0
+      },
+      {
+        "date": "2026-04-03",
+        "stale_pick": null,
+        "fresh_pick": "MCL",
+        "stale_overnight_pnl": 0.0,
+        "fresh_overnight_pnl": 0.0,
+        "missed_or_gained_by_stale": 0.0
+      },
+      {
+        "date": "2026-04-06",
+        "stale_pick": null,
+        "fresh_pick": "MCL",
+        "stale_overnight_pnl": 0.0,
+        "fresh_overnight_pnl": 54.0,
+        "missed_or_gained_by_stale": -54.0
+      },
+      {
+        "date": "2026-04-07",
+        "stale_pick": null,
+        "fresh_pick": "MCL",
+        "stale_overnight_pnl": 0.0,
+        "fresh_overnight_pnl": -1854.0,
+        "missed_or_gained_by_stale": 1854.0
+      },
+      {
+        "date": "2026-04-08",
+        "stale_pick": null,
+        "fresh_pick": "MCL",
+        "stale_overnight_pnl": 0.0,
+        "fresh_overnight_pnl": 346.0,
+        "missed_or_gained_by_stale": -346.0
+      },
+      {
+        "date": "2026-04-09",
+        "stale_pick": "M2K",
+        "fresh_pick": "MCL",
+        "stale_overnight_pnl": -36.0,
+        "fresh_overnight_pnl": -130.0,
+        "missed_or_gained_by_stale": 94.0
+      },
+      {
+        "date": "2026-04-10",
+        "stale_pick": "M2K",
+        "fresh_pick": "MCL",
+        "stale_overnight_pnl": 189.5,
+        "fresh_overnight_pnl": 251.0,
+        "missed_or_gained_by_stale": -61.5
+      },
+      {
+        "date": "2026-04-23",
+        "stale_pick": "M2K",
+        "fresh_pick": "MNQ",
+        "stale_overnight_pnl": 92.5,
+        "fresh_overnight_pnl": 995.0,
+        "missed_or_gained_by_stale": -902.5
+      },
+      {
+        "date": "2026-04-24",
+        "stale_pick": "M2K",
+        "fresh_pick": "MNQ",
+        "stale_overnight_pnl": 0.0,
+        "fresh_overnight_pnl": 0.0,
+        "missed_or_gained_by_stale": 0.0
+      }
+    ]
+  },
+  "GOR": {
+    "n_divergent_days": 13,
+    "total_missed_usd": -2806.0,
+    "interpretation": "Manque a gagner si GOR avait pu switch (signal vivant) vers fresh_pick. GOR signal dormant -> en pratique, le worker n'a pas tenu de position GOR pendant la fenetre. Borne sup\u00e9rieure du manque a gagner.",
+    "daily": [
+      {
+        "date": "2026-03-31",
+        "stale": "MGC",
+        "fresh": "MCL",
+        "stale_pnl_usd": 1356.0,
+        "fresh_pnl_usd": -126.0,
+        "missed_by_stale_usd": -1482.0
+      },
+      {
+        "date": "2026-04-01",
+        "stale": "MGC",
+        "fresh": "MCL",
+        "stale_pnl_usd": -1317.0,
+        "fresh_pnl_usd": 1142.0,
+        "missed_by_stale_usd": 2459.0
+      },
+      {
+        "date": "2026-04-02",
+        "stale": "MGC",
+        "fresh": "MCL",
+        "stale_pnl_usd": 53.0,
+        "fresh_pnl_usd": 87.0,
+        "missed_by_stale_usd": 34.0
+      },
+      {
+        "date": "2026-04-03",
+        "stale": "MGC",
+        "fresh": "MCL",
+        "stale_pnl_usd": 0.0,
+        "fresh_pnl_usd": 0.0,
+        "missed_by_stale_usd": 0.0
+      },
+      {
+        "date": "2026-04-06",
+        "stale": "MGC",
+        "fresh": "MCL",
+        "stale_pnl_usd": 3.0,
+        "fresh_pnl_usd": 54.0,
+        "missed_by_stale_usd": 51.0
+      },
+      {
+        "date": "2026-04-07",
+        "stale": "MGC",
+        "fresh": "MCL",
+        "stale_pnl_usd": 924.0,
+        "fresh_pnl_usd": -1854.0,
+        "missed_by_stale_usd": -2778.0
+      },
+      {
+        "date": "2026-04-08",
+        "stale": "MGC",
+        "fresh": "MCL",
+        "stale_pnl_usd": 427.0,
+        "fresh_pnl_usd": 346.0,
+        "missed_by_stale_usd": -81.0
+      },
+      {
+        "date": "2026-04-09",
+        "stale": "MGC",
+        "fresh": "MCL",
+        "stale_pnl_usd": -303.0,
+        "fresh_pnl_usd": -130.0,
+        "missed_by_stale_usd": 173.0
+      },
+      {
+        "date": "2026-04-10",
+        "stale": "MGC",
+        "fresh": "MCL",
+        "stale_pnl_usd": -195.0,
+        "fresh_pnl_usd": 251.0,
+        "missed_by_stale_usd": 446.0
+      },
+      {
+        "date": "2026-04-13",
+        "stale": "MGC",
+        "fresh": "MCL",
+        "stale_pnl_usd": 826.0,
+        "fresh_pnl_usd": -780.0,
+        "missed_by_stale_usd": -1606.0
+      },
+      {
+        "date": "2026-04-14",
+        "stale": "MGC",
+        "fresh": "MCL",
+        "stale_pnl_usd": -110.0,
+        "fresh_pnl_usd": 9.0,
+        "missed_by_stale_usd": 119.0
+      },
+      {
+        "date": "2026-04-15",
+        "stale": "MGC",
+        "fresh": "MCL",
+        "stale_pnl_usd": -31.0,
+        "fresh_pnl_usd": -172.0,
+        "missed_by_stale_usd": -141.0
+      },
+      {
+        "date": "2026-04-24",
+        "stale": "MGC",
+        "fresh": "MCL",
+        "stale_pnl_usd": 0.0,
+        "fresh_pnl_usd": 0.0,
+        "missed_by_stale_usd": 0.0
+      }
+    ]
+  },
+  "gold_trend_mgc": {
+    "n_missed_long_days": 10,
+    "total_missed_paper_pnl_usd": -286.0,
+    "interpretation": "PnL paper hypothetique manque par gold_trend_mgc (long-only, 1 contract MGC). Pas de PnL reel: sleeve paper_only.",
+    "daily": [
+      {
+        "date": "2026-04-02",
+        "missed_long_pnl_usd": 53.0
+      },
+      {
+        "date": "2026-04-09",
+        "missed_long_pnl_usd": -303.0
+      },
+      {
+        "date": "2026-04-10",
+        "missed_long_pnl_usd": -195.0
+      },
+      {
+        "date": "2026-04-13",
+        "missed_long_pnl_usd": 826.0
+      },
+      {
+        "date": "2026-04-14",
+        "missed_long_pnl_usd": -110.0
+      },
+      {
+        "date": "2026-04-15",
+        "missed_long_pnl_usd": -31.0
+      },
+      {
+        "date": "2026-04-16",
+        "missed_long_pnl_usd": 385.0
+      },
+      {
+        "date": "2026-04-17",
+        "missed_long_pnl_usd": -84.0
+      },
+      {
+        "date": "2026-04-20",
+        "missed_long_pnl_usd": -1025.0
+      },
+      {
+        "date": "2026-04-21",
+        "missed_long_pnl_usd": 198.0
+      }
+    ]
+  }
+}
