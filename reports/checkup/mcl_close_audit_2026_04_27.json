@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-04-27T17:45:57.509958+00:00",
+  "decision": "Marc 2026-04-27 option C \u2014 fermer position nue MCLZ6",
+  "account": "U25023333",
+  "action": "SELL_MARKET_CLOSE",
+  "symbol": "MCLZ6",
+  "qty_closed": 1,
+  "fill_price": 78.32,
+  "status": "Filled",
+  "context": "Position nue (bracket SL/TP disparu entre 07:08 UTC et 17:30 UTC), kill switch live arm\u00e9 depuis 24/04 14:49 UTC. Fermeture preventive."
+}
