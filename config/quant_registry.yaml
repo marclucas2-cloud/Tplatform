@@ -55,11 +55,11 @@ strategies:
     status: live_core
     paper_start_at: null
     live_start_at: "2026-04-07"
-    wf_manifest_path: data/research/wf_manifests/cross_asset_momentum_2026-04-19_backfill.json
-    grade: A
-    last_wf_run_at: "2026-04-19"
+    wf_manifest_path: data/research/wf_manifests/cross_asset_momentum_runtime48h_2026-04-27.json
+    grade: B
+    last_wf_run_at: "2026-04-27"
     is_live: true
-    infra_gaps: []
+    infra_gaps: ["front_month_proxy_vs_deferred_contract_mcl", "broker_bracket_disappearance_root_cause_pending"]
 
   - strategy_id: gold_oil_rotation
     book: ibkr_futures
@@ -77,12 +77,12 @@ strategies:
     status: paper_only
     paper_start_at: "2026-04-16"
     live_start_at: null
-    wf_manifest_path: data/research/wf_manifests/gold_trend_mgc_v1_2026-04-19.json
-    grade: A
-    last_wf_run_at: "2026-04-19"
+    wf_manifest_path: data/research/wf_manifests/gold_trend_mgc_v1_2026-04-26.json
+    grade: REJECTED
+    last_wf_run_at: "2026-04-26"
     is_live: false
     infra_gaps: []
-    notes: "B2 iter3: WF V1 livre (4/5 OOS, mean Sharpe 2.625, MC P(DD>30%)=0.15%, DSR p=0.0003). Grade A. Paper 30j start 2026-04-16, earliest promotion live 2026-05-16."
+    notes: "Fresh-data revalidation 2026-04-26: strategy no longer holds its previous A-grade. Current manifest shows Sharpe -0.03, total OOS pnl negative, MC P(DD>30%)=92.5%. Keep as paper dossier only until a new hypothesis is validated."
 
   - strategy_id: mes_monday_long_oc
     book: ibkr_futures

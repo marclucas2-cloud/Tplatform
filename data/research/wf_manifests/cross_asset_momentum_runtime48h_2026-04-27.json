@@ -1,0 +1,114 @@
+{
+  "schema_version": 2,
+  "run_id": "cam_runtime48h_2026-04-27",
+  "strategy_id": "cross_asset_momentum",
+  "variant": "runtime_48h_with_bracket",
+  "source": "scripts/research/cam_runtime_reality_2026_04_27.py",
+  "source_data": "data/futures/{MES,MNQ,M2K,MGC,MCL}_1D.parquet",
+  "finished_at": "2026-04-27T19:18:27.966499+00:00",
+  "params": {
+    "universe": [
+      "MES",
+      "MNQ",
+      "M2K",
+      "MGC",
+      "MCL"
+    ],
+    "lookback_days": 20,
+    "min_momentum": 0.02,
+    "rebal_days": 20,
+    "stop_loss_pct": 0.03,
+    "take_profit_pct": 0.08,
+    "cost_bps_round_trip": 5,
+    "entry_model": "same_day_close_proxy_for_cycle_fill",
+    "assumed_runtime_exit_cap_hours": 48,
+    "classification_windows": 5
+  },
+  "windows": [
+    {
+      "window": 1,
+      "period": "2021-01-04..2022-01-18",
+      "n": 12,
+      "sharpe": 1.3,
+      "total_return_pct": 7.08,
+      "profitable": true
+    },
+    {
+      "window": 2,
+      "period": "2022-01-19..2023-02-03",
+      "n": 12,
+      "sharpe": 0.38,
+      "total_return_pct": 3.4,
+      "profitable": true
+    },
+    {
+      "window": 3,
+      "period": "2023-02-06..2024-02-22",
+      "n": 13,
+      "sharpe": -0.67,
+      "total_return_pct": -2.87,
+      "profitable": false
+    },
+    {
+      "window": 4,
+      "period": "2024-02-23..2025-03-11",
+      "n": 13,
+      "sharpe": 0.05,
+      "total_return_pct": 0.12,
+      "profitable": true
+    },
+    {
+      "window": 5,
+      "period": "2025-03-12..2026-03-26",
+      "n": 13,
+      "sharpe": 0.82,
+      "total_return_pct": 6.43,
+      "profitable": true
+    }
+  ],
+  "summary": {
+    "windows_pass": 4,
+    "windows_total": 5,
+    "pass_rate": 0.8,
+    "median_sharpe": 0.38,
+    "grade": "B",
+    "verdict": "VALIDATED",
+    "num_trades": 64,
+    "win_rate_pct": 59.4,
+    "sharpe": 0.52,
+    "cagr_pct": 3.27,
+    "max_drawdown_pct": 9.78,
+    "exit_counts": {
+      "TIME_48H": 57,
+      "SL": 6,
+      "TP": 1
+    },
+    "per_symbol_exit_counts": {
+      "M2K": {
+        "SL": 0,
+        "TIME_48H": 6,
+        "TP": 0
+      },
+      "MCL": {
+        "SL": 5,
+        "TIME_48H": 15,
+        "TP": 1
+      },
+      "MES": {
+        "SL": 0,
+        "TIME_48H": 2,
+        "TP": 0
+      },
+      "MGC": {
+        "SL": 1,
+        "TIME_48H": 17,
+        "TP": 0
+      },
+      "MNQ": {
+        "SL": 0,
+        "TIME_48H": 17,
+        "TP": 0
+      }
+    }
+  }
+}

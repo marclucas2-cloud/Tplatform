@@ -28,7 +28,7 @@ ibkr_futures:
   status: live_core
   runtime_entrypoint: worker.py:_run_futures_cycle (bloc STRATS LIVE CAPABLE)
   runtime_module: strategies_v2.futures.cross_asset_momentum.CrossAssetMomentum
-  wf_source: scripts/wf_ib_portfolio.py (5 windows, 4/5 OOS profitable)
+  wf_source: data/research/wf_manifests/cross_asset_momentum_runtime48h_2026-04-27.json
   sizing_policy: risk_budget_5pct
   max_risk_usd: 500
   priority: first_refusal
@@ -38,20 +38,29 @@ ibkr_futures:
   - M2K
   - MGC
   - MCL
-  holding_period_days: 20
+  holding_period_days: 2
+  runtime_exit_cap_hours: 48
   rebalance_cadence_days: 20
   min_momentum_pct: 0.02
   kill_criteria:
   - 5 consecutive losses
   - rolling 90d Sharpe < -0.5
   - DD depuis peak > 35%
-  notes: 'Rotate meilleur de MES/MNQ/M2K/MGC/MCL sur 20d momentum.
+  notes: 'Desk decision 2026-04-27: CAM is now treated as a 48h runtime product,
 
-    Backtest 10Y Sharpe 0.85, corr MES 0.003. First-refusal sur
+    not as the original 20-day hold product. Fresh-data runtime replay with
 
-    ses symboles preferes via cam_top_pick() (bloque gold_trend
+    the current 48h cap + nominal 3%/8% bracket: 64 trades, Sharpe 0.52,
 
-    et gold_oil si CAM voudrait le meme symbole).
+    CAGR 3.27%, MaxDD 9.78%, exits = 57 TIME_48H / 6 SL / 1 TP, 4/5
+
+    chronological windows profitable. Grade reclassified to B in quant_registry.
+
+    First-refusal logic on preferred symbols remains unchanged. Remaining
+
+    analytical debt: front-month CL=F proxy vs deferred MCL contract, plus
+
+    root-cause analysis of the broker bracket disappearance on 2026-04-27.
 
     '
 - strategy_id: gold_trend_mgc

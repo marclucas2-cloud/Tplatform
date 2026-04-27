@@ -1,0 +1,24 @@
+{
+  "generated_from": "broker confirmation relayed in thread on 2026-04-27",
+  "account": "U25023333",
+  "symbol": "MCLZ6",
+  "action": "SELL",
+  "order_type": "Market",
+  "time_in_force": "DAY",
+  "outside_rth": true,
+  "quantity": 1,
+  "status": "Filled",
+  "fill_time_utc": "2026-04-27 17:45:47 UTC",
+  "fill_price": 78.32,
+  "entry_avg_cost": 77.4677,
+  "gross_pnl_usd": 85.23,
+  "estimated_commissions_usd": 1.24,
+  "estimated_net_pnl_usd": 84.0,
+  "perm_id": 722493237,
+  "post_trade_account_state": {
+    "all_symbols_flat": true,
+    "local_state_synced_empty": true,
+    "kill_switch_live_still_armed": true
+  },
+  "reasoning": "Closed a naked live MCL position after broker-side bracket disappeared."
+}

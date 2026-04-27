@@ -1,0 +1,330 @@
+{
+  "generated_at": "2026-04-27T19:18:27.966499+00:00",
+  "period": {
+    "start": "2021-01-04",
+    "end": "2026-03-30",
+    "years": 5.23
+  },
+  "params": {
+    "universe": [
+      "MES",
+      "MNQ",
+      "M2K",
+      "MGC",
+      "MCL"
+    ],
+    "lookback_days": 20,
+    "min_momentum": 0.02,
+    "rebal_days": 20,
+    "stop_loss_pct": 0.03,
+    "take_profit_pct": 0.08,
+    "cost_bps_round_trip": 5,
+    "entry_model": "same_day_close_proxy_for_cycle_fill"
+  },
+  "variants": {
+    "intended_20d": {
+      "summary": {
+        "num_trades": 62,
+        "win_rate_pct": 54.8,
+        "sharpe": 1.37,
+        "cagr_pct": 22.82,
+        "max_drawdown_pct": 17.64,
+        "exit_counts": {
+          "SL": 28,
+          "TP": 18,
+          "REBAL": 16
+        },
+        "per_symbol_exit_counts": {
+          "M2K": {
+            "REBAL": 0,
+            "SL": 6,
+            "TP": 0
+          },
+          "MCL": {
+            "REBAL": 1,
+            "SL": 14,
+            "TP": 9
+          },
+          "MGC": {
+            "REBAL": 5,
+            "SL": 3,
+            "TP": 7
+          },
+          "MNQ": {
+            "REBAL": 10,
+            "SL": 5,
+            "TP": 2
+          }
+        }
+      },
+      "sample_trades": [
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-03",
+          "exit_date": "2021-02-16",
+          "bars_held": 8,
+          "entry_price": 55.69,
+          "exit_price": 60.1452,
+          "exit_reason": "TP",
+          "net_return_pct": 7.95
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-04",
+          "exit_date": "2021-03-18",
+          "bars_held": 10,
+          "entry_price": 63.83,
+          "exit_price": 61.9151,
+          "exit_reason": "SL",
+          "net_return_pct": -3.05
+        },
+        {
+          "symbol": "MNQ",
+          "entry_date": "2021-04-01",
+          "exit_date": "2021-04-30",
+          "bars_held": 20,
+          "entry_price": 13316.0,
+          "exit_price": 13850.0,
+          "exit_reason": "REBAL",
+          "net_return_pct": 3.9602
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-05-03",
+          "exit_date": "2021-05-19",
+          "bars_held": 12,
+          "entry_price": 64.49,
+          "exit_price": 62.5553,
+          "exit_reason": "SL",
+          "net_return_pct": -3.05
+        },
+        {
+          "symbol": "MGC",
+          "entry_date": "2021-06-01",
+          "exit_date": "2021-06-16",
+          "bars_held": 11,
+          "entry_price": 1902.9,
+          "exit_price": 1845.813,
+          "exit_reason": "SL",
+          "net_return_pct": -3.05
+        }
+      ]
+    },
+    "runtime_48h": {
+      "summary": {
+        "num_trades": 64,
+        "win_rate_pct": 59.4,
+        "sharpe": 0.28,
+        "cagr_pct": 1.54,
+        "max_drawdown_pct": 13.3,
+        "exit_counts": {
+          "TIME_48H": 64
+        },
+        "per_symbol_exit_counts": {
+          "M2K": {
+            "TIME_48H": 6
+          },
+          "MCL": {
+            "TIME_48H": 21
+          },
+          "MES": {
+            "TIME_48H": 2
+          },
+          "MGC": {
+            "TIME_48H": 18
+          },
+          "MNQ": {
+            "TIME_48H": 17
+          }
+        }
+      },
+      "sample_trades": [
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-03",
+          "exit_date": "2021-02-05",
+          "bars_held": 2,
+          "entry_price": 55.69,
+          "exit_price": 56.46,
+          "exit_reason": "TIME_48H",
+          "net_return_pct": 1.3327
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-04",
+          "exit_date": "2021-03-08",
+          "bars_held": 2,
+          "entry_price": 63.83,
+          "exit_price": 66.68,
+          "exit_reason": "TIME_48H",
+          "net_return_pct": 4.415
+        },
+        {
+          "symbol": "MNQ",
+          "entry_date": "2021-04-01",
+          "exit_date": "2021-04-05",
+          "bars_held": 1,
+          "entry_price": 13316.0,
+          "exit_price": 13339.0,
+          "exit_reason": "TIME_48H",
+          "net_return_pct": 0.1227
+        },
+        {
+          "symbol": "MES",
+          "entry_date": "2021-04-30",
+          "exit_date": "2021-05-03",
+          "bars_held": 1,
+          "entry_price": 4174.5,
+          "exit_price": 4181.5,
+          "exit_reason": "TIME_48H",
+          "net_return_pct": 0.1177
+        },
+        {
+          "symbol": "MGC",
+          "entry_date": "2021-05-28",
+          "exit_date": "2021-06-01",
+          "bars_held": 1,
+          "entry_price": 1902.5,
+          "exit_price": 1905.1,
+          "exit_reason": "TIME_48H",
+          "net_return_pct": 0.0867
+        }
+      ]
+    },
+    "runtime_48h_with_bracket": {
+      "summary": {
+        "num_trades": 64,
+        "win_rate_pct": 59.4,
+        "sharpe": 0.52,
+        "cagr_pct": 3.27,
+        "max_drawdown_pct": 9.78,
+        "exit_counts": {
+          "TIME_48H": 57,
+          "SL": 6,
+          "TP": 1
+        },
+        "per_symbol_exit_counts": {
+          "M2K": {
+            "SL": 0,
+            "TIME_48H": 6,
+            "TP": 0
+          },
+          "MCL": {
+            "SL": 5,
+            "TIME_48H": 15,
+            "TP": 1
+          },
+          "MES": {
+            "SL": 0,
+            "TIME_48H": 2,
+            "TP": 0
+          },
+          "MGC": {
+            "SL": 1,
+            "TIME_48H": 17,
+            "TP": 0
+          },
+          "MNQ": {
+            "SL": 0,
+            "TIME_48H": 17,
+            "TP": 0
+          }
+        }
+      },
+      "sample_trades": [
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-03",
+          "exit_date": "2021-02-05",
+          "bars_held": 2,
+          "entry_price": 55.69,
+          "exit_price": 56.46,
+          "exit_reason": "TIME_48H",
+          "net_return_pct": 1.3327
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-04",
+          "exit_date": "2021-03-08",
+          "bars_held": 2,
+          "entry_price": 63.83,
+          "exit_price": 66.68,
+          "exit_reason": "TIME_48H",
+          "net_return_pct": 4.415
+        },
+        {
+          "symbol": "MNQ",
+          "entry_date": "2021-04-01",
+          "exit_date": "2021-04-05",
+          "bars_held": 1,
+          "entry_price": 13316.0,
+          "exit_price": 13339.0,
+          "exit_reason": "TIME_48H",
+          "net_return_pct": 0.1227
+        },
+        {
+          "symbol": "MES",
+          "entry_date": "2021-04-30",
+          "exit_date": "2021-05-03",
+          "bars_held": 1,
+          "entry_price": 4174.5,
+          "exit_price": 4181.5,
+          "exit_reason": "TIME_48H",
+          "net_return_pct": 0.1177
+        },
+        {
+          "symbol": "MGC",
+          "entry_date": "2021-05-28",
+          "exit_date": "2021-06-01",
+          "bars_held": 1,
+          "entry_price": 1902.5,
+          "exit_price": 1905.1,
+          "exit_reason": "TIME_48H",
+          "net_return_pct": 0.0867
+        }
+      ],
+      "windows": [
+        {
+          "window": 1,
+          "period": "2021-01-04..2022-01-18",
+          "n": 12,
+          "sharpe": 1.3,
+          "total_return_pct": 7.08,
+          "profitable": true
+        },
+        {
+          "window": 2,
+          "period": "2022-01-19..2023-02-03",
+          "n": 12,
+          "sharpe": 0.38,
+          "total_return_pct": 3.4,
+          "profitable": true
+        },
+        {
+          "window": 3,
+          "period": "2023-02-06..2024-02-22",
+          "n": 13,
+          "sharpe": -0.67,
+          "total_return_pct": -2.87,
+          "profitable": false
+        },
+        {
+          "window": 4,
+          "period": "2024-02-23..2025-03-11",
+          "n": 13,
+          "sharpe": 0.05,
+          "total_return_pct": 0.12,
+          "profitable": true
+        },
+        {
+          "window": 5,
+          "period": "2025-03-12..2026-03-26",
+          "n": 13,
+          "sharpe": 0.82,
+          "total_return_pct": 6.43,
+          "profitable": true
+        }
+      ]
+    }
+  }
+}
