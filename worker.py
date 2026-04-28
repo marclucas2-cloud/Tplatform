@@ -2311,7 +2311,13 @@ def run_live_risk_cycle():
                         time.sleep(1)
 
                         _real_pos = {p.contract.symbol: p for p in _sl_ib.positions()}
-                        _open_trades = list(_sl_ib.openTrades())
+                        # Use reqAllOpenOrders() so this check can see bracket legs placed
+                        # by other clientIds on the same IBKR session. openTrades() only
+                        # exposes orders owned by the current client and caused false
+                        # "no broker-side stop visible" warnings on paper fills.
+                        _open_trades = list(_sl_ib.reqAllOpenOrders() or [])
+                        if not _open_trades:
+                            _open_trades = list(_sl_ib.openTrades())
                         _portfolio = list(_sl_ib.portfolio())
 
                         for _ps, _pi in list(_fut_pos.items()):
@@ -2875,13 +2881,35 @@ def run_crypto_cycle():
             _ks_age_h = 0
             if risk_mgr.kill_switch._trigger_time:
                 _ks_age_h = (datetime.now(UTC) - risk_mgr.kill_switch._trigger_time).total_seconds() / 3600
-            if _ks_age_h > 24:
+            _derived_from_live = (
+                kill_reason.startswith("live_kill_")
+                or kill_reason.startswith("emergency_LEVEL_")
+            )
+            _live_ks_inactive = False
+            if _derived_from_live:
+                try:
+                    from core.kill_switch_live import LiveKillSwitch
+                    _live_ks_inactive = not LiveKillSwitch().is_active
+                except Exception:
+                    _live_ks_inactive = False
+            if _derived_from_live and _live_ks_inactive:
+                logger.warning(
+                    "CRYPTO KILL SWITCH AUTO-RESET: inherited from live incident "
+                    f"and live kill switch is now inactive — reason was: {kill_reason}"
+                )
+                risk_mgr.kill_switch.reset(_authorized_by="live_kill_reset_sync")
+                _send_alert(
+                    f"CRYPTO KILL SWITCH AUTO-RESET (live reset sync)\n"
+                    f"Reason was: {kill_reason}\n"
+                    f"Trading crypto reprend.",
+                    level="warning",
+                )
+            elif _ks_age_h > 24:
                 logger.warning(
                     f"CRYPTO KILL SWITCH AUTO-RESET: active {_ks_age_h:.0f}h "
                     f"(>{24}h) — reason was: {kill_reason}"
                 )
-                risk_mgr.kill_switch._active = False
-                risk_mgr.kill_switch._save_persisted_state()
+                risk_mgr.kill_switch.reset(_authorized_by="age_gt_24h_auto_reset")
                 _send_alert(
                     f"KILL SWITCH AUTO-RESET ({_ks_age_h:.0f}h old)\n"
                     f"Reason was: {kill_reason}\n"

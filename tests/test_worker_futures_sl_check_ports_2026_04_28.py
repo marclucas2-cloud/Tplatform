@@ -28,3 +28,8 @@ def test_sl_check_uses_canonical_future_contract_factory():
     src = (ROOT / "worker.py").read_text(encoding="utf-8")
     assert "from core.worker.cycles.futures_runner import _make_future_contract as _sl_make_future_contract" in src
     assert "_contract = _sl_make_future_contract(_ps)" in src
+
+
+def test_sl_check_reads_all_open_orders_not_only_current_client():
+    src = (ROOT / "worker.py").read_text(encoding="utf-8")
+    assert "_sl_ib.reqAllOpenOrders()" in src
