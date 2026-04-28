@@ -83,6 +83,65 @@ def _ensure_live_dd_baseline(current_equity: float) -> float:
         return current_equity
 
 
+def _load_cached_live_equity_snapshot(max_age_minutes: float = 30.0) -> dict | None:
+    """Return a fresh cached IBKR live equity snapshot if available.
+
+    Why this exists:
+    - `run_live_risk_cycle()` historically fell back to config capital (`$10k`)
+      when the IBKR account snapshot was temporarily unavailable.
+    - With a real daily baseline around `$11.3k`, that fabricated a false
+      `-11.39%` daily loss and armed the live kill switch.
+
+    Behavior:
+    - Prefer canonical `data/state/ibkr_futures/equity_state.json`
+    - Fallback to legacy `data/state/ibkr_equity.json`
+    - Accept only positive equity with a fresh timestamp or file mtime
+    - Return `None` if no reliable cached snapshot exists
+    """
+    state_paths = [
+        ROOT / "data" / "state" / "ibkr_futures" / "equity_state.json",
+        ROOT / "data" / "state" / "ibkr_equity.json",
+    ]
+    now = datetime.now(UTC)
+
+    for path in state_paths:
+        if not path.exists():
+            continue
+        try:
+            payload = json.loads(path.read_text(encoding="utf-8"))
+            equity = float(payload.get("equity", 0) or 0)
+            if equity <= 0:
+                continue
+
+            cash = float(payload.get("cash", equity) or equity)
+            updated_raw = payload.get("updated_at")
+            if updated_raw:
+                updated_at = datetime.fromisoformat(updated_raw.replace("Z", "+00:00"))
+            else:
+                updated_at = datetime.fromtimestamp(path.stat().st_mtime, tz=UTC)
+
+            age_minutes = (now - updated_at).total_seconds() / 60.0
+            if age_minutes > max_age_minutes:
+                logger.warning(
+                    f"Cached IBKR equity snapshot stale ({path.name}, age={age_minutes:.1f} min) "
+                    f"— ignoring for live risk"
+                )
+                continue
+
+            return {
+                "equity": equity,
+                "cash": cash,
+                "currency": payload.get("currency", "USD"),
+                "updated_at": updated_at.isoformat(),
+                "age_minutes": age_minutes,
+                "path": str(path),
+            }
+        except Exception as exc:
+            logger.warning(f"_load_cached_live_equity_snapshot: {path.name} unreadable — {exc}")
+
+    return None
+
+
 @lru_cache(maxsize=1)
 def _disabled_whitelist_strategy_ids() -> frozenset[str]:
     """Retourne le set des canonical strategy_id au status=disabled dans
@@ -1891,9 +1950,16 @@ def run_live_risk_cycle():
 
         risk_mgr = LiveRiskManager()
 
-        # Build portfolio snapshot from IBKR (or skip if not connected)
-        # For now, use a lightweight check that doesn't require full TradingEngine
-        portfolio = {"equity": risk_mgr.capital, "positions": [], "cash": risk_mgr.capital}
+        # Build portfolio snapshot from IBKR (or fail over to a fresh cached
+        # equity snapshot). NEVER use config capital as if it were live equity:
+        # that can fabricate a false daily DD and arm the kill switch.
+        portfolio = {
+            "equity": 0.0,
+            "positions": [],
+            "cash": 0.0,
+            "margin_used_pct": 0.0,
+            "snapshot_source": "none",
+        }
 
         try:
             # Try to get real portfolio from IBKR (always try, not gated by env var)
@@ -1912,11 +1978,37 @@ def run_live_risk_cycle():
                     "cash": float(account.get("cash", risk_mgr.capital)),
                     "positions": positions,
                     "margin_used_pct": float(account.get("margin_used_pct", 0)),
+                    "snapshot_source": "api",
                 }
             finally:
                 _risk_ibkr.disconnect()
         except Exception as e:
-            logger.info(f"Live risk cycle: IBKR unavailable ({e}), using config capital")
+            logger.info(f"Live risk cycle: IBKR unavailable ({e}), trying cached equity snapshot")
+
+        if float(portfolio.get("equity", 0) or 0) <= 0:
+            _cached_snapshot = _load_cached_live_equity_snapshot(max_age_minutes=30.0)
+            if _cached_snapshot:
+                portfolio = {
+                    "equity": float(_cached_snapshot["equity"]),
+                    "cash": float(_cached_snapshot["cash"]),
+                    "positions": [],
+                    "margin_used_pct": 0.0,
+                    "snapshot_source": "cache",
+                }
+                logger.warning(
+                    "Live risk cycle: using cached IBKR equity snapshot "
+                    f"(${portfolio['equity']:.2f}, age={_cached_snapshot['age_minutes']:.1f} min)"
+                )
+            else:
+                logger.warning(
+                    "Live risk cycle: no reliable IBKR equity snapshot available — "
+                    "skipping numeric live risk checks to avoid false kill switch"
+                )
+                _log_event("warning", "live_risk_cycle", {
+                    "reason": "missing_live_equity_snapshot",
+                    "snapshot_source": "none",
+                })
+                return
 
         # FIX: update risk manager capital from live equity
         equity_live = portfolio.get("equity", risk_mgr.capital)
@@ -1929,6 +2021,13 @@ def run_live_risk_cycle():
         daily_start_equity = _ensure_live_dd_baseline(equity)
 
         daily_pnl_pct = (equity - daily_start_equity) / daily_start_equity if daily_start_equity > 0 else 0
+        logger.info(
+            "LIVE RISK SNAPSHOT: source=%s equity=$%.2f baseline=$%.2f daily_pnl=%.2f%%",
+            portfolio.get("snapshot_source", "unknown"),
+            equity,
+            daily_start_equity,
+            daily_pnl_pct * 100,
+        )
 
         # Run all risk checks
         risk_result = risk_mgr.check_all_limits(
@@ -2157,135 +2256,154 @@ def run_live_risk_cycle():
         # --- SOFTWARE SL/TP for futures positions ---
         # IBKR presets kill GTC orders on futures. This is the backup.
         # Check both live and paper state files
-        _fut_pos = {}
-        for _sfx in ("live", "paper"):
-            _fsp = ROOT / "data" / "state" / f"futures_positions_{_sfx}.json"
+        try:
+            _state_by_mode: dict[str, dict] = {}
+            for _sfx in ("live", "paper"):
+                _fsp = ROOT / "data" / "state" / f"futures_positions_{_sfx}.json"
+                try:
+                    if _fsp.exists():
+                        _loaded = json.loads(_fsp.read_text(encoding="utf-8"))
+                        if isinstance(_loaded, dict) and _loaded:
+                            _state_by_mode[_sfx] = _loaded
+                except Exception:
+                    pass
+
+            # Legacy file migration fallback: route by embedded mode, default live.
+            _legacy_state_path = ROOT / "data" / "state" / "futures_positions.json"
             try:
-                if _fsp.exists():
-                    _fut_pos.update(json.loads(_fsp.read_text(encoding="utf-8")))
+                if _legacy_state_path.exists():
+                    _legacy = json.loads(_legacy_state_path.read_text(encoding="utf-8"))
+                    if isinstance(_legacy, dict):
+                        for _sym, _meta in _legacy.items():
+                            _mode_key = str(_meta.get("mode", "LIVE")).lower()
+                            _mode_key = "paper" if _mode_key == "paper" else "live"
+                            _state_by_mode.setdefault(_mode_key, {})
+                            _state_by_mode[_mode_key].setdefault(_sym, _meta)
             except Exception:
                 pass
-        # Also check legacy file for migration
-        _fut_state_path = ROOT / "data" / "state" / "futures_positions.json"
-        try:
-            if _fut_state_path.exists():
-                _legacy = json.loads(_fut_state_path.read_text(encoding="utf-8"))
-                for k, v in _legacy.items():
-                    if k not in _fut_pos:
-                        _fut_pos[k] = v
-        except Exception:
-            pass
-        try:
-            if _fut_pos:
-                    import socket as _sl_sock
-                    _ibkr_host = os.getenv("IBKR_HOST", "127.0.0.1")
-                    _ibkr_port = int(os.getenv("IBKR_PORT", "4002"))
+
+            if _state_by_mode:
+                import socket as _sl_sock
+                from ib_insync import IB as _SlIB, MarketOrder as _SlMkt
+                import random as _sl_rng
+                from core.worker.cycles.futures_runner import _make_future_contract as _sl_make_future_contract
+
+                _ibkr_host = os.getenv("IBKR_HOST", "127.0.0.1")
+
+                for _mode_key, _fut_pos in _state_by_mode.items():
+                    _ibkr_port = int(
+                        os.getenv("IBKR_PAPER_PORT", "4003")
+                        if _mode_key == "paper"
+                        else os.getenv("IBKR_PORT", "4002")
+                    )
                     try:
                         with _sl_sock.create_connection((_ibkr_host, _ibkr_port), timeout=3):
                             pass
                     except Exception:
-                        _fut_pos = {}  # IBKR not connected, skip
+                        logger.warning(
+                            f"  FUTURES SL CHECK ({_mode_key.upper()}) skipped — port {_ibkr_port} unavailable"
+                        )
+                        continue
 
-                    if _fut_pos:
-                        from ib_insync import IB as _SlIB, Future as _SlFut, MarketOrder as _SlMkt, StopOrder as _SlStop
-                        import random as _sl_rng
-                        _sl_ib = _SlIB()
-                        try:
-                            _sl_ib.connect(_ibkr_host, _ibkr_port, clientId=_sl_rng.randint(90, 98), timeout=8)
-                            time.sleep(1)
+                    _sl_ib = _SlIB()
+                    try:
+                        _sl_ib.connect(_ibkr_host, _ibkr_port, clientId=_sl_rng.randint(90, 98), timeout=8)
+                        time.sleep(1)
 
-                            # Check each futures position
-                            for _ps, _pi in list(_fut_pos.items()):
-                                _sl_price = _pi.get("sl", 0)
-                                _tp_price = _pi.get("tp", 0)
-                                _pos_side = _pi.get("side", "")
-                                if _sl_price <= 0:
-                                    continue
+                        _real_pos = {p.contract.symbol: p for p in _sl_ib.positions()}
+                        _open_trades = list(_sl_ib.openTrades())
+                        _portfolio = list(_sl_ib.portfolio())
 
-                                # Get current price
-                                _pf = _SlFut(_ps, exchange="CME")
-                                _pd = _sl_ib.reqContractDetails(_pf)
-                                if not _pd:
-                                    continue
-                                _pc = _pd[0].contract
-                                _real_pos = {p.contract.symbol: p for p in _sl_ib.positions()}
-                                if _ps not in _real_pos or abs(_real_pos[_ps].position) == 0:
-                                    # Position gone (SL/TP hit or closed)
-                                    logger.info(f"  FUTURES SL CHECK: {_ps} position gone — removing from state")
-                                    del _fut_pos[_ps]
-                                    continue
+                        for _ps, _pi in list(_fut_pos.items()):
+                            _sl_price = _pi.get("sl", 0)
+                            _tp_price = _pi.get("tp", 0)
+                            _pos_side = _pi.get("side", "")
+                            if _sl_price <= 0:
+                                continue
 
-                                # Check if SL order still exists
-                                _has_sl = any(
-                                    t.contract.symbol == _ps and t.order.orderType in ("STP", "STOP")
-                                    for t in _sl_ib.openTrades()
+                            _contract = _sl_make_future_contract(_ps)
+                            _pd = _sl_ib.reqContractDetails(_contract)
+                            if not _pd:
+                                continue
+                            _pc = _pd[0].contract
+
+                            if _ps not in _real_pos or abs(_real_pos[_ps].position) == 0:
+                                logger.info(
+                                    f"  FUTURES SL CHECK ({_mode_key.upper()}): {_ps} position gone — removing from state"
                                 )
-                                # Software SL: check price vs SL level
-                                _cur_price = _real_pos[_ps].avgCost / 5  # avgCost = price * multiplier
-                                # Get market price from portfolio
-                                for _pitem in _sl_ib.portfolio():
-                                    if _pitem.contract.symbol == _ps and abs(_pitem.position) > 0:
-                                        _cur_price = _pitem.marketPrice
-                                        break
+                                del _fut_pos[_ps]
+                                continue
 
-                                _sl_hit = False
-                                if _pos_side == "SELL" and _cur_price >= _sl_price:
-                                    _sl_hit = True
-                                elif _pos_side == "BUY" and _cur_price <= _sl_price:
-                                    _sl_hit = True
+                            _has_sl = any(
+                                t.contract.symbol == _ps and t.order.orderType in ("STP", "STOP")
+                                for t in _open_trades
+                            )
+                            if not _has_sl:
+                                logger.warning(
+                                    f"  FUTURES SL CHECK ({_mode_key.upper()}): {_ps} has no broker-side stop order visible"
+                                )
 
-                                if _sl_hit:
-                                    _exit_side = "BUY" if _pos_side == "SELL" else "SELL"
-                                    _close_ord = _SlMkt(_exit_side, abs(int(_real_pos[_ps].position)))
-                                    _close_trade = _sl_ib.placeOrder(_pc, _close_ord)
-                                    time.sleep(4); _sl_ib.sleep(2)
-                                    logger.critical(
-                                        f"  FUTURES SOFTWARE SL HIT: {_ps} price={_cur_price:.2f} >= SL={_sl_price:.2f} "
-                                        f"-> {_close_trade.orderStatus.status}"
-                                    )
-                                    _send_alert(
-                                        f"FUTURES SL HIT: {_exit_side} {_ps}\n"
-                                        f"Price={_cur_price:.2f} SL={_sl_price:.2f}",
-                                        level="critical",
-                                    )
-                                    del _fut_pos[_ps]
-                                else:
-                                    # Check TP too
-                                    _tp_hit = False
-                                    if _tp_price > 0:
-                                        if _pos_side == "SELL" and _cur_price <= _tp_price:
-                                            _tp_hit = True
-                                        elif _pos_side == "BUY" and _cur_price >= _tp_price:
-                                            _tp_hit = True
+                            _cur_price = _real_pos[_ps].avgCost / 5
+                            for _pitem in _portfolio:
+                                if _pitem.contract.symbol == _ps and abs(_pitem.position) > 0:
+                                    _cur_price = _pitem.marketPrice
+                                    break
 
-                                    if _tp_hit:
-                                        _exit_side = "BUY" if _pos_side == "SELL" else "SELL"
-                                        _close_ord = _SlMkt(_exit_side, abs(int(_real_pos[_ps].position)))
-                                        _close_trade = _sl_ib.placeOrder(_pc, _close_ord)
-                                        time.sleep(4); _sl_ib.sleep(2)
-                                        logger.info(
-                                            f"  FUTURES SOFTWARE TP HIT: {_ps} price={_cur_price:.2f} TP={_tp_price:.2f} "
-                                            f"-> {_close_trade.orderStatus.status}"
-                                        )
-                                        _send_alert(
-                                            f"FUTURES TP HIT: {_exit_side} {_ps}\n"
-                                            f"Price={_cur_price:.2f} TP={_tp_price:.2f}",
-                                            level="info",
-                                        )
-                                        del _fut_pos[_ps]
+                            _sl_hit = False
+                            if _pos_side == "SELL" and _cur_price >= _sl_price:
+                                _sl_hit = True
+                            elif _pos_side == "BUY" and _cur_price <= _sl_price:
+                                _sl_hit = True
 
-                            # Write back to split state files (by mode)
-                            for _wsfx in ("live", "paper"):
-                                _wsf = ROOT / "data" / "state" / f"futures_positions_{_wsfx}.json"
-                                _wdata = {k: v for k, v in _fut_pos.items() if v.get("mode", "").upper() == _wsfx.upper()}
-                                _wsf.write_text(json.dumps(_wdata, indent=2))
+                            if _sl_hit:
+                                _exit_side = "BUY" if _pos_side == "SELL" else "SELL"
+                                _close_ord = _SlMkt(_exit_side, abs(int(_real_pos[_ps].position)))
+                                _close_trade = _sl_ib.placeOrder(_pc, _close_ord)
+                                time.sleep(4); _sl_ib.sleep(2)
+                                logger.critical(
+                                    f"  FUTURES SOFTWARE SL HIT ({_mode_key.upper()}): {_ps} "
+                                    f"price={_cur_price:.2f} SL={_sl_price:.2f} -> {_close_trade.orderStatus.status}"
+                                )
+                                _send_alert(
+                                    f"FUTURES SL HIT ({_mode_key.upper()}): {_exit_side} {_ps}\n"
+                                    f"Price={_cur_price:.2f} SL={_sl_price:.2f}",
+                                    level="critical",
+                                )
+                                del _fut_pos[_ps]
+                                continue
+
+                            _tp_hit = False
+                            if _tp_price > 0:
+                                if _pos_side == "SELL" and _cur_price <= _tp_price:
+                                    _tp_hit = True
+                                elif _pos_side == "BUY" and _cur_price >= _tp_price:
+                                    _tp_hit = True
+
+                            if _tp_hit:
+                                _exit_side = "BUY" if _pos_side == "SELL" else "SELL"
+                                _close_ord = _SlMkt(_exit_side, abs(int(_real_pos[_ps].position)))
+                                _close_trade = _sl_ib.placeOrder(_pc, _close_ord)
+                                time.sleep(4); _sl_ib.sleep(2)
+                                logger.info(
+                                    f"  FUTURES SOFTWARE TP HIT ({_mode_key.upper()}): {_ps} "
+                                    f"price={_cur_price:.2f} TP={_tp_price:.2f} -> {_close_trade.orderStatus.status}"
+                                )
+                                _send_alert(
+                                    f"FUTURES TP HIT ({_mode_key.upper()}): {_exit_side} {_ps}\n"
+                                    f"Price={_cur_price:.2f} TP={_tp_price:.2f}",
+                                    level="info",
+                                )
+                                del _fut_pos[_ps]
+
+                        _wsf = ROOT / "data" / "state" / f"futures_positions_{_mode_key}.json"
+                        _wsf.write_text(json.dumps(_fut_pos, indent=2))
+                        _sl_ib.disconnect()
+                    except Exception as _sle:
+                        logger.warning(f"  FUTURES SL CHECK ({_mode_key.upper()}) error: {_sle}")
+                        try:
                             _sl_ib.disconnect()
-                        except Exception as _sle:
-                            logger.warning(f"  FUTURES SL CHECK error: {_sle}")
-                            try:
-                                _sl_ib.disconnect()
-                            except Exception:
-                                pass
+                        except Exception:
+                            pass
         except Exception:
             pass
 
@@ -4654,19 +4772,13 @@ def main():
     # equity_state.json IBKR (deja ecrit par boot_preflight) au lieu de
     # refaire une connection IBKR (clientId conflicts possibles au boot).
     try:
-        _boot_equity = 0.0
-        _eq_path = ROOT / "data" / "state" / "ibkr_futures" / "equity_state.json"
-        if _eq_path.exists():
-            try:
-                _eq_data = json.loads(_eq_path.read_text(encoding="utf-8"))
-                _boot_equity = float(_eq_data.get("equity", 0))
-            except Exception as _eq_exc:
-                logger.warning(f"Boot DD baseline: equity_state.json read error: {_eq_exc}")
-        if _boot_equity > 0:
-            _ensure_live_dd_baseline(_boot_equity)
+        _boot_snapshot = _load_cached_live_equity_snapshot(max_age_minutes=30.0)
+        if _boot_snapshot:
+            _ensure_live_dd_baseline(float(_boot_snapshot["equity"]))
         else:
             logger.warning(
-                "Boot DD baseline rollover skipped: equity=0 (will retry in live_risk_cycle)"
+                "Boot DD baseline rollover skipped: no fresh cached live equity "
+                "(will retry in live_risk_cycle)"
             )
     except Exception as _exc:
         logger.warning(f"Boot DD baseline rollover error: {_exc}")
