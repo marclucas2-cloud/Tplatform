@@ -18,7 +18,7 @@ import json
 import logging
 import os
 import time
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 from core.worker.alerts import log_event as _log_event
@@ -79,6 +79,42 @@ def _make_future_contract(symbol: str, currency: str = "USD"):
     return _IbFuture(symbol=symbol, exchange=exchange, currency=currency)
 
 
+def _normalize_contract_month(contract_month: str | None) -> str | None:
+    """Normalize an IBKR lastTradeDateOrContractMonth value.
+
+    Accepts either YYYYMM or YYYYMMDD and returns the same canonical string.
+    Returns None when the input is empty or malformed.
+    """
+    if not contract_month:
+        return None
+    raw = "".join(ch for ch in str(contract_month) if ch.isdigit())
+    if len(raw) in (6, 8):
+        return raw
+    return None
+
+
+def _resolve_front_month_contract(ib, symbol: str):
+    """Resolve the nearest non-expired futures contract for a symbol.
+
+    The generic `reqContractDetails(Future(symbol=...))` chain can return an
+    already expired contract first (observed 2026-04-29 on MGC -> MGCJ6 after
+    expiry). We pin the request to the front month from the canonical futures
+    calendar, then qualify that exact contract.
+    """
+    from core.broker.ibkr_futures import FuturesContractManager
+
+    mgr = FuturesContractManager()
+    front = mgr.get_front_month(symbol, ref_date=date.today())
+    contract = _make_future_contract(symbol)
+    contract.lastTradeDateOrContractMonth = front["expiry"][:7].replace("-", "")
+    details = ib.reqContractDetails(contract)
+    if details:
+        return details[0].contract
+    # Conservative fallback: return the month-pinned contract even if IBKR
+    # detail lookup is temporarily unavailable; caller will surface the error.
+    return contract
+
+
 def _get_canonical_ibkr_account(ib) -> str | None:
     """Retourne l'account canonique IBKR pour ce cycle.
 
@@ -131,6 +167,18 @@ def _filter_positions_by_account(positions, canonical_account: str | None) -> di
         logger.info(
             f"  Positions skipped (not on canonical account {canonical_account}): {skipped}"
         )
+    return out
+
+
+def _map_position_contracts_by_account(positions, canonical_account: str | None) -> dict:
+    """Return `{symbol: contract}` for active positions on the canonical account."""
+    out = {}
+    for p in positions:
+        if abs(p.position) == 0:
+            continue
+        if canonical_account is not None and p.account != canonical_account:
+            continue
+        out[p.contract.symbol] = p.contract
     return out
 
 
@@ -472,7 +520,7 @@ def run_futures_cycle(live: bool = False):
         #     dans core/worker/cycles/paper_cycles.py - pas besoin de 2e path)
         # Toutes les archives restent dans strategies_v2/_archive/ comme ref historique.
 
-        logger.info(f"  FUTURES PAPER: {len(signals)} signal(s)")
+        logger.info(f"  FUTURES {_mode}: {len(signals)} signal(s)")
         _log_event("cycle_end", "futures_paper", {
             "signals": len(signals), "equity": equity,
         })
@@ -494,10 +542,13 @@ def run_futures_cycle(live: bool = False):
         # If state says we have a position but IBKR doesn't, the trade was
         # closed (SL/TP hit or manual close) — update journal + remove from state
         _ibkr_real_pos = {}  # initialized empty in case positions() fails
+        _ibkr_real_contracts = {}
         # Fix 2026-04-21: filter sub-accounts (DUP*) pour ne garder que le live
         _canonical_acct = _get_canonical_ibkr_account(ibkr._ib)
         try:
-            _ibkr_real_pos = _filter_positions_by_account(ibkr._ib.positions(), _canonical_acct)
+            _all_positions = ibkr._ib.positions()
+            _ibkr_real_pos = _filter_positions_by_account(_all_positions, _canonical_acct)
+            _ibkr_real_contracts = _map_position_contracts_by_account(_all_positions, _canonical_acct)
             stale_keys = [k for k in _fut_positions if k not in _ibkr_real_pos]
             for k in stale_keys:
                 # Journal UPDATE: the position was closed between last cycle and now.
@@ -601,10 +652,8 @@ def run_futures_cycle(live: bool = False):
                     if _rb_sl > 0 and _rb_tp > 0:
                         # Attempt repose
                         try:
-                            _rb_fut = _make_future_contract(pos_sym)
-                            _rb_details = ibkr._ib.reqContractDetails(_rb_fut)
-                            if _rb_details:
-                                _rb_contract = _rb_details[0].contract
+                            _rb_contract = _ibkr_real_contracts.get(pos_sym)
+                            if _rb_contract is not None:
                                 _rb_oca = f"REBRACKET_{pos_sym}_{_uuid.uuid4().hex[:8]}"
                                 _sl_ord = StopOrder(_rb_side, _rb_qty, _rb_sl)
                                 _sl_ord.tif = "GTC"; _sl_ord.ocaGroup = _rb_oca; _sl_ord.ocaType = 1; _sl_ord.outsideRth = True
@@ -619,7 +668,7 @@ def run_futures_cycle(live: bool = False):
                                 )
                                 _repose_ok = True
                             else:
-                                _fail_reason = "no contract details"
+                                _fail_reason = "no live contract found for active position"
                         except Exception as _be:
                             _fail_reason = str(_be)[:100]
                             logger.error(f"    BRACKET REPOSE FAILED {pos_sym}: {_be}")
@@ -634,10 +683,8 @@ def run_futures_cycle(live: bool = False):
                             f"Closing position at market to enforce SL obligatoire rule."
                         )
                         try:
-                            _fs_fut = _make_future_contract(pos_sym)
-                            _fs_details = ibkr._ib.reqContractDetails(_fs_fut)
-                            if _fs_details:
-                                _fs_contract = _fs_details[0].contract
+                            _fs_contract = _ibkr_real_contracts.get(pos_sym)
+                            if _fs_contract is not None:
                                 _fs_order = _FailMarketOrder(_rb_side, _rb_qty)
                                 _fs_order.tif = "DAY"  # P0 FIX 2026-04-23: explicit TIF (cf Error 10349)
                                 _fs_order.outsideRth = True
@@ -691,10 +738,12 @@ def run_futures_cycle(live: bool = False):
             close_side = "SELL" if pos_info.get("side") == "BUY" else "BUY"
             try:
                 from ib_insync import MarketOrder as IbMarketOrder
-                fut_contract = _make_future_contract(pos_sym)
-                details = ibkr._ib.reqContractDetails(fut_contract)
-                if details:
-                    fut_contract = details[0].contract
+                fut_contract = _ibkr_real_contracts.get(pos_sym)
+                if fut_contract is None:
+                    logger.warning(
+                        f"    FUTURES TIME-EXIT SKIP {pos_sym}: no live contract found for active position"
+                    )
+                    continue
 
                 # Cancel existing OCA bracket orders BEFORE closing
                 _oca_group = pos_info.get("oca_group", "")
@@ -730,7 +779,9 @@ def run_futures_cycle(live: bool = False):
         # Refresh IBKR real positions right before entry decisions
         # (initial query at line 1047 may be stale after time-exits above)
         try:
-            _ibkr_real_pos = _filter_positions_by_account(ibkr._ib.positions(), _canonical_acct)
+            _all_positions = ibkr._ib.positions()
+            _ibkr_real_pos = _filter_positions_by_account(_all_positions, _canonical_acct)
+            _ibkr_real_contracts = _map_position_contracts_by_account(_all_positions, _canonical_acct)
         except Exception:
             pass  # keep previous _ibkr_real_pos
 
@@ -870,7 +921,15 @@ def run_futures_cycle(live: bool = False):
             # Precise enforcement happens after fill via _current_risk update.
             _est_mult = _FUT_MULT.get(sym, 1)
             if sig.stop_loss and sig.take_profit:
-                _est_entry = (sig.stop_loss + sig.take_profit) / 2.0
+                _est_entry = None
+                try:
+                    _entry_bar = feed.get_latest_bar(sym)
+                    if _entry_bar is not None:
+                        _est_entry = float(_entry_bar.close)
+                except Exception:
+                    _est_entry = None
+                if _est_entry is None:
+                    _est_entry = (sig.stop_loss + sig.take_profit) / 2.0
                 _est_risk = abs(_est_entry - sig.stop_loss) * _est_mult * qty
             else:
                 _est_risk = 0.0
@@ -881,12 +940,7 @@ def run_futures_cycle(live: bool = False):
                 )
                 continue
             try:
-                _fut = _make_future_contract(sym)
-                _details = ibkr._ib.reqContractDetails(_fut)
-                if not _details:
-                    logger.warning(f"    {name}: no contract details for {sym} (exchange={_fut.exchange})")
-                    continue
-                _contract = _details[0].contract
+                _contract = _resolve_front_month_contract(ibkr._ib, sym)
 
                 # G4 iter2 plan 9.5 (2026-04-19): OSM wire symetrique crypto.
                 # Create_order + validate avant placeOrder IBKR, puis submit +
@@ -994,6 +1048,10 @@ def run_futures_cycle(live: bool = False):
                 _fut_positions[sym] = {
                     "strategy": name,
                     "symbol": sym,
+                    "contract_month": _normalize_contract_month(
+                        getattr(_contract, "lastTradeDateOrContractMonth", None)
+                    ),
+                    "local_symbol": getattr(_contract, "localSymbol", None),
                     "side": sig.side,
                     "qty": qty,
                     "entry": _fill_price,
