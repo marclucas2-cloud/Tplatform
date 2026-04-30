@@ -1,0 +1,161 @@
+{
+  "candidate": "lowvol_bab_v1",
+  "run_at": "2026-04-30",
+  "config": {
+    "vol_lookback": 60,
+    "rebal_days": 21,
+    "n_per_leg": 5,
+    "rt_cost_pct": 0.0005,
+    "borrow_annual": 0.01,
+    "gross_notional": 10000.0,
+    "universe_size": 30
+  },
+  "variants": {
+    "long_only_bottom5_vol": {
+      "label": "long_only_bottom5_vol",
+      "all_period": {
+        "sharpe": 0.7623691088482842,
+        "max_dd_pct": -18.539274475390556,
+        "total_pnl": 10264.30811901573,
+        "n_days": 2082
+      },
+      "wf_windows": [
+        {
+          "window": 1,
+          "oos_start": "2018-01-02",
+          "oos_end": "2021-04-22",
+          "n_days": 832,
+          "sharpe": 1.0722965900797956,
+          "max_dd_pct": -18.539274475390556,
+          "total_pnl": 6930.4780787277205,
+          "profitable": true
+        },
+        {
+          "window": 2,
+          "oos_start": "2019-04-01",
+          "oos_end": "2022-07-19",
+          "n_days": 832,
+          "sharpe": 0.9519306239290142,
+          "max_dd_pct": -21.52009813711937,
+          "total_pnl": 6399.7050296198095,
+          "profitable": true
+        },
+        {
+          "window": 3,
+          "oos_start": "2020-06-25",
+          "oos_end": "2023-10-13",
+          "n_days": 832,
+          "sharpe": 0.9476354019741099,
+          "max_dd_pct": -11.89592456639909,
+          "total_pnl": 4357.864564536172,
+          "profitable": true
+        },
+        {
+          "window": 4,
+          "oos_start": "2021-09-21",
+          "oos_end": "2025-01-13",
+          "n_days": 832,
+          "sharpe": 0.4567906045174841,
+          "max_dd_pct": -14.936627177373804,
+          "total_pnl": 2016.7806049715023,
+          "profitable": true
+        },
+        {
+          "window": 5,
+          "oos_start": "2022-12-15",
+          "oos_end": "2026-04-13",
+          "n_days": 832,
+          "sharpe": 0.30794525904444714,
+          "max_dd_pct": -16.05670624793257,
+          "total_pnl": 1306.3571246266529,
+          "profitable": true
+        }
+      ],
+      "gates": {
+        "sharpe_oos_median": 0.9476354019741099,
+        "pass_rate": 1.0,
+        "gate_sharpe_gt_0_3": true,
+        "gate_pass_rate_gte_0_6": true
+      },
+      "correlation_vs_macro_top1": {
+        "available": true,
+        "spy_corr_proxy": 0.665582729846948,
+        "n_obs": 2082
+      },
+      "verdict": "PROMOTE_PAPER"
+    },
+    "ls_bottom5_top5_vol_borrow1pct": {
+      "label": "ls_bottom5_top5_vol_borrow1pct",
+      "all_period": {
+        "sharpe": -0.8115556500864048,
+        "max_dd_pct": -115.91376736091819,
+        "total_pnl": -10826.171764078985,
+        "n_days": 2082
+      },
+      "wf_windows": [
+        {
+          "window": 1,
+          "oos_start": "2018-01-02",
+          "oos_end": "2021-04-22",
+          "n_days": 832,
+          "sharpe": -0.6969515613724305,
+          "max_dd_pct": -41.75383746259436,
+          "total_pnl": -3177.1161610417985,
+          "profitable": false
+        },
+        {
+          "window": 2,
+          "oos_start": "2019-04-01",
+          "oos_end": "2022-07-19",
+          "n_days": 832,
+          "sharpe": -0.44389175098621975,
+          "max_dd_pct": -50.18174397818969,
+          "total_pnl": -2412.2008789119172,
+          "profitable": false
+        },
+        {
+          "window": 3,
+          "oos_start": "2020-06-25",
+          "oos_end": "2023-10-13",
+          "n_days": 832,
+          "sharpe": -0.6734850881040774,
+          "max_dd_pct": -44.30173969745716,
+          "total_pnl": -3846.4220244698117,
+          "profitable": false
+        },
+        {
+          "window": 4,
+          "oos_start": "2021-09-21",
+          "oos_end": "2025-01-13",
+          "n_days": 832,
+          "sharpe": -1.0186809859323336,
+          "max_dd_pct": -68.40059631653199,
+          "total_pnl": -6102.713195048971,
+          "profitable": false
+        },
+        {
+          "window": 5,
+          "oos_start": "2022-12-15",
+          "oos_end": "2026-04-13",
+          "n_days": 832,
+          "sharpe": -1.509462591620271,
+          "max_dd_pct": -93.34170096947722,
+          "total_pnl": -8163.811356693617,
+          "profitable": false
+        }
+      ],
+      "gates": {
+        "sharpe_oos_median": -0.6969515613724305,
+        "pass_rate": 0.0,
+        "gate_sharpe_gt_0_3": false,
+        "gate_pass_rate_gte_0_6": false
+      },
+      "correlation_vs_macro_top1": {
+        "available": true,
+        "spy_corr_proxy": -0.5170518645984131,
+        "n_obs": 2082
+      },
+      "verdict": "REJECTED"
+    }
+  }
+}

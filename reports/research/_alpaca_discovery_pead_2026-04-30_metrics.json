@@ -1,0 +1,94 @@
+{
+  "candidate": "pead_us_long_only_v1",
+  "run_at": "2026-04-30",
+  "config": {
+    "surprise_threshold": 5.0,
+    "gap_threshold": 0.01,
+    "hold_days": 20,
+    "tp_pct": 0.08,
+    "sl_pct": 0.03,
+    "notional_per_trade": 2000.0,
+    "rt_cost_pct": 0.0005,
+    "universe_size": 30
+  },
+  "wf_windows": [
+    {
+      "window": 1,
+      "oos_start": "2020-04-15",
+      "oos_end": "2022-09-08",
+      "n_trades": 58,
+      "sharpe": 0.9106218289524985,
+      "max_dd_pct": -10.279576502860372,
+      "total_pnl": 1429.524938310809,
+      "win_rate": 0.5,
+      "profitable": true
+    },
+    {
+      "window": 2,
+      "oos_start": "2021-03-09",
+      "oos_end": "2023-08-02",
+      "n_trades": 52,
+      "sharpe": 0.3441345162353714,
+      "max_dd_pct": -11.995880550290225,
+      "total_pnl": 565.431060536862,
+      "win_rate": 0.46153846153846156,
+      "profitable": true
+    },
+    {
+      "window": 3,
+      "oos_start": "2022-01-31",
+      "oos_end": "2024-06-25",
+      "n_trades": 46,
+      "sharpe": 1.0137807775008556,
+      "max_dd_pct": -6.763352055246615,
+      "total_pnl": 1259.9987839315727,
+      "win_rate": 0.5434782608695652,
+      "profitable": true
+    },
+    {
+      "window": 4,
+      "oos_start": "2022-12-25",
+      "oos_end": "2025-05-19",
+      "n_trades": 49,
+      "sharpe": 1.3414098628068387,
+      "max_dd_pct": -2.9829209403711197,
+      "total_pnl": 1895.5954805712267,
+      "win_rate": 0.5918367346938775,
+      "profitable": true
+    },
+    {
+      "window": 5,
+      "oos_start": "2023-11-18",
+      "oos_end": "2026-04-12",
+      "n_trades": 39,
+      "sharpe": 1.1906475318477876,
+      "max_dd_pct": -2.395041014404796,
+      "total_pnl": 1533.2360158111126,
+      "win_rate": 0.5384615384615384,
+      "profitable": true
+    }
+  ],
+  "all_period": {
+    "n_trades": 122,
+    "sharpe": 1.0103105992632133,
+    "max_dd_pct": -10.279576502860372,
+    "total_pnl": 4120.837221808032,
+    "win_rate": 0.5409836065573771,
+    "start": "2018-01-02",
+    "end": "2026-04-15"
+  },
+  "gates": {
+    "sharpe_oos_median": 1.0137807775008556,
+    "pass_rate": 1.0,
+    "gate_sharpe_median_gt_0_3": true,
+    "gate_pass_rate_gte_0_6": true,
+    "sharpe_oos_above_0_3_count": 5
+  },
+  "correlation_vs_macro_top1": {
+    "available": true,
+    "spy_corr_proxy": 0.13885125768838408,
+    "n_obs": 2082,
+    "note": "Upper bound: macro_top1 rotates 8 ETF, real corr likely lower"
+  },
+  "verdict": "PROMOTE_PAPER"
+}

@@ -329,6 +329,49 @@ strategies:
     infra_gaps: ["paper_simulation_locale_pas_d_ordre_broker_reel"]
     notes: "Mission paper plug target-alpha 2026-04-24. Long-only top-1 rotation mensuelle sur 8 ETFs macro (SPY/TLT/GLD/DBC/UUP/IEF/HYG/QQQ). Config LB=60, HD=21. Sharpe 0.676, DD -5.94%, WF 4/5 sur 2018-2026. Sensitivity grid 12 configs confirme robustesse (9/12 OK). Runtime: runner dedie worker 16h30 Paris, simulation locale pure (journal+state, pas d ordre broker). Earliest promotion live_micro: 2026-05-24."
 
+  - strategy_id: pead_long_only_v1
+    book: alpaca_us
+    status: validated_research_pending_runtime
+    discovered_at: "2026-04-30"
+    paper_start_at: null
+    live_start_at: null
+    wf_manifest_path: reports/research/_alpaca_discovery_pead_2026-04-30_metrics.json
+    grade: A
+    last_wf_run_at: "2026-04-30"
+    is_live: false
+    infra_gaps: ["runtime_module_a_creer_strategies_v2_us_pead_py", "runner_a_cabler_worker_py", "earnings_calendar_source_a_definir"]
+    notes: |
+      Discovery 2026-04-30 (Lever 2 reformulation desk Alpaca post-rejection us_sector_ls).
+      Edge academique solide (Bernard&Thomas 1989, post-earnings drift).
+      Config validee : surprise >= 5%, gap >= 1%, hold 20j, TP 8% / SL 3%, $2K/trade,
+      max 5 positions concurrent. Univers 30 large caps SP500.
+      WF 5 fenetres glissantes 60% IS / 40% OOS sur 2020-04 -> 2026-04 :
+      - 5/5 PASS (gate Sharpe OOS > 0.3)
+      - Sharpe median 1.01 (range 0.34-1.34, fenetres recentes 1.0-1.34 robustes)
+      - MaxDD -10.3%, win rate 54%, 122 trades sur 5 ans
+      - Correlation SPY ~0.14 (faible, vraie diversification vs macro_top1_rotation)
+      - DSR p-value non calculee (1 seule config, pas de grid sensitivity)
+      Caveats : univers 30 symbols (biais survivor), WF fenetres se chevauchent
+      (IID assumption faible, Sharpe biaise haut), earnings calendar source a definir.
+      Artefacts : scripts/research/_alpaca_discovery_pead_2026-04-30.py,
+      reports/research/_alpaca_discovery_pead_2026-04-30_metrics.json.
+      Earliest promotion paper -> live_micro : 30j paper sans divergence (~2026-06-01
+      apres cablage runtime).
+
+  - strategy_id: low_vol_long_only_bottom5
+    book: alpaca_us
+    status: keep_research
+    discovered_at: "2026-04-30"
+    wf_manifest_path: reports/research/_alpaca_discovery_lowvol_2026-04-30_metrics.json
+    grade: B_decay_warning
+    last_wf_run_at: "2026-04-30"
+    notes: |
+      Discovery 2026-04-30 (Lever 2). Sharpe all-period 0.76, 5/5 WF mais Sharpe
+      *declinant* W1 1.07 -> W5 0.31 (alpha decay observable) + DD -18% trop
+      eleve sur $100K paper. A retester avec lookback alternatif (90/120) et
+      n_per_leg=3 pour reduire concentration. Variant L/S BAB REJECTED
+      (Sharpe -0.81, DD -115%, asymetrie short top-vol post-2018).
+
 # =============================================================================
 # Strategies archivees post-drain 19 avril (NE PLUS PROMOUVOIR)
 # =============================================================================
