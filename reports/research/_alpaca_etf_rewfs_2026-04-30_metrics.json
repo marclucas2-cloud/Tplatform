@@ -1,0 +1,976 @@
+{
+  "mission": "Re-WF us_sector_ls on ETF SPDR + borrow 1%/an",
+  "date": "2026-04-30",
+  "universe": [
+    "XLB",
+    "XLC",
+    "XLE",
+    "XLF",
+    "XLI",
+    "XLK",
+    "XLP",
+    "XLRE",
+    "XLU",
+    "XLV",
+    "XLY"
+  ],
+  "n_days": 2088,
+  "borrow_annual_pct": 1.0,
+  "rt_cost_pct": 0.1,
+  "results": {
+    "etf_ls_1L1S_20_5": {
+      "params": {
+        "n_leg": 1,
+        "lookback": 20,
+        "hold_days": 5
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -1104.94,
+        "sharpe": -0.485,
+        "max_dd_pct": -13.32
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 1,
+        "ratio": 0.2,
+        "median_sharpe": -0.686,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": -0.186,
+            "pnl": -90.97,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": 0.546,
+            "pnl": 221.99,
+            "profitable": true
+          },
+          {
+            "window": 3,
+            "sharpe": -0.686,
+            "pnl": -290.32,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -1.176,
+            "pnl": -364.41,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.727,
+            "pnl": -248.42,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_1L1S_20_10": {
+      "params": {
+        "n_leg": 1,
+        "lookback": 20,
+        "hold_days": 10
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -758.14,
+        "sharpe": -0.332,
+        "max_dd_pct": -11.53
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 2,
+        "ratio": 0.4,
+        "median_sharpe": -0.533,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.225,
+            "pnl": 109.53,
+            "profitable": true
+          },
+          {
+            "window": 2,
+            "sharpe": 0.556,
+            "pnl": 230.85,
+            "profitable": true
+          },
+          {
+            "window": 3,
+            "sharpe": -1.036,
+            "pnl": -447.07,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -0.533,
+            "pnl": -168.58,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.712,
+            "pnl": -228.42,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_1L1S_40_5": {
+      "params": {
+        "n_leg": 1,
+        "lookback": 40,
+        "hold_days": 5
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -962.43,
+        "sharpe": -0.402,
+        "max_dd_pct": -12.78
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 1,
+        "ratio": 0.2,
+        "median_sharpe": -0.32,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.772,
+            "pnl": 410.35,
+            "profitable": true
+          },
+          {
+            "window": 2,
+            "sharpe": -0.62,
+            "pnl": -261.69,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -0.32,
+            "pnl": -147.16,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -1.596,
+            "pnl": -494.45,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.173,
+            "pnl": -61.15,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_1L1S_40_10": {
+      "params": {
+        "n_leg": 1,
+        "lookback": 40,
+        "hold_days": 10
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -679.89,
+        "sharpe": -0.291,
+        "max_dd_pct": -10.48
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 1,
+        "ratio": 0.2,
+        "median_sharpe": -0.376,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.527,
+            "pnl": 276.94,
+            "profitable": true
+          },
+          {
+            "window": 2,
+            "sharpe": -0.702,
+            "pnl": -289.46,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -0.376,
+            "pnl": -164.86,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -0.749,
+            "pnl": -233.11,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.102,
+            "pnl": -34.52,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_1L1S_60_5": {
+      "params": {
+        "n_leg": 1,
+        "lookback": 60,
+        "hold_days": 5
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -1639.17,
+        "sharpe": -0.676,
+        "max_dd_pct": -19.41
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 0,
+        "ratio": 0.0,
+        "median_sharpe": -0.6,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": -0.55,
+            "pnl": -297.3,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": -1.014,
+            "pnl": -442.33,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -0.432,
+            "pnl": -196.34,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -0.6,
+            "pnl": -183.39,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.938,
+            "pnl": -348.18,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_1L1S_60_10": {
+      "params": {
+        "n_leg": 1,
+        "lookback": 60,
+        "hold_days": 10
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -1530.15,
+        "sharpe": -0.64,
+        "max_dd_pct": -20.01
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 0,
+        "ratio": 0.0,
+        "median_sharpe": -0.67,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": -0.13,
+            "pnl": -69.33,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": -1.309,
+            "pnl": -591.12,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -0.67,
+            "pnl": -295.17,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -0.734,
+            "pnl": -222.82,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.618,
+            "pnl": -214.42,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_3L3S_20_5": {
+      "params": {
+        "n_leg": 3,
+        "lookback": 20,
+        "hold_days": 5
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -768.17,
+        "sharpe": -0.57,
+        "max_dd_pct": -8.93
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 0,
+        "ratio": 0.0,
+        "median_sharpe": -0.281,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.004,
+            "pnl": 1.34,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": -0.136,
+            "pnl": -30.55,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -0.281,
+            "pnl": -70.1,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -1.873,
+            "pnl": -318.57,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -1.048,
+            "pnl": -219.47,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_3L3S_20_10": {
+      "params": {
+        "n_leg": 3,
+        "lookback": 20,
+        "hold_days": 10
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -728.42,
+        "sharpe": -0.54,
+        "max_dd_pct": -9.15
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 0,
+        "ratio": 0.0,
+        "median_sharpe": -0.876,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.175,
+            "pnl": 52.79,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": -0.072,
+            "pnl": -16.8,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -0.876,
+            "pnl": -214.54,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -1.236,
+            "pnl": -212.29,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -1.238,
+            "pnl": -248.47,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_3L3S_40_5": {
+      "params": {
+        "n_leg": 3,
+        "lookback": 40,
+        "hold_days": 5
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -538.16,
+        "sharpe": -0.395,
+        "max_dd_pct": -6.22
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 1,
+        "ratio": 0.2,
+        "median_sharpe": -0.256,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.401,
+            "pnl": 115.69,
+            "profitable": true
+          },
+          {
+            "window": 2,
+            "sharpe": -0.467,
+            "pnl": -104.79,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -0.256,
+            "pnl": -66.79,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -0.886,
+            "pnl": -163.58,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.111,
+            "pnl": -24.49,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_3L3S_40_10": {
+      "params": {
+        "n_leg": 3,
+        "lookback": 40,
+        "hold_days": 10
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -352.51,
+        "sharpe": -0.261,
+        "max_dd_pct": -4.64
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 1,
+        "ratio": 0.2,
+        "median_sharpe": -0.263,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.262,
+            "pnl": 74.96,
+            "profitable": true
+          },
+          {
+            "window": 2,
+            "sharpe": -0.513,
+            "pnl": -116.2,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -0.263,
+            "pnl": -67.7,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -0.373,
+            "pnl": -69.17,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.016,
+            "pnl": -3.44,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_3L3S_60_5": {
+      "params": {
+        "n_leg": 3,
+        "lookback": 60,
+        "hold_days": 5
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -1185.84,
+        "sharpe": -0.846,
+        "max_dd_pct": -12.6
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 0,
+        "ratio": 0.0,
+        "median_sharpe": -0.776,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": -0.693,
+            "pnl": -201.7,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": -1.028,
+            "pnl": -240.48,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -0.776,
+            "pnl": -212.75,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -0.881,
+            "pnl": -154.77,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.653,
+            "pnl": -151.01,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_3L3S_60_10": {
+      "params": {
+        "n_leg": 3,
+        "lookback": 60,
+        "hold_days": 10
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -984.22,
+        "sharpe": -0.714,
+        "max_dd_pct": -10.41
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 0,
+        "ratio": 0.0,
+        "median_sharpe": -0.75,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": -0.114,
+            "pnl": -31.6,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": -0.735,
+            "pnl": -172.01,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -1.024,
+            "pnl": -280.09,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -0.75,
+            "pnl": -132.68,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -1.007,
+            "pnl": -226.01,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_5L5S_20_5": {
+      "params": {
+        "n_leg": 5,
+        "lookback": 20,
+        "hold_days": 5
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -681.55,
+        "sharpe": -0.698,
+        "max_dd_pct": -7.6
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 1,
+        "ratio": 0.2,
+        "median_sharpe": -0.796,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": -0.05,
+            "pnl": -10.69,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": 0.211,
+            "pnl": 33.74,
+            "profitable": true
+          },
+          {
+            "window": 3,
+            "sharpe": -0.796,
+            "pnl": -150.86,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -1.183,
+            "pnl": -141.61,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -1.176,
+            "pnl": -175.87,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_5L5S_20_10": {
+      "params": {
+        "n_leg": 5,
+        "lookback": 20,
+        "hold_days": 10
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -691.94,
+        "sharpe": -0.709,
+        "max_dd_pct": -7.38
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 0,
+        "ratio": 0.0,
+        "median_sharpe": -0.984,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": -0.064,
+            "pnl": -13.48,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": -0.125,
+            "pnl": -19.89,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -0.984,
+            "pnl": -187.4,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -1.079,
+            "pnl": -136.02,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -1.379,
+            "pnl": -209.21,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_5L5S_40_5": {
+      "params": {
+        "n_leg": 5,
+        "lookback": 40,
+        "hold_days": 5
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -299.72,
+        "sharpe": -0.301,
+        "max_dd_pct": -3.71
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 1,
+        "ratio": 0.2,
+        "median_sharpe": -0.105,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.377,
+            "pnl": 76.73,
+            "profitable": true
+          },
+          {
+            "window": 2,
+            "sharpe": -0.755,
+            "pnl": -121.34,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": 0.084,
+            "pnl": 15.98,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -0.466,
+            "pnl": -65.44,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.105,
+            "pnl": -17.11,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_5L5S_40_10": {
+      "params": {
+        "n_leg": 5,
+        "lookback": 40,
+        "hold_days": 10
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -157.56,
+        "sharpe": -0.161,
+        "max_dd_pct": -2.4
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 1,
+        "ratio": 0.2,
+        "median_sharpe": 0.04,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.04,
+            "pnl": 7.66,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": 0.042,
+            "pnl": 7.0,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": 0.221,
+            "pnl": 42.34,
+            "profitable": true
+          },
+          {
+            "window": 4,
+            "sharpe": -0.343,
+            "pnl": -47.3,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.346,
+            "pnl": -55.5,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_5L5S_60_5": {
+      "params": {
+        "n_leg": 5,
+        "lookback": 60,
+        "hold_days": 5
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -703.23,
+        "sharpe": -0.679,
+        "max_dd_pct": -7.52
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 0,
+        "ratio": 0.0,
+        "median_sharpe": -0.69,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.148,
+            "pnl": 31.73,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": -1.261,
+            "pnl": -216.44,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -0.69,
+            "pnl": -138.72,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -0.823,
+            "pnl": -113.13,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.567,
+            "pnl": -95.67,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    },
+    "etf_ls_5L5S_60_10": {
+      "params": {
+        "n_leg": 5,
+        "lookback": 60,
+        "hold_days": 10
+      },
+      "standalone": {
+        "n_days": 2088,
+        "total_pnl": -447.82,
+        "sharpe": -0.439,
+        "max_dd_pct": -5.96
+      },
+      "wf": {
+        "n_splits": 5,
+        "profitable": 0,
+        "ratio": 0.0,
+        "median_sharpe": -0.624,
+        "validated": false,
+        "windows": [
+          {
+            "window": 1,
+            "sharpe": 0.096,
+            "pnl": 19.9,
+            "profitable": false
+          },
+          {
+            "window": 2,
+            "sharpe": -0.624,
+            "pnl": -101.66,
+            "profitable": false
+          },
+          {
+            "window": 3,
+            "sharpe": -0.284,
+            "pnl": -57.16,
+            "profitable": false
+          },
+          {
+            "window": 4,
+            "sharpe": -0.957,
+            "pnl": -130.17,
+            "profitable": false
+          },
+          {
+            "window": 5,
+            "sharpe": -0.73,
+            "pnl": -123.13,
+            "profitable": false
+          }
+        ]
+      },
+      "grade": "REJECTED"
+    }
+  }
+}

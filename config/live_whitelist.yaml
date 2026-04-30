@@ -478,19 +478,13 @@ alpaca_us:
     "
 - strategy_id: us_sector_ls_40_5
   book: alpaca_us
-  status: paper_only
-  runtime_entrypoint: worker.py:run_us_sector_ls_paper_cycle (22h30 Paris)
+  status: REJECTED
+  rejected_at: "2026-04-30"
+  rejected_reason: |
+    Re-WF ETF SPDR + borrow cost 1%/an : 18/18 configs Sharpe negatif.
+    Edge initial Sharpe +0.39 venait du bruit smaller caps. Voir
+    config/quant_registry.yaml (us_sector_ls_40_5) pour details.
+  runtime_entrypoint: null  # cycle stoppe le 2026-04-30
   runtime_module: strategies_v2.us.us_sector_ls
-  wf_source: docs/research/wf_reports/T3B-01_us_sector_ls.md + INT-C_us_batch.md
-  sizing_policy: log_only_paper_1000_per_leg
-  max_risk_usd: 200
-  kill_criteria:
-    drawdown_absolute: -5%
-    sharpe_rolling_60d: -0.5
-    divergence_vs_backtest: 1x_std
-  notes: "T3-B1 VALIDATED (Sharpe +0.39, MaxDD -2.1%, WF 3/5, MC P(DD>30%) 0%).\nBacktest 1274 days sur 11 GICS sectors (moyenne\
-    \ tickers US pass_all=True).\nLookback 40j, hold 5j, 1v1 top long + bottom short.\n\nRuntime: log-only retrospective via\
-    \ run_us_sector_ls_paper_cycle()\n22h30 Paris weekday (apres close US). Lit data/us_stocks/_metadata.csv\n+ data/us_stocks/*.parquet.\n\
-    \nCaveats promotion live:\n  1. Shorts sectors: PDT rule + short borrow cost. Non trivial en live.\n  2. Sector baskets:\
-    \ probablement implementable via ETFs sectoriels\n     (XLK, XLF, XLV, XLY, XLP, XLI, XLE, XLU, XLB, XLRE, XLC) plutot\n\
-    \     qu'avec 500 tickers. A re-WF avec ETF data avant live.\nStart paper: 2026-04-18.\n"
+  notes: "REJECTED 2026-04-30. Ne plus promouvoir. Code conserve dans
+    strategies_v2/us/us_sector_ls.py mais runtime entrypoint retire."

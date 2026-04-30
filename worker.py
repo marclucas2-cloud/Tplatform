@@ -5124,19 +5124,13 @@ def main():
         if is_weekday() and now_paris.hour < 18:
             run_eu_relmom_paper_cycle._done_today = False
 
-        # === US SECTOR L/S PAPER (lun-ven, 23h30 Paris = apres close US 22h UTC ete ou 21h UTC hiver) ===
-        # T3-B1 VALIDATED (Sharpe +0.39, WF 3/5). Log-only retrospective.
-        # Timing 23h30 Paris = 21h30 UTC ete / 22h30 UTC hiver -> toujours apres close US.
-        # Attention: le cron yfinance doit rafraichir data/us_stocks avant 23h30 Paris,
-        # sinon as_of_date = J-1 (dedup s'en occupe, mais observation reporte d'1 jour).
-        if is_weekday() and now_paris.hour == 23 and now_paris.minute >= 30 and not getattr(run_us_sector_ls_paper_cycle, '_done_today', False):
-            try:
-                run_us_sector_ls_paper_cycle()
-            except Exception as _us_err:
-                logger.error(f"US SECTOR L/S error: {_us_err}", exc_info=True)
-            run_us_sector_ls_paper_cycle._done_today = True
-        if is_weekday() and now_paris.hour < 23:
-            run_us_sector_ls_paper_cycle._done_today = False
+        # === US SECTOR L/S PAPER — DESACTIVE 2026-04-30 ===
+        # Strategie REJECTED apres re-WF ETF (cf config/quant_registry.yaml).
+        # 18/18 configs Sharpe negatif sur ETF SPDR avec borrow 1%/an.
+        # L'edge initial Sharpe +0.39 venait du bruit smaller caps. Pas un alpha reel.
+        # Code de la strat conserve dans strategies_v2/us/us_sector_ls.py mais
+        # plus appele ici. Re-activable seulement si nouvelle hypothese a tester.
+        # Ancien horaire 23h30 Paris (apres close US).
 
         # === BRACKET WATCHDOG toutes les 5 minutes (24/7) ===
         # Verifie que chaque position futures live a un bracket actif.

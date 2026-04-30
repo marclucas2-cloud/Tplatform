@@ -297,14 +297,25 @@ strategies:
 
   - strategy_id: us_sector_ls_40_5
     book: alpaca_us
-    status: paper_only
+    status: REJECTED
     paper_start_at: "2026-04-18"
+    paper_stopped_at: "2026-04-30"
     live_start_at: null
     wf_manifest_path: data/research/wf_manifests/us_sector_ls_40_5_2026-04-19_backfill.json
-    grade: B
-    last_wf_run_at: "2026-04-19"
+    rejected_at: "2026-04-30"
+    rejected_reason: |
+      Re-WF 2026-04-30 sur ETF SPDR sectoriel (11 ETF) avec borrow cost realiste 1%/an :
+      18/18 configs Sharpe negatif (best -0.16 sur 5L/5S 40_10), 0 WF pass.
+      L'edge initial Sharpe +0.39 sur 500 tickers individuels venait du bruit
+      des smaller caps mal liquides + biais selection pass_all + slippage
+      non modelise. Sur ETF propres l'alpha est inexistant.
+      Resultats : reports/research/_alpaca_etf_rewfs_2026-04-30_metrics.json
+      Script : scripts/research/_alpaca_etf_rewfs_2026-04-30.py
+      Cohere avec target_alpha 24-04 (etf_sector_ls_mom_40_5 Sharpe -0.39 deja).
+    grade: REJECTED
+    last_wf_run_at: "2026-04-30"
     is_live: false
-    infra_gaps: ["shorts_sectors_pdt_rule_borrow_cost", "re_wf_etf_data_requis_vs_500_tickers"]
+    infra_gaps: []  # resolus negativement par le re-WF (pas d'edge a sauver)
 
   - strategy_id: macro_top1_rotation
     book: alpaca_us
