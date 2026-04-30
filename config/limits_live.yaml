@@ -1,50 +1,50 @@
-# Limites de risque LIVE — IBKR
-# Derniere mise a jour : 2026-04-30
+# Limites de risque LIVE - IBKR
+# Derniere mise a jour : 2026-04-30 (post ajout capital +$15K)
 #
 # IMPORTANT : `capital` ci-dessous n'est qu'une valeur de bootstrap.
-# En runtime, worker.py:2016 appelle risk_mgr.update_capital(equity_live)
+# En runtime, worker.py:2024 appelle risk_mgr.update_capital(equity_live)
 # a chaque cycle live, qui ecrase cette valeur avec le NAV IBKR reel
-# (cf core/risk_manager_live.py:80-83). Modifier cette valeur n'a donc
+# (cf core/risk_manager_live.py). Modifier cette valeur n'a donc
 # d'effet QUE pendant la fenetre tres courte entre boot du worker et
 # premier cycle live. Ne pas se reposer dessus pour calibrer le sizing.
 #
 # Note historique : la plateforme est passee d'un compte equity $10K
-# (mars 2026) a un compte futures $11K+ (depuis fin mars). Les sections
-# `position_limits`, `sector_limits`, `fx_limits` ci-dessous datent de
-# l'ere equity et ne sont PAS lues par le runtime futures actuel
-# (cf core/risk/risk_budget_allocator.py qui gere le budget futures).
+# (mars 2026) a un compte futures finance a $25.5K de depots historiques
+# (500 + 10,000 + 15,000). Les sections `position_limits`, `sector_limits`
+# et `fx_limits` ci-dessous datent de l'ere equity et ne sont PAS lues par
+# le runtime futures actuel pour le risk budget per-strategy.
 
-capital: 10000  # bootstrap only, override par update_capital() au 1er cycle
+capital: 25500  # bootstrap only, override par update_capital() au 1er cycle
 mode: LIVE
 
 position_limits:
-  max_position_pct: 0.20          # $2,000 max par position (was 15%) — Fix #4 $10K
-  max_strategy_pct: 0.30          # $3,000 max par strategie (was 25%) — Fix #4
-  max_long_pct: 0.70              # $7,000 max long (was 60%) — Fix #4
-  max_short_pct: 0.40             # $4,000 max short
-  max_gross_pct: 1.30             # $13,000 max gross (was 1.20) — Fix #4
-  max_positions: 12               # Max 12 positions (was 10) — Fix #4
-  min_cash_pct: 0.05              # 5% min cash (was 10%) — Fix #4 $500 suffisant
+  max_position_pct: 0.20          # ~$5,100 max par position
+  max_strategy_pct: 0.30          # ~$7,650 max par strategie
+  max_long_pct: 0.70              # ~$17,850 max long
+  max_short_pct: 0.40             # ~$10,200 max short
+  max_gross_pct: 1.30             # ~$33,150 max gross
+  max_positions: 12               # Max 12 positions
+  min_cash_pct: 0.05              # ~$1,275 min cash
 
 margin_limits:
   max_margin_used_pct: 0.70       # Alerte
   block_margin_pct: 0.85          # Block new trades
 
 circuit_breakers:
-  daily_loss_pct: 0.05            # -$500 -> stop trading today (was 1.5% — trop serre pour futures)
-  hourly_loss_pct: 0.03           # -$300 -> pause 30 min (was 1% — 1 SL MES = 2%)
-  weekly_loss_pct: 0.08           # -$800 -> reduce sizing 50% (was 3%)
+  daily_loss_pct: 0.05            # -$1,275 -> stop trading today
+  hourly_loss_pct: 0.03           # -$765 -> pause 30 min
+  weekly_loss_pct: 0.08           # -$2,040 -> reduce sizing 50%
 
 kill_switch:
-  trailing_5d_loss_pct: 0.08      # -$800 sur 5j -> tout fermer (was 3%)
-  max_monthly_loss_pct: 0.12      # -$1,200 sur le mois -> tout fermer, review (was 5%)
+  trailing_5d_loss_pct: 0.08      # -$2,040 sur 5j -> tout fermer
+  max_monthly_loss_pct: 0.12      # -$3,060 sur le mois -> tout fermer, review
 
 deleveraging:
-  level_1_dd_pct: 0.025            # -$250 -> reduce 30% (was 0.9%)
+  level_1_dd_pct: 0.025           # -$638 -> reduce 30%
   level_1_action: 0.30
-  level_2_dd_pct: 0.04             # -$400 -> reduce 50% (was 1.35%)
+  level_2_dd_pct: 0.04            # -$1,020 -> reduce 50%
   level_2_action: 0.50
-  level_3_dd_pct: 0.06             # -$600 -> close all (was 1.8%)
+  level_3_dd_pct: 0.06            # -$1,530 -> close all
   level_3_action: 1.00
 
 sector_limits:
@@ -54,22 +54,22 @@ sector_limits:
 
 # FX-specific limits
 fx_limits:
-  max_fx_notional_pct: 15.0         # $150K notional max (15x capital)
-  max_fx_margin_pct: 0.40           # $4,000 margin FX max (40% capital)
+  max_fx_notional_pct: 15.0         # ~$382.5K notional max (15x capital)
+  max_fx_margin_pct: 0.40           # ~$10,200 margin FX max
   max_single_pair_notional: 40000   # $40K max per pair
-  max_single_pair_margin_pct: 0.15  # $1,500 margin max per pair
+  max_single_pair_margin_pct: 0.15  # ~$3,825 margin max per pair
 
 # Futures-specific limits
 futures_limits:
-  max_futures_margin_pct: 0.35      # $3,500 margin futures max (35% capital)
-  max_single_contract_margin_pct: 0.20  # $2,000 max per contract type
+  max_futures_margin_pct: 0.35      # ~$8,925 margin futures max
+  max_single_contract_margin_pct: 0.20  # ~$5,100 max par contract type
   allowed_contracts: [MCL, MES, MNQ, MGC, FIB, FESX]
   max_contracts_per_symbol: 2
 
 # Combined limits
 combined_limits:
   max_total_margin_pct: 0.80        # Total margin (equity+FX+futures) < 80%
-  min_cash_pct: 0.10                # 10% combined cash free (was 15%) — Fix #4
+  min_cash_pct: 0.10                # ~$2,550 combined cash free
 
 # Same sector map as paper
 sector_map:

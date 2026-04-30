@@ -1,7 +1,7 @@
 metadata:
-  version: 7
-  updated_at: '2026-04-19'
-  updated_by: phase_c_residuel_archive_3_re_wf_insufficient
+  version: 8
+  updated_at: '2026-04-30'
+  updated_by: codex_ibkr_capital_raise_15k
   review_cadence: hebdomadaire
   notes: 'v2 2026-04-16: +3 candidates ibkr_futures paper_only (INT-C).
 
@@ -21,7 +21,11 @@ metadata:
     v6 2026-04-19: Bucket C residuel — eu_gap_open ARCHIVE (WF REJECTED 31 mars, output/wf_eu_results/wf_eu_summary.json).
 
     v7 2026-04-19: Bucket C-2 — vix_mean_reversion + gold_equity_divergence + sector_rotation_eu ARCHIVES apres RE-WF INSUFFICIENT_TRADES
-    (0/5, 0/5, 1/5 windows). Manifests data/research/wf_bucket_c/.'
+    (0/5, 0/5, 1/5 windows). Manifests data/research/wf_bucket_c/.
+
+    v8 2026-04-30: IBKR +$15K. Nominal live_core max_risk_usd aligne sur
+    $25.5K de depots historiques (= $1,275 a 5%), avec rappel explicite que
+    le runtime futures applique le budget dynamiquement sur l''equity live.'
 ibkr_futures:
 - strategy_id: cross_asset_momentum
   book: ibkr_futures
@@ -30,7 +34,8 @@ ibkr_futures:
   runtime_module: strategies_v2.futures.cross_asset_momentum.CrossAssetMomentum
   wf_source: data/research/wf_manifests/cross_asset_momentum_runtime48h_2026-04-27.json
   sizing_policy: risk_budget_5pct
-  max_risk_usd: 500
+  max_risk_usd: 1275
+  risk_budget_pct: 0.05
   priority: first_refusal
   universe:
   - MES
@@ -61,6 +66,9 @@ ibkr_futures:
     analytical debt: front-month CL=F proxy vs deferred MCL contract, plus
 
     root-cause analysis of the broker bracket disappearance on 2026-04-27.
+
+    2026-04-30: nominal max_risk_usd raised to $1,275 after +$15K IBKR deposit;
+    actual enforcement stays dynamic at 5% of live equity inside futures_runner.
 
     '
 - strategy_id: gold_trend_mgc
@@ -96,7 +104,8 @@ ibkr_futures:
   runtime_module: strategies_v2.futures.gold_oil_rotation.GoldOilRotation
   wf_source: scripts/wf_gold_oil_rotation.py (5/5 OOS profitable)
   sizing_policy: risk_budget_5pct
-  max_risk_usd: 500
+  max_risk_usd: 1275
+  risk_budget_pct: 0.05
   priority: secondary_to_cross_asset
   universe:
   - MGC
@@ -115,6 +124,9 @@ ibkr_futures:
     annee 2021-2026 (backtest 5Y). Sharpe 6.44 solo, 0.87 en portefeuille
 
     (dilute par interactions avec gold_trend).
+
+    2026-04-30: nominal max_risk_usd raised to $1,275 after +$15K IBKR deposit;
+    runtime guard remains dynamic at 5% of live equity.
 
     '
 - strategy_id: mes_monday_long_oc

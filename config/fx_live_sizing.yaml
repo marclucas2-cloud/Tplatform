@@ -1,5 +1,7 @@
-# FX Live Sizing Configuration for $10K
-# Updated: 2026-03-27
+# FX Live Sizing Configuration for the legacy $10K launch plan
+# Not consumed by the current futures runtime; kept as reference only until
+# an explicit FX relaunch. Do not use this file to infer live IBKR futures sizing.
+# Updated: 2026-04-30
 
 total_capital: 10000
 fx_allocation_pct: 0.40  # $4,000 dedicated to FX

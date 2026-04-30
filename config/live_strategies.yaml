@@ -1,6 +1,7 @@
-# Live strategies configuration for $10K IBKR
-# Only strategies viable at this capital level
-# Last updated: 2026-03-27
+# Legacy live strategies configuration for the old $10K IBKR launch plan
+# NOT consumed by the current futures runtime (worker.py + futures_runner.py).
+# Kept as a historical FX/equity reference until an explicit relaunch review.
+# Last updated: 2026-04-30
 
 tier1_fx:
   enabled: true

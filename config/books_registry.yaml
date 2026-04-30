@@ -17,9 +17,9 @@
 # =============================================================================
 
 metadata:
-  version: 2
-  updated_at: "2026-04-19"
-  updated_by: "audit_9_0_chatgpt_b1_cleanup"
+  version: 3
+  updated_at: "2026-04-30"
+  updated_by: "codex_ibkr_capital_raise_15k"
   schema_version: 1
   notes: |
     v1 2026-04-16: registre initial. 5 books identifies cf doctrine projet.
@@ -28,6 +28,11 @@ metadata:
     v2 2026-04-19: B1 cleanup narrative drift. Notes alignees sur verite post-drain
     XXL + bucket A + C (voir live_whitelist.yaml v7). 0 live_core binance_crypto
     actuel, 2 live_core ibkr_futures (CAM + GOR).
+
+    v3 2026-04-30: ajout capital IBKR +$15K. Le champ capital_budget_usd est
+    realigne sur les depots historiques cumules du book futures ($25.5K), mais
+    le runtime continue de sizer sur l'equity live instantanee, pas sur ce
+    budget declaratif.
 
 # -----------------------------------------------------------------------------
 # Books actifs en prod
@@ -73,13 +78,13 @@ books:
     broker: "ibkr"
     asset_scope: ["MES", "MNQ", "M2K", "MGC", "MCL", "VIX", "MIB", "ESTX50"]
     mode_authorized: "live_allowed"
-    capital_budget_usd: 10000          # equivalent EUR ~9.5K
+    capital_budget_usd: 25500          # depots historiques IBKR: 500 + 10000 + 15000
     risk_budget:
       daily_loss_pct: 0.015            # cf config/limits_live.yaml
       level_1_dd_pct: 0.009
       level_3_dd_pct: 0.018
       max_futures_contracts: 4         # cf config/limits_live.yaml futures_limits
-      max_risk_per_strat_usd: 500
+      max_risk_per_strat_usd: 1275     # 5% nominal sur $25.5K; runtime re-evalue sur equity live
     health_requirements:
       - "ibkr_gateway_4002_connected"
       - "ibkr_account_authenticated"
@@ -98,9 +103,10 @@ books:
     notes: |
       2 strats live_core (cross_asset_momentum + gold_oil_rotation) + 5 paper_only
       (gold_trend_mgc V1, mes_monday/wednesday/pre_holiday_long, mcl_overnight_mon_trend10).
-      Equity live snapshot 2026-04-19: $11,013 (compte U25023333), inclut
-      position MCL 1 contrat +$295 unrealized. Trade ouvert via gold_oil_rotation
-      ou cross_asset_momentum.
+      2026-04-30: depots historiques cumules = $25,500 (500 + 10,000 + 15,000).
+      Le runtime live ne lit PAS ce champ pour le sizing intraday: il consomme
+      l'equity IBKR reelle via worker.py/run_live_risk_cycle et
+      core/worker/cycles/futures_runner.py.
 
   - book_id: "ibkr_eu"
     broker: "ibkr"

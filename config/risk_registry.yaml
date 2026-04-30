@@ -15,9 +15,9 @@
 # =============================================================================
 
 metadata:
-  version: 1
-  updated_at: "2026-04-16"
-  notes: "v1 initial consolidant config/limits_live.yaml + state files."
+  version: 2
+  updated_at: "2026-04-30"
+  notes: "v2 2026-04-30: budgets IBKR futures realignes sur un nominal post-depot $25.5K. Le runtime continue de re-sizer dynamiquement sur l'equity live."
 
 # -----------------------------------------------------------------------------
 # Budgets PORTFOLIO global (cross-book)
@@ -60,7 +60,7 @@ books:
     max_long_pct: 0.70
     max_short_pct: 0.40
     max_futures_contracts: 4           # cross-strat hard cap
-    max_risk_per_strat_usd: 500
+    max_risk_per_strat_usd: 1275       # 5% nominal sur $25.5K; runtime = equity live * 5%
     deleveraging:
       level_1_dd_pct: 0.009            # -0.9% NAV -> reduce 30%
       level_2_dd_pct: 0.0135           # -1.35% NAV -> reduce 50%
@@ -91,7 +91,8 @@ strategies:
 
   cross_asset_momentum:
     book: ibkr_futures
-    max_risk_usd: 500
+    max_risk_usd: 1275
+    risk_budget_pct: 0.05
     max_drawdown_strat_pct: 0.05       # -5% sur capital alloue
     sizing_policy: "risk_budget_5pct"
     kill_criteria:
@@ -100,7 +101,8 @@ strategies:
 
   gold_oil_rotation:
     book: ibkr_futures
-    max_risk_usd: 500
+    max_risk_usd: 1275
+    risk_budget_pct: 0.05
     max_drawdown_strat_pct: 0.05
     sizing_policy: "risk_budget_5pct"
     kill_criteria:
