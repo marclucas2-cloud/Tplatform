@@ -63,6 +63,7 @@ class Signal:
     order_type: str = "MARKET"  # MARKET, LIMIT
     stop_loss: float | None = None
     take_profit: float | None = None
+    trailing_stop_pct: float | None = None
     strength: float = 1.0
 
 
@@ -78,6 +79,7 @@ class Order:
     strategy: str = ""
     stop_loss: float | None = None
     take_profit: float | None = None
+    trailing_stop_pct: float | None = None
     broker: str = "default"
     limit_price: float | None = None
 

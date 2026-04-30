@@ -6,6 +6,7 @@ strategy execution with strict anti-lookahead guarantees.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 import logging
 from typing import Dict, List
 
@@ -40,6 +41,20 @@ from core.backtester_v2.types import (
 logger = logging.getLogger(__name__)
 
 
+@dataclass
+class _ProtectiveExitState:
+    """Runtime stop / take-profit / trailing state for one open symbol."""
+
+    strategy: str
+    side: int  # +1 long, -1 short
+    base_stop_loss: float | None = None
+    active_stop_loss: float | None = None
+    take_profit: float | None = None
+    trailing_stop_pct: float | None = None
+    high_watermark: float | None = None
+    low_watermark: float | None = None
+
+
 class BacktesterV2:
     """Event-driven backtesting engine with anti-lookahead DataFeed.
 
@@ -60,6 +75,7 @@ class BacktesterV2:
         self._cash: float = config.initial_capital
         self._positions: Dict[str, float] = {}  # symbol -> signed qty
         self._avg_costs: Dict[str, float] = {}  # symbol -> avg entry price
+        self._protective_exits: Dict[str, _ProtectiveExitState] = {}
         self._peak_equity: float = config.initial_capital
 
         # Results
@@ -129,6 +145,7 @@ class BacktesterV2:
         bar: Bar = event.data
         feed_ts = event.timestamp + pd.Timedelta(nanoseconds=1)
         self._feed.set_timestamp(feed_ts)
+        self._process_protective_exits(bar, strategies)
         record_equity(self, event.timestamp)
 
         portfolio_state = get_portfolio_state(self)
@@ -174,6 +191,7 @@ class BacktesterV2:
             quantity=float(quantity), order_type=signal.order_type,
             timestamp=event.timestamp, strategy=signal.strategy_name,
             stop_loss=signal.stop_loss, take_profit=signal.take_profit,
+            trailing_stop_pct=signal.trailing_stop_pct,
         )
         self._queue.push(Event(
             timestamp=event.timestamp, type=EventType.ORDER, data=order,
@@ -201,37 +219,67 @@ class BacktesterV2:
             return
 
         symbol = fill.order.symbol
-        signed_qty = fill.quantity if fill.order.side == "BUY" else -fill.quantity
+        side_sign = 1 if fill.order.side == "BUY" else -1
+        signed_qty = fill.quantity if side_sign == 1 else -fill.quantity
         old_qty = self._positions.get(symbol, 0.0)
         new_qty = old_qty + signed_qty
 
-        if fill.order.side == "BUY":
+        if side_sign == 1:
             self._cash -= fill.price * fill.quantity + fill.commission
-            if old_qty >= 0:
-                old_cost = self._avg_costs.get(symbol, 0.0) * old_qty
-                self._avg_costs[symbol] = (
-                    (old_cost + fill.price * fill.quantity) / max(new_qty, 1e-10)
-                )
         else:
             self._cash += fill.price * fill.quantity - fill.commission
-            if old_qty > 0:
-                entry = self._avg_costs.get(symbol, fill.price)
-                pnl = (fill.price - entry) * min(abs(signed_qty), old_qty)
-                pnl -= fill.commission
-                self._results.trades.append({
-                    "symbol": symbol, "side": fill.order.side,
-                    "entry_price": entry, "exit_price": fill.price,
-                    "quantity": abs(fill.quantity), "pnl": round(pnl, 4),
-                    "commission": fill.commission,
-                    "strategy": fill.order.strategy,
-                    "timestamp": str(event.timestamp),
-                })
 
-        if abs(new_qty) < 1e-10:
-            self._positions.pop(symbol, None)
-            self._avg_costs.pop(symbol, None)
-        else:
+        old_side = 0
+        if old_qty > 0:
+            old_side = 1
+        elif old_qty < 0:
+            old_side = -1
+
+        # Open / add in the same direction.
+        if old_side == 0 or old_side == side_sign:
+            old_abs = abs(old_qty)
+            total_qty = old_abs + fill.quantity
+            entry = self._avg_costs.get(symbol, fill.price)
+            self._avg_costs[symbol] = (
+                (entry * old_abs + fill.price * fill.quantity) / max(total_qty, 1e-10)
+            )
             self._positions[symbol] = new_qty
+            self._upsert_protective_state(symbol, fill, side_sign)
+        else:
+            closing_qty = min(abs(old_qty), fill.quantity)
+            entry = self._avg_costs.get(symbol, fill.price)
+            commission_close = fill.commission * (closing_qty / max(fill.quantity, 1e-10))
+            pnl = (fill.price - entry) * closing_qty * old_side
+            pnl -= commission_close
+            self._results.trades.append({
+                "symbol": symbol,
+                "side": fill.order.side,
+                "position_side": "LONG" if old_side == 1 else "SHORT",
+                "entry_price": entry,
+                "exit_price": fill.price,
+                "quantity": abs(closing_qty),
+                "pnl": round(pnl, 4),
+                "commission": round(commission_close, 4),
+                "strategy": fill.order.strategy,
+                "timestamp": str(event.timestamp),
+                "exit_reason": fill.reason or "signal",
+            })
+
+            residual_old = abs(old_qty) - closing_qty
+            opening_qty = fill.quantity - closing_qty
+
+            if residual_old <= 1e-10:
+                self._positions.pop(symbol, None)
+                self._avg_costs.pop(symbol, None)
+                self._protective_exits.pop(symbol, None)
+            else:
+                self._positions[symbol] = old_side * residual_old
+
+            if opening_qty > 1e-10:
+                flipped_qty = side_sign * opening_qty
+                self._positions[symbol] = flipped_qty
+                self._avg_costs[symbol] = fill.price
+                self._upsert_protective_state(symbol, fill, side_sign)
 
         for s in strategies:
             if s.name == fill.order.strategy:
@@ -262,3 +310,165 @@ class BacktesterV2:
     ) -> None:
         """Apply FX swap costs for overnight positions."""
         pass
+
+    def _upsert_protective_state(self, symbol: str, fill: Fill, side_sign: int) -> None:
+        """Create or refresh protective exits for an open position."""
+        trailing_pct = fill.order.trailing_stop_pct
+        base_stop = fill.order.stop_loss
+        active_stop = base_stop
+        high_watermark = None
+        low_watermark = None
+
+        if trailing_pct is not None and trailing_pct > 0:
+            if side_sign == 1:
+                trailing_stop = fill.price * (1.0 - trailing_pct)
+                active_stop = max(x for x in [base_stop, trailing_stop] if x is not None)
+                high_watermark = fill.price
+            else:
+                trailing_stop = fill.price * (1.0 + trailing_pct)
+                active_stop = min(x for x in [base_stop, trailing_stop] if x is not None)
+                low_watermark = fill.price
+
+        state = self._protective_exits.get(symbol)
+        if state is None or state.side != side_sign:
+            self._protective_exits[symbol] = _ProtectiveExitState(
+                strategy=fill.order.strategy,
+                side=side_sign,
+                base_stop_loss=base_stop,
+                active_stop_loss=active_stop,
+                take_profit=fill.order.take_profit,
+                trailing_stop_pct=trailing_pct,
+                high_watermark=high_watermark,
+                low_watermark=low_watermark,
+            )
+            return
+
+        if base_stop is not None:
+            state.base_stop_loss = base_stop
+        if fill.order.take_profit is not None:
+            state.take_profit = fill.order.take_profit
+        if trailing_pct is not None:
+            state.trailing_stop_pct = trailing_pct
+        if state.side == 1:
+            state.high_watermark = max(state.high_watermark or fill.price, fill.price)
+        else:
+            state.low_watermark = min(state.low_watermark or fill.price, fill.price)
+        if active_stop is not None:
+            if state.active_stop_loss is None:
+                state.active_stop_loss = active_stop
+            elif state.side == 1:
+                state.active_stop_loss = max(state.active_stop_loss, active_stop)
+            else:
+                state.active_stop_loss = min(state.active_stop_loss, active_stop)
+
+    def _process_protective_exits(
+        self, bar: Bar, strategies: List[StrategyBase]
+    ) -> None:
+        """Handle fixed and trailing exits before polling strategies.
+
+        Conservative trailing semantics:
+        - the active stop used for this bar comes from prior bars
+        - the trailing watermark is updated only after this bar survives
+        This avoids optimistic intrabar path assumptions from the same OHLC bar.
+        """
+        state = self._protective_exits.get(bar.symbol)
+        qty = self._positions.get(bar.symbol, 0.0)
+        if state is None or abs(qty) < 1e-10:
+            return
+
+        close_side = "SELL" if qty > 0 else "BUY"
+        stop_price = state.active_stop_loss
+        if stop_price is not None:
+            triggered = (qty > 0 and bar.low <= stop_price) or (
+                qty < 0 and bar.high >= stop_price
+            )
+            if triggered:
+                fill_price = min(stop_price, bar.open) if qty > 0 else max(stop_price, bar.open)
+                self._emit_protective_fill(
+                    symbol=bar.symbol,
+                    side=close_side,
+                    quantity=abs(qty),
+                    price=fill_price,
+                    timestamp=bar.timestamp,
+                    strategy=state.strategy,
+                    reason="stop_loss",
+                    strategies=strategies,
+                )
+                return
+
+        tp_price = state.take_profit
+        if tp_price is not None:
+            triggered = (qty > 0 and bar.high >= tp_price) or (
+                qty < 0 and bar.low <= tp_price
+            )
+            if triggered:
+                fill_price = max(tp_price, bar.open) if qty > 0 else min(tp_price, bar.open)
+                self._emit_protective_fill(
+                    symbol=bar.symbol,
+                    side=close_side,
+                    quantity=abs(qty),
+                    price=fill_price,
+                    timestamp=bar.timestamp,
+                    strategy=state.strategy,
+                    reason="take_profit",
+                    strategies=strategies,
+                )
+                return
+
+        trailing_pct = state.trailing_stop_pct
+        if trailing_pct is None or trailing_pct <= 0:
+            return
+
+        if qty > 0:
+            state.high_watermark = max(state.high_watermark or bar.close, bar.high)
+            candidate = state.high_watermark * (1.0 - trailing_pct)
+            floor = state.base_stop_loss if state.base_stop_loss is not None else candidate
+            state.active_stop_loss = max(
+                x for x in [state.active_stop_loss, candidate, floor] if x is not None
+            )
+        else:
+            state.low_watermark = min(state.low_watermark or bar.close, bar.low)
+            candidate = state.low_watermark * (1.0 + trailing_pct)
+            ceiling = state.base_stop_loss if state.base_stop_loss is not None else candidate
+            state.active_stop_loss = min(
+                x for x in [state.active_stop_loss, candidate, ceiling] if x is not None
+            )
+
+    def _emit_protective_fill(
+        self,
+        *,
+        symbol: str,
+        side: str,
+        quantity: float,
+        price: float,
+        timestamp: pd.Timestamp,
+        strategy: str,
+        reason: str,
+        strategies: List[StrategyBase],
+    ) -> None:
+        """Create and apply a synthetic protective fill."""
+        broker_cfg = self._config.brokers.get("default", {})
+        commission = broker_cfg.get("commission_per_share", 0.005) * abs(quantity)
+        order = Order(
+            symbol=symbol,
+            side=side,
+            quantity=quantity,
+            order_type="STOP",
+            timestamp=timestamp,
+            strategy=strategy,
+        )
+        fill = Fill(
+            order=order,
+            price=round(price, 6),
+            quantity=quantity,
+            commission=round(commission, 4),
+            slippage_bps=0.0,
+            latency_ms=0.0,
+            timestamp=timestamp,
+            rejected=False,
+            reason=reason,
+        )
+        self._on_fill(
+            Event(timestamp=timestamp, type=EventType.FILL, data=fill),
+            strategies,
+        )

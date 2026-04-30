@@ -177,15 +177,16 @@ def close_all_positions(engine: BacktesterV2) -> None:
         entry = engine._avg_costs.get(symbol, bar.close)
         pnl = (bar.close - entry) * qty
         engine._results.trades.append({
-            "symbol": symbol, "side": "CLOSE",
+            "symbol": symbol,
+            "side": "CLOSE",
+            "position_side": "LONG" if qty > 0 else "SHORT",
             "entry_price": entry, "exit_price": bar.close,
             "quantity": abs(qty), "pnl": round(pnl, 4),
             "commission": 0.0, "strategy": "close_all",
             "timestamp": str(engine._feed.timestamp),
+            "exit_reason": "end_of_data",
         })
-        if qty > 0:
-            engine._cash += qty * bar.close
-        else:
-            engine._cash += abs(qty) * (2 * entry - bar.close)
+        engine._cash += qty * bar.close
     engine._positions.clear()
     engine._avg_costs.clear()
+    engine._protective_exits.clear()
