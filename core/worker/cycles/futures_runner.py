@@ -117,6 +117,60 @@ def _trade_is_active(trade) -> bool:
     return status not in ("Cancelled", "Filled", "Inactive", "ApiCancelled")
 
 
+def _recalculate_bracket_from_fill(
+    sig,
+    fill_price: float,
+    signal_price: float | None = None,
+    strategy_params: dict | None = None,
+) -> tuple[float, float]:
+    """Translate a strategy bracket onto the actual fill price.
+
+    Priority:
+      1. Explicit percentage params (sl_pct/tp_pct)
+      2. Explicit point params (sl_points/tp_points)
+      3. Distances implied by signal_price -> stop/tp
+      4. Fallback to legacy absolute-distance mirroring
+    """
+    if not fill_price or not sig.stop_loss or not sig.take_profit:
+        return round(sig.stop_loss or 0.0, 2), round(sig.take_profit or 0.0, 2)
+
+    params = strategy_params or {}
+    side = sig.side.upper()
+
+    sl_pct = params.get("sl_pct")
+    tp_pct = params.get("tp_pct")
+    if sl_pct is not None and tp_pct is not None:
+        sl_pct = float(sl_pct)
+        tp_pct = float(tp_pct)
+        if side == "BUY":
+            return round(fill_price * (1 - sl_pct), 2), round(fill_price * (1 + tp_pct), 2)
+        return round(fill_price * (1 + sl_pct), 2), round(fill_price * (1 - tp_pct), 2)
+
+    sl_points = params.get("sl_points")
+    tp_points = params.get("tp_points")
+    if sl_points is not None and tp_points is not None:
+        sl_points = float(sl_points)
+        tp_points = float(tp_points)
+        if side == "BUY":
+            return round(fill_price - sl_points, 2), round(fill_price + tp_points, 2)
+        return round(fill_price + sl_points, 2), round(fill_price - tp_points, 2)
+
+    if signal_price:
+        signal_price = float(signal_price)
+        sl_distance = abs(signal_price - float(sig.stop_loss))
+        tp_distance = abs(float(sig.take_profit) - signal_price)
+        if side == "BUY":
+            return round(fill_price - sl_distance, 2), round(fill_price + tp_distance, 2)
+        return round(fill_price + sl_distance, 2), round(fill_price - tp_distance, 2)
+
+    # Legacy fallback when we have no better source of truth.
+    sl_offset = abs(float(sig.stop_loss) - fill_price)
+    tp_offset = abs(float(sig.take_profit) - fill_price)
+    if side == "BUY":
+        return round(fill_price - sl_offset, 2), round(fill_price + tp_offset, 2)
+    return round(fill_price + sl_offset, 2), round(fill_price - tp_offset, 2)
+
+
 def _resolve_front_month_contract(ib, symbol: str):
     """Resolve the nearest non-expired futures contract for a symbol.
 
@@ -294,6 +348,20 @@ def run_futures_cycle(live: bool = False):
 
         signals = []
 
+        def _append_signal(display_name: str, sig, *, signal_price: float | None = None, strat=None):
+            _meta: dict[str, object] = {}
+            if signal_price is not None:
+                try:
+                    _meta["signal_price"] = float(signal_price)
+                except Exception:
+                    pass
+            if strat is not None and hasattr(strat, "get_parameters"):
+                try:
+                    _meta["strategy_params"] = dict(strat.get_parameters() or {})
+                except Exception:
+                    pass
+            signals.append((display_name, sig, _meta))
+
         # ============================================================
         # ============================================================
         # STRATS LIVE CAPABLE (true alpha, zero-beta, paper + live)
@@ -326,7 +394,7 @@ def run_futures_cycle(live: bool = False):
                 _cam_top_pick = _cam_strat.get_top_pick(bar=bar, portfolio_state=portfolio_state)
                 sig = _cam_strat.on_bar(bar, portfolio_state)
                 if sig:
-                    signals.append(("Cross-Asset Mom", sig))
+                    _append_signal("Cross-Asset Mom", sig, signal_price=float(bar.close), strat=_cam_strat)
                     logger.info(f"    Cross-Asset Mom ({_mode}): BUY {sig.symbol}")
                 else:
                     logger.info(f"    Cross-Asset Mom ({_mode}): pas de rebal "
@@ -348,7 +416,7 @@ def run_futures_cycle(live: bool = False):
                     if bar:
                         sig = _gt_strat.on_bar(bar, portfolio_state)
                         if sig:
-                            signals.append(("Gold Trend MGC", sig))
+                            _append_signal("Gold Trend MGC", sig, signal_price=float(bar.close), strat=_gt_strat)
                             logger.info(f"    Gold Trend MGC ({_mode}): BUY @ {bar.close:.2f}")
                         else:
                             logger.info(f"    Gold Trend MGC ({_mode}): below EMA20")
@@ -374,7 +442,13 @@ def run_futures_cycle(live: bool = False):
                             logger.info(f"    Gold-Oil Rotation ({_mode}): SKIP "
                                         f"— CAM reserved {sig.symbol}")
                         else:
-                            signals.append(("Gold-Oil Rotation", sig))
+                            _winner_bar = feed.get_latest_bar(sig.symbol)
+                            _append_signal(
+                                "Gold-Oil Rotation",
+                                sig,
+                                signal_price=float(_winner_bar.close) if _winner_bar else None,
+                                strat=_gor_strat,
+                            )
                             logger.info(f"    Gold-Oil Rotation ({_mode}): BUY {sig.symbol}")
                     else:
                         logger.info(f"    Gold-Oil Rotation ({_mode}): spread < 2%")
@@ -428,7 +502,7 @@ def run_futures_cycle(live: bool = False):
                     if bar:
                         sig = _cal.on_bar(bar, portfolio_state)
                         if sig:
-                            signals.append((_cal.name, sig))
+                            _append_signal(_cal.name, sig, signal_price=float(bar.close), strat=_cal)
                             logger.info(f"    {_cal.name} (paper): BUY @ {bar.close:.2f}")
                         else:
                             logger.info(f"    {_cal.name} (paper): pas un jour pattern")
@@ -451,7 +525,7 @@ def run_futures_cycle(live: bool = False):
                     if bar:
                         sig = _mcl_strat.on_bar(bar, portfolio_state)
                         if sig:
-                            signals.append((_mcl_strat.name, sig))
+                            _append_signal(_mcl_strat.name, sig, signal_price=float(bar.close), strat=_mcl_strat)
                             logger.info(f"    {_mcl_strat.name} (paper): BUY @ {bar.close:.2f}")
                         else:
                             logger.info(f"    {_mcl_strat.name} (paper): pas un jour/trend pattern")
@@ -487,7 +561,7 @@ def run_futures_cycle(live: bool = False):
                             "bar_ts": str(bar.timestamp),
                         }
                         if sig:
-                            signals.append((_mvs.name, sig))
+                            _append_signal(_mvs.name, sig, signal_price=float(bar.close), strat=_mvs)
                             logger.info(
                                 f"    {_mvs.name} (paper): BUY @ {bar.close:.2f} "
                                 f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f}"
@@ -944,7 +1018,7 @@ def run_futures_cycle(live: bool = False):
             "mes_mr_vix_spike":          "mes_mr_vix_spike",
         }
 
-        for name, sig in signals:
+        for name, sig, sig_meta in signals:
             if _contracts_opened >= _slots_available:
                 logger.info(f"    {name}: SKIP — no slots left ({_slots_available} available, {_contracts_opened} used)")
                 continue
@@ -1071,21 +1145,14 @@ def run_futures_cycle(live: bool = False):
                 # Signal price = bar.close at signal time, fill price = actual execution
                 _exit_side = "BUY" if sig.side == "SELL" else "SELL"
                 _oca = f"OCA_{sym}_{_uuid.uuid4().hex[:8]}"
-                _signal_price = sig.stop_loss + sig.take_profit  # just for logging
-                _sl_offset = abs(sig.stop_loss - _fill_price) if sig.stop_loss else 20
-                _tp_offset = abs(sig.take_profit - _fill_price) if sig.take_profit else 40
-                # Use the LARGER of: original offset or recalculated from fill
-                # Recalculate from fill price to ensure SL is on correct side
-                if sig.side == "BUY":
-                    _real_sl = _fill_price - _sl_offset
-                    _real_tp = _fill_price + _tp_offset
-                else:  # SELL
-                    _real_sl = _fill_price + _sl_offset
-                    _real_tp = _fill_price - _tp_offset
-                # FIX: Signal is @dataclass(frozen=True), cannot mutate sig.stop_loss.
-                # Use local variables for the fill-based SL/TP instead.
-                _final_sl = round(_real_sl, 2)
-                _final_tp = round(_real_tp, 2)
+                _signal_price = sig_meta.get("signal_price")
+                _strategy_params = sig_meta.get("strategy_params")
+                _final_sl, _final_tp = _recalculate_bracket_from_fill(
+                    sig,
+                    float(_fill_price),
+                    signal_price=float(_signal_price) if _signal_price is not None else None,
+                    strategy_params=_strategy_params if isinstance(_strategy_params, dict) else None,
+                )
 
                 _sl = StopOrder(_exit_side, qty, _final_sl)
                 _sl.tif = "GTC"; _sl.ocaGroup = _oca; _sl.ocaType = 1; _sl.outsideRth = True
