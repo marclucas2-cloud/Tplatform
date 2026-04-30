@@ -158,6 +158,12 @@ books:
     asset_scope: ["US equities SP500 large+mid caps"]
     mode_authorized: "paper_only"      # doctrine: paper d'abord
     capital_budget_usd: 100000         # paper $100K
+    # 2026-04-30: source-of-truth explicite. Tant que ce book est paper_only,
+    # la simulation locale fait foi. Les positions presentes sur le compte
+    # broker Alpaca paper (heritees ou manuelles) sont NON CANONIQUES et
+    # ne doivent PAS declencher un warning de reconciliation.
+    source_of_truth: "simulation_local"
+    broker_positions_canonical: false
     risk_budget:
       paper_only_note: "n/a, mode paper"
       max_position_pct: 0.10           # 10% par symbol
@@ -178,6 +184,8 @@ books:
       d'abord, capital reel non requis tant que paper sans divergence > 30j.
       Alpaca live requerrait PDT waiver (capital > $25K) + 30j paper stable.
       Post-drain 2026-04-19: capital equity paper $99,495 (simule $100K).
+      2026-04-30 : 4 positions broker (AMAT/AMD/MU/TLT) sont non-canoniques
+      et ignorees par la reconciliation (source_of_truth=simulation_local).
 
 # -----------------------------------------------------------------------------
 # Schema validation

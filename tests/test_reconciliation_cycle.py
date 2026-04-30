@@ -161,9 +161,10 @@ class TestReconciliationCycleOrchestration:
                 ],
             }
 
-        # Force alpaca_us recognized as paper_only
+        # Force alpaca_us recognized as paper_only (no source_of_truth set)
         with patch("core.governance.reconciliation_cycle.reconcile_book", side_effect=fake), \
-             patch("core.governance.reconciliation_cycle._is_paper_only", return_value=True):
+             patch("core.governance.reconciliation_cycle._get_book_meta",
+                   return_value={"paper_only": True, "source_of_truth": ""}):
             run_reconciliation_cycle(
                 books=("alpaca_us",),
                 alert_callback=lambda msg, lvl: alerts.append((msg, lvl)),
@@ -171,6 +172,39 @@ class TestReconciliationCycleOrchestration:
 
         # No Telegram alert for paper_only divergence (spam prevention)
         assert alerts == [], f"paper_only should not send alert_callback, got: {alerts}"
+
+    def test_paper_only_with_simulation_canonical_logs_info(self, isolated_recon_dir, caplog):
+        """source_of_truth=simulation_local: divergence is INFO, not WARNING."""
+        import logging as _logging
+        alerts = []
+
+        def fake(book_id):
+            return {
+                "book": book_id,
+                "divergences": [
+                    {"type": "only_in_broker", "symbols": ["AMAT", "TLT"]},
+                ],
+            }
+
+        with patch("core.governance.reconciliation_cycle.reconcile_book", side_effect=fake), \
+             patch("core.governance.reconciliation_cycle._get_book_meta",
+                   return_value={"paper_only": True, "source_of_truth": "simulation_local"}), \
+             caplog.at_level(_logging.INFO, logger="core.governance.reconciliation_cycle"):
+            run_reconciliation_cycle(
+                books=("alpaca_us",),
+                alert_callback=lambda msg, lvl: alerts.append((msg, lvl)),
+            )
+
+        # No Telegram alert (paper_only excluded)
+        assert alerts == []
+        # Logged at INFO with the canonical message
+        info_msgs = [r.getMessage() for r in caplog.records if r.levelno == _logging.INFO]
+        assert any("non-canonical" in m and "simulation_local" in m for m in info_msgs), \
+            f"expected INFO log mentioning non-canonical+simulation_local, got: {info_msgs}"
+        # And NOT logged at WARNING
+        warn_msgs = [r.getMessage() for r in caplog.records
+                     if r.levelno == _logging.WARNING and "ALERT_WARN" in r.getMessage()]
+        assert warn_msgs == [], f"should not emit ALERT_WARN, got: {warn_msgs}"
 
     def test_live_book_still_alerts_on_divergence(self, isolated_recon_dir):
         """Regression: live books (non paper_only) MUST still alert Telegram."""

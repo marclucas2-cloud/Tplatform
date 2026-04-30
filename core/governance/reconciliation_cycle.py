@@ -38,22 +38,39 @@ from core.governance.reconciliation import (
 logger = logging.getLogger(__name__)
 
 
-def _is_paper_only(book_id: str) -> bool:
-    """Check if book is paper_only in books_registry (affects alert severity)."""
+def _get_book_meta(book_id: str) -> dict:
+    """Return book metadata dict (paper_only, source_of_truth) for severity tuning.
+
+    Keys:
+      - paper_only: bool — book is in paper_only mode
+      - source_of_truth: str — "simulation_local" | "broker" | "" (default)
+
+    source_of_truth=simulation_local means broker positions are non-canonical
+    for this book and reconciliation divergences are pure information,
+    not even worth a WARNING level (they are expected by design).
+    """
+    meta = {"paper_only": False, "source_of_truth": ""}
     try:
         from pathlib import Path
         import yaml
         root = Path(__file__).resolve().parent.parent.parent
         registry = root / "config" / "books_registry.yaml"
         if not registry.exists():
-            return False
+            return meta
         data = yaml.safe_load(registry.read_text(encoding="utf-8")) or {}
         for b in data.get("books", []) or []:
             if b.get("book_id") == book_id:
-                return b.get("mode_authorized") == "paper_only"
+                meta["paper_only"] = b.get("mode_authorized") == "paper_only"
+                meta["source_of_truth"] = b.get("source_of_truth", "") or ""
+                return meta
     except Exception:
         pass
-    return False
+    return meta
+
+
+def _is_paper_only(book_id: str) -> bool:
+    """Back-compat shim. Prefer _get_book_meta()."""
+    return _get_book_meta(book_id)["paper_only"]
 
 
 def run_reconciliation_cycle(
@@ -83,10 +100,14 @@ def run_reconciliation_cycle(
         except Exception as exc:
             logger.warning(f"save_reconciliation_report failed for {book_id}: {exc}")
 
-        # Determine book mode (live vs paper) to tune severity. paper_only books
-        # are expected to have local_positions (simulation) without real broker
-        # positions — this is NOT critical, just informational/warning.
-        is_paper_book = _is_paper_only(book_id)
+        # Determine book mode (live vs paper) and source of truth to tune severity.
+        # - live book: divergence is CRITICAL (manual reconcile needed)
+        # - paper book + source_of_truth=simulation_local: divergence is INFO
+        #   (broker positions are non-canonical by design, no action needed)
+        # - paper book otherwise: divergence is WARNING (expected but trace-worthy)
+        meta = _get_book_meta(book_id)
+        is_paper_book = meta["paper_only"]
+        sim_is_canonical = meta["source_of_truth"] == "simulation_local"
 
         # Alert on divergences using severity matrix
         if alert_callback is not None:
@@ -94,7 +115,18 @@ def run_reconciliation_cycle(
                 dtype = div.get("type", "unknown")
                 if dtype in ("only_in_broker", "only_in_local"):
                     syms = div.get("symbols", [])
-                    if is_paper_book:
+                    if is_paper_book and sim_is_canonical:
+                        # Source-of-truth = simulation locale, donc les positions
+                        # broker sont non-canoniques par design. Pas un signal
+                        # operationnel : INFO uniquement, pas de warning.
+                        severity = "info"
+                        label = "RECONCILIATION INFO"
+                        msg = (
+                            f"{label} [{book_id} paper_only non-canonical] {dtype}: "
+                            f"symbols={syms}. source_of_truth=simulation_local, "
+                            f"broker positions ignored by design."
+                        )
+                    elif is_paper_book:
                         # Paper book simulation is locally-maintained, not pushed
                         # to broker. Divergence expected — warning only.
                         severity = "warning"
@@ -114,7 +146,10 @@ def run_reconciliation_cycle(
                     # positions broker auto-fillees. On garde JSONL + syslog
                     # pour tracabilite mais on evite Telegram (spam ~180/24h).
                     if is_paper_book:
-                        logger.warning(f"ALERT_WARN: {msg}")
+                        if sim_is_canonical:
+                            logger.info(f"ALERT_INFO: {msg}")
+                        else:
+                            logger.warning(f"ALERT_WARN: {msg}")
                     else:
                         try:
                             alert_callback(msg, severity)
@@ -131,6 +166,7 @@ def run_reconciliation_cycle(
                             context={
                                 "book": book_id,
                                 "book_mode": "paper_only" if is_paper_book else "live_allowed",
+                                "source_of_truth": meta["source_of_truth"] or "broker",
                                 "divergence_type": dtype,
                                 "symbols": syms,
                                 "broker_positions": result.get("broker_positions", []),
