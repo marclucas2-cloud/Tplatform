@@ -25,6 +25,7 @@ LIVE_SIGNAL_PATTERN="Cross-Asset Mom \\(LIVE\\): (BUY|SELL)|Gold-Oil Rotation \\
 XMOM_SIGNAL_PATTERN="XMOMENTUM SIGNAL"
 BUDGET_BLOCK_PATTERN="SKIP.*risk budget exceeded|risk budget exceeded|budget saturat|RISK_BUDGET"
 BUDGET_STATUS_PATTERN="FUTURES LIVE: risk budget|risk budget \\$[0-9]"
+RESERVED_SKIP_PATTERN="SKIP.*CAM reserved"
 
 mkdir -p reports/checkup
 
@@ -72,10 +73,14 @@ BUDGET_BLOCK_COUNT=$(count_lines "$BUDGET_BLOCKS")
 # 6) Last risk budget status line
 LAST_BUDGET=$(grep -E "$BUDGET_STATUS_PATTERN" $LOGS 2>/dev/null | awk_filter | tail -1)
 
-# 7) Current live position state
+# 7) Reservation skips (normal if CAM and GOR target same symbol)
+RESERVED_SKIPS=$(grep -E "$RESERVED_SKIP_PATTERN" $LOGS 2>/dev/null | awk_filter)
+RESERVED_SKIP_COUNT=$(count_lines "$RESERVED_SKIPS")
+
+# 8) Current live position state
 LIVE_POS=$(cat data/state/futures_positions_live.json 2>/dev/null || echo "{}")
 
-# 8) Live kill switch status
+# 9) Live kill switch status
 KILL_LIVE=$(python3 -c "import json; d=json.load(open('data/kill_switch_state.json')); print('ACTIVE' if d.get('active') else 'inactive')" 2>/dev/null || echo "unknown")
 
 # === VERDICT ===
@@ -122,6 +127,7 @@ $DETAIL
 | Worker live order / intent lines | $LIVE_ORDER_COUNT |
 | Real fills on live account $LIVE_ACCOUNT | $LIVE_FILL_COUNT |
 | Risk budget block mentions | $BUDGET_BLOCK_COUNT |
+| Normal CAM reservation skips | $RESERVED_SKIP_COUNT |
 
 ## Current state
 - Live kill switch: $KILL_LIVE
@@ -153,6 +159,11 @@ $LIVE_FILLS
 ### Risk budget blocks
 \`\`\`
 $BUDGET_BLOCKS
+\`\`\`
+
+### CAM reservation skips
+\`\`\`
+$RESERVED_SKIPS
 \`\`\`
 
 ## Next action by verdict
