@@ -1402,6 +1402,16 @@ def run_bracket_watchdog_cycle():
             import time as _wdt
             _wdt.sleep(2)
 
+            def _contract_key(_contract, _fallback_symbol=""):
+                _local = getattr(_contract, "localSymbol", None)
+                if _local:
+                    return str(_local)
+                _symbol = getattr(_contract, "symbol", None) or _fallback_symbol
+                _month = getattr(_contract, "lastTradeDateOrContractMonth", None)
+                if _symbol and _month:
+                    return f"{_symbol}:{_month}"
+                return _symbol
+
             _live_positions = [p for p in _ib.positions() if abs(p.position) > 0]
             if not _live_positions:
                 logger.info("BRACKET WATCHDOG: 0 live positions, nothing to check")
@@ -1411,15 +1421,43 @@ def run_bracket_watchdog_cycle():
             _active_orders = [t for t in _open_trades
                               if t.orderStatus.status not in ("Cancelled", "Filled", "Inactive")]
 
-            # Build per-symbol order map: need BOTH STP and LMT to be protected
-            _sym_has_stp: dict[str, list] = {}
-            _sym_has_lmt: dict[str, list] = {}
+            # Build per-contract order map: protection must match the exact contract
+            _key_has_stp: dict[str, list] = {}
+            _key_has_lmt: dict[str, list] = {}
+            _sym_order_legs: dict[str, list] = {}
             for t in _active_orders:
                 s = t.contract.symbol
+                k = _contract_key(t.contract, s)
+                _sym_order_legs.setdefault(s, []).append(t)
                 if t.order.orderType in ("STP", "STOP"):
-                    _sym_has_stp.setdefault(s, []).append(t)
+                    _key_has_stp.setdefault(k, []).append(t)
                 elif t.order.orderType in ("LMT", "LIMIT"):
-                    _sym_has_lmt.setdefault(s, []).append(t)
+                    _key_has_lmt.setdefault(k, []).append(t)
+
+            _sym_live_keys: dict[str, set[str]] = {}
+            for pos in _live_positions:
+                _sym_live_keys.setdefault(pos.contract.symbol, set()).add(
+                    _contract_key(pos.contract, pos.contract.symbol)
+                )
+
+            # Cancel stale same-symbol orders that target a non-live contract month.
+            for _sym, _legs in _sym_order_legs.items():
+                _valid_keys = _sym_live_keys.get(_sym, set())
+                for _leg in _legs:
+                    _leg_key = _contract_key(_leg.contract, _sym)
+                    if _valid_keys and _leg_key not in _valid_keys:
+                        logger.warning(
+                            "BRACKET WATCHDOG: cancelling stale %s %s orderId=%s "
+                            "(live contracts=%s)",
+                            _sym,
+                            _leg_key,
+                            _leg.order.orderId,
+                            sorted(_valid_keys),
+                        )
+                        try:
+                            _ib.cancelOrder(_leg.order)
+                        except Exception:
+                            pass
 
             _state_candidates = [
                 ROOT / "data" / "state" / "ibkr_futures" / "positions_live.json",
@@ -1443,22 +1481,27 @@ def run_bracket_watchdog_cycle():
             _unprotected = 0
             for pos in _live_positions:
                 _sym = pos.contract.symbol
-                _has_sl = len(_sym_has_stp.get(_sym, [])) > 0
-                _has_tp = len(_sym_has_lmt.get(_sym, [])) > 0
+                _contract_k = _contract_key(pos.contract, _sym)
+                _has_sl = len(_key_has_stp.get(_contract_k, [])) > 0
+                _has_tp = len(_key_has_lmt.get(_contract_k, [])) > 0
 
-                # Detect duplicates: >1 STP or >1 LMT on same symbol
-                if len(_sym_has_stp.get(_sym, [])) > 1:
-                    _dupes = _sym_has_stp[_sym][1:]
+                # Detect duplicates: >1 STP or >1 LMT on same contract
+                if len(_key_has_stp.get(_contract_k, [])) > 1:
+                    _dupes = _key_has_stp[_contract_k][1:]
                     for _d in _dupes:
-                        logger.warning(f"BRACKET WATCHDOG: cancelling duplicate STP on {_sym} orderId={_d.order.orderId}")
+                        logger.warning(
+                            f"BRACKET WATCHDOG: cancelling duplicate STP on {_contract_k} orderId={_d.order.orderId}"
+                        )
                         try:
                             _ib.cancelOrder(_d.order)
                         except Exception:
                             pass
-                if len(_sym_has_lmt.get(_sym, [])) > 1:
-                    _dupes = _sym_has_lmt[_sym][1:]
+                if len(_key_has_lmt.get(_contract_k, [])) > 1:
+                    _dupes = _key_has_lmt[_contract_k][1:]
                     for _d in _dupes:
-                        logger.warning(f"BRACKET WATCHDOG: cancelling duplicate LMT on {_sym} orderId={_d.order.orderId}")
+                        logger.warning(
+                            f"BRACKET WATCHDOG: cancelling duplicate LMT on {_contract_k} orderId={_d.order.orderId}"
+                        )
                         try:
                             _ib.cancelOrder(_d.order)
                         except Exception:
@@ -1561,7 +1604,7 @@ def run_bracket_watchdog_cycle():
                     )
                     # Reuse existing OCA group if one leg exists, else create new
                     _existing_oca = ""
-                    for _leg in (_sym_has_stp.get(_sym, []) + _sym_has_lmt.get(_sym, [])):
+                    for _leg in (_key_has_stp.get(_contract_k, []) + _key_has_lmt.get(_contract_k, [])):
                         if _leg.order.ocaGroup:
                             _existing_oca = _leg.order.ocaGroup
                             break
@@ -1626,6 +1669,8 @@ def run_bracket_watchdog_cycle():
                         _state[_sym].update({
                             "symbol": _sym, "side": "BUY" if pos.position > 0 else "SELL",
                             "qty": _qty, "entry": _entry_px, "sl": _sl, "tp": _tp,
+                            "contract_month": getattr(pos.contract, "lastTradeDateOrContractMonth", None),
+                            "local_symbol": getattr(pos.contract, "localSymbol", None),
                             "oca_group": _oca, "mode": "LIVE",
                             "_authorized_by": f"bracket_watchdog_{_source}",
                         })

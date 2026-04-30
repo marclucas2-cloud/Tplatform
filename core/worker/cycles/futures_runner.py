@@ -93,6 +93,30 @@ def _normalize_contract_month(contract_month: str | None) -> str | None:
     return None
 
 
+def _contract_identity_key(contract, fallback_symbol: str | None = None) -> str | None:
+    """Return a contract-specific identity, preferring IBKR localSymbol."""
+    if contract is None:
+        return fallback_symbol
+
+    local_symbol = getattr(contract, "localSymbol", None)
+    if local_symbol:
+        return str(local_symbol)
+
+    symbol = getattr(contract, "symbol", None) or fallback_symbol
+    month = _normalize_contract_month(
+        getattr(contract, "lastTradeDateOrContractMonth", None)
+    )
+    if symbol and month:
+        return f"{symbol}:{month}"
+    return symbol
+
+
+def _trade_is_active(trade) -> bool:
+    """True when an IBKR trade leg is still working."""
+    status = getattr(getattr(trade, "orderStatus", None), "status", "")
+    return status not in ("Cancelled", "Filled", "Inactive", "ApiCancelled")
+
+
 def _resolve_front_month_contract(ib, symbol: str):
     """Resolve the nearest non-expired futures contract for a symbol.
 
@@ -636,9 +660,59 @@ def run_futures_cycle(live: bool = False):
                 MarketOrder as _FailMarketOrder,
             )
             import uuid as _uuid
-            _open_order_syms = {t.contract.symbol for t in ibkr._ib.openTrades()}
+            try:
+                _all_open_trades = list(ibkr._ib.reqAllOpenOrders() or [])
+            except Exception:
+                _all_open_trades = list(ibkr._ib.openTrades())
+            _active_open_trades = [t for t in _all_open_trades if _trade_is_active(t)]
+            _open_order_keys = {
+                _contract_identity_key(t.contract)
+                for t in _active_open_trades
+                if _contract_identity_key(t.contract)
+            }
+            _active_live_keys = set()
+            _active_live_symbols = set()
+            for _live_sym, _live_contract in _ibkr_real_contracts.items():
+                _active_live_symbols.add(
+                    getattr(_live_contract, "symbol", _live_sym) or _live_sym
+                )
+                _live_key = _contract_identity_key(_live_contract, _live_sym)
+                if _live_key:
+                    _active_live_keys.add(_live_key)
+
+            for _ot in _active_open_trades:
+                _ot_key = _contract_identity_key(_ot.contract)
+                _ot_sym = getattr(_ot.contract, "symbol", None)
+                _ot_type = getattr(_ot.order, "orderType", "")
+                if (
+                    _ot_sym in _active_live_symbols
+                    and _ot_key
+                    and _ot_key not in _active_live_keys
+                    and _ot_type in ("STP", "STOP", "LMT", "LIMIT")
+                ):
+                    logger.warning(
+                        "    STALE BRACKET LEG: cancelling %s %s orderId=%s "
+                        "(active contracts=%s)",
+                        _ot_sym,
+                        _ot_key,
+                        getattr(_ot.order, "orderId", "?"),
+                        sorted(_active_live_keys),
+                    )
+                    try:
+                        ibkr._ib.cancelOrder(_ot.order)
+                        time.sleep(0.2)
+                    except Exception as _cancel_err:
+                        logger.warning(
+                            f"    STALE BRACKET CANCEL FAILED {_ot_sym} {_ot_key}: {_cancel_err}"
+                        )
             for pos_sym, pos_info in list(_fut_positions.items()):
-                if pos_sym in _ibkr_real_pos and pos_sym not in _open_order_syms:
+                _live_contract = _ibkr_real_contracts.get(pos_sym)
+                _pos_key = (
+                    pos_info.get("local_symbol")
+                    or _contract_identity_key(_live_contract, pos_sym)
+                    or pos_sym
+                )
+                if pos_sym in _ibkr_real_pos and _pos_key not in _open_order_keys:
                     logger.warning(f"    BRACKET MISSING: {pos_sym} — reposing SL/TP")
 
                     _rb_sl = float(pos_info.get("sl", 0) or 0)
@@ -652,7 +726,7 @@ def run_futures_cycle(live: bool = False):
                     if _rb_sl > 0 and _rb_tp > 0:
                         # Attempt repose
                         try:
-                            _rb_contract = _ibkr_real_contracts.get(pos_sym)
+                            _rb_contract = _live_contract
                             if _rb_contract is not None:
                                 _rb_oca = f"REBRACKET_{pos_sym}_{_uuid.uuid4().hex[:8]}"
                                 _sl_ord = StopOrder(_rb_side, _rb_qty, _rb_sl)
