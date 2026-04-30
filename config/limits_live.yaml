@@ -1,7 +1,20 @@
-# Limites de risque LIVE — IBKR $10K capital reel
-# Derniere mise a jour : 2026-03-27
+# Limites de risque LIVE — IBKR
+# Derniere mise a jour : 2026-04-30
+#
+# IMPORTANT : `capital` ci-dessous n'est qu'une valeur de bootstrap.
+# En runtime, worker.py:2016 appelle risk_mgr.update_capital(equity_live)
+# a chaque cycle live, qui ecrase cette valeur avec le NAV IBKR reel
+# (cf core/risk_manager_live.py:80-83). Modifier cette valeur n'a donc
+# d'effet QUE pendant la fenetre tres courte entre boot du worker et
+# premier cycle live. Ne pas se reposer dessus pour calibrer le sizing.
+#
+# Note historique : la plateforme est passee d'un compte equity $10K
+# (mars 2026) a un compte futures $11K+ (depuis fin mars). Les sections
+# `position_limits`, `sector_limits`, `fx_limits` ci-dessous datent de
+# l'ere equity et ne sont PAS lues par le runtime futures actuel
+# (cf core/risk/risk_budget_allocator.py qui gere le budget futures).
 
-capital: 10000
+capital: 10000  # bootstrap only, override par update_capital() au 1er cycle
 mode: LIVE
 
 position_limits:
