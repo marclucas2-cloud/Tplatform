@@ -331,17 +331,21 @@ strategies:
 
   - strategy_id: pead_long_only_v1
     book: alpaca_us
-    status: validated_research_pending_runtime
+    status: paper_only
     discovered_at: "2026-04-30"
-    paper_start_at: null
+    paper_start_at: "2026-04-30"
     live_start_at: null
     wf_manifest_path: reports/research/_alpaca_discovery_pead_2026-04-30_metrics.json
     grade: A
     last_wf_run_at: "2026-04-30"
     is_live: false
-    infra_gaps: ["runtime_module_a_creer_strategies_v2_us_pead_py", "runner_a_cabler_worker_py", "earnings_calendar_source_a_definir"]
+    infra_gaps: ["paper_simulation_locale_pas_d_ordre_broker_reel"]
+    runtime_entrypoint: "worker.py: run_pead_paper_cycle (22h30 Paris weekday)"
+    runtime_module: core.worker.cycles.pead_runner
     notes: |
       Discovery 2026-04-30 (Lever 2 reformulation desk Alpaca post-rejection us_sector_ls).
+      Cable runtime 2026-04-30 meme jour : earnings source yfinance (TTL 24h),
+      runner core/worker/cycles/pead_runner.py, cycle 22h30 Paris weekday.
       Edge academique solide (Bernard&Thomas 1989, post-earnings drift).
       Config validee : surprise >= 5%, gap >= 1%, hold 20j, TP 8% / SL 3%, $2K/trade,
       max 5 positions concurrent. Univers 30 large caps SP500.
@@ -352,11 +356,12 @@ strategies:
       - Correlation SPY ~0.14 (faible, vraie diversification vs macro_top1_rotation)
       - DSR p-value non calculee (1 seule config, pas de grid sensitivity)
       Caveats : univers 30 symbols (biais survivor), WF fenetres se chevauchent
-      (IID assumption faible, Sharpe biaise haut), earnings calendar source a definir.
+      (IID assumption faible, Sharpe biaise haut), gap calcule via close-to-close
+      proxy (cache prix close-only, ameliorer avec open intraday plus tard).
       Artefacts : scripts/research/_alpaca_discovery_pead_2026-04-30.py,
       reports/research/_alpaca_discovery_pead_2026-04-30_metrics.json.
-      Earliest promotion paper -> live_micro : 30j paper sans divergence (~2026-06-01
-      apres cablage runtime).
+      State : data/state/pead_long_only_v1/{state.json,journal.jsonl}.
+      Earliest promotion paper -> live_micro : 30j paper sans divergence (2026-05-30).
 
   - strategy_id: low_vol_long_only_bottom5
     book: alpaca_us

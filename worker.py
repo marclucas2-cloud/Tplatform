@@ -1783,6 +1783,14 @@ from core.worker.cycles.macro_top1_rotation_runner import (  # noqa: E402
     run_macro_top1_rotation_cycle,
 )
 
+# 2026-04-30 (mission alpaca desk reformulation post-rejection us_sector_ls):
+# pead_long_only_v1 paper runner. Long-only PEAD sur 30 large caps SP500.
+# Source earnings: yfinance (TTL 24h). Simulation locale pure (pas d ordre broker).
+# Research source: scripts/research/_alpaca_discovery_pead_2026-04-30.py
+from core.worker.cycles.pead_runner import (  # noqa: E402
+    run_pead_paper_cycle,
+)
+
 def run_fx_paper_cycle():
     """FX Paper Trading — run validated FX strategies on IBKR paper (port 4003).
 
@@ -4988,6 +4996,12 @@ def main():
                                              alert_callback=_cycle_alert,
                                              metrics_callback=_cycle_metrics_cb,
                                              timeout_seconds=60.0),
+        # Mission alpaca desk 2026-04-30: pead_long_only_v1 PEAD long-only sur SP500 large caps.
+        # Earnings source yfinance (TTL 24h), pure simulation locale, journal + state dedies.
+        "pead_long_only_v1": CycleRunner("pead_long_only_v1", run_pead_paper_cycle,
+                                             alert_callback=_cycle_alert,
+                                             metrics_callback=_cycle_metrics_cb,
+                                             timeout_seconds=120.0),
     }
     logger.info(f"  CycleRunners initialized: {list(_runners.keys())}")
 
@@ -5178,6 +5192,16 @@ def main():
             run_macro_top1_rotation_cycle._done_today = True
         if is_weekday() and now_paris.hour < 16:
             run_macro_top1_rotation_cycle._done_today = False
+
+        # === PEAD PAPER CYCLE (weekday 22h30 Paris = 16h30 ET = apres US close) ===
+        # Mission alpaca desk 2026-04-30. Capture earnings publiees after-market.
+        # yfinance refresh TTL 24h, journal + state dedies, pure simulation locale.
+        # Config WF validee: surprise>=5%, gap>=1%, hold 20j, TP 8%/SL 3%, max 5 concurrent.
+        if is_weekday() and now_paris.hour == 22 and now_paris.minute >= 30 and not getattr(run_pead_paper_cycle, '_done_today', False):
+            _runners["pead_long_only_v1"].run()
+            run_pead_paper_cycle._done_today = True
+        if is_weekday() and now_paris.hour < 22:
+            run_pead_paper_cycle._done_today = False
 
         # === MACRO ECB EVENT DRIVEN (lun-ven, 14h50 Paris, jours BCE only) ===
         # Le module skip lui-meme les jours non-BCE; on declenche tous les jours
