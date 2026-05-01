@@ -19,6 +19,11 @@ ssh -i ~/.ssh/id_hetzner root@178.104.125.74     # VPS Hetzner
 - **Pipeline obligatoire** : _authorized_by sur tous les ordres
 - **Shorts en qty entiere** : pas de notional pour les SELL
 
+## Skills projet
+- **Par defaut**, utiliser les skills projet situes dans `C:\Users\barqu\.claude\skills` quand ils sont pertinents pour la mission.
+- Priorite workflow desk/research: `discover` -> `crypto` -> `bt` -> `qr` -> `risk` -> `review` -> `exec`.
+- Ne pas utiliser ces skills comme pretexte pour contourner les garde-fous runtime/prod du projet.
+
 ## Architecture (fichiers cles)
 ```
 worker.py                          # Scheduler 24/7 + CycleRunners (9 cycles)
