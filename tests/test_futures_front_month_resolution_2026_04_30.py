@@ -73,4 +73,4 @@ def test_futures_runner_entry_uses_front_month_resolver_and_bar_close_estimate()
         encoding="utf-8",
     )
     assert "_resolve_front_month_contract(ibkr._ib, sym)" in src
-    assert "_entry_bar = feed.get_latest_bar(sym)" in src
+    assert "_estimate_futures_signal_risk_usd(" in src

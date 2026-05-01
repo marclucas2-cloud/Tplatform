@@ -142,6 +142,125 @@ def _load_cached_live_equity_snapshot(max_age_minutes: float = 30.0) -> dict | N
     return None
 
 
+_IBKR_4002_STATE_PATH = ROOT / "data" / "state" / "ibkr_4002_monitor.json"
+_IBKR_4002_ALERT_COOLDOWN_SECONDS = 15 * 60
+
+
+def _count_live_futures_positions_from_state() -> int:
+    """Best-effort count of live futures positions from local runtime state."""
+    state_path = ROOT / "data" / "state" / "futures_positions_live.json"
+    try:
+        if not state_path.exists():
+            return 0
+        payload = json.loads(state_path.read_text(encoding="utf-8"))
+        if isinstance(payload, dict):
+            return len(payload)
+    except Exception as exc:
+        logger.warning(f"_count_live_futures_positions_from_state: {exc}")
+    return 0
+
+
+def _note_ibkr_4002_connectivity_issue(source: str, error: str) -> None:
+    """Persist and alert repeated 4002 connectivity flaps, especially with live exposure."""
+    now = datetime.now(UTC)
+    live_positions = _count_live_futures_positions_from_state()
+    state: dict = {}
+    try:
+        if _IBKR_4002_STATE_PATH.exists():
+            state = json.loads(_IBKR_4002_STATE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        state = {}
+
+    first_seen = state.get("first_seen") or now.isoformat()
+    last_alert_at = state.get("last_alert_at")
+    should_alert = live_positions > 0
+    if should_alert and last_alert_at:
+        try:
+            last_alert_dt = datetime.fromisoformat(last_alert_at.replace("Z", "+00:00"))
+            if (now - last_alert_dt).total_seconds() < _IBKR_4002_ALERT_COOLDOWN_SECONDS:
+                should_alert = False
+        except Exception:
+            pass
+
+    new_state = {
+        "active": True,
+        "first_seen": first_seen,
+        "last_seen": now.isoformat(),
+        "count": int(state.get("count", 0) or 0) + 1,
+        "source": source,
+        "last_error": str(error)[:200],
+        "estimated_live_positions": live_positions,
+        "last_alert_at": now.isoformat() if should_alert else last_alert_at,
+    }
+    try:
+        _IBKR_4002_STATE_PATH.parent.mkdir(parents=True, exist_ok=True)
+        _IBKR_4002_STATE_PATH.write_text(json.dumps(new_state, indent=2), encoding="utf-8")
+    except Exception as exc:
+        logger.warning(f"_note_ibkr_4002_connectivity_issue persist failed: {exc}")
+
+    logger.warning(
+        "IBKR 4002 incident: source=%s live_positions=%s error=%s",
+        source,
+        live_positions,
+        str(error)[:120],
+    )
+    if should_alert:
+        _send_alert(
+            f"IBKR 4002 flap detected\n"
+            f"Source: {source}\n"
+            f"Estimated live futures positions: {live_positions}\n"
+            f"Error: {str(error)[:180]}\n"
+            f"Broker-side bracket protection should be verified.",
+            level="critical",
+        )
+
+
+def _clear_ibkr_4002_connectivity_issue(source: str) -> None:
+    """Mark a previous 4002 flap as resolved and emit a single recovery note."""
+    if not _IBKR_4002_STATE_PATH.exists():
+        return
+    try:
+        state = json.loads(_IBKR_4002_STATE_PATH.read_text(encoding="utf-8"))
+    except Exception:
+        return
+    if not state.get("active"):
+        return
+
+    now = datetime.now(UTC)
+    resolved = {
+        **state,
+        "active": False,
+        "resolved_at": now.isoformat(),
+        "resolved_by": source,
+    }
+    try:
+        _IBKR_4002_STATE_PATH.write_text(json.dumps(resolved, indent=2), encoding="utf-8")
+    except Exception as exc:
+        logger.warning(f"_clear_ibkr_4002_connectivity_issue persist failed: {exc}")
+        return
+
+    try:
+        first_seen = datetime.fromisoformat(str(state.get("first_seen")).replace("Z", "+00:00"))
+        outage_minutes = max((now - first_seen).total_seconds() / 60.0, 0.0)
+    except Exception:
+        outage_minutes = 0.0
+
+    logger.info(
+        "IBKR 4002 connectivity restored via %s after %.1f min (observations=%s)",
+        source,
+        outage_minutes,
+        state.get("count", 0),
+    )
+    if int(state.get("estimated_live_positions", 0) or 0) > 0:
+        _send_alert(
+            f"IBKR 4002 connectivity restored\n"
+            f"Resolved by: {source}\n"
+            f"Outage observed for ~{outage_minutes:.1f} min\n"
+            f"Tracked observations: {state.get('count', 0)}",
+            level="info",
+        )
+
+
 @lru_cache(maxsize=1)
 def _disabled_whitelist_strategy_ids() -> frozenset[str]:
     """Retourne le set des canonical strategy_id au status=disabled dans
@@ -1396,11 +1515,13 @@ def run_bracket_watchdog_cycle():
             _ib.connect(_host, _port, clientId=_wd_rng.randint(310, 319), timeout=10)
         except Exception as e:
             logger.warning(f"BRACKET WATCHDOG: connect failed: {e}")
+            _note_ibkr_4002_connectivity_issue("bracket_watchdog_connect", str(e))
             return
 
         try:
             import time as _wdt
             _wdt.sleep(2)
+            _clear_ibkr_4002_connectivity_issue("bracket_watchdog_connect")
 
             def _contract_key(_contract, _fallback_symbol=""):
                 _local = getattr(_contract, "localSymbol", None)
@@ -2037,6 +2158,7 @@ def run_live_risk_cycle():
                 _risk_ibkr.disconnect()
         except Exception as e:
             logger.info(f"Live risk cycle: IBKR unavailable ({e}), trying cached equity snapshot")
+            _note_ibkr_4002_connectivity_issue("live_risk_snapshot", str(e))
 
         if float(portfolio.get("equity", 0) or 0) <= 0:
             _cached_snapshot = _load_cached_live_equity_snapshot(max_age_minutes=30.0)
@@ -2081,6 +2203,8 @@ def run_live_risk_cycle():
             daily_start_equity,
             daily_pnl_pct * 100,
         )
+        if portfolio.get("snapshot_source") == "api":
+            _clear_ibkr_4002_connectivity_issue("live_risk_snapshot")
 
         # Run all risk checks
         risk_result = risk_mgr.check_all_limits(

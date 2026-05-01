@@ -46,6 +46,19 @@ _FUTURES_EXCHANGE_MAP: dict[str, str] = {
     "VIX": "CFE",
 }
 
+_FUTURES_MULTIPLIERS: dict[str, int] = {
+    "MES": 5,
+    "MNQ": 2,
+    "M2K": 5,
+    "MGC": 10,
+    "MCL": 100,
+    "MIB": 5,
+    "ESTX50": 10,
+    "DAX": 1,
+    "CAC40": 1,
+    "VIX": 1,
+}
+
 
 def _load_futures_daily_frame(path: Path):
     """Load a daily parquet while preserving a valid DatetimeIndex.
@@ -169,6 +182,69 @@ def _recalculate_bracket_from_fill(
     if side == "BUY":
         return round(fill_price - sl_offset, 2), round(fill_price + tp_offset, 2)
     return round(fill_price + sl_offset, 2), round(fill_price - tp_offset, 2)
+
+
+def _estimate_futures_signal_risk_usd(
+    symbol: str,
+    stop_loss: float | None,
+    take_profit: float | None,
+    qty: int,
+    *,
+    feed=None,
+    fallback_entry: float | None = None,
+) -> float:
+    """Estimate risk-if-stopped for a pending futures entry."""
+    if not stop_loss or not take_profit or qty <= 0:
+        return 0.0
+
+    entry_price = fallback_entry
+    if entry_price is None and feed is not None:
+        try:
+            entry_bar = feed.get_latest_bar(symbol)
+            if entry_bar is not None:
+                entry_price = float(entry_bar.close)
+        except Exception:
+            entry_price = None
+
+    if entry_price is None:
+        entry_price = (float(stop_loss) + float(take_profit)) / 2.0
+
+    multiplier = _FUTURES_MULTIPLIERS.get(symbol, 1)
+    return abs(float(entry_price) - float(stop_loss)) * multiplier * qty
+
+
+def _select_executable_cam_candidate(
+    ranked_candidates: list[dict[str, float | str]] | None,
+    *,
+    current_risk_usd: float,
+    risk_budget_usd: float,
+    sl_pct: float,
+    min_momentum: float,
+    occupied_symbols: set[str] | None = None,
+    traded_symbols: set[str] | None = None,
+    qty: int = 1,
+) -> dict[str, float | str] | None:
+    """Pick the first CAM candidate that fits the live budget and current occupancy."""
+    occupied = occupied_symbols or set()
+    traded = traded_symbols or set()
+
+    for candidate in ranked_candidates or []:
+        symbol = str(candidate.get("symbol", ""))
+        momentum = float(candidate.get("momentum", 0.0) or 0.0)
+        close = float(candidate.get("close", 0.0) or 0.0)
+        if not symbol or close <= 0:
+            continue
+        if momentum < min_momentum:
+            continue
+        if symbol in occupied or symbol in traded:
+            continue
+        est_risk = close * float(sl_pct) * _FUTURES_MULTIPLIERS.get(symbol, 1) * qty
+        if current_risk_usd + est_risk <= risk_budget_usd:
+            return {
+                **candidate,
+                "estimated_risk_usd": round(est_risk, 2),
+            }
+    return None
 
 
 def _resolve_front_month_contract(ib, symbol: str):
@@ -360,6 +436,7 @@ def run_futures_cycle(live: bool = False):
                     _meta["strategy_params"] = dict(strat.get_parameters() or {})
                 except Exception:
                     pass
+                _meta["strategy_obj"] = strat
             signals.append((display_name, sig, _meta))
 
         # ============================================================
@@ -382,19 +459,28 @@ def run_futures_cycle(live: bool = False):
         # mais au prix de bloquer GOR (live_core) dans ~90% des cas => net
         # desk-level negatif. Nouvelle regle: live_core ne neutralise pas live_core.
         _cam_top_pick = None
+        _cam_ranked_candidates: list[dict[str, float | str]] = []
         try:
             from strategies_v2.futures.cross_asset_momentum import CrossAssetMomentum
             _cam_strat = CrossAssetMomentum()
             _cam_strat.set_data_feed(feed)
             bar = feed.get_latest_bar("MES")
             if bar:
+                _cam_ranked_candidates = _cam_strat.get_ranked_candidates()
                 # Note: get_top_pick(bar, portfolio_state) retourne None si CAM
                 # est en cooldown + sans position. Sinon retourne le symbole
                 # reserve (position active OU top momentum si eligible).
                 _cam_top_pick = _cam_strat.get_top_pick(bar=bar, portfolio_state=portfolio_state)
                 sig = _cam_strat.on_bar(bar, portfolio_state)
                 if sig:
-                    _append_signal("Cross-Asset Mom", sig, signal_price=float(bar.close), strat=_cam_strat)
+                    _winner_bar = feed.get_latest_bar(sig.symbol)
+                    _append_signal(
+                        "Cross-Asset Mom",
+                        sig,
+                        signal_price=float(_winner_bar.close) if _winner_bar is not None else None,
+                        strat=_cam_strat,
+                    )
+                    signals[-1][2]["ranked_candidates"] = list(_cam_ranked_candidates)
                     logger.info(f"    Cross-Asset Mom ({_mode}): BUY {sig.symbol}")
                 else:
                     logger.info(f"    Cross-Asset Mom ({_mode}): pas de rebal "
@@ -943,10 +1029,6 @@ def run_futures_cycle(live: bool = False):
         # Sum of (entry - SL) * mult * qty for all open positions ≤ 5% * equity
         # Worst case all SL hit same day = max 5% DD (within kill switch limits)
 
-        _FUT_MULT = {
-            "MES": 5, "MNQ": 2, "M2K": 5, "MGC": 10, "MCL": 100,
-            "MIB": 5, "ESTX50": 10, "DAX": 1, "CAC40": 1, "VIX": 1,
-        }
         RISK_BUDGET_PCT = 0.05  # 5% of equity worst-case DD cap
         _risk_budget_usd = equity * RISK_BUDGET_PCT
         MAX_DISTINCT_SYMBOLS = 4 if live else 20
@@ -957,7 +1039,7 @@ def run_futures_cycle(live: bool = False):
             _pe = float(_pos_info.get("entry", 0) or 0)
             _ps = float(_pos_info.get("sl", 0) or 0)
             _pq = abs(int(_pos_info.get("qty", 1) or 1))
-            _pmult = _FUT_MULT.get(_pos_sym, 1)
+            _pmult = _FUTURES_MULTIPLIERS.get(_pos_sym, 1)
             _side = _pos_info.get("side", "BUY")
             if _pe > 0 and _ps > 0:
                 # Trailing SL above entry = locked-in gain, risk = $0
@@ -1023,23 +1105,67 @@ def run_futures_cycle(live: bool = False):
                 logger.info(f"    {name}: SKIP — no slots left ({_slots_available} available, {_contracts_opened} used)")
                 continue
             sym = sig.symbol
+            qty = 1
+
+            def _maybe_rebind_cam_signal(blocked_reason: str) -> bool:
+                nonlocal sig, sym
+                if not (live and name == "Cross-Asset Mom"):
+                    return False
+                _ranked_candidates = sig_meta.get("ranked_candidates")
+                _strategy_obj = sig_meta.get("strategy_obj")
+                _params = sig_meta.get("strategy_params") if isinstance(sig_meta.get("strategy_params"), dict) else {}
+                if _strategy_obj is None or not hasattr(_strategy_obj, "build_signal_for_candidate"):
+                    return False
+                _candidate = _select_executable_cam_candidate(
+                    _ranked_candidates if isinstance(_ranked_candidates, list) else None,
+                    current_risk_usd=_current_risk,
+                    risk_budget_usd=_risk_budget_usd,
+                    sl_pct=float(_params.get("sl_pct", 0.03)),
+                    min_momentum=float(_params.get("min_momentum", 0.02)),
+                    occupied_symbols=set(_fut_positions) | set(_ibkr_real_pos),
+                    traded_symbols=_traded_this_cycle,
+                    qty=qty,
+                )
+                if not _candidate:
+                    return False
+                _new_symbol = str(_candidate["symbol"])
+                if _new_symbol == sym:
+                    return False
+                _old_symbol = sym
+                sig = _strategy_obj.build_signal_for_candidate(_candidate)
+                sym = sig.symbol
+                sig_meta["signal_price"] = float(_candidate["close"])
+                sig_meta["selected_candidate"] = dict(_candidate)
+                logger.info(
+                    "    Cross-Asset Mom (LIVE): fallback %s -> %s (%s, est risk $%.0f/$%.0f)",
+                    _old_symbol,
+                    sym,
+                    blocked_reason,
+                    float(_candidate["estimated_risk_usd"]),
+                    _risk_budget_usd,
+                )
+                return True
 
             # GUARD 1: state file says we already have a position
+            if sym in _fut_positions:
+                _maybe_rebind_cam_signal("state_position")
             if sym in _fut_positions:
                 logger.info(f"    {name}: SKIP — already positioned in {sym} (state file)")
                 continue
 
             # GUARD 2: IBKR says we already have a real position on this symbol
             if sym in _ibkr_real_pos:
+                _maybe_rebind_cam_signal("broker_position")
+            if sym in _ibkr_real_pos:
                 logger.warning(f"    {name}: SKIP — IBKR real position exists for {sym} ({_ibkr_real_pos[sym]} lots)")
                 continue
 
             # GUARD 3: already traded this symbol earlier in this loop iteration
             if sym in _traded_this_cycle:
+                _maybe_rebind_cam_signal("cycle_duplicate")
+            if sym in _traded_this_cycle:
                 logger.info(f"    {name}: SKIP — already traded {sym} this cycle")
                 continue
-
-            qty = 1
 
             # GUARD 3bis: P1.1 Whitelist enforcement (LIVE mode only).
             # Paper mode skips this check (paper strats are not whitelist by design).
@@ -1065,22 +1191,26 @@ def run_futures_cycle(live: bool = False):
                     )
                     continue
 
-            # GUARD 4: RISK BUDGET — pre-fill estimate using (SL,TP) midpoint as entry proxy
-            # Precise enforcement happens after fill via _current_risk update.
-            _est_mult = _FUT_MULT.get(sym, 1)
-            if sig.stop_loss and sig.take_profit:
-                _est_entry = None
-                try:
-                    _entry_bar = feed.get_latest_bar(sym)
-                    if _entry_bar is not None:
-                        _est_entry = float(_entry_bar.close)
-                except Exception:
-                    _est_entry = None
-                if _est_entry is None:
-                    _est_entry = (sig.stop_loss + sig.take_profit) / 2.0
-                _est_risk = abs(_est_entry - sig.stop_loss) * _est_mult * qty
-            else:
-                _est_risk = 0.0
+            # GUARD 4: RISK BUDGET — estimate against the visible symbol close when possible,
+            # with CAM fallback to the next executable ranked candidate before we give up.
+            _est_risk = _estimate_futures_signal_risk_usd(
+                sym,
+                sig.stop_loss,
+                sig.take_profit,
+                qty,
+                feed=feed,
+                fallback_entry=sig_meta.get("signal_price"),
+            )
+            if _current_risk + _est_risk > _risk_budget_usd:
+                if _maybe_rebind_cam_signal("risk_budget"):
+                    _est_risk = _estimate_futures_signal_risk_usd(
+                        sym,
+                        sig.stop_loss,
+                        sig.take_profit,
+                        qty,
+                        feed=feed,
+                        fallback_entry=sig_meta.get("signal_price"),
+                    )
             if _current_risk + _est_risk > _risk_budget_usd:
                 logger.warning(
                     f"    {name}: SKIP — risk budget exceeded "
@@ -1206,7 +1336,7 @@ def run_futures_cycle(live: bool = False):
                 _traded_this_cycle.add(sym)
                 n_fut_orders += 1
                 _contracts_opened += 1
-                _actual_risk = abs(_fill_price - _final_sl) * _est_mult * qty
+                _actual_risk = abs(_fill_price - _final_sl) * _FUTURES_MULTIPLIERS.get(sym, 1) * qty
                 _current_risk += _actual_risk
                 logger.info(
                     f"    RISK BUDGET: +${_actual_risk:.0f} → ${_current_risk:.0f}/${_risk_budget_usd:.0f}"

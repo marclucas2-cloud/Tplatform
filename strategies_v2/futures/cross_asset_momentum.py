@@ -39,10 +39,14 @@ class CrossAssetMomentum(StrategyBase):
         lookback_days: int = 20,
         min_momentum: float = 0.02,
         rebal_days: int = 20,
+        sl_pct: float = 0.03,
+        tp_pct: float = 0.08,
     ) -> None:
         self.lookback_days = lookback_days
         self.min_momentum = min_momentum
         self.rebal_days = rebal_days
+        self.sl_pct = sl_pct
+        self.tp_pct = tp_pct
         self.data_feed: DataFeed | None = None
         self._last_rebal_ts: pd.Timestamp | None = None
 
@@ -60,6 +64,45 @@ class CrossAssetMomentum(StrategyBase):
 
     def set_data_feed(self, feed: DataFeed) -> None:
         self.data_feed = feed
+
+    def get_ranked_candidates(self) -> list[dict[str, float | str]]:
+        """Return momentum-ranked candidates with their latest close.
+
+        The live runtime can use this to fall back from an ineligible top pick
+        (e.g. risk budget too small for MNQ) to the next executable symbol
+        without inventing a new alpha signal.
+        """
+        if self.data_feed is None:
+            return []
+
+        candidates: list[dict[str, float | str]] = []
+        for sym in self.UNIVERSE:
+            bars = self.data_feed.get_bars(sym, self.lookback_days + 2)
+            if bars is None or len(bars) < self.lookback_days + 1:
+                continue
+            close = bars["close"].astype(float)
+            candidates.append({
+                "symbol": sym,
+                "momentum": float(close.iloc[-1] / close.iloc[-self.lookback_days - 1] - 1),
+                "close": float(close.iloc[-1]),
+            })
+
+        candidates.sort(key=lambda item: float(item["momentum"]), reverse=True)
+        return candidates
+
+    def build_signal_for_candidate(self, candidate: dict[str, float | str]) -> Signal:
+        """Build the canonical CAM signal for an already-ranked candidate."""
+        winner = str(candidate["symbol"])
+        winner_close = float(candidate["close"])
+        winner_ret = float(candidate["momentum"])
+        return Signal(
+            symbol=winner,
+            side="BUY",
+            strategy_name=self.name,
+            stop_loss=winner_close * (1 - self.sl_pct),
+            take_profit=winner_close * (1 + self.tp_pct),
+            strength=min(winner_ret * 5, 1.0),
+        )
 
     def get_top_pick(
         self,
@@ -110,19 +153,10 @@ class CrossAssetMomentum(StrategyBase):
                 return None
 
         # Eligible a entrer: calcule top pick theorique
-        returns = {}
-        for sym in self.UNIVERSE:
-            bars = self.data_feed.get_bars(sym, self.lookback_days + 2)
-            if bars is None or len(bars) < self.lookback_days + 1:
-                continue
-            close = bars["close"].astype(float)
-            returns[sym] = float(close.iloc[-1] / close.iloc[-self.lookback_days - 1] - 1)
-        if not returns:
-            return None
-        winner = max(returns, key=returns.get)
-        if returns[winner] < self.min_momentum:
-            return None
-        return winner
+        for candidate in self.get_ranked_candidates():
+            if float(candidate["momentum"]) >= self.min_momentum:
+                return str(candidate["symbol"])
+        return None
 
     def on_bar(self, bar: Bar, portfolio_state: PortfolioState) -> Signal | None:
         if self.data_feed is None:
@@ -134,43 +168,22 @@ class CrossAssetMomentum(StrategyBase):
             if days_since < self.rebal_days:
                 return None
 
-        # Compute lookback return for each asset
-        returns = {}
-        for sym in self.UNIVERSE:
-            bars = self.data_feed.get_bars(sym, self.lookback_days + 2)
-            if bars is None or len(bars) < self.lookback_days + 1:
-                continue
-            close = bars["close"].astype(float)
-            ret = float(close.iloc[-1] / close.iloc[-self.lookback_days - 1] - 1)
-            returns[sym] = ret
-
-        if not returns:
+        ranked = self.get_ranked_candidates()
+        candidate = next(
+            (item for item in ranked if float(item["momentum"]) >= self.min_momentum),
+            None,
+        )
+        if candidate is None:
             return None
-
-        # Pick winner
-        winner = max(returns, key=returns.get)
-        if returns[winner] < self.min_momentum:
-            return None  # no asset strong enough
-
-        winner_bars = self.data_feed.get_bars(winner, 2)
-        if winner_bars is None or len(winner_bars) < 1:
-            return None
-        winner_close = float(winner_bars["close"].iloc[-1])
 
         self._last_rebal_ts = bar.timestamp
-
-        return Signal(
-            symbol=winner,
-            side="BUY",
-            strategy_name=self.name,
-            stop_loss=winner_close * 0.97,   # 3% SL (was 5%, resized for risk budget)
-            take_profit=winner_close * 1.08,  # 8% TP (was 10%, Sharpe 1.24 vs 0.81)
-            strength=min(returns[winner] * 5, 1.0),
-        )
+        return self.build_signal_for_candidate(candidate)
 
     def get_parameters(self) -> dict:
         return {
             "lookback_days": self.lookback_days,
             "min_momentum": self.min_momentum,
             "rebal_days": self.rebal_days,
+            "sl_pct": self.sl_pct,
+            "tp_pct": self.tp_pct,
         }

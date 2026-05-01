@@ -69,6 +69,9 @@ ibkr_futures:
 
     2026-04-30: nominal max_risk_usd raised to $1,275 after +$15K IBKR deposit;
     actual enforcement stays dynamic at 5% of live equity inside futures_runner.
+    2026-05-01: live runtime may fall back from an over-budget top pick
+    (ex MNQ) to the next executable CAM candidate instead of dropping the
+    cycle entirely. This is a runtime executability filter, not a new alpha.
 
     '
 - strategy_id: gold_trend_mgc
