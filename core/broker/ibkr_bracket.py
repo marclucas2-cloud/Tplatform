@@ -36,6 +36,7 @@ _BRACKETS_STATE_PATH = _Path(__file__).resolve().parent.parent.parent / "data" /
 FUTURES_MULTIPLIERS = {
     "MES": 5.0,
     "MNQ": 2.0,
+    "M2K": 5.0,
     "MCL": 100.0,
     "MGC": 10.0,
 }
@@ -50,6 +51,7 @@ FUTURES_TICK_SIZES = {
     "MCL": 0.01,
     "MES": 0.25,
     "MNQ": 0.25,
+    "M2K": 0.10,
     "MGC": 0.10,
 }
 
@@ -57,8 +59,38 @@ FUTURES_SL_BUFFERS = {
     "MCL": 0.02,   # 2 ticks
     "MES": 1.00,   # 4 points (4 * 0.25)
     "MNQ": 0.50,   # 2 points
+    "M2K": 0.20,   # 2 ticks
     "MGC": 0.20,   # 2 ticks
 }
+
+
+def snap_price_to_tick(price: float, symbol: str, side: str | None = None) -> float:
+    """Snap `price` to the symbol's minimum tick increment.
+
+    IBKR rejects orders whose price is not a multiple of the contract tick
+    with `Warning 110` (`The price does not conform to the minimum price
+    variation for this contract`). When the rejected order is a SL or TP,
+    the position stays effectively unprotected.
+
+    `side` hints the protective role of the price so rounding never crosses
+    entry: `"sl_long"`/`"tp_short"` floor toward 0; `"tp_long"`/`"sl_short"`
+    ceil away from 0. Falls back to nearest-tick rounding when `side` is
+    not provided, and to 2-decimal rounding when the symbol is unknown.
+    """
+    import math
+
+    tick = FUTURES_TICK_SIZES.get(symbol.upper())
+    if tick is None or tick <= 0 or price is None or price <= 0:
+        return round(float(price or 0), 2)
+    ratio = float(price) / tick
+    if side in ("sl_long", "tp_short"):
+        snapped = math.floor(ratio) * tick
+    elif side in ("tp_long", "sl_short"):
+        snapped = math.ceil(ratio) * tick
+    else:
+        snapped = round(ratio) * tick
+    decimals = max(2, len(f"{tick:.10f}".rstrip("0").split(".")[-1]))
+    return round(snapped, decimals)
 
 # FX pip offset for STP LMT (5 pips)
 FX_SL_PIP_OFFSET = 0.0005
@@ -68,6 +100,7 @@ FUTURES_INITIAL_MARGIN = {
     "MCL": 600,
     "MES": 1400,
     "MNQ": 1800,
+    "M2K": 1300,
     "MGC": 1100,
 }
 
@@ -75,6 +108,7 @@ FUTURES_MAINTENANCE_MARGIN = {
     "MCL": 540,
     "MES": 1260,
     "MNQ": 1620,
+    "M2K": 1100,
     "MGC": 990,
 }
 
@@ -218,6 +252,15 @@ class BracketOrderManager:
 
         # Determine rounding precision based on instrument type
         rounding = 5 if instrument_type.upper() == "FX" else 2
+
+        # Snap futures prices to the contract tick — IBKR rejects non-tick
+        # prices with warning 110.
+        if instrument_type.upper() == "FUTURES":
+            sl_role = "sl_long" if direction == "BUY" else "sl_short"
+            tp_role = "tp_long" if direction == "BUY" else "tp_short"
+            entry_price = snap_price_to_tick(entry_price, symbol)
+            stop_loss_price = snap_price_to_tick(stop_loss_price, symbol, side=sl_role)
+            take_profit_price = snap_price_to_tick(take_profit_price, symbol, side=tp_role)
 
         # --- Parent order ---
         if order_type.upper() == "MARKET":
@@ -758,8 +801,8 @@ class BracketOrderManager:
             from ib_insync import Future
 
             exchange_map = {
-                "MES": "CME", "MNQ": "CME", "MCL": "NYMEX", "MGC": "COMEX",
-                "ES": "CME", "NQ": "CME", "CL": "NYMEX", "GC": "COMEX",
+                "MES": "CME", "MNQ": "CME", "M2K": "CME", "MCL": "NYMEX", "MGC": "COMEX",
+                "ES": "CME", "NQ": "CME", "RTY": "CME", "CL": "NYMEX", "GC": "COMEX",
             }
             exchange = exchange_map.get(symbol, "CME")
 
@@ -1191,13 +1234,21 @@ class FuturesBracketHandler:
         tick_size = self.get_tick_size(symbol)
         buffer = self.get_buffer(symbol)
 
-        # Calculate stop limit price with buffer
+        # Snap entry / SL / TP to the contract tick — IBKR rejects non-tick
+        # prices with warning 110 and the bracket fails silently.
+        sl_role = "sl_long" if direction == "BUY" else "sl_short"
+        tp_role = "tp_long" if direction == "BUY" else "tp_short"
+        entry_price = snap_price_to_tick(entry_price, symbol)
+        stop_loss_price = snap_price_to_tick(stop_loss_price, symbol, side=sl_role)
+        take_profit_price = snap_price_to_tick(take_profit_price, symbol, side=tp_role)
+
+        # Calculate stop limit price with buffer (also snapped to tick)
         if direction == "BUY":
             # BUY: SL below entry -> stop limit further below stop
-            stop_limit_price = round(stop_loss_price - buffer, 2)
+            stop_limit_price = snap_price_to_tick(stop_loss_price - buffer, symbol, side=sl_role)
         else:
             # SELL: SL above entry -> stop limit further above stop
-            stop_limit_price = round(stop_loss_price + buffer, 2)
+            stop_limit_price = snap_price_to_tick(stop_loss_price + buffer, symbol, side=sl_role)
 
         # OCA group name
         oca_group = f"BRACKET_{symbol}_{uuid.uuid4().hex[:12]}"

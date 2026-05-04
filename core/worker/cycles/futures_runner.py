@@ -59,6 +59,52 @@ _FUTURES_MULTIPLIERS: dict[str, int] = {
     "VIX": 1,
 }
 
+# Tick sizes per symbol (must match `core/broker/ibkr_bracket.py::FUTURES_TICK_SIZES`).
+# Used by `_snap_to_tick` to round SL/TP prices to a value IBKR will accept.
+# Without this, SL/TP placement fails silently with `Warning 110: The price does
+# not conform to the minimum price variation for this contract` and positions
+# stay unprotected (incident 2026-05-04).
+_FUTURES_TICK_SIZES: dict[str, float] = {
+    "MES": 0.25,
+    "MNQ": 0.25,
+    "M2K": 0.10,
+    "MGC": 0.10,
+    "MCL": 0.01,
+    "MIB": 5.0,
+    "ESTX50": 1.0,
+    "DAX": 0.5,
+    "CAC40": 0.5,
+    "VIX": 0.05,
+}
+
+
+def _snap_to_tick(price: float, symbol: str, side: str | None = None) -> float:
+    """Snap a price to the symbol's minimum tick increment.
+
+    IBKR rejects orders whose price is not a multiple of the contract tick
+    (warning 110). This helper rounds `price` to the nearest tick. When
+    `side` hints the role of the price (`"sl_long"`, `"tp_long"`,
+    `"sl_short"`, `"tp_short"`), the rounding direction is chosen so that
+    the snapped price stays on the protective side of entry (e.g. SL of a
+    long is floored, never crossing entry from above).
+
+    Falls back to `round(price, 2)` for symbols without a known tick size.
+    """
+    import math
+    tick = _FUTURES_TICK_SIZES.get(symbol.upper())
+    if tick is None or tick <= 0 or price is None or price <= 0:
+        return round(float(price or 0), 2)
+    ratio = float(price) / tick
+    if side in ("sl_long", "tp_short"):
+        snapped = math.floor(ratio) * tick
+    elif side in ("tp_long", "sl_short"):
+        snapped = math.ceil(ratio) * tick
+    else:
+        snapped = round(ratio) * tick
+    # Strip float-arithmetic dust (e.g. 4484.39999999 -> 4484.4).
+    decimals = max(2, len(f"{tick:.10f}".rstrip("0").split(".")[-1]))
+    return round(snapped, decimals)
+
 
 def _load_futures_daily_frame(path: Path):
     """Load a daily parquet while preserving a valid DatetimeIndex.
@@ -135,6 +181,7 @@ def _recalculate_bracket_from_fill(
     fill_price: float,
     signal_price: float | None = None,
     strategy_params: dict | None = None,
+    symbol: str | None = None,
 ) -> tuple[float, float]:
     """Translate a strategy bracket onto the actual fill price.
 
@@ -143,12 +190,24 @@ def _recalculate_bracket_from_fill(
       2. Explicit point params (sl_points/tp_points)
       3. Distances implied by signal_price -> stop/tp
       4. Fallback to legacy absolute-distance mirroring
+
+    Final SL/TP are snapped to the contract tick when `symbol` is provided.
     """
+    sym = (symbol or getattr(sig, "symbol", "") or "").upper()
+    side = sig.side.upper()
+    sl_role = "sl_long" if side == "BUY" else "sl_short"
+    tp_role = "tp_long" if side == "BUY" else "tp_short"
+
+    def _snap(sl_raw: float, tp_raw: float) -> tuple[float, float]:
+        return (
+            _snap_to_tick(sl_raw, sym, side=sl_role),
+            _snap_to_tick(tp_raw, sym, side=tp_role),
+        )
+
     if not fill_price or not sig.stop_loss or not sig.take_profit:
-        return round(sig.stop_loss or 0.0, 2), round(sig.take_profit or 0.0, 2)
+        return _snap(sig.stop_loss or 0.0, sig.take_profit or 0.0)
 
     params = strategy_params or {}
-    side = sig.side.upper()
 
     sl_pct = params.get("sl_pct")
     tp_pct = params.get("tp_pct")
@@ -156,8 +215,8 @@ def _recalculate_bracket_from_fill(
         sl_pct = float(sl_pct)
         tp_pct = float(tp_pct)
         if side == "BUY":
-            return round(fill_price * (1 - sl_pct), 2), round(fill_price * (1 + tp_pct), 2)
-        return round(fill_price * (1 + sl_pct), 2), round(fill_price * (1 - tp_pct), 2)
+            return _snap(fill_price * (1 - sl_pct), fill_price * (1 + tp_pct))
+        return _snap(fill_price * (1 + sl_pct), fill_price * (1 - tp_pct))
 
     sl_points = params.get("sl_points")
     tp_points = params.get("tp_points")
@@ -165,23 +224,23 @@ def _recalculate_bracket_from_fill(
         sl_points = float(sl_points)
         tp_points = float(tp_points)
         if side == "BUY":
-            return round(fill_price - sl_points, 2), round(fill_price + tp_points, 2)
-        return round(fill_price + sl_points, 2), round(fill_price - tp_points, 2)
+            return _snap(fill_price - sl_points, fill_price + tp_points)
+        return _snap(fill_price + sl_points, fill_price - tp_points)
 
     if signal_price:
         signal_price = float(signal_price)
         sl_distance = abs(signal_price - float(sig.stop_loss))
         tp_distance = abs(float(sig.take_profit) - signal_price)
         if side == "BUY":
-            return round(fill_price - sl_distance, 2), round(fill_price + tp_distance, 2)
-        return round(fill_price + sl_distance, 2), round(fill_price - tp_distance, 2)
+            return _snap(fill_price - sl_distance, fill_price + tp_distance)
+        return _snap(fill_price + sl_distance, fill_price - tp_distance)
 
     # Legacy fallback when we have no better source of truth.
     sl_offset = abs(float(sig.stop_loss) - fill_price)
     tp_offset = abs(float(sig.take_profit) - fill_price)
     if side == "BUY":
-        return round(fill_price - sl_offset, 2), round(fill_price + tp_offset, 2)
-    return round(fill_price + sl_offset, 2), round(fill_price - tp_offset, 2)
+        return _snap(fill_price - sl_offset, fill_price + tp_offset)
+    return _snap(fill_price + sl_offset, fill_price - tp_offset)
 
 
 def _estimate_futures_signal_risk_usd(
@@ -878,6 +937,13 @@ def run_futures_cycle(live: bool = False):
                     _rb_sl = float(pos_info.get("sl", 0) or 0)
                     _rb_tp = float(pos_info.get("tp", 0) or 0)
                     _rb_qty = abs(int(_ibkr_real_pos[pos_sym]))
+                    # Snap recovered SL/TP to tick (state files written before
+                    # the tick-snap fix may carry non-conforming prices).
+                    _rb_long = _ibkr_real_pos[pos_sym] > 0
+                    if _rb_sl > 0:
+                        _rb_sl = _snap_to_tick(_rb_sl, pos_sym, side="sl_long" if _rb_long else "sl_short")
+                    if _rb_tp > 0:
+                        _rb_tp = _snap_to_tick(_rb_tp, pos_sym, side="tp_long" if _rb_long else "tp_short")
                     _rb_side = "BUY" if _ibkr_real_pos[pos_sym] < 0 else "SELL"
 
                     _repose_ok = False
@@ -1282,6 +1348,7 @@ def run_futures_cycle(live: bool = False):
                     float(_fill_price),
                     signal_price=float(_signal_price) if _signal_price is not None else None,
                     strategy_params=_strategy_params if isinstance(_strategy_params, dict) else None,
+                    symbol=sym,
                 )
 
                 _sl = StopOrder(_exit_side, qty, _final_sl)

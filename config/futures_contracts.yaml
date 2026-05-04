@@ -65,6 +65,21 @@ micro_contracts:
     full_size_equivalent: GC
     point_value: 10.0
 
+  M2K:
+    description: "Micro E-mini Russell 2000"
+    exchange: CME
+    multiplier: 5
+    currency: USD
+    tick_size: 0.10
+    tick_value: 0.50
+    months: HMUZ
+    trading_hours: "18:00-17:00 ET"
+    margin_initial: 1300
+    margin_maintenance: 1100
+    etf_proxy: IWM
+    full_size_equivalent: RTY
+    point_value: 5.0
+
 # Full-size — reference uniquement, INTERDIT pour trading $25K
 full_size_contracts:
   ES:

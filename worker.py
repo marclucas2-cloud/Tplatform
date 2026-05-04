@@ -1599,6 +1599,11 @@ def run_bracket_watchdog_cycle():
                 "MGC": {"sl_pct": 0.004, "tp_pct": 0.008},
             }
 
+            # Tick-snap helper — IBKR rejects non-tick prices with warning 110
+            # (bug 2026-05-04: MGC live unprotected for 6h because SL=4484.48
+            # and watchdog repose=4557.79 both violated the 0.10 tick).
+            from core.worker.cycles.futures_runner import _snap_to_tick as _wd_snap_to_tick
+
             _unprotected = 0
             for pos in _live_positions:
                 _sym = pos.contract.symbol
@@ -1662,19 +1667,19 @@ def run_bracket_watchdog_cycle():
                     if "sl_pct" in _d:
                         # Percent-based (MGC, etc.)
                         if pos.position > 0:
-                            _sl = _sl or round(_entry_px * (1 - _d["sl_pct"]), 2)
-                            _tp = _tp or round(_entry_px * (1 + _d["tp_pct"]), 2)
+                            _sl = _sl or _entry_px * (1 - _d["sl_pct"])
+                            _tp = _tp or _entry_px * (1 + _d["tp_pct"])
                         else:
-                            _sl = _sl or round(_entry_px * (1 + _d["sl_pct"]), 2)
-                            _tp = _tp or round(_entry_px * (1 - _d["tp_pct"]), 2)
+                            _sl = _sl or _entry_px * (1 + _d["sl_pct"])
+                            _tp = _tp or _entry_px * (1 - _d["tp_pct"])
                     else:
                         # Points-based (MES, MNQ, etc.)
                         if pos.position > 0:
-                            _sl = _sl or round(_entry_px - _d["sl_points"], 2)
-                            _tp = _tp or round(_entry_px + _d["tp_points"], 2)
+                            _sl = _sl or _entry_px - _d["sl_points"]
+                            _tp = _tp or _entry_px + _d["tp_points"]
                         else:
-                            _sl = _sl or round(_entry_px + _d["sl_points"], 2)
-                            _tp = _tp or round(_entry_px - _d["tp_points"], 2)
+                            _sl = _sl or _entry_px + _d["sl_points"]
+                            _tp = _tp or _entry_px - _d["tp_points"]
                     _source = "strat_defaults"
 
                 # Tier 3: synthesize from current market price (-1%/+1.5% for longs)
@@ -1699,16 +1704,25 @@ def run_bracket_watchdog_cycle():
                                 _current_px = float(_bars[-1].close)
                                 # 1% SL / 1.5% TP from current — conservative bracket
                                 if pos.position > 0:
-                                    _sl = round(_current_px * 0.99, 2)
-                                    _tp = round(_current_px * 1.015, 2)
+                                    _sl = _current_px * 0.99
+                                    _tp = _current_px * 1.015
                                 else:
-                                    _sl = round(_current_px * 1.01, 2)
-                                    _tp = round(_current_px * 0.985, 2)
+                                    _sl = _current_px * 1.01
+                                    _tp = _current_px * 0.985
                                 _source = f"current_px={_current_px}"
                     except Exception as _px_err:
                         logger.warning(
                             f"BRACKET WATCHDOG: {_sym} current price fetch failed: {_px_err}"
                         )
+
+                # Snap to contract tick — IBKR rejects non-tick prices with
+                # warning 110 and the watchdog re-poses in a tight loop, leaving
+                # the position effectively unprotected (incident 2026-05-04 MGC).
+                _is_long = pos.position > 0
+                if _sl > 0:
+                    _sl = _wd_snap_to_tick(_sl, _sym, side="sl_long" if _is_long else "sl_short")
+                if _tp > 0:
+                    _tp = _wd_snap_to_tick(_tp, _sym, side="tp_long" if _is_long else "tp_short")
 
                 _side_exit = "SELL" if pos.position > 0 else "BUY"
                 _qty = abs(int(pos.position))
