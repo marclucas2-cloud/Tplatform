@@ -1099,8 +1099,17 @@ def run_futures_cycle(live: bool = False):
         _risk_budget_usd = equity * RISK_BUDGET_PCT
         MAX_DISTINCT_SYMBOLS = 4 if live else 20
 
-        # Compute current total risk-if-stopped from state file
-        _current_risk = 0.0
+        # Compute per-position risk-if-stopped, then aggregate two ways:
+        #   * _current_risk_naive: additive sum (worst case rho=1, legacy)
+        #   * _current_risk_var: correlation-aware portfolio VaR
+        # The risk gate uses VaR when available, naive otherwise.
+        from core.risk.portfolio_var import (
+            PositionRisk as _PortfolioPositionRisk,
+            naive_risk_sum as _portfolio_naive_sum,
+            portfolio_risk_var as _portfolio_var,
+        )
+
+        _existing_risks: list[_PortfolioPositionRisk] = []
         for _pos_sym, _pos_info in _fut_positions.items():
             _pe = float(_pos_info.get("entry", 0) or 0)
             _ps = float(_pos_info.get("sl", 0) or 0)
@@ -1108,19 +1117,39 @@ def run_futures_cycle(live: bool = False):
             _pmult = _FUTURES_MULTIPLIERS.get(_pos_sym, 1)
             _side = _pos_info.get("side", "BUY")
             if _pe > 0 and _ps > 0:
-                # Trailing SL above entry = locked-in gain, risk = $0
+                # Trailing SL through entry = locked-in P&L, risk floor $0.
                 if _side == "BUY" and _ps >= _pe:
-                    pass  # no risk, SL guarantees profit
+                    _leg_risk = 0.0
                 elif _side == "SELL" and _ps <= _pe:
-                    pass  # no risk for short
+                    _leg_risk = 0.0
                 else:
-                    _current_risk += abs(_pe - _ps) * _pmult * _pq
+                    _leg_risk = abs(_pe - _ps) * _pmult * _pq
+                if _leg_risk > 0:
+                    _existing_risks.append(
+                        _PortfolioPositionRisk(symbol=_pos_sym.upper(), risk_usd=_leg_risk)
+                    )
+
+        _current_risk_naive = _portfolio_naive_sum(_existing_risks)
+        _current_risk_var = _portfolio_var(_existing_risks)
+        # Source of truth for the legacy gate path; replaced per-signal below
+        # with the correlation-aware combined VaR when available.
+        _current_risk = _current_risk_naive
 
         _total_existing = sum(abs(int(v)) for v in _ibkr_real_pos.values())
-        logger.info(
-            f"    FUTURES {_mode}: risk budget ${_current_risk:.0f}/${_risk_budget_usd:.0f} "
-            f"({_current_risk/_risk_budget_usd*100:.0f}%), {_total_existing}/{MAX_DISTINCT_SYMBOLS} symbols"
-        )
+        if _current_risk_var is not None and len(_existing_risks) >= 2:
+            logger.info(
+                f"    FUTURES {_mode}: risk budget naive=${_current_risk_naive:.0f} "
+                f"var=${_current_risk_var:.0f} / ${_risk_budget_usd:.0f} "
+                f"({_current_risk_var/_risk_budget_usd*100:.0f}% var, "
+                f"{_current_risk_naive/_risk_budget_usd*100:.0f}% naive), "
+                f"{_total_existing}/{MAX_DISTINCT_SYMBOLS} symbols"
+            )
+        else:
+            logger.info(
+                f"    FUTURES {_mode}: risk budget ${_current_risk_naive:.0f}/${_risk_budget_usd:.0f} "
+                f"({_current_risk_naive/_risk_budget_usd*100:.0f}%), "
+                f"{_total_existing}/{MAX_DISTINCT_SYMBOLS} symbols"
+            )
 
         # Legacy soft cap: max 4 distinct contracts (fallback if risk data missing)
         _slots_available = MAX_DISTINCT_SYMBOLS - _total_existing
@@ -1267,7 +1296,26 @@ def run_futures_cycle(live: bool = False):
                 feed=feed,
                 fallback_entry=sig_meta.get("signal_price"),
             )
-            if _current_risk + _est_risk > _risk_budget_usd:
+
+            def _combined_risk_for(_candidate_sym: str, _candidate_risk: float) -> tuple[float, str]:
+                """Combine existing legs + candidate using portfolio VaR when possible.
+
+                Returns (risk_usd, mode) where mode is "var" if the correlation
+                matrix was available for every leg involved, "naive" otherwise.
+                The legacy additive sum is the fallback so a missing parquet
+                cannot silently relax the gate.
+                """
+                combined = list(_existing_risks) + [
+                    _PortfolioPositionRisk(symbol=_candidate_sym.upper(), risk_usd=_candidate_risk)
+                ]
+                if len(combined) >= 2:
+                    var = _portfolio_var(combined)
+                    if var is not None:
+                        return var, "var"
+                return _portfolio_naive_sum(combined), "naive"
+
+            _combined, _combined_mode = _combined_risk_for(sym, _est_risk)
+            if _combined > _risk_budget_usd:
                 if _maybe_rebind_cam_signal("risk_budget"):
                     _est_risk = _estimate_futures_signal_risk_usd(
                         sym,
@@ -1277,10 +1325,12 @@ def run_futures_cycle(live: bool = False):
                         feed=feed,
                         fallback_entry=sig_meta.get("signal_price"),
                     )
-            if _current_risk + _est_risk > _risk_budget_usd:
+                    _combined, _combined_mode = _combined_risk_for(sym, _est_risk)
+            if _combined > _risk_budget_usd:
                 logger.warning(
                     f"    {name}: SKIP — risk budget exceeded "
-                    f"(current ${_current_risk:.0f} + new ${_est_risk:.0f} > ${_risk_budget_usd:.0f})"
+                    f"(combined {_combined_mode}=${_combined:.0f} > ${_risk_budget_usd:.0f}; "
+                    f"existing naive=${_current_risk_naive:.0f}, new=${_est_risk:.0f})"
                 )
                 continue
             try:
@@ -1405,8 +1455,17 @@ def run_futures_cycle(live: bool = False):
                 _contracts_opened += 1
                 _actual_risk = abs(_fill_price - _final_sl) * _FUTURES_MULTIPLIERS.get(sym, 1) * qty
                 _current_risk += _actual_risk
+                _current_risk_naive += _actual_risk
+                _existing_risks.append(
+                    _PortfolioPositionRisk(symbol=sym.upper(), risk_usd=_actual_risk)
+                )
+                _refreshed_var = _portfolio_var(_existing_risks)
+                if _refreshed_var is not None:
+                    _current_risk_var = _refreshed_var
                 logger.info(
-                    f"    RISK BUDGET: +${_actual_risk:.0f} → ${_current_risk:.0f}/${_risk_budget_usd:.0f}"
+                    f"    RISK BUDGET: +${_actual_risk:.0f} → naive=${_current_risk_naive:.0f}"
+                    + (f" var=${_current_risk_var:.0f}" if _current_risk_var is not None else "")
+                    + f" / ${_risk_budget_usd:.0f}"
                 )
 
                 # P1.4 audit trail — record the decision for post-mortem reconstructibility
