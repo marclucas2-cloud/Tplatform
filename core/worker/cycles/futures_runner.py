@@ -1085,17 +1085,25 @@ def run_futures_cycle(live: bool = False):
         except Exception:
             pass  # keep previous _ibkr_real_pos
 
-        # RISK BUDGET FRAMEWORK (user decision 15 avril 2026)
-        # ====================================================
+        # RISK BUDGET FRAMEWORK (user decision 15 avril 2026, raised 5 mai 2026)
+        # =======================================================================
         # Approach: think in EXPOSURE not contract count.
-        # - Hard cap: max total risk-if-stopped <= 5% of equity
+        # - Hard cap: max portfolio risk-if-stopped <= RISK_BUDGET_PCT * equity
         # - Plus soft cap: max 4 distinct symbols live (diversification)
         # - Per-symbol cap: 1 contract (existing guards below)
         #
-        # Sum of (entry - SL) * mult * qty for all open positions ≤ 5% * equity
-        # Worst case all SL hit same day = max 5% DD (within kill switch limits)
+        # Aggregation uses correlation-aware portfolio VaR when daily returns
+        # parquets are available (`core/risk/portfolio_var.py`); falls back to
+        # the additive sum (legacy worst case rho=1) otherwise.
+        #
+        # Budget at 8% (raised from 5% on 2026-05-05): the daily kill switch
+        # at -5% NAV remains the real safety net. The budget is a soft cap to
+        # bound expected drawdown per day, not a substitute for the kill
+        # switches. With 4 symbols max @ 1 contract each, an 8% portfolio VaR
+        # ceiling lets uncorrelated legs (e.g. MGC + MNQ at rho ~= 0) coexist
+        # in the book without naive-sum overstating the joint risk.
 
-        RISK_BUDGET_PCT = 0.05  # 5% of equity worst-case DD cap
+        RISK_BUDGET_PCT = 0.08  # 8% portfolio VaR cap (kill switch -5% is the floor)
         _risk_budget_usd = equity * RISK_BUDGET_PCT
         MAX_DISTINCT_SYMBOLS = 4 if live else 20
 
