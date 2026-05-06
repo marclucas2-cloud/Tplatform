@@ -38,6 +38,14 @@ TRAILING_CONFIG = {
 }
 
 
+# Safety margin between the proposed SL and the current price. A SELL STP whose
+# trigger sits at or above the current bid would fire on the next tick — that is
+# a close-at-touch disguised as a trailing update. We require the new SL to sit
+# at least one tick below the current price (LONG case). Set conservatively at
+# 0.05% which is well above MGC/MES tick granularity.
+TRAILING_PRICE_GUARD_PCT = 0.0005
+
+
 def compute_trailing_sl(
     entry_price: float,
     highest_price: float,
@@ -45,12 +53,20 @@ def compute_trailing_sl(
     trail_pct: float,
     current_sl: float,
     side: str = "BUY",
+    price_guard_pct: float = TRAILING_PRICE_GUARD_PCT,
 ) -> float | None:
     """Compute new trailing SL price. Returns None if no change needed.
 
     The SL only ratchets in the profitable direction:
     - LONG: SL moves UP as highest_price increases
     - SHORT: SL moves DOWN as lowest_price decreases (not implemented yet)
+
+    Safety: when the prospective SL ends up at or above ``current_price`` (LONG)
+    or at or below it (SHORT), this function returns ``None``. Without this
+    guard the strategy would post a STP that fires on the next tick — a
+    close-at-touch retroactively dressed up as a trailing update. The
+    ``price_guard_pct`` margin keeps the SL strictly on the protective side of
+    the current mark.
     """
     if side != "BUY":
         return None  # SHORT trailing not implemented yet
@@ -61,6 +77,24 @@ def compute_trailing_sl(
     # Ratchet: never move SL down
     if new_sl <= current_sl:
         return None
+
+    # Price guard: refuse to post a SL at or above current price.
+    # When the market has retraced from the high, the strict trailing
+    # formula can produce new_sl > current_price. Posting it would fire
+    # the STP immediately and close the position at the current mark.
+    # That is worse than leaving the trail behind and waiting for either
+    # a new high (which re-arms the ratchet) or for the user to close
+    # the position manually if conviction has changed.
+    if current_price > 0:
+        guard = current_price * (1 - price_guard_pct)
+        if new_sl >= guard:
+            logger.warning(
+                "TRAILING SKIP price_guard: proposed SL %.2f >= current %.2f * "
+                "(1 - %.4f) = %.2f. Position would close at touch; keeping "
+                "current SL %.2f. Either wait for a new high or close manually.",
+                new_sl, current_price, price_guard_pct, guard, current_sl,
+            )
+            return None
 
     return new_sl
 

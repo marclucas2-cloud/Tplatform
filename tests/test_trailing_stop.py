@@ -50,6 +50,69 @@ class TestComputeTrailingSL:
         )
         assert result is None
 
+    def test_price_guard_blocks_close_at_touch_after_retrace(self):
+        """Reproduces the 2026-05-06 MGC scenario: high=4734.6 atteint le matin,
+        prix retrace a 4696 l'apres-midi. Strict trailing 0.4% donnerait
+        new_sl=4715.66, mais ce niveau > current_price=4696 -> SL fire au touch
+        = close-at-touch deguise. Le garde-fou doit retourner None."""
+        result = compute_trailing_sl(
+            entry_price=4576.097, highest_price=4734.6,
+            current_price=4696.0, trail_pct=0.004,
+            current_sl=4484.5, side="BUY",
+        )
+        assert result is None, (
+            "guard must reject SL at/above current price even when ratchet rule "
+            "would otherwise approve"
+        )
+
+    def test_price_guard_allows_when_sl_safely_below_mark(self):
+        # high=4850, current=4845, trail 0.4% -> new_sl=4830.60.
+        # Guard threshold = 4845 * 0.9995 = 4842.58. 4830.60 < 4842.58 -> OK.
+        result = compute_trailing_sl(
+            entry_price=4800, highest_price=4850,
+            current_price=4845, trail_pct=0.004,
+            current_sl=4780, side="BUY",
+        )
+        assert result == 4830.60
+
+    def test_price_guard_blocks_when_sl_within_margin(self):
+        # high=4850, current=4832 (sharp retrace). trail 0.4% -> new_sl=4830.60.
+        # Guard threshold = 4832 * 0.9995 = 4829.58. 4830.60 >= 4829.58 -> block.
+        result = compute_trailing_sl(
+            entry_price=4800, highest_price=4850,
+            current_price=4832.0, trail_pct=0.004,
+            current_sl=4780, side="BUY",
+        )
+        assert result is None
+
+    def test_price_guard_pct_override(self):
+        # With a 0%-margin guard the SL must only be strictly below the mark.
+        # high=4850, current=4830.61 (one cent above target SL).
+        # Default 0.05% guard would block; override 0% must let it pass.
+        result_default = compute_trailing_sl(
+            entry_price=4800, highest_price=4850,
+            current_price=4830.61, trail_pct=0.004,
+            current_sl=4780, side="BUY",
+        )
+        assert result_default is None
+        result_override = compute_trailing_sl(
+            entry_price=4800, highest_price=4850,
+            current_price=4830.61, trail_pct=0.004,
+            current_sl=4780, side="BUY",
+            price_guard_pct=0.0,
+        )
+        assert result_override == 4830.60
+
+    def test_price_guard_skipped_when_current_zero(self):
+        # When current price is unknown (0 or negative), don't block —
+        # caller is expected to skip the position separately.
+        result = compute_trailing_sl(
+            entry_price=4800, highest_price=4850,
+            current_price=0.0, trail_pct=0.004,
+            current_sl=4780, side="BUY",
+        )
+        assert result == 4830.60
+
 
 class TestUpdateTrailingStops:
     def test_no_trailing_for_unknown_strategy(self):
