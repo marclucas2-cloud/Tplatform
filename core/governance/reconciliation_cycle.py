@@ -109,7 +109,23 @@ def run_reconciliation_cycle(
         is_paper_book = meta["paper_only"]
         sim_is_canonical = meta["source_of_truth"] == "simulation_local"
 
-        # Alert on divergences using severity matrix
+        # Alert on divergences using severity matrix.
+        #
+        # 2026-05-07 update: only_in_local downgraded from CRITICAL to WARNING
+        # for live books. Rationale: only_in_local means the broker has CLOSED
+        # the position (TP/SL fill, manual close) but the local state file
+        # hasn't propagated yet. The risk is strictly zero — the broker is
+        # canonical, the position is gone, there's nothing to manage. The
+        # only consequence is the strategy can't re-open until cleanup.
+        #
+        # only_in_broker stays CRITICAL because it means a position exists
+        # broker-side that our risk pipeline doesn't know about (orphan,
+        # unprotected by our SL/TP logic). That is genuinely dangerous.
+        #
+        # Reproduction of the asymmetry:
+        # - 2026-05-07 06:43 UTC: MGC live TP'd at $4759 (broker closed)
+        # - 06:55 → 11:00 UTC: 16 CRITICAL alerts on only_in_local=['MGC']
+        #   for a position that was 100% safe (closed broker-side).
         if alert_callback is not None:
             for div in result.get("divergences", []):
                 dtype = div.get("type", "unknown")
@@ -134,6 +150,17 @@ def run_reconciliation_cycle(
                         msg = (
                             f"{label} [{book_id} paper_only] {dtype}: "
                             f"symbols={syms}. Local simulation only, no broker push."
+                        )
+                    elif dtype == "only_in_local":
+                        # Live book, but the broker has already closed the
+                        # position. Cosmetic state lag, not a CRO issue.
+                        severity = "warning"
+                        label = "RECONCILIATION WARNING"
+                        msg = (
+                            f"{label} [{book_id}] only_in_local: "
+                            f"symbols={syms}. Broker has CLOSED these positions; "
+                            f"local state lagging. Cleanup happens at next "
+                            f"futures cycle / boot reconcile."
                         )
                     else:
                         severity = "critical"

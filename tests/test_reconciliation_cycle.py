@@ -226,6 +226,68 @@ class TestReconciliationCycleOrchestration:
         assert len(alerts) == 1
         assert alerts[0][1] == "critical"
 
+    def test_only_in_local_on_live_is_warning_not_critical(self, isolated_recon_dir):
+        """only_in_local means the broker has CLOSED the position; local state lags.
+
+        2026-05-07 incident: 16 spurious CRITICAL alerts on MGC after a TP fill
+        because the state file took hours to clean. Risk was strictly zero
+        (broker canonical, position closed). Severity must be warning, not
+        critical. only_in_broker (orphan position, unprotected by our SL)
+        remains critical.
+        """
+        alerts = []
+
+        def fake(book_id):
+            return {
+                "book": book_id,
+                "divergences": [{"type": "only_in_local", "symbols": ["MGC"]}],
+            }
+
+        with patch("core.governance.reconciliation_cycle.reconcile_book", side_effect=fake), \
+             patch(
+                 "core.governance.reconciliation_cycle._get_book_meta",
+                 return_value={"paper_only": False, "source_of_truth": ""},
+             ):
+            run_reconciliation_cycle(
+                books=("ibkr_futures",),
+                alert_callback=lambda msg, lvl: alerts.append((msg, lvl)),
+            )
+
+        assert len(alerts) == 1
+        msg, lvl = alerts[0]
+        assert lvl == "warning", f"only_in_local must be warning, got {lvl}"
+        assert "RECONCILIATION WARNING" in msg
+        assert "CLOSED" in msg, "message must explain the position is broker-closed"
+
+    def test_only_in_broker_on_live_stays_critical(self, isolated_recon_dir):
+        """only_in_broker = orphan position broker-side, NOT tracked by our pipeline.
+
+        This is genuinely dangerous (no SL/TP guard from us) and must stay
+        critical. Asymmetry vs only_in_local is intentional.
+        """
+        alerts = []
+
+        def fake(book_id):
+            return {
+                "book": book_id,
+                "divergences": [{"type": "only_in_broker", "symbols": ["MGC"]}],
+            }
+
+        with patch("core.governance.reconciliation_cycle.reconcile_book", side_effect=fake), \
+             patch(
+                 "core.governance.reconciliation_cycle._get_book_meta",
+                 return_value={"paper_only": False, "source_of_truth": ""},
+             ):
+            run_reconciliation_cycle(
+                books=("ibkr_futures",),
+                alert_callback=lambda msg, lvl: alerts.append((msg, lvl)),
+            )
+
+        assert len(alerts) == 1
+        msg, lvl = alerts[0]
+        assert lvl == "critical", f"only_in_broker must stay critical, got {lvl}"
+        assert "RECONCILIATION CRITICAL" in msg
+
     def test_state_file_corrupted_alert(self, isolated_recon_dir):
         alerts = []
         def fake(book_id):
