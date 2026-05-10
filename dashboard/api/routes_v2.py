@@ -37,6 +37,15 @@ except ImportError:  # pragma: no cover
 
 from fastapi import APIRouter, Query
 
+from dashboard_data import (
+    get_dashboard_positions,
+    live_drawdown_snapshot,
+    live_equity_total,
+    load_kill_switch_state,
+    load_binance_account_snapshot,
+    load_ibkr_account_snapshot,
+)
+
 logger = logging.getLogger("dashboard-api-v2")
 
 # ── Paths ────────────────────────────────────────────────────────────────────
@@ -347,6 +356,59 @@ def _asset_class_from_trade(t: dict) -> str:
 def risk_overview():
     """Vue synthetique du risque : drawdown, VaR, exposition, kill switches."""
     try:
+        limits_ibkr = _load_yaml(CONFIG_DIR / "limits_live.yaml")
+        ks_ibkr = load_kill_switch_state()
+        ks_crypto = _load_crypto_kill_switch_state()
+        live = live_equity_total()
+        equity = live["live_equity"]
+        dd = live_drawdown_snapshot(equity)
+        positions = get_dashboard_positions(include_paper=False)
+
+        portfolio_vol_daily = 0.012
+        var_95 = equity * portfolio_vol_daily * 1.645
+        var_99 = equity * portfolio_vol_daily * 2.326
+
+        return {
+            "drawdown": {
+                "current_pct": round(dd["current_pct"], 2),
+                "max_allowed_pct": -limits_ibkr.get("kill_switch", {}).get("max_monthly_loss_pct", 0.05) * 100,
+                "daily_pnl": round(dd["daily_pnl"], 2),
+                "daily_pnl_pct": round(dd["daily_pnl_pct"], 2),
+                "peak_equity": round(dd["peak"], 2),
+                "daily_start_equity": round(dd["daily_start"], 2),
+            },
+            "var": {
+                "var_95_1d": round(var_95, 2),
+                "var_99_1d": round(var_99, 2),
+            },
+            "exposure": {
+                "ibkr_capital": round(live["ibkr_equity"], 2),
+                "crypto_capital": round(live["binance_equity"], 2),
+                "alpaca_live_capital": round(live["alpaca_live_equity"], 2),
+                "total_capital": round(equity, 2),
+                "exposure_long": positions.get("exposure_long", 0),
+                "exposure_short": positions.get("exposure_short", 0),
+                "exposure_net": positions.get("exposure_net", 0),
+                "positions_count": positions.get("live_count", 0),
+            },
+            "kill_switch": {
+                "ibkr": {
+                    "active": ks_ibkr.get("active", False),
+                    "armed": ks_ibkr.get("armed", True),
+                    "reason": ks_ibkr.get("activation_reason") or ks_ibkr.get("reason"),
+                    "activated_at": ks_ibkr.get("activated_at"),
+                },
+                "crypto": {
+                    "active": ks_crypto.get("active", False),
+                    "armed": ks_crypto.get("armed", True),
+                    "reason": ks_crypto.get("activation_reason"),
+                    "activated_at": ks_crypto.get("activated_at"),
+                },
+            },
+            "sources": dd.get("sources", {}),
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+
         state = _load_state()
         limits_ibkr = _load_yaml(CONFIG_DIR / "limits_live.yaml")
         limits_crypto = _load_yaml(CONFIG_DIR / "crypto_limits.yaml")
@@ -1913,6 +1975,51 @@ def tax_monthly():
 def cross_exposure():
     """Exposition combinee IBKR + Binance — donnees LIVE."""
     try:
+        live = live_equity_total()
+        ibkr = load_ibkr_account_snapshot()
+        binance = load_binance_account_snapshot()
+        positions = get_dashboard_positions(include_paper=False)
+        by_broker: dict[str, dict[str, float]] = {}
+        for pos in positions.get("positions", []):
+            broker = str(pos.get("broker", "UNKNOWN")).lower()
+            row = by_broker.setdefault(broker, {"long": 0.0, "short": 0.0, "net": 0.0, "count": 0.0})
+            value = float(pos.get("market_value") or 0.0)
+            if pos.get("direction") == "SHORT":
+                row["short"] += abs(value)
+                row["net"] -= abs(value)
+            else:
+                row["long"] += value
+                row["net"] += value
+            row["count"] += 1
+
+        return {
+            "total_equity": round(live["live_equity"], 2),
+            "ibkr_equity": round(live["ibkr_equity"], 2),
+            "binance_equity": round(live["binance_equity"], 2),
+            "positions": positions.get("positions", []),
+            "exposure": {
+                "long": positions.get("exposure_long", 0),
+                "short": positions.get("exposure_short", 0),
+                "net": positions.get("exposure_net", 0),
+                "long_pct": positions.get("exposure_long_pct", 0),
+                "short_pct": positions.get("exposure_short_pct", 0),
+            },
+            "by_broker": by_broker,
+            "brokers": {
+                "ibkr": {
+                    "equity": round(live["ibkr_equity"], 2),
+                    "cash": round(float(ibkr.get("cash") or 0.0), 2),
+                    "source": ibkr.get("source"),
+                },
+                "binance": {
+                    "equity": round(live["binance_equity"], 2),
+                    "cash": round(float(binance.get("cash") or 0.0), 2),
+                    "source": binance.get("source"),
+                },
+            },
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+
         # ── IBKR (TCP check + equity from snapshot) ──
         import socket
         ibkr_host = os.environ.get("IBKR_HOST", "127.0.0.1")
@@ -2510,12 +2617,14 @@ def equity_curve():
         if curve:
             return {
                 "equity_curve": curve,
+                "curve": curve,
                 "source": "snapshots",
                 "points": len(curve),
             }
 
         return {
             "equity_curve": [],
+            "curve": [],
             "source": "no_data",
             "points": 0,
             "message": "Aucune donnee de snapshot portfolio disponible",

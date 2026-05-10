@@ -32,6 +32,16 @@ except ImportError:
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("dashboard-api")
 
+from dashboard_data import (
+    build_strategy_rows,
+    get_dashboard_portfolio,
+    get_dashboard_positions,
+    get_ibkr_positions_via_insync,
+    load_binance_account_snapshot,
+    load_quant_registry,
+    strategy_detail,
+)
+
 app = FastAPI(title="Trading Dashboard API", version="2.0.0")
 
 # ── CORS ─────────────────────────────────────────────────────────────────────
@@ -156,6 +166,10 @@ def get_portfolio():
     Alpaca paper est affiché séparément.
     """
     try:
+        portfolio = get_dashboard_portfolio()
+        portfolio["market_open"] = _is_market_open()
+        return portfolio
+
         # Alpaca (PAPER — $100K, not real money)
         alpaca_equity, alpaca_cash, alpaca_positions = 0, 0, []
         alpaca_is_paper = True
@@ -244,6 +258,8 @@ def _is_market_open() -> bool:
 def get_positions():
     """Positions ouvertes."""
     try:
+        return get_dashboard_positions(include_paper=True)
+
         client = _get_alpaca_client()
         positions = client.get_positions()
         state = _load_state()
@@ -309,6 +325,9 @@ def get_positions():
 def get_strategies():
     """Liste de toutes les strategies avec config, sante et phase lifecycle."""
     try:
+        result = build_strategy_rows()
+        return {"strategies": result, "count": len(result), "source": "config/quant_registry.yaml"}
+
         strategies, tier_alloc = _get_strategies_config()
         state = _load_state()
         pnl_log = state.get("strategy_pnl_log", {})
@@ -402,10 +421,9 @@ def get_strategies():
 def _get_total_strategies_count() -> int:
     """Count total strategies from STRATEGY_PHASES (most complete source)."""
     try:
-        from strategy_registry import STRATEGY_PHASES
-        return len(STRATEGY_PHASES)
+        return len(load_quant_registry().get("strategies", []))
     except Exception:
-        return len(_load_strategy_registry())
+        return 0
 
 
 def _load_strategy_registry() -> dict:
@@ -441,6 +459,11 @@ def get_strategy_detail(strategy_id: str):
     crypto strategies, FX, EU, futures. Plus jamais "introuvable".
     """
     try:
+        detail = strategy_detail(strategy_id)
+        if detail is None:
+            return {"error": f"Strategy {strategy_id} not found"}
+        return detail
+
         STRATEGY_REGISTRY = _load_strategy_registry()
 
         strategies, tier_alloc = _get_strategies_config()
@@ -520,6 +543,43 @@ def get_strategy_detail(strategy_id: str):
 def get_crypto_strategies():
     """Liste des 8 strategies crypto Binance avec config, wallet et statut."""
     try:
+        rows = [row for row in build_strategy_rows() if row.get("book") == "binance_crypto"]
+        binance_info = load_binance_account_snapshot()
+        return {
+            "strategies": [
+                {
+                    "id": row["id"],
+                    "name": row["name"],
+                    "status": "LIVE" if row["phase"] in {"LIVE", "LIVE_MICRO", "PROBATION"} else row["phase"],
+                    "wallet": "spot",
+                    "market_type": "spot",
+                    "allocation_pct": row.get("allocation_pct") or 0,
+                    "capital_allocated": row.get("capital") or 0,
+                    "symbols": [],
+                    "timeframe": "daily",
+                    "frequency": "registry",
+                    "max_leverage": 1,
+                    "kelly_fraction": 0,
+                    "grade": row.get("grade"),
+                    "phase": row.get("phase"),
+                }
+                for row in rows
+            ],
+            "count": len(rows),
+            "total_capital": binance_info.get("equity", 0),
+            "total_allocation_pct": round(sum((row.get("allocation_pct") or 0) for row in rows), 1),
+            "wallets": {"spot": "canonical"},
+            "binance_balance": {
+                "equity": binance_info.get("equity", 0),
+                "cash_usdt": binance_info.get("cash", 0),
+                "spot_total_usd": binance_info.get("equity", 0),
+            },
+            "phase": "CANONICAL_REGISTRY",
+            "kelly_fraction": 0,
+            "source": "config/quant_registry.yaml",
+            "timestamp": datetime.now(UTC).isoformat(),
+        }
+
         # Charger la config allocation pour obtenir le capital total
         import yaml
         from strategies.crypto import CRYPTO_STRATEGIES
@@ -1204,18 +1264,6 @@ def health_check():
 # Must be LAST — catches all non-API routes and serves the React frontend.
 
 DIST_DIR = ROOT / "dashboard" / "frontend" / "dist"
-if DIST_DIR.exists():
-    from fastapi.responses import FileResponse
-
-    @app.get("/{full_path:path}")
-    async def serve_spa(full_path: str):
-        """Serve React SPA — all non-API routes return index.html."""
-        file_path = DIST_DIR / full_path
-        if full_path and file_path.exists() and file_path.is_file():
-            return FileResponse(file_path)
-        return FileResponse(DIST_DIR / "index.html")
-else:
-    logger.warning(f"Frontend dist not found at {DIST_DIR} — run 'npm run build'")
 
 
 # ── Startup ──────────────────────────────────────────────────────────────────
@@ -1287,6 +1335,7 @@ def get_futures_trades(limit: int = 50):
 @app.get("/api/futures/positions")
 def get_futures_positions():
     """Current futures positions from state files."""
+    live_rows = get_ibkr_positions_via_insync(mode="live")
     result = {"live": {}, "paper": {}}
     for suffix in ("live", "paper"):
         fp = ROOT / "data" / "state" / f"futures_positions_{suffix}.json"
@@ -1295,6 +1344,8 @@ def get_futures_positions():
                 result[suffix] = json.loads(fp.read_text(encoding="utf-8"))
             except Exception:
                 pass
+    result["live_broker"] = live_rows
+    result["live_broker_count"] = len(live_rows)
     return result
 
 
@@ -1387,6 +1438,23 @@ def api_desk_status():
     except Exception as e:
         logger.error(f"/api/governance/desk-status error: {e}")
         return {"error": str(e)}
+
+
+# ── Static SPA serving ───────────────────────────────────────────────────────
+# Must be registered after every /api route. Otherwise FastAPI will serve the
+# React index.html for typoed or late-declared API endpoints.
+if DIST_DIR.exists():
+    from fastapi.responses import FileResponse
+
+    @app.get("/{full_path:path}")
+    async def serve_spa(full_path: str):
+        """Serve React SPA — all non-API routes return index.html."""
+        file_path = DIST_DIR / full_path
+        if full_path and file_path.exists() and file_path.is_file():
+            return FileResponse(file_path)
+        return FileResponse(DIST_DIR / "index.html")
+else:
+    logger.warning(f"Frontend dist not found at {DIST_DIR} — run 'npm run build'")
 
 
 @app.on_event("startup")

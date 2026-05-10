@@ -79,15 +79,12 @@ function PositionTable({ positions, showMode }) {
 
 export default function Positions() {
   const { data, loading } = useApi('/positions', 10000)
-  const { data: crossData } = useApi('/cross/exposure', 30000)
   const [mode, setMode] = useState('all')
 
   if (loading || !data) return <div className="text-center py-12 text-[var(--color-text-secondary)]">Loading...</div>
 
-  // Merge positions from both sources and tag mode
-  const paperPositions = (data.positions || []).map(p => ({ ...p, _mode: 'paper' }))
-  const livePositions = (crossData?.positions || []).map(p => ({ ...p, _mode: 'live' }))
-  const allPositions = [...livePositions, ...paperPositions]
+  // Backend now returns the canonical combined book: IBKR live + Binance live + Alpaca paper.
+  const allPositions = (data.positions || []).map(p => ({ ...p, _mode: p._mode || p.mode || 'paper' }))
 
   const filtered = mode === 'all' ? allPositions : allPositions.filter(p => p._mode === mode)
 

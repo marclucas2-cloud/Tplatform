@@ -153,7 +153,7 @@ export default function Overview() {
           equity={brokers.IBKR?.equity || portfolio.ibkr_equity || 0}
           deposited={brokers.IBKR?.deposited || 10000}
           status={true}
-          currency="EUR "
+          currency="$"
         />
         <BrokerCard
           name="Binance"
@@ -179,7 +179,7 @@ export default function Overview() {
             options={['7j', '30j', '90j', 'YTD']}
           />
         </div>
-        <EquityCurve data={equityData?.curve || []} period={period} showBrokers={true} />
+        <EquityCurve data={equityData?.curve || equityData?.equity_curve || []} period={period} showBrokers={true} />
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">

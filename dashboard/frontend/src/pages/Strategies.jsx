@@ -119,7 +119,8 @@ export default function Strategies() {
                 </tr>,
                 ...items.map((s) => {
                   const killMargin = s.kill_margin_pct
-                  const killDanger = killMargin < 50
+                  const killStatus = s.kill_switch_status || (s.kill_threshold !== 0 ? 'OK' : 'N/A')
+                  const killDanger = killStatus !== 'OK' && killStatus !== 'N/A'
                   return (
                     <tr key={s.id} onClick={() => navigate(`/strategies/${s.id}`)} className="border-t border-[var(--color-border)]/30 hover:bg-[var(--color-bg-hover)] transition-colors cursor-pointer">
                       <td className="py-2.5 px-4"><PhaseBadge phase={s.phase} /></td>
@@ -136,7 +137,7 @@ export default function Strategies() {
                         {s.pnl_5d !== 0 ? `$${s.pnl_5d >= 0 ? '+' : ''}${s.pnl_5d.toFixed(0)}` : '—'}
                       </td>
                       <td className="py-2.5 px-4 text-right">
-                        {s.kill_threshold !== 0 ? (
+                        {killStatus !== 'N/A' ? (
                           <div className="flex items-center justify-end gap-1">
                             {killDanger ? (
                               <AlertTriangle size={12} className="text-[var(--color-warning)]" />
@@ -144,7 +145,7 @@ export default function Strategies() {
                               <Shield size={12} className="text-[var(--color-profit)]" />
                             )}
                             <span className={`font-mono text-xs ${killDanger ? 'text-[var(--color-warning)]' : 'text-[var(--color-text-secondary)]'}`}>
-                              {killMargin}%
+                              {killDanger ? killStatus : `${killMargin}%`}
                             </span>
                           </div>
                         ) : (

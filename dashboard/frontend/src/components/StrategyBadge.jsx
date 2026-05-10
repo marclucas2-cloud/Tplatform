@@ -36,6 +36,13 @@ const PHASE_CONFIG = {
   REJECTED:   { bg: 'bg-red-500/20',     text: 'text-red-400',     border: 'border-red-500/30',     icon: '✕', label: 'Rejete' },
 }
 
+Object.assign(PHASE_CONFIG, {
+  LIVE_MICRO: { bg: 'bg-emerald-500/10', text: 'text-emerald-300', border: 'border-emerald-500/20', icon: 'LM', label: 'Live micro' },
+  FROZEN: { bg: 'bg-cyan-500/10', text: 'text-cyan-300', border: 'border-cyan-500/20', icon: 'FR', label: 'Frozen' },
+  RESEARCH: { bg: 'bg-indigo-500/10', text: 'text-indigo-300', border: 'border-indigo-500/20', icon: 'RS', label: 'Research' },
+  DISABLED: { bg: 'bg-zinc-500/10', text: 'text-zinc-400', border: 'border-zinc-500/20', icon: 'OFF', label: 'Disabled' },
+})
+
 export function PhaseBadge({ phase }) {
   const c = PHASE_CONFIG[phase] || PHASE_CONFIG.CODE
   return (
@@ -46,5 +53,5 @@ export function PhaseBadge({ phase }) {
   )
 }
 
-export const PHASE_ORDER = ['LIVE', 'PROBATION', 'PAPER', 'WF_PENDING', 'CODE', 'REJECTED']
+export const PHASE_ORDER = ['LIVE', 'LIVE_MICRO', 'PROBATION', 'PAPER', 'FROZEN', 'RESEARCH', 'DISABLED', 'WF_PENDING', 'CODE', 'REJECTED']
 export { PHASE_CONFIG }
