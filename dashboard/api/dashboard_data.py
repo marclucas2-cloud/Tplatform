@@ -723,6 +723,13 @@ def _add_strategy_pnl(
     row["sources"][source] = int(row["sources"].get(source, 0)) + 1
 
 
+def _source_label(path: Path) -> str:
+    try:
+        return str(path.relative_to(ROOT))
+    except ValueError:
+        return str(path)
+
+
 def _load_sqlite_strategy_pnl(cutoff: datetime, totals: dict[str, dict[str, Any]]) -> None:
     for db_name in ("live_journal.db", "paper_journal.db"):
         db_path = DATA_DIR / db_name
@@ -804,7 +811,7 @@ def _load_jsonl_strategy_pnl(cutoff: datetime, totals: dict[str, dict[str, Any]]
                                 before = 0.0
                             last = value
                     if last is not None:
-                        _add_strategy_pnl(totals, sid, last - (before or 0.0), str(path.relative_to(ROOT)))
+                        _add_strategy_pnl(totals, sid, last - (before or 0.0), _source_label(path))
                 continue
 
             for item in records:
@@ -815,7 +822,7 @@ def _load_jsonl_strategy_pnl(cutoff: datetime, totals: dict[str, dict[str, Any]]
                 if pnl is None:
                     continue
                 sid = item.get("strategy_id") or item.get("strategy") or default_sid
-                _add_strategy_pnl(totals, sid, pnl, str(path.relative_to(ROOT)))
+                _add_strategy_pnl(totals, sid, pnl, _source_label(path))
         except Exception as exc:
             logger.debug("Failed to aggregate strategy PnL from %s: %s", path, exc)
 
