@@ -745,12 +745,25 @@ def live_drawdown_snapshot(live_equity: float | None = None) -> dict[str, Any]:
     ibkr_equity = live["ibkr_equity"]
     binance_equity = live["binance_equity"]
 
-    ibkr_start = safe_float(ibkr.get("daily_start_equity"), ibkr_equity)
-    crypto_start = safe_float(crypto.get("daily_start_equity", crypto.get("daily_start")), binance_equity)
+    def stable_anchor(anchor: float, current: float) -> float:
+        """Ignore stale anchors from an old equity perimeter.
+
+        This prevents dashboard-only false daily PnL spikes when a broker
+        snapshot starts including cash/earn buckets that the persisted DD anchor
+        did not include yet.
+        """
+        if current <= 0:
+            return anchor
+        if anchor <= 0:
+            return current
+        return current if abs(anchor - current) / current > 0.25 else anchor
+
+    ibkr_start = stable_anchor(safe_float(ibkr.get("daily_start_equity"), ibkr_equity), ibkr_equity)
+    crypto_start = stable_anchor(safe_float(crypto.get("daily_start_equity", crypto.get("daily_start")), binance_equity), binance_equity)
     daily_start = (ibkr_start if ibkr_start > 0 else ibkr_equity) + (crypto_start if crypto_start > 0 else binance_equity)
 
-    ibkr_peak = safe_float(ibkr.get("peak_equity"), ibkr_equity)
-    crypto_peak = safe_float(crypto.get("peak_equity", crypto.get("peak")), binance_equity)
+    ibkr_peak = stable_anchor(safe_float(ibkr.get("peak_equity"), ibkr_equity), ibkr_equity)
+    crypto_peak = stable_anchor(safe_float(crypto.get("peak_equity", crypto.get("peak")), binance_equity), binance_equity)
     peak = (ibkr_peak if ibkr_peak > 0 else ibkr_equity) + (crypto_peak if crypto_peak > 0 else binance_equity)
     if peak < equity:
         peak = equity
