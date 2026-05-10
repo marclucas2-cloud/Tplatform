@@ -42,6 +42,16 @@ scripts/{deploy.sh,pre_deploy_check.py}  # Canary deploy + checklist
 config/{allocation,crypto_allocation,limits_live,crypto_limits}.yaml
 ```
 
+## Etat actuel rapide (as of 2026-05-10)
+- Source longue: `SYNTHESE_COMPLETE.md` V17 + `reports/checkup/checkup_2026-05-10.md`.
+- Incident Telegram `/kill CONFIRM` du 2026-05-08 corrige le 2026-05-10: le bot ferme maintenant les positions IBKR via `ib_insync` direct, y compris futures, puis active le kill switch apres les tentatives.
+- `_authorized_by` peut contenir un suffixe, par exemple `:live_micro_entry`; l'extracteur canonique split sur `:` avant les checks whitelist.
+- `live_micro_sizing` n'utilise plus les anciens caps fixes `$500/$300/$200`; depuis la decision Marc "aucun seuil en dur", les caps sont en pourcentage d'equity: S=2.0%, A=1.2%, B=0.8%.
+- `mib_estx50_spread` n'a plus de blocker funding reel: le gap EUR du 2026-04-22 etait base sur l'equity pre-depot. Apres le depot +$15K du 2026-04-30, IBKR couvre la marge estimee.
+- `SAFE-003 LivePerformanceGuard` persiste ses disabled strategies dans `data/state/safe003_disabled.json`; statut actuel advisory-only, pas encore enforce dans les chemins d'ordre.
+- Strats live actuelles: `cross_asset_momentum` + `gold_oil_rotation` en IBKR futures live_core, `btc_asia_mes_leadlag_q80_v80_long_only` en Binance live_micro.
+- Promotions surveillees: `mib_estx50_spread` earliest 2026-05-18, `mes_mr_vix_spike` earliest 2026-05-23 avec audit paper/backtest, `mes_estx50_divergence` earliest 2026-06-09.
+
 ## Etat actuel (as of 2026-04-19T15:01Z — voir docs/audit/hygiene_baseline.md)
 - **16 strategies canoniques** : 2 ACTIVE + 11 READY + 1 AUTHORIZED + 2 DISABLED (+15 archived REJECTED)
 - **2 LIVE** (ibkr_futures uniquement) :

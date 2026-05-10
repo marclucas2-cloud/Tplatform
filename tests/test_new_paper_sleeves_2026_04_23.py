@@ -137,7 +137,12 @@ class TestRegistryIntegration:
             entry = next(s for s in reg["strategies"] if s["strategy_id"] == sid)
             assert entry["book"] == "ibkr_futures"
             assert entry["status"] == "paper_only"
-            assert entry["paper_start_at"] == "2026-04-23"
+            if sid == "mes_estx50_divergence":
+                # Research date was 2026-04-23, but the runtime paper clock
+                # starts only once the sleeve is actually wired and journaling.
+                assert entry["paper_start_at"] == "2026-05-10"
+            else:
+                assert entry["paper_start_at"] == "2026-04-23"
             assert entry["is_live"] is False
 
     def test_gold_q4_seasonality_retrospective(self):

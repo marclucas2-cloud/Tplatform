@@ -660,11 +660,15 @@ class TestPaperLiveIsolation:
     """Paper and live limits must not mix."""
 
     def test_live_uses_live_limits(self, live_rm):
-        """LiveRiskManager loads limits_live.yaml, not limits.yaml."""
+        """LiveRiskManager loads limits_live.yaml, not limits.yaml.
+
+        capital 25500 = bootstrap value (post depot +$15K du 2026-04-30),
+        ecrasee runtime par update_capital(equity_live) au 1er cycle live.
+        """
         assert live_rm.mode == "LIVE"
-        assert live_rm.capital == 10_000
+        assert live_rm.capital == 25_500
         assert live_rm.position_limits.get("max_position_pct") == 0.20
-        assert live_rm.position_limits.get("max_positions") == 12  # Updated from 10
+        assert live_rm.position_limits.get("max_positions") == 12
 
     def test_paper_uses_paper_limits(self, paper_rm):
         """Original RiskManager loads limits.yaml with paper settings."""

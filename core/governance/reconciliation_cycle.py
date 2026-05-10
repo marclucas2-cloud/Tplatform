@@ -73,6 +73,51 @@ def _is_paper_only(book_id: str) -> bool:
     return _get_book_meta(book_id)["paper_only"]
 
 
+def _autocleanup_only_in_local(book_id: str, symbols: list[str]) -> int:
+    """Remove `symbols` from the local state file for `book_id`.
+
+    Called when reconciliation detects only_in_local on a LIVE book :
+    le broker a deja close ces positions, le local state est juste lagging.
+    Avant ce cleanup auto, l'attente du futures_runner cycle (1x/jour 16h
+    Paris) ou du boot reconcile pouvait laisser le state stale 21h+, ce qui
+    bloquait CAM avec "already positioned" sur des positions inexistantes.
+
+    Returns nombre de symbols effectivement retires du state.
+    Safe : ne touche que la cle correspondant au symbol; pas de write si
+    aucun match.
+    """
+    try:
+        from pathlib import Path
+        import json
+        root = Path(__file__).resolve().parent.parent.parent
+
+        # Map book_id -> state file (live only ; paper books pas concernes)
+        STATE_PATHS = {
+            "ibkr_futures": root / "data" / "state" / "futures_positions_live.json",
+            # Add other live books here when reconcile_book is wired for them.
+        }
+        path = STATE_PATHS.get(book_id)
+        if path is None or not path.exists():
+            return 0
+
+        data = json.loads(path.read_text(encoding="utf-8")) or {}
+        removed = 0
+        for sym in symbols:
+            if sym in data:
+                del data[sym]
+                removed += 1
+        if removed > 0:
+            path.write_text(json.dumps(data, indent=2), encoding="utf-8")
+            logger.info(
+                f"reconcile auto-cleanup: removed {removed} stale symbols "
+                f"from {path.name}: {symbols}"
+            )
+        return removed
+    except Exception as exc:
+        logger.warning(f"reconcile auto-cleanup failed for {book_id}: {exc}")
+        return 0
+
+
 def run_reconciliation_cycle(
     books: tuple[str, ...] = ("binance_crypto", "ibkr_futures", "alpaca_us", "ibkr_eu"),
     alert_callback: Callable[[str, str], None] | None = None,
@@ -154,13 +199,22 @@ def run_reconciliation_cycle(
                     elif dtype == "only_in_local":
                         # Live book, but the broker has already closed the
                         # position. Cosmetic state lag, not a CRO issue.
+                        # Refactor 2026-05-10 : auto-cleanup le state file
+                        # immediatement (le futures_runner cycle reconcile
+                        # ne tourne qu'une fois par jour à 16h Paris, ce qui
+                        # avait laisse le state stale 21h le 2026-05-09).
+                        cleanup_done = _autocleanup_only_in_local(book_id, syms)
                         severity = "warning"
                         label = "RECONCILIATION WARNING"
+                        cleanup_suffix = (
+                            f" -> auto-cleanup OK ({cleanup_done} symbols)"
+                            if cleanup_done > 0
+                            else " (no cleanup needed or path unsupported)"
+                        )
                         msg = (
                             f"{label} [{book_id}] only_in_local: "
-                            f"symbols={syms}. Broker has CLOSED these positions; "
-                            f"local state lagging. Cleanup happens at next "
-                            f"futures cycle / boot reconcile."
+                            f"symbols={syms}. Broker has CLOSED these positions"
+                            f"{cleanup_suffix}."
                         )
                     else:
                         severity = "critical"

@@ -1,6 +1,92 @@
-# SYNTHESE COMPLETE — TRADING PLATFORM V16.1 (P0 MCL FIX + PAPER BLOCK CLEANED)
-## Portefeuille Quantitatif — 3 classes d'actifs, 15 strats canoniques (2 live_core + 1 live_micro + 6 paper_only + 4 frozen + 2 disabled + 16 archived)
-### Date : 23 avril 2026 | 3,816 tests | ~151 fichiers test | CRO 9.0/10 APPROUVE | CAM unlocked (MCL contract fixed) | Cleanup Phase 3.5 active
+# SYNTHESE COMPLETE — TRADING PLATFORM V17 (TELEGRAM BOT FIX + SIZING REFACTOR + 2 STRATS UNFROZEN/WIRED)
+## Portefeuille Quantitatif — 3 classes d'actifs, 21 strats canoniques (2 live_core + 1 live_micro + 11 paper + 2 frozen + 2 disabled + 1 rejected + 1 research + 16 archived)
+### Date : 10 mai 2026 | 3,946 tests | CRO 9.0/10 | Capital live $39K (IBKR $29K + Binance $10K)
+
+---
+
+## V17 — 10 mai 2026 (session checkup post-incident Telegram /kill du 8 mai)
+
+**Contexte** : Marc a coupe les positions live MNQ + M2K manuellement dans
+TWS le 2026-05-08 pendant le weekend, apres echec de `/kill CONFIRM` Telegram.
+
+**Bugs corriges** :
+1. **Telegram `/kill` et `/emergency`** ([core/telegram/bot_service.py](core/telegram/bot_service.py)) :
+   - Avant : `LiveKillSwitch()` instancie sans broker -> flag actif, positions
+     non fermees. `IBKRBroker(client_id=50)` = adapter stocks/forex, ne sait
+     pas fermer les futures (MNQ, M2K, MGC).
+   - Apres : reecrit en `_ibkr_close_all_via_insync()` qui itere `ib.positions()`
+     + envoie `MarketOrder` opposee pour chaque contract (Stock/FX/Future).
+     Activation kill switch APRES tentatives. Rapport status FAILED/PARTIAL/OK.
+2. **`_extract_strategy_from_authorized_by`** ([core/broker/binance_broker.py](core/broker/binance_broker.py)) :
+   - Avant : `_authorized_by="btc_asia_q80:live_micro_entry"` etait passe
+     tel quel a `pre_order_guard.is_strategy_live_allowed`. L'ID complet
+     (avec suffix) n'est pas dans live_whitelist -> rejet systematique.
+   - Apres : split sur `:` et prend la partie avant le suffix.
+   - **Impact** : btc_asia_q80 live_micro a tente 1 BUY le 2026-05-02 (paper
+     Sharpe +1.08 attendu) mais le runner a ete bloque a chaque cycle.
+     Apres fix, le prochain signal BUY (cycle 10h30 Paris) sera execute.
+
+**Refactor "aucun seuil en dur" (decision Marc 10/05)** :
+- [core/governance/live_micro_sizing.py](core/governance/live_micro_sizing.py) :
+  - Avant : `MAX_NOTIONAL_USD_BY_GRADE = {S: 500, A: 300, B: 200}` hard-coded
+    pour $25K capital.
+  - Apres : `MAX_NOTIONAL_PCT_BY_GRADE = {S: 0.020, A: 0.012, B: 0.008}`,
+    cap = `equity_usd * pct` calcule a chaque ordre. Scale automatique avec
+    le capital. Sur $29K live actuel : S=$580 / A=$348 / B=$232.
+- API change : `enforce_sizing(grade, notional, equity_usd, risk_usd)` requiert
+  desormais `equity_usd`. Callers updated : `pre_order_guard.py`,
+  `btc_asia_q80_live_micro_runner.py`.
+
+**2 strats LIVE supplementaires en route** :
+- **mes_estx50_divergence** runtime cable (bloc 3a-quinquies dans
+  [core/worker/cycles/futures_runner.py](core/worker/cycles/futures_runner.py)).
+  Grade A, WF 5/5, corr CAM -0.005 / GOR -0.102. Earliest live_micro
+  **2026-06-09** (paper_start re-anchored 2026-05-10 + 30j).
+- **mib_estx50_spread** UNFROZEN. Grade S, WF 4/5, +EUR 22.6K/12 trades/24m
+  OOS. Le "blocker funding EUR 3.6K" 2026-04-22 etait obsolete (post-depot
+  +$15K du 2026-04-30, $29K USD ~= 27K EUR > 13.5K margin requis). Earliest
+  live_probation **2026-05-18** ou **2026-06-09** (selon J+30 effectif).
+
+**Telegram bot enrichi** :
+- `/strats` lit maintenant `config/quant_registry.yaml` (canonical) au lieu
+  de `dashboard/api/strategy_registry.py` (drift). 21 strats correctes
+  affichees avec phase + grade.
+- `/positions` inclut IBKR via ib_insync direct + SL/TP broker-side
+  (warning `[NO BRACKET]` si position sans SL).
+- `/risk` montre DD daily/weekly/peak numeriques + reason kill switch + age.
+- `/health` distingue `ibgateway` (4002 LIVE) vs `ibgateway-paper` (4003).
+
+**Diagnostics paper journals** (`mes_mr_vix_spike`, `mes_estx50_divergence`) :
+- Ajout `last_diagnostics: dict` dans les classes -> writes `diagnostics`
+  field dans le journal (rejection_reason, vix_close, z_score, etc.). Audit
+  paper vs backtest devient trivial.
+
+**SAFE-003 LivePerformanceGuard** ([core/live_performance_guard.py](core/live_performance_guard.py)) :
+- Persistance du set `_disabled_strategies` dans
+  `data/state/safe003_disabled.json`. Avant : guard re-cree a chaque cycle
+  -> spam log "AUTO-DISABLED" repete. Apres : load au init, short-circuit
+  si deja disabled.
+- corr_hedge (paper Alpaca) Sharpe -0.77 detecte le 2026-05-08 -> persiste.
+- **TODO advisory-only** : `is_disabled()` n'est encore consulte nulle part
+  pour bloquer effectivement les nouveaux trades. Ticket roadmap.
+
+**Audit paper -> live ready** :
+- [scripts/audit/audit_mes_mr_vix_spike_paper.py](scripts/audit/audit_mes_mr_vix_spike_paper.py)
+  compare journal paper vs replay backtest (3 bougies rouges + VIX>15).
+  Test 17j : 0=0 match 100%. Pour decision live le 23 mai.
+
+**Roadmap promotions live** :
+| Date | Strat | Grade | Action |
+|------|-------|-------|--------|
+| 2026-05-18 | mib_estx50_spread | S | paper -> live_probation (J+30 paper depuis 2026-04-18) |
+| 2026-05-23 | mes_mr_vix_spike  | A | paper -> live_probation (J+30 + audit signaux >= 90% match) |
+| 2026-06-09 | mes_estx50_divergence | A | paper -> live_probation (J+30 post-wiring) |
+
+**Tests** : 3946 passed (2 tests prexistants fixes : `test_us_sector_ls_40_5`
+update REJECTED, `test_live_uses_live_limits` update capital=$25.5K).
+
+**Rapport detaille** : [reports/checkup/checkup_2026-05-10.md](reports/checkup/checkup_2026-05-10.md)
++ [docs/audit/paper_to_live_review_2026-05-10.md](docs/audit/paper_to_live_review_2026-05-10.md).
 
 ---
 

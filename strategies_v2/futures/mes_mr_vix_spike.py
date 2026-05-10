@@ -76,6 +76,10 @@ class MESMeanReversionVIXSpike(StrategyBase):
         self.sl_points = sl_points
         self.tp_points = tp_points
         self.data_feed: DataFeed | None = None
+        # Audit trail : valeurs des dernieres conditions evaluees, peuplees par
+        # on_bar() pour exposer les diagnostics au journal paper (ex audit
+        # signaux paper vs backtest avant promotion live).
+        self.last_diagnostics: dict = {}
 
     @property
     def name(self) -> str:
@@ -95,7 +99,18 @@ class MESMeanReversionVIXSpike(StrategyBase):
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
     ) -> Signal | None:
+        # Reset diagnostics au debut de chaque tick.
+        self.last_diagnostics = {
+            "rejection_reason": None,
+            "consec_red_count": None,
+            "consec_required": self.consec_days,
+            "vix_close": None,
+            "vix_min": self.vix_min,
+            "bar_age_days": None,
+        }
+
         if self.data_feed is None:
+            self.last_diagnostics["rejection_reason"] = "no_data_feed"
             return None
 
         bar_ts = pd.Timestamp(bar.timestamp).normalize()
@@ -108,31 +123,41 @@ class MESMeanReversionVIXSpike(StrategyBase):
             if now.tzinfo is not None:
                 now = now.tz_localize(None)
             now = now.normalize()
-        if (now - bar_ts).days > self.MAX_BAR_AGE_DAYS:
+        bar_age = (now - bar_ts).days
+        self.last_diagnostics["bar_age_days"] = bar_age
+        if bar_age > self.MAX_BAR_AGE_DAYS:
+            self.last_diagnostics["rejection_reason"] = "stale_bar"
             return None
 
         sym = self.SYMBOL
         # Need N consecutive down days on MES
         bars_df = self.data_feed.get_bars(sym, self.consec_days + 1)
         if bars_df is None or len(bars_df) < self.consec_days:
+            self.last_diagnostics["rejection_reason"] = "insufficient_history"
             return None
         recent = bars_df.tail(self.consec_days)
-        all_down = all(
-            recent.iloc[i]["close"] < recent.iloc[i]["open"]
-            for i in range(len(recent))
-        )
-        if not all_down:
+        red_count = int(sum(
+            1 for i in range(len(recent))
+            if recent.iloc[i]["close"] < recent.iloc[i]["open"]
+        ))
+        self.last_diagnostics["consec_red_count"] = red_count
+        if red_count < self.consec_days:
+            self.last_diagnostics["rejection_reason"] = "consec_red_not_met"
             return None
 
         # VIX level filter: must be > vix_min (regime de peur confirme)
         vix_bars = self.data_feed.get_bars(self.VIX_SYMBOL, 1)
         if vix_bars is None or len(vix_bars) == 0:
+            self.last_diagnostics["rejection_reason"] = "no_vix_data"
             return None
         vix_close = float(vix_bars.iloc[-1]["close"])
+        self.last_diagnostics["vix_close"] = vix_close
         if vix_close <= self.vix_min:
+            self.last_diagnostics["rejection_reason"] = "vix_below_min"
             return None
 
         price = bar.close
+        self.last_diagnostics["rejection_reason"] = None  # Signal emis
         return Signal(
             symbol=sym,
             side="BUY",

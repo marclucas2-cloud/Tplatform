@@ -88,6 +88,7 @@ def pre_order_guard(
     strategy_status: Optional[str] = None,
     live_start_at: Optional[str] = None,
     open_positions_count: int = 0,
+    equity_usd: Optional[float] = None,
 ) -> None:
     """Validate that an order request is authorized.
 
@@ -309,14 +310,15 @@ def pre_order_guard(
             enforce_sizing,
         )
 
-        if notional_usd is None or strategy_grade is None:
+        if notional_usd is None or strategy_grade is None or equity_usd is None:
             raise GuardError(
-                "live_micro requires notional_usd + strategy_grade kwargs (sizing cap enforcement). "
+                "live_micro requires notional_usd + strategy_grade + equity_usd kwargs "
+                "(sizing cap is % of live equity since 2026-05-10 refactor). "
                 "Caller must pass these or status must not be live_micro.",
                 book=book, strategy_id=strategy_id,
             )
         try:
-            enforce_sizing(strategy_grade, notional_usd, risk_usd=risk_usd)
+            enforce_sizing(strategy_grade, notional_usd, equity_usd, risk_usd=risk_usd)
         except LiveMicroViolation as e:
             raise GuardError(
                 f"live_micro sizing violation: {e.reason} detail={e.detail}",

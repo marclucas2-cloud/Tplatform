@@ -11,8 +11,8 @@ from core.live_performance_guard import ALERT, CONTINUE, DISABLE, LivePerformanc
 
 
 @pytest.fixture
-def guard():
-    return LivePerformanceGuard()
+def guard(tmp_path):
+    return LivePerformanceGuard(state_path=tmp_path / "safe003_disabled.json")
 
 
 class TestNotEnoughTrades:
@@ -72,9 +72,12 @@ class TestReactivation:
 
 
 class TestAlertCallback:
-    def test_disable_fires_alert(self):
+    def test_disable_fires_alert(self, tmp_path):
         alerts = []
-        guard = LivePerformanceGuard(alert_callback=lambda m, l: alerts.append((m, l)))
+        guard = LivePerformanceGuard(
+            alert_callback=lambda m, l: alerts.append((m, l)),
+            state_path=tmp_path / "safe003_disabled.json",
+        )
         trades = [{"pnl": -10}] * 12
         guard.evaluate("dying_strat", trades)
         assert len(alerts) >= 1

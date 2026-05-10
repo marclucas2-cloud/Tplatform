@@ -295,6 +295,40 @@ def run_btc_asia_mes_leadlag_paper_cycle():
 
         if target_date not in daily.index:
             logger.info(f"btc_asia_mes_leadlag: target {target_date.date()} not in daily")
+            try:
+                from core.governance.quant_registry import get_entry
+                _q80_entry = get_entry("btc_asia_mes_leadlag_q80_v80_long_only")
+                if _q80_entry and _q80_entry.status == "live_micro":
+                    from core.runtime.btc_asia_q80_live_micro_runner import (
+                        run_live_micro_cycle,
+                    )
+                    _live_start = (
+                        _q80_entry.live_start_at.isoformat()
+                        if _q80_entry.live_start_at else ""
+                    )
+                    _last_daily = None
+                    try:
+                        _last_daily = str(pd.Timestamp(daily.index.max()).date())
+                    except Exception:
+                        pass
+                    _summary = run_live_micro_cycle(
+                        signal_side="DATA_STALE",
+                        signal_details={
+                            "target_date": target_date.isoformat(),
+                            "data_status": "stale",
+                            "stale_reason": "target_not_in_daily",
+                            "last_daily_date": _last_daily,
+                        },
+                        live_start_at_iso=_live_start,
+                    )
+                    logger.warning(
+                        f"btc_asia_q80 live_micro stale-data guard: {_summary}"
+                    )
+            except Exception as _live_stale_err:
+                logger.error(
+                    f"btc_asia_q80 live_micro stale-data guard error: {_live_stale_err}",
+                    exc_info=True,
+                )
             return
 
         signal = compute_signal_for_date(daily, target_date, rolling_window=365, mode="both")
@@ -414,6 +448,8 @@ def run_btc_asia_mes_leadlag_paper_cycle():
                     )
                     _sig_details = {
                         "target_date": target_date.isoformat(),
+                        "data_status": "fresh",
+                        "last_daily_date": str(pd.Timestamp(daily.index.max()).date()),
                         "side": signal_lo.side,
                         "mes_sig": signal_lo.mes_sig,
                         "mes_vol": signal_lo.mes_vol,

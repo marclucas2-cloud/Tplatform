@@ -207,24 +207,27 @@ class TestKill:
 
     @pytest.mark.asyncio
     async def test_kill_confirm_activates_kill_switches(self, bot):
-        """/kill CONFIRM activates LiveKillSwitch and CryptoKillSwitch."""
+        """/kill CONFIRM closes IBKR positions via ib_insync direct, then activates kill switches.
+
+        Refactor 2026-05-10 : cmd_kill ferme AVANT d'activer le flag (pour
+        eviter le bug du 2026-05-08 ou flag actif sans positions fermees).
+        """
         update = _make_update()
         ctx = _make_context(["CONFIRM"])
 
         mock_ks = MagicMock()
+        mock_ks.is_active = False
         mock_cks = MagicMock()
-        mock_closer = MagicMock()
-        mock_closer.execute.return_value = {
-            "total_positions_closed": 5,
-            "total_orders_cancelled": 3,
-        }
+        mock_bnb = MagicMock()
+        mock_bnb.cancel_all_orders.return_value = 0
+        mock_bnb.get_positions.return_value = []
 
-        with patch.dict("sys.modules", {
+        with patch.object(bot, "_ibkr_close_all_via_insync", return_value={
+            "closed": 2, "cancelled": 4, "errors": [], "status": "OK",
+        }), patch.dict("sys.modules", {
             "core.kill_switch_live": MagicMock(LiveKillSwitch=MagicMock(return_value=mock_ks)),
             "core.crypto.risk_manager_crypto": MagicMock(CryptoKillSwitch=MagicMock(return_value=mock_cks)),
-            "core.risk.emergency_close_all": MagicMock(EmergencyCloseAll=MagicMock(return_value=mock_closer)),
-            "core.broker.binance_broker": MagicMock(BinanceBroker=MagicMock()),
-            "core.broker.ibkr_adapter": MagicMock(IBKRBroker=MagicMock()),
+            "core.broker.binance_broker": MagicMock(BinanceBroker=MagicMock(return_value=mock_bnb)),
         }):
             await bot.cmd_kill(update, ctx)
 
@@ -239,41 +242,45 @@ class TestKill:
         update = _make_update()
         ctx = _make_context(["confirm"])
 
-        with patch.dict("sys.modules", {
-            "core.kill_switch_live": MagicMock(LiveKillSwitch=MagicMock(return_value=MagicMock())),
+        mock_bnb = MagicMock()
+        mock_bnb.cancel_all_orders.return_value = 0
+        mock_bnb.get_positions.return_value = []
+
+        with patch.object(bot, "_ibkr_close_all_via_insync", return_value={
+            "closed": 0, "cancelled": 0, "errors": [], "status": "OK",
+        }), patch.dict("sys.modules", {
+            "core.kill_switch_live": MagicMock(LiveKillSwitch=MagicMock(return_value=MagicMock(is_active=False))),
             "core.crypto.risk_manager_crypto": MagicMock(CryptoKillSwitch=MagicMock(return_value=MagicMock())),
-            "core.risk.emergency_close_all": MagicMock(
-                EmergencyCloseAll=MagicMock(return_value=MagicMock(
-                    execute=MagicMock(return_value={"total_positions_closed": 0, "total_orders_cancelled": 0})
-                ))
-            ),
-            "core.broker.binance_broker": MagicMock(BinanceBroker=MagicMock()),
-            "core.broker.ibkr_adapter": MagicMock(IBKRBroker=MagicMock()),
+            "core.broker.binance_broker": MagicMock(BinanceBroker=MagicMock(return_value=mock_bnb)),
         }):
             await bot.cmd_kill(update, ctx)
 
         reply = update.message.reply_text.call_args[0][0]
-        assert "KILL SWITCH ACTIVE" in reply
+        assert "KILL SWITCH" in reply
 
     @pytest.mark.asyncio
     async def test_kill_handles_kill_switch_error(self, bot):
-        """/kill CONFIRM handles LiveKillSwitch import/init errors gracefully."""
+        """/kill CONFIRM handles errors gracefully — partial status."""
         update = _make_update()
         ctx = _make_context(["CONFIRM"])
 
-        # All imports raise
-        with patch.dict("sys.modules", {
+        with patch.object(bot, "_ibkr_close_all_via_insync", return_value={
+            "closed": 0, "cancelled": 0,
+            "errors": ["connect 127.0.0.1:4002 cid=99: timeout"],
+            "status": "FAILED",
+        }), patch.dict("sys.modules", {
             "core.kill_switch_live": None,  # force ImportError
             "core.crypto.risk_manager_crypto": None,
-            "core.risk.emergency_close_all": None,
             "core.broker.binance_broker": None,
-            "core.broker.ibkr_adapter": None,
         }):
             # Should not crash
             await bot.cmd_kill(update, ctx)
 
         # Still sends a response
         update.message.reply_text.assert_awaited_once()
+        reply = update.message.reply_text.call_args[0][0]
+        # PARTIAL header + warning expected when nothing succeeded
+        assert "PARTIEL" in reply or "VERIFIER" in reply
 
 
 # =============================================================================
@@ -567,11 +574,11 @@ class TestStrats:
         reply = update.message.reply_text.call_args[0][0]
         assert "LIVE" in reply
         assert "PAPER" in reply
-        assert "3 total" in reply
+        assert "3 canoniques" in reply
 
     @pytest.mark.asyncio
     async def test_strats_empty_registry(self, bot):
-        """/strats handles empty strategy registry."""
+        """/strats handles empty strategy registry by returning an explicit error."""
         update = _make_update()
         ctx = _make_context()
 
@@ -579,7 +586,7 @@ class TestStrats:
             await bot.cmd_strats(update, ctx)
 
         reply = update.message.reply_text.call_args[0][0]
-        assert "0 total" in reply
+        assert "Erreur" in reply or "quant_registry" in reply
 
 
 # =============================================================================
@@ -747,32 +754,38 @@ class TestEmergency:
 
     @pytest.mark.asyncio
     async def test_emergency_correct_code_executes(self, bot):
-        """/emergency with correct code closes all positions."""
+        """/emergency with correct code ferme via ib_insync direct + Binance.
+
+        Refactor 2026-05-10 : meme architecture que /kill (ib_insync direct
+        + activation kill switches en derniere etape).
+        """
         update = _make_update()
         ctx = _make_context(["ABC123"])
 
-        mock_closer = MagicMock()
-        mock_closer.execute.return_value = {
-            "status": "EXECUTED",
-            "total_positions_closed": 7,
-            "total_orders_cancelled": 2,
-            "elapsed_seconds": 1.5,
-        }
-
         mock_mod = MagicMock()
         mock_mod._generate_confirmation_code.return_value = "ABC123"
-        mock_mod.EmergencyCloseAll.return_value = mock_closer
 
-        with patch.dict("sys.modules", {
+        mock_bnb = MagicMock()
+        mock_bnb.cancel_all_orders.return_value = 0
+        mock_bnb.get_positions.return_value = []
+        mock_ks = MagicMock()
+        mock_cks = MagicMock()
+
+        with patch.object(bot, "_ibkr_close_all_via_insync", return_value={
+            "closed": 7, "cancelled": 2, "errors": [], "status": "OK",
+        }), patch.dict("sys.modules", {
             "core.risk.emergency_close_all": mock_mod,
-            "core.broker.binance_broker": MagicMock(BinanceBroker=MagicMock()),
-            "core.broker.ibkr_adapter": MagicMock(IBKRBroker=MagicMock()),
+            "core.kill_switch_live": MagicMock(LiveKillSwitch=MagicMock(return_value=mock_ks)),
+            "core.crypto.risk_manager_crypto": MagicMock(CryptoKillSwitch=MagicMock(return_value=mock_cks)),
+            "core.broker.binance_broker": MagicMock(BinanceBroker=MagicMock(return_value=mock_bnb)),
         }), patch.dict("os.environ", {"BINANCE_API_KEY": "test"}):
             await bot.cmd_emergency(update, ctx)
 
         reply = update.message.reply_text.call_args[0][0]
-        assert "DONE" in reply
+        assert "EMERGENCY CLOSE EXECUTED" in reply
         assert "7" in reply
+        mock_ks.activate.assert_called_once()
+        mock_cks._activate.assert_called_once()
 
 
 # =============================================================================
@@ -854,8 +867,11 @@ class TestDataFetchers:
         assert result == []
 
     def test_strategy_phases_exception(self, bot):
-        """_strategy_phases returns {} on exception."""
-        with patch("importlib.util.spec_from_file_location", side_effect=Exception("not found")):
+        """_strategy_phases returns {} when yaml load fails.
+
+        Refactor 2026-05-10 : reads config/quant_registry.yaml via yaml.safe_load.
+        """
+        with patch("builtins.open", side_effect=Exception("not found")):
             result = bot._strategy_phases()
         assert result == {}
 

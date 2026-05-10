@@ -86,7 +86,11 @@ class TestPreOrderGuardLiveMicro:
         assert "live_micro requires notional_usd" in str(exc.value)
 
     def test_live_micro_sizing_cap_rejects(self, monkeypatch):
-        """Order exceeding grade cap -> GuardError with sizing violation detail."""
+        """Order exceeding grade cap -> GuardError with sizing violation detail.
+
+        Refactor 2026-05-10 : caps en % du capital live (B = 0.8% du NAV).
+        Sur $25K equity, B cap = $200, donc $250 doit rejeter.
+        """
         _setup_passthrough_mocks(monkeypatch)
 
         with pytest.raises(GuardError) as exc:
@@ -96,14 +100,15 @@ class TestPreOrderGuardLiveMicro:
                 paper_mode=False,
                 strategy_status="live_micro",
                 strategy_grade="B",
-                notional_usd=250.0,  # > B cap $200
+                notional_usd=250.0,  # > B cap (0.8% * $25K = $200)
+                equity_usd=25_000.0,
             )
         assert "live_micro sizing violation" in str(exc.value)
         assert "notional_cap_exceeded" in str(exc.value)
 
     def test_live_micro_within_cap_passes(self, monkeypatch):
         _setup_passthrough_mocks(monkeypatch)
-        # Should not raise
+        # Should not raise. B cap on $25K = $200 notional / $20 risk
         pre_order_guard(
             book="test_book",
             strategy_id="test_strat",
@@ -114,6 +119,7 @@ class TestPreOrderGuardLiveMicro:
             risk_usd=19.0,
             live_start_at="2026-04-22",
             open_positions_count=0,
+            equity_usd=25_000.0,
         )
 
     def test_live_micro_pyramid_blocked_j5(self, monkeypatch):
@@ -129,6 +135,7 @@ class TestPreOrderGuardLiveMicro:
                 notional_usd=200.0,
                 live_start_at=(datetime.now(UTC).date() - timedelta(days=5)).isoformat(),
                 open_positions_count=1,
+                equity_usd=25_000.0,
             )
         assert "live_micro pyramiding blocked" in str(exc.value)
 

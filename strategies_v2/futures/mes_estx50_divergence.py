@@ -64,6 +64,9 @@ class MESEstx50Divergence(StrategyBase):
         self.max_hold_days = max_hold_days
         self.sl_points = sl_points
         self.data_feed: DataFeed | None = None
+        # Diagnostics audit (idem mes_mr_vix_spike) : journal paper expose
+        # z_score + spread pour comparer paper vs backtest avant promotion.
+        self.last_diagnostics: dict = {}
 
     @property
     def name(self) -> str:
@@ -83,30 +86,55 @@ class MESEstx50Divergence(StrategyBase):
     def on_bar(
         self, bar: Bar, portfolio_state: PortfolioState
     ) -> Signal | None:
+        self.last_diagnostics = {
+            "rejection_reason": None,
+            "z_current": None,
+            "z_entry_threshold": -self.z_entry,
+            "spread_last": None,
+            "spread_mean": None,
+            "spread_std": None,
+            "lookback": self.lookback,
+        }
+
         if self.data_feed is None:
+            self.last_diagnostics["rejection_reason"] = "no_data_feed"
             return None
 
         mes_bars = self.data_feed.get_bars(self.SYMBOL, self.lookback + 1)
         estx50_bars = self.data_feed.get_bars(self.REF_SYMBOL, self.lookback + 1)
         if mes_bars is None or estx50_bars is None:
+            self.last_diagnostics["rejection_reason"] = "missing_bars"
             return None
         if len(mes_bars) < self.lookback or len(estx50_bars) < self.lookback:
+            self.last_diagnostics["rejection_reason"] = "insufficient_history"
             return None
 
         # Align on last N bars
         mes_c = pd.Series(mes_bars["close"].values[-self.lookback:])
         est_c = pd.Series(estx50_bars["close"].values[-self.lookback:])
         if (mes_c <= 0).any() or (est_c <= 0).any():
+            self.last_diagnostics["rejection_reason"] = "non_positive_close"
             return None
 
         spread = np.log(mes_c) - np.log(est_c)
-        z_current = (spread.iloc[-1] - spread.mean()) / (spread.std() or 1.0)
+        spread_mean = float(spread.mean())
+        spread_std = float(spread.std() or 1.0)
+        z_current = (float(spread.iloc[-1]) - spread_mean) / spread_std
+
+        self.last_diagnostics.update({
+            "z_current": round(z_current, 4),
+            "spread_last": round(float(spread.iloc[-1]), 6),
+            "spread_mean": round(spread_mean, 6),
+            "spread_std": round(spread_std, 6),
+        })
 
         if z_current > -self.z_entry:
+            self.last_diagnostics["rejection_reason"] = "z_above_entry_threshold"
             return None
 
         # Signal: MES oversold vs ESTX50 -> LONG
         price = bar.close
+        self.last_diagnostics["rejection_reason"] = None
         return Signal(
             symbol=self.SYMBOL,
             side="BUY",

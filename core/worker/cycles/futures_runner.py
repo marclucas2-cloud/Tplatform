@@ -29,6 +29,22 @@ logger = logging.getLogger("worker")
 ROOT = Path(__file__).resolve().parents[3]
 
 
+def _append_paper_observation(strategy_id: str, event: dict) -> None:
+    """Append a paper observation/heartbeat even when no trade signal is emitted."""
+    try:
+        journal_dir = ROOT / "data" / "state" / strategy_id
+        journal_dir.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "ts_utc": datetime.now(UTC).isoformat(),
+            "strategy_id": strategy_id,
+            **event,
+        }
+        with (journal_dir / "journal.jsonl").open("a", encoding="utf-8") as f:
+            f.write(json.dumps(payload) + "\n")
+    except Exception as exc:
+        logger.warning(f"    {strategy_id} observation journal write failed: {exc}")
+
+
 # P0 fix 2026-04-23: MCL/MGC contract resolution bug depuis 20/04
 # (9 echecs "no contract details for MCL" post TP fill 19/04).
 # Root cause: hardcode exchange="CME" pour tous symboles, or MCL=NYMEX et MGC=COMEX.
@@ -409,6 +425,10 @@ def run_futures_cycle(live: bool = False):
     _mode = "LIVE" if live else "PAPER"
     try:
         logger.info(f"=== FUTURES {_mode} CYCLE ===")
+        if not live:
+            logger.info(
+                "FUTURES PAPER SCHEDULE: run_futures_cycle(live=False) entered"
+            )
 
         if live:
             target_port = int(os.environ.get("IBKR_PORT", "4002"))
@@ -685,6 +705,11 @@ def run_futures_cycle(live: bool = False):
             # Corr CAM 0.055 / GOR -0.014 (quasi-nulle).
             # Paper start 2026-04-24 (runtime). Earliest live_micro: 2026-05-24.
             if _cam_top_pick == "MES":
+                _append_paper_observation("mes_mr_vix_spike", {
+                    "event": "skip",
+                    "reason": "cam_reserved_mes",
+                    "cam_top_pick": _cam_top_pick,
+                })
                 logger.info("    mes_mr_vix_spike (paper): SKIP — CAM reserved MES")
             else:
                 try:
@@ -704,6 +729,7 @@ def run_futures_cycle(live: bool = False):
                             "strategy_id": "mes_mr_vix_spike",
                             "bar_close": float(bar.close),
                             "bar_ts": str(bar.timestamp),
+                            "diagnostics": dict(getattr(_mvs, "last_diagnostics", {}) or {}),
                         }
                         if sig:
                             _append_signal(_mvs.name, sig, signal_price=float(bar.close), strat=_mvs)
@@ -731,8 +757,81 @@ def run_futures_cycle(live: bool = False):
                             logger.warning(
                                 f"    mes_mr_vix_spike journal write failed: {_je}"
                             )
+                    else:
+                        _append_paper_observation("mes_mr_vix_spike", {
+                            "event": "skip",
+                            "reason": "no_mes_bar",
+                        })
                 except Exception as e:
                     logger.error(f"    mes_mr_vix_spike paper error: {e}")
+
+            # 3a-quinquies. mes_estx50_divergence paper (research mission 2026-04-23 PM)
+            # Source: scripts/research/c1_mes_only_variant_2026_04_23.py (sensitivity 27 configs).
+            # Config retenue: lookback=25, z_entry=1.5, max_hold=15, sl_points=30.
+            # Backtest 5Y: 48 trades (~10/an), Sharpe 0.95, DD -10.4%, WF 5/5 parfait.
+            # Corr CAM -0.005 / GOR -0.102 / btc_asia 0.083 (decorrelation parfaite).
+            # Runtime cable 2026-05-10 (etait flagged runner_wiring_pending dans
+            # quant_registry.yaml). Earliest live_micro: paper_start + 30j.
+            if _cam_top_pick == "MES":
+                _append_paper_observation("mes_estx50_divergence", {
+                    "event": "skip",
+                    "reason": "cam_reserved_mes",
+                    "cam_top_pick": _cam_top_pick,
+                })
+                logger.info("    mes_estx50_divergence (paper): SKIP — CAM reserved MES")
+            else:
+                try:
+                    from strategies_v2.futures.mes_estx50_divergence import (
+                        MESEstx50Divergence,
+                    )
+                    _med = MESEstx50Divergence()
+                    _med.set_data_feed(feed)
+                    bar = feed.get_latest_bar("MES")
+                    _med_journal_dir = ROOT / "data" / "state" / "mes_estx50_divergence"
+                    _med_journal_dir.mkdir(parents=True, exist_ok=True)
+                    _med_journal = _med_journal_dir / "journal.jsonl"
+                    if bar:
+                        sig = _med.on_bar(bar, portfolio_state)
+                        _med_event = {
+                            "ts_utc": pd.Timestamp.now(tz="UTC").isoformat(),
+                            "strategy_id": "mes_estx50_divergence",
+                            "bar_close": float(bar.close),
+                            "bar_ts": str(bar.timestamp),
+                            "diagnostics": dict(getattr(_med, "last_diagnostics", {}) or {}),
+                        }
+                        if sig:
+                            _append_signal(_med.name, sig, signal_price=float(bar.close), strat=_med)
+                            logger.info(
+                                f"    {_med.name} (paper): BUY @ {bar.close:.2f} "
+                                f"SL={sig.stop_loss:.2f} TP={sig.take_profit:.2f}"
+                            )
+                            _med_event.update({
+                                "event": "signal_emit",
+                                "side": sig.side,
+                                "sl": float(sig.stop_loss),
+                                "tp": float(sig.take_profit),
+                                "strength": float(sig.strength),
+                            })
+                        else:
+                            logger.info(
+                                f"    {_med.name} (paper): pas signal "
+                                f"(Z(MES/ESTX50, 25d) > -1.5 ou data manquante)"
+                            )
+                            _med_event["event"] = "no_signal"
+                        try:
+                            with _med_journal.open("a", encoding="utf-8") as _f:
+                                _f.write(json.dumps(_med_event) + "\n")
+                        except Exception as _je:
+                            logger.warning(
+                                f"    mes_estx50_divergence journal write failed: {_je}"
+                            )
+                    else:
+                        _append_paper_observation("mes_estx50_divergence", {
+                            "event": "skip",
+                            "reason": "no_mes_bar",
+                        })
+                except Exception as e:
+                    logger.error(f"    mes_estx50_divergence paper error: {e}")
 
             # NOTE 2026-04-22 (Phase 3.5 desk productif):
             # Blocs supprimes de la rotation paper (retrait catalogue V16):
@@ -1201,6 +1300,8 @@ def run_futures_cycle(live: bool = False):
             "mcl_overnight_mon_trend10": "mcl_overnight_mon_trend10",
             # Research mission 2026-04-23 AM paper promotion
             "mes_mr_vix_spike":          "mes_mr_vix_spike",
+            # Research mission 2026-04-23 PM paper promotion (cable 2026-05-10)
+            "mes_estx50_divergence":     "mes_estx50_divergence",
         }
 
         for name, sig, sig_meta in signals:

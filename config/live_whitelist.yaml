@@ -415,8 +415,8 @@ ibkr_eu:
     Start paper: 2026-04-18.\n"
 - strategy_id: mib_estx50_spread
   book: ibkr_eu
-  status: frozen  # Phase 3.1 desk productif 2026-04-22 - freeze tant que funding EUR 3.6K non effectue (cf chiffrage 22/04 NO_GO)
-  frozen_at: "2026-04-22"
+  status: paper_only  # Unfrozen 2026-05-10 : capital IBKR $29K USD ~= 27K EUR couvre les 13.5K EUR margin requis (le "gap 3.6K" du 2026-04-22 etait base sur equity pre-depot +$15K du 2026-04-30).
+  unfrozen_at: "2026-05-10"
   runtime_entrypoint: worker.py:run_mib_estx50_spread_paper_cycle (17h45 Paris)
   runtime_module: core.runtime.spread_paper_runner
   wf_source: reports/research/wf_mib_estx50_corrected.json (2026-04-18)

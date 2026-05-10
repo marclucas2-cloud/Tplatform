@@ -483,6 +483,29 @@ class TestPortfolioStateEngineSingleBroker:
         # Gross = 5000, equity = 5000, leverage = 1.0
         assert abs(state.leverage_real - 1.0) < 1e-6
 
+    def test_ibkr_uses_fresh_equity_cache_when_account_query_fails(self, tmp_path: Path):
+        data_dir = tmp_path / "data"
+        state_dir = data_dir / "state"
+        state_dir.mkdir(parents=True)
+        (state_dir / "ibkr_equity.json").write_text(
+            json.dumps({
+                "updated_at": datetime.now(timezone.utc).isoformat(),
+                "equity": 29_089.0,
+                "cash": 29_000.0,
+            }),
+            encoding="utf-8",
+        )
+        broker = _make_broker("ibkr", equity=0, cash=0, positions=[], paper=False)
+        broker.get_account_info.side_effect = RuntimeError("IBKR query timeout")
+        router = _make_smart_router({"ibkr": broker})
+
+        engine = PortfolioStateEngine(smart_router=router, data_dir=str(data_dir))
+        state = engine.get_state()
+
+        assert state.total_capital == 29_089.0
+        assert state.total_cash == 29_000.0
+        assert state.brokers[0].paper is False
+
 
 class TestPortfolioStateEngineMultiBroker:
     """Multi-broker aggregation with long + short."""

@@ -1,0 +1,241 @@
+{
+  "results": [
+    {
+      "label": "baseline_fixed_2_4",
+      "n": 274,
+      "trades_per_year": 24.32,
+      "total_pnl_net": 31337.02,
+      "pnl_per_year": 2781.49,
+      "win_rate_pct": 46.72,
+      "sharpe_ann": 1.2,
+      "profit_factor": 2.05,
+      "max_dd": -2449.61,
+      "calmar": 1.14,
+      "avg_bars_held": 5.28,
+      "wf_profitable_windows": 4,
+      "wf_oos_total_pnl": 21640.37,
+      "exit_mix": {
+        "sl": 119,
+        "tp": 79,
+        "time_exit": 62,
+        "gap_sl": 9,
+        "gap_tp": 5
+      }
+    },
+    {
+      "label": "trail_0.40pct",
+      "n": 274,
+      "trades_per_year": 24.32,
+      "total_pnl_net": 11542.65,
+      "pnl_per_year": 1024.53,
+      "win_rate_pct": 47.08,
+      "sharpe_ann": 0.66,
+      "profit_factor": 1.74,
+      "max_dd": -2359.98,
+      "calmar": 0.43,
+      "avg_bars_held": 2.12,
+      "wf_profitable_windows": 5,
+      "wf_oos_total_pnl": 11161.55,
+      "exit_mix": {
+        "gap_sl": 144,
+        "sl": 117,
+        "tp": 10,
+        "gap_tp": 3
+      }
+    },
+    {
+      "label": "trail_0.60pct",
+      "n": 274,
+      "trades_per_year": 24.32,
+      "total_pnl_net": 13703.06,
+      "pnl_per_year": 1216.29,
+      "win_rate_pct": 48.54,
+      "sharpe_ann": 0.77,
+      "profit_factor": 1.87,
+      "max_dd": -2490.35,
+      "calmar": 0.49,
+      "avg_bars_held": 2.29,
+      "wf_profitable_windows": 4,
+      "wf_oos_total_pnl": 12466.68,
+      "exit_mix": {
+        "gap_sl": 119,
+        "sl": 139,
+        "tp": 13,
+        "gap_tp": 3
+      }
+    },
+    {
+      "label": "trail_0.80pct",
+      "n": 274,
+      "trades_per_year": 24.32,
+      "total_pnl_net": 16394.13,
+      "pnl_per_year": 1455.15,
+      "win_rate_pct": 46.72,
+      "sharpe_ann": 0.82,
+      "profit_factor": 1.97,
+      "max_dd": -3131.75,
+      "calmar": 0.46,
+      "avg_bars_held": 2.48,
+      "wf_profitable_windows": 5,
+      "wf_oos_total_pnl": 15846.18,
+      "exit_mix": {
+        "gap_sl": 87,
+        "sl": 165,
+        "tp": 18,
+        "time_exit": 1,
+        "gap_tp": 3
+      }
+    },
+    {
+      "label": "trail_1.00pct",
+      "n": 274,
+      "trades_per_year": 24.32,
+      "total_pnl_net": 17661.01,
+      "pnl_per_year": 1567.6,
+      "win_rate_pct": 45.62,
+      "sharpe_ann": 0.83,
+      "profit_factor": 1.95,
+      "max_dd": -2712.78,
+      "calmar": 0.58,
+      "avg_bars_held": 2.73,
+      "wf_profitable_windows": 5,
+      "wf_oos_total_pnl": 17395.61,
+      "exit_mix": {
+        "gap_sl": 75,
+        "sl": 171,
+        "tp": 24,
+        "time_exit": 1,
+        "gap_tp": 3
+      }
+    },
+    {
+      "label": "trail_1.25pct",
+      "n": 274,
+      "trades_per_year": 24.32,
+      "total_pnl_net": 19873.17,
+      "pnl_per_year": 1763.96,
+      "win_rate_pct": 44.53,
+      "sharpe_ann": 0.91,
+      "profit_factor": 2.01,
+      "max_dd": -2397.67,
+      "calmar": 0.74,
+      "avg_bars_held": 3.09,
+      "wf_profitable_windows": 5,
+      "wf_oos_total_pnl": 18128.4,
+      "exit_mix": {
+        "gap_sl": 56,
+        "sl": 176,
+        "tp": 32,
+        "time_exit": 7,
+        "gap_tp": 3
+      }
+    },
+    {
+      "label": "trail_1.50pct",
+      "n": 274,
+      "trades_per_year": 24.32,
+      "total_pnl_net": 20242.02,
+      "pnl_per_year": 1796.69,
+      "win_rate_pct": 44.16,
+      "sharpe_ann": 0.9,
+      "profit_factor": 1.93,
+      "max_dd": -2237.23,
+      "calmar": 0.8,
+      "avg_bars_held": 3.44,
+      "wf_profitable_windows": 5,
+      "wf_oos_total_pnl": 18370.13,
+      "exit_mix": {
+        "gap_sl": 49,
+        "sl": 171,
+        "tp": 38,
+        "time_exit": 13,
+        "gap_tp": 3
+      }
+    },
+    {
+      "label": "trail_2.00pct",
+      "n": 274,
+      "trades_per_year": 24.32,
+      "total_pnl_net": 28096.68,
+      "pnl_per_year": 2493.88,
+      "win_rate_pct": 43.07,
+      "sharpe_ann": 1.12,
+      "profit_factor": 2.17,
+      "max_dd": -2113.81,
+      "calmar": 1.18,
+      "avg_bars_held": 4.1,
+      "wf_profitable_windows": 4,
+      "wf_oos_total_pnl": 21467.43,
+      "exit_mix": {
+        "sl": 167,
+        "tp": 49,
+        "gap_sl": 25,
+        "time_exit": 28,
+        "gap_tp": 5
+      }
+    },
+    {
+      "label": "arm_1R_then_trail_2pct",
+      "n": 274,
+      "trades_per_year": 24.32,
+      "total_pnl_net": 31216.14,
+      "pnl_per_year": 2770.76,
+      "win_rate_pct": 49.27,
+      "sharpe_ann": 1.2,
+      "profit_factor": 2.09,
+      "max_dd": -2627.73,
+      "calmar": 1.05,
+      "avg_bars_held": 5.05,
+      "wf_profitable_windows": 4,
+      "wf_oos_total_pnl": 22099.65,
+      "exit_mix": {
+        "sl": 136,
+        "tp": 68,
+        "time_exit": 52,
+        "gap_sl": 13,
+        "gap_tp": 5
+      }
+    },
+    {
+      "label": "atr2_trail_no_tp",
+      "n": 274,
+      "trades_per_year": 24.32,
+      "total_pnl_net": 27795.83,
+      "pnl_per_year": 2467.18,
+      "win_rate_pct": 38.69,
+      "sharpe_ann": 0.94,
+      "profit_factor": 1.95,
+      "max_dd": -4470.34,
+      "calmar": 0.55,
+      "avg_bars_held": 5.8,
+      "wf_profitable_windows": 4,
+      "wf_oos_total_pnl": 24029.29,
+      "exit_mix": {
+        "sl": 183,
+        "time_exit": 70,
+        "gap_sl": 21
+      }
+    },
+    {
+      "label": "breakeven_1R_then_atr1_no_tp",
+      "n": 274,
+      "trades_per_year": 24.32,
+      "total_pnl_net": 33174.55,
+      "pnl_per_year": 2944.59,
+      "win_rate_pct": 40.15,
+      "sharpe_ann": 1.04,
+      "profit_factor": 2.1,
+      "max_dd": -4017.38,
+      "calmar": 0.73,
+      "avg_bars_held": 6.01,
+      "wf_profitable_windows": 4,
+      "wf_oos_total_pnl": 25938.69,
+      "exit_mix": {
+        "sl": 176,
+        "gap_sl": 19,
+        "time_exit": 79
+      }
+    }
+  ],
+  "span_days": 4115
+}

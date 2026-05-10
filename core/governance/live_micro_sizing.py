@@ -1,19 +1,26 @@
-"""Live micro sizing caps + anti-dispersion guardrails (2026-04-22).
+"""Live micro sizing caps + anti-dispersion guardrails.
 
 Purpose: let the desk buy CHEAP live truth without burning meaningful capital.
 
-Sizing caps per grade (USD notional, USD risk-if-stopped):
-  S: 500 / 50
-  A: 300 / 30
-  B: 200 / 20
-  (10% stop convention => risk ~= 10% of notional)
+REFACTOR 2026-05-10 (Marc decision: "aucun seuil en dur, tout en fonction du
+capital reel"). Caps are now expressed as % of live equity, not hard-coded $.
+The caller passes `equity_usd` so the cap scales with the broker NAV.
 
-Guardrails:
-  - No pyramiding before J+14 review per sleeve (open_positions >= 1 blocks new entry)
+Sizing caps per grade (% of live equity):
+  S: 2.00% notional / 0.20% risk-if-stopped
+  A: 1.20% notional / 0.12% risk-if-stopped
+  B: 0.80% notional / 0.08% risk-if-stopped
+
+Origin of the percentages: previously caps were $500/$50 (S), $300/$30 (A),
+$200/$20 (B) calibrated for a $25K account. Converted 1:1 to fractions of
+$25K to preserve calibration, future capital changes scale automatically.
+
+Guardrails (unchanged):
+  - No pyramiding before J+14 review per sleeve
   - Rate limit: max 1 NEW live_micro sleeve promoted per rolling 7 days
 
 Validator entry points:
-  - enforce_sizing(grade, notional_usd, risk_usd) -> raises LiveMicroViolation
+  - enforce_sizing(grade, notional_usd, equity_usd, risk_usd) -> raises LiveMicroViolation
   - can_pyramid(live_start_at, open_positions) -> (bool, reason)
   - can_promote_new_live_micro(registry_entries) -> (bool, reason)
 """
@@ -24,15 +31,17 @@ from typing import Iterable
 
 UTC = timezone.utc
 
-MAX_NOTIONAL_USD_BY_GRADE: dict[str, float] = {
-    "S": 500.0,
-    "A": 300.0,
-    "B": 200.0,
+# Caps as fraction of live equity (NOT hard-coded $).
+# S: 2.00% notional / 0.20% risk = $500/$50 on $25K, scales with capital.
+MAX_NOTIONAL_PCT_BY_GRADE: dict[str, float] = {
+    "S": 0.0200,
+    "A": 0.0120,
+    "B": 0.0080,
 }
-MAX_RISK_USD_BY_GRADE: dict[str, float] = {
-    "S": 50.0,
-    "A": 30.0,
-    "B": 20.0,
+MAX_RISK_PCT_BY_GRADE: dict[str, float] = {
+    "S": 0.0020,
+    "A": 0.0012,
+    "B": 0.0008,
 }
 
 MIN_DAYS_BEFORE_PYRAMID: int = 14
@@ -49,41 +58,84 @@ class LiveMicroViolation(Exception):
         super().__init__(f"LIVE_MICRO_VIOLATION: {reason} detail={self.detail}")
 
 
-def get_max_notional_usd(grade: str | None) -> float:
+def get_max_notional_pct(grade: str | None) -> float:
+    """Return notional cap as fraction of equity (e.g. 0.02 = 2%)."""
     if not grade:
         return 0.0
-    return MAX_NOTIONAL_USD_BY_GRADE.get(grade.upper(), 0.0)
+    return MAX_NOTIONAL_PCT_BY_GRADE.get(grade.upper(), 0.0)
 
 
-def get_max_risk_usd(grade: str | None) -> float:
+def get_max_risk_pct(grade: str | None) -> float:
+    """Return risk-if-stopped cap as fraction of equity."""
     if not grade:
         return 0.0
-    return MAX_RISK_USD_BY_GRADE.get(grade.upper(), 0.0)
+    return MAX_RISK_PCT_BY_GRADE.get(grade.upper(), 0.0)
+
+
+def get_max_notional_usd(grade: str | None, equity_usd: float) -> float:
+    """Return notional cap in $ for a given equity. equity_usd REQUIRED.
+
+    No fallback to a hard-coded value: passing equity_usd<=0 returns 0
+    (effectively blocking the order).
+    """
+    if equity_usd is None or equity_usd <= 0:
+        return 0.0
+    return get_max_notional_pct(grade) * equity_usd
+
+
+def get_max_risk_usd(grade: str | None, equity_usd: float) -> float:
+    """Return risk-if-stopped cap in $ for a given equity."""
+    if equity_usd is None or equity_usd <= 0:
+        return 0.0
+    return get_max_risk_pct(grade) * equity_usd
 
 
 def enforce_sizing(
     grade: str | None,
     notional_usd: float,
+    equity_usd: float,
     risk_usd: float | None = None,
 ) -> None:
-    """Raise LiveMicroViolation if sizing exceeds caps for the given grade."""
-    cap_notional = get_max_notional_usd(grade)
+    """Raise LiveMicroViolation if sizing exceeds caps for the given grade.
+
+    equity_usd MUST be provided (broker NAV at time of order). Caps are
+    computed dynamically as `equity_usd * pct_for_grade`.
+    """
+    if equity_usd is None or equity_usd <= 0:
+        raise LiveMicroViolation(
+            "missing_or_invalid_equity",
+            {"grade": grade, "equity_usd": equity_usd, "notional_usd": notional_usd},
+        )
+
+    cap_notional = get_max_notional_usd(grade, equity_usd)
     if cap_notional <= 0:
         raise LiveMicroViolation(
             "unknown_or_missing_grade",
-            {"grade": grade, "notional_usd": notional_usd},
+            {"grade": grade, "notional_usd": notional_usd, "equity_usd": equity_usd},
         )
     if notional_usd > cap_notional:
         raise LiveMicroViolation(
             "notional_cap_exceeded",
-            {"grade": grade, "cap_notional_usd": cap_notional, "requested_usd": notional_usd},
+            {
+                "grade": grade,
+                "cap_notional_usd": cap_notional,
+                "cap_notional_pct": get_max_notional_pct(grade),
+                "requested_usd": notional_usd,
+                "equity_usd": equity_usd,
+            },
         )
     if risk_usd is not None:
-        cap_risk = get_max_risk_usd(grade)
+        cap_risk = get_max_risk_usd(grade, equity_usd)
         if risk_usd > cap_risk:
             raise LiveMicroViolation(
                 "risk_cap_exceeded",
-                {"grade": grade, "cap_risk_usd": cap_risk, "requested_risk_usd": risk_usd},
+                {
+                    "grade": grade,
+                    "cap_risk_usd": cap_risk,
+                    "cap_risk_pct": get_max_risk_pct(grade),
+                    "requested_risk_usd": risk_usd,
+                    "equity_usd": equity_usd,
+                },
             )
 
 

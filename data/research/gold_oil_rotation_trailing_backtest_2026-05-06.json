@@ -1,0 +1,954 @@
+{
+  "variants": [
+    {
+      "label": "baseline_fixed_2_4",
+      "trail_pct": null,
+      "stats": {
+        "n": 126,
+        "total_pnl": 31712.5389,
+        "avg_pnl": 251.68681666666666,
+        "win_rate": 0.5317460317460317,
+        "sharpe_trade": 6.444959776223881,
+        "profit_factor": 3.162194246506519,
+        "max_dd": -1140.7297
+      },
+      "wf": {
+        "windows": [
+          {
+            "window": 1,
+            "oos_period": "2021-08-18..2022-01-18",
+            "oos_n": 11,
+            "oos_total_pnl": 516.23,
+            "oos_sharpe": 2.34,
+            "oos_profitable": true
+          },
+          {
+            "window": 2,
+            "oos_period": "2022-09-02..2023-02-03",
+            "oos_n": 10,
+            "oos_total_pnl": 1677.98,
+            "oos_sharpe": 6.26,
+            "oos_profitable": true
+          },
+          {
+            "window": 3,
+            "oos_period": "2023-09-21..2024-02-22",
+            "oos_n": 11,
+            "oos_total_pnl": 1821.81,
+            "oos_sharpe": 5.33,
+            "oos_profitable": true
+          },
+          {
+            "window": 4,
+            "oos_period": "2024-10-08..2025-03-11",
+            "oos_n": 10,
+            "oos_total_pnl": 2310.8,
+            "oos_sharpe": 6.87,
+            "oos_profitable": true
+          },
+          {
+            "window": 5,
+            "oos_period": "2025-10-23..2026-03-26",
+            "oos_n": 10,
+            "oos_total_pnl": 10394.76,
+            "oos_sharpe": 14.98,
+            "oos_profitable": true
+          }
+        ],
+        "oos_profitable_windows": 5,
+        "oos_total_pnl": 16721.58,
+        "oos_mean_sharpe": 7.16
+      },
+      "exit_reasons": {
+        "tp": 39,
+        "sl": 48,
+        "time_exit": 29,
+        "gap_sl": 5,
+        "gap_tp": 5
+      },
+      "sample_trades": [
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-03",
+          "exit_date": "2021-02-05",
+          "entry_price": 55.05,
+          "exit_price": 57.252,
+          "pnl": 217.71,
+          "exit_reason": "tp",
+          "trail_pct": null
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-18",
+          "exit_date": "2021-02-18",
+          "entry_price": 61.68,
+          "exit_price": 60.4464,
+          "pnl": -125.85,
+          "exit_reason": "sl",
+          "trail_pct": null
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-04",
+          "exit_date": "2021-03-04",
+          "entry_price": 61.08,
+          "exit_price": 63.5232,
+          "pnl": 241.83,
+          "exit_reason": "tp",
+          "trail_pct": null
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-18",
+          "exit_date": "2021-03-18",
+          "entry_price": 64.42,
+          "exit_price": 63.1316,
+          "pnl": -131.33,
+          "exit_reason": "sl",
+          "trail_pct": null
+        },
+        {
+          "symbol": "MGC",
+          "entry_date": "2021-04-01",
+          "exit_date": "2021-04-15",
+          "entry_price": 1706.8,
+          "exit_price": 1765.4,
+          "pnl": 583.5098,
+          "exit_reason": "time_exit",
+          "trail_pct": null
+        }
+      ]
+    },
+    {
+      "label": "trail_0.40pct",
+      "trail_pct": 0.004,
+      "stats": {
+        "n": 126,
+        "total_pnl": 11332.141500000002,
+        "avg_pnl": 89.93763095238097,
+        "win_rate": 0.5,
+        "sharpe_trade": 3.261970695181035,
+        "profit_factor": 2.203949161044793,
+        "max_dd": -1828.3180000000002
+      },
+      "wf": {
+        "windows": [
+          {
+            "window": 1,
+            "oos_period": "2021-08-18..2022-01-18",
+            "oos_n": 10,
+            "oos_total_pnl": -596.22,
+            "oos_sharpe": -9.32,
+            "oos_profitable": false
+          },
+          {
+            "window": 2,
+            "oos_period": "2022-09-02..2023-02-03",
+            "oos_n": 10,
+            "oos_total_pnl": -702.56,
+            "oos_sharpe": -11.53,
+            "oos_profitable": false
+          },
+          {
+            "window": 3,
+            "oos_period": "2023-09-21..2024-02-22",
+            "oos_n": 10,
+            "oos_total_pnl": 236.74,
+            "oos_sharpe": 1.92,
+            "oos_profitable": true
+          },
+          {
+            "window": 4,
+            "oos_period": "2024-10-08..2025-03-11",
+            "oos_n": 10,
+            "oos_total_pnl": 1016.89,
+            "oos_sharpe": 8.41,
+            "oos_profitable": true
+          },
+          {
+            "window": 5,
+            "oos_period": "2025-10-23..2026-03-26",
+            "oos_n": 10,
+            "oos_total_pnl": 5106.29,
+            "oos_sharpe": 8.03,
+            "oos_profitable": true
+          }
+        ],
+        "oos_profitable_windows": 3,
+        "oos_total_pnl": 5061.14,
+        "oos_mean_sharpe": -0.5
+      },
+      "exit_reasons": {
+        "trail_gap_sl": 59,
+        "trail_sl": 58,
+        "tp": 6,
+        "gap_tp": 3
+      },
+      "sample_trades": [
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-03",
+          "exit_date": "2021-02-04",
+          "entry_price": 55.05,
+          "exit_price": 55.96,
+          "pnl": 88.51,
+          "exit_reason": "trail_gap_sl",
+          "trail_pct": 0.004
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-18",
+          "exit_date": "2021-02-18",
+          "entry_price": 61.68,
+          "exit_price": 60.4464,
+          "pnl": -125.85,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.004
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-04",
+          "exit_date": "2021-03-04",
+          "entry_price": 61.08,
+          "exit_price": 63.5232,
+          "pnl": 241.83,
+          "exit_reason": "tp",
+          "trail_pct": 0.004
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-18",
+          "exit_date": "2021-03-18",
+          "entry_price": 64.42,
+          "exit_price": 63.1316,
+          "pnl": -131.33,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.004
+        },
+        {
+          "symbol": "MGC",
+          "entry_date": "2021-04-01",
+          "exit_date": "2021-04-07",
+          "entry_price": 1706.8,
+          "exit_price": 1737.8208,
+          "pnl": 307.718,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.004
+        }
+      ]
+    },
+    {
+      "label": "trail_0.60pct",
+      "trail_pct": 0.006,
+      "stats": {
+        "n": 126,
+        "total_pnl": 12856.1616,
+        "avg_pnl": 102.03302857142857,
+        "win_rate": 0.49206349206349204,
+        "sharpe_trade": 3.642373971749775,
+        "profit_factor": 2.3507903064151967,
+        "max_dd": -1552.5332000000003
+      },
+      "wf": {
+        "windows": [
+          {
+            "window": 1,
+            "oos_period": "2021-08-18..2022-01-18",
+            "oos_n": 11,
+            "oos_total_pnl": -215.57,
+            "oos_sharpe": -1.53,
+            "oos_profitable": false
+          },
+          {
+            "window": 2,
+            "oos_period": "2022-09-02..2023-02-03",
+            "oos_n": 10,
+            "oos_total_pnl": -549.53,
+            "oos_sharpe": -6.84,
+            "oos_profitable": false
+          },
+          {
+            "window": 3,
+            "oos_period": "2023-09-21..2024-02-22",
+            "oos_n": 10,
+            "oos_total_pnl": 76.77,
+            "oos_sharpe": 0.66,
+            "oos_profitable": true
+          },
+          {
+            "window": 4,
+            "oos_period": "2024-10-08..2025-03-11",
+            "oos_n": 10,
+            "oos_total_pnl": 1149.84,
+            "oos_sharpe": 8.91,
+            "oos_profitable": true
+          },
+          {
+            "window": 5,
+            "oos_period": "2025-10-23..2026-03-26",
+            "oos_n": 10,
+            "oos_total_pnl": 4925.26,
+            "oos_sharpe": 7.73,
+            "oos_profitable": true
+          }
+        ],
+        "oos_profitable_windows": 3,
+        "oos_total_pnl": 5386.77,
+        "oos_mean_sharpe": 1.79
+      },
+      "exit_reasons": {
+        "trail_gap_sl": 42,
+        "trail_sl": 75,
+        "tp": 6,
+        "gap_tp": 3
+      },
+      "sample_trades": [
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-03",
+          "exit_date": "2021-02-04",
+          "entry_price": 55.05,
+          "exit_price": 55.96,
+          "pnl": 88.51,
+          "exit_reason": "trail_gap_sl",
+          "trail_pct": 0.006
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-18",
+          "exit_date": "2021-02-18",
+          "entry_price": 61.68,
+          "exit_price": 60.4464,
+          "pnl": -125.85,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.006
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-04",
+          "exit_date": "2021-03-04",
+          "entry_price": 61.08,
+          "exit_price": 63.5232,
+          "pnl": 241.83,
+          "exit_reason": "tp",
+          "trail_pct": 0.006
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-18",
+          "exit_date": "2021-03-18",
+          "entry_price": 64.42,
+          "exit_price": 63.1316,
+          "pnl": -131.33,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.006
+        },
+        {
+          "symbol": "MGC",
+          "entry_date": "2021-04-01",
+          "exit_date": "2021-04-07",
+          "entry_price": 1706.8,
+          "exit_price": 1734.3312,
+          "pnl": 272.822,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.006
+        }
+      ]
+    },
+    {
+      "label": "trail_0.80pct",
+      "trail_pct": 0.008,
+      "stats": {
+        "n": 126,
+        "total_pnl": 17272.159200000002,
+        "avg_pnl": 137.08062857142858,
+        "win_rate": 0.49206349206349204,
+        "sharpe_trade": 4.318365873530772,
+        "profit_factor": 2.77423865580678,
+        "max_dd": -1276.3436999999994
+      },
+      "wf": {
+        "windows": [
+          {
+            "window": 1,
+            "oos_period": "2021-08-18..2022-01-18",
+            "oos_n": 11,
+            "oos_total_pnl": -313.95,
+            "oos_sharpe": -2.31,
+            "oos_profitable": false
+          },
+          {
+            "window": 2,
+            "oos_period": "2022-09-02..2023-02-03",
+            "oos_n": 10,
+            "oos_total_pnl": 22.4,
+            "oos_sharpe": 0.14,
+            "oos_profitable": true
+          },
+          {
+            "window": 3,
+            "oos_period": "2023-09-21..2024-02-22",
+            "oos_n": 10,
+            "oos_total_pnl": 796.79,
+            "oos_sharpe": 3.72,
+            "oos_profitable": true
+          },
+          {
+            "window": 4,
+            "oos_period": "2024-10-08..2025-03-11",
+            "oos_n": 10,
+            "oos_total_pnl": 1552.27,
+            "oos_sharpe": 7.16,
+            "oos_profitable": true
+          },
+          {
+            "window": 5,
+            "oos_period": "2025-10-23..2026-03-26",
+            "oos_n": 10,
+            "oos_total_pnl": 8411.34,
+            "oos_sharpe": 12.38,
+            "oos_profitable": true
+          }
+        ],
+        "oos_profitable_windows": 4,
+        "oos_total_pnl": 10468.85,
+        "oos_mean_sharpe": 4.22
+      },
+      "exit_reasons": {
+        "trail_sl": 75,
+        "tp": 11,
+        "trail_gap_sl": 35,
+        "gap_tp": 4,
+        "time_exit": 1
+      },
+      "sample_trades": [
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-03",
+          "exit_date": "2021-02-04",
+          "entry_price": 55.05,
+          "exit_price": 55.8794,
+          "pnl": 80.4463,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.008
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-18",
+          "exit_date": "2021-02-18",
+          "entry_price": 61.68,
+          "exit_price": 60.4464,
+          "pnl": -125.85,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.008
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-04",
+          "exit_date": "2021-03-04",
+          "entry_price": 61.08,
+          "exit_price": 63.5232,
+          "pnl": 241.83,
+          "exit_reason": "tp",
+          "trail_pct": 0.008
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-18",
+          "exit_date": "2021-03-18",
+          "entry_price": 64.42,
+          "exit_price": 63.1316,
+          "pnl": -131.33,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.008
+        },
+        {
+          "symbol": "MGC",
+          "entry_date": "2021-04-01",
+          "exit_date": "2021-04-09",
+          "entry_price": 1706.8,
+          "exit_price": 1743.936,
+          "pnl": 368.8695,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.008
+        }
+      ]
+    },
+    {
+      "label": "trail_1.00pct",
+      "trail_pct": 0.01,
+      "stats": {
+        "n": 126,
+        "total_pnl": 19876.1983,
+        "avg_pnl": 157.74760555555557,
+        "win_rate": 0.5,
+        "sharpe_trade": 4.759876469901509,
+        "profit_factor": 2.9752993938556744,
+        "max_dd": -1355.2170999999994
+      },
+      "wf": {
+        "windows": [
+          {
+            "window": 1,
+            "oos_period": "2021-08-18..2022-01-18",
+            "oos_n": 11,
+            "oos_total_pnl": -108.55,
+            "oos_sharpe": -0.75,
+            "oos_profitable": false
+          },
+          {
+            "window": 2,
+            "oos_period": "2022-09-02..2023-02-03",
+            "oos_n": 10,
+            "oos_total_pnl": 332.97,
+            "oos_sharpe": 2.03,
+            "oos_profitable": true
+          },
+          {
+            "window": 3,
+            "oos_period": "2023-09-21..2024-02-22",
+            "oos_n": 10,
+            "oos_total_pnl": 1310.88,
+            "oos_sharpe": 6.02,
+            "oos_profitable": true
+          },
+          {
+            "window": 4,
+            "oos_period": "2024-10-08..2025-03-11",
+            "oos_n": 10,
+            "oos_total_pnl": 1223.55,
+            "oos_sharpe": 5.49,
+            "oos_profitable": true
+          },
+          {
+            "window": 5,
+            "oos_period": "2025-10-23..2026-03-26",
+            "oos_n": 10,
+            "oos_total_pnl": 10167.6,
+            "oos_sharpe": 15.48,
+            "oos_profitable": true
+          }
+        ],
+        "oos_profitable_windows": 4,
+        "oos_total_pnl": 12926.45,
+        "oos_mean_sharpe": 5.65
+      },
+      "exit_reasons": {
+        "trail_sl": 79,
+        "tp": 15,
+        "trail_gap_sl": 27,
+        "gap_tp": 4,
+        "time_exit": 1
+      },
+      "sample_trades": [
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-03",
+          "exit_date": "2021-02-04",
+          "entry_price": 55.05,
+          "exit_price": 55.7667,
+          "pnl": 69.1803,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.01
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-18",
+          "exit_date": "2021-02-18",
+          "entry_price": 61.68,
+          "exit_price": 60.4464,
+          "pnl": -125.85,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.01
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-04",
+          "exit_date": "2021-03-04",
+          "entry_price": 61.08,
+          "exit_price": 63.5232,
+          "pnl": 241.83,
+          "exit_reason": "tp",
+          "trail_pct": 0.01
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-18",
+          "exit_date": "2021-03-18",
+          "entry_price": 64.42,
+          "exit_price": 63.1316,
+          "pnl": -131.33,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.01
+        },
+        {
+          "symbol": "MGC",
+          "entry_date": "2021-04-01",
+          "exit_date": "2021-04-09",
+          "entry_price": 1706.8,
+          "exit_price": 1740.42,
+          "pnl": 333.7095,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.01
+        }
+      ]
+    },
+    {
+      "label": "trail_1.25pct",
+      "trail_pct": 0.0125,
+      "stats": {
+        "n": 126,
+        "total_pnl": 20969.924699999996,
+        "avg_pnl": 166.42797380952376,
+        "win_rate": 0.4603174603174603,
+        "sharpe_trade": 4.861127140194342,
+        "profit_factor": 2.8630348787235014,
+        "max_dd": -1571.8582000000006
+      },
+      "wf": {
+        "windows": [
+          {
+            "window": 1,
+            "oos_period": "2021-08-18..2022-01-18",
+            "oos_n": 11,
+            "oos_total_pnl": -133.35,
+            "oos_sharpe": -0.73,
+            "oos_profitable": false
+          },
+          {
+            "window": 2,
+            "oos_period": "2022-09-02..2023-02-03",
+            "oos_n": 10,
+            "oos_total_pnl": 1059.59,
+            "oos_sharpe": 4.95,
+            "oos_profitable": true
+          },
+          {
+            "window": 3,
+            "oos_period": "2023-09-21..2024-02-22",
+            "oos_n": 10,
+            "oos_total_pnl": 1575.84,
+            "oos_sharpe": 6.16,
+            "oos_profitable": true
+          },
+          {
+            "window": 4,
+            "oos_period": "2024-10-08..2025-03-11",
+            "oos_n": 11,
+            "oos_total_pnl": 1208.02,
+            "oos_sharpe": 4.02,
+            "oos_profitable": true
+          },
+          {
+            "window": 5,
+            "oos_period": "2025-10-23..2026-03-26",
+            "oos_n": 10,
+            "oos_total_pnl": 10090.23,
+            "oos_sharpe": 15.36,
+            "oos_profitable": true
+          }
+        ],
+        "oos_profitable_windows": 4,
+        "oos_total_pnl": 13800.33,
+        "oos_mean_sharpe": 5.95
+      },
+      "exit_reasons": {
+        "trail_sl": 79,
+        "tp": 21,
+        "trail_gap_sl": 18,
+        "gap_tp": 4,
+        "time_exit": 4
+      },
+      "sample_trades": [
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-03",
+          "exit_date": "2021-02-04",
+          "entry_price": 55.05,
+          "exit_price": 55.6259,
+          "pnl": 55.0978,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.0125
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-18",
+          "exit_date": "2021-02-18",
+          "entry_price": 61.68,
+          "exit_price": 60.4464,
+          "pnl": -125.85,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.0125
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-04",
+          "exit_date": "2021-03-04",
+          "entry_price": 61.08,
+          "exit_price": 63.5232,
+          "pnl": 241.83,
+          "exit_reason": "tp",
+          "trail_pct": 0.0125
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-18",
+          "exit_date": "2021-03-18",
+          "entry_price": 64.42,
+          "exit_price": 63.1316,
+          "pnl": -131.33,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.0125
+        },
+        {
+          "symbol": "MGC",
+          "entry_date": "2021-04-01",
+          "exit_date": "2021-04-09",
+          "entry_price": 1706.8,
+          "exit_price": 1736.025,
+          "pnl": 289.7595,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.0125
+        }
+      ]
+    },
+    {
+      "label": "trail_1.50pct",
+      "trail_pct": 0.015,
+      "stats": {
+        "n": 126,
+        "total_pnl": 21379.7641,
+        "avg_pnl": 169.68066746031747,
+        "win_rate": 0.49206349206349204,
+        "sharpe_trade": 4.901814358562708,
+        "profit_factor": 2.7736786829469153,
+        "max_dd": -1891.2173000000003
+      },
+      "wf": {
+        "windows": [
+          {
+            "window": 1,
+            "oos_period": "2021-08-18..2022-01-18",
+            "oos_n": 11,
+            "oos_total_pnl": -23.17,
+            "oos_sharpe": -0.12,
+            "oos_profitable": false
+          },
+          {
+            "window": 2,
+            "oos_period": "2022-09-02..2023-02-03",
+            "oos_n": 10,
+            "oos_total_pnl": 1728.99,
+            "oos_sharpe": 8.25,
+            "oos_profitable": true
+          },
+          {
+            "window": 3,
+            "oos_period": "2023-09-21..2024-02-22",
+            "oos_n": 10,
+            "oos_total_pnl": 1108.81,
+            "oos_sharpe": 3.9,
+            "oos_profitable": true
+          },
+          {
+            "window": 4,
+            "oos_period": "2024-10-08..2025-03-11",
+            "oos_n": 11,
+            "oos_total_pnl": 929.62,
+            "oos_sharpe": 2.93,
+            "oos_profitable": true
+          },
+          {
+            "window": 5,
+            "oos_period": "2025-10-23..2026-03-26",
+            "oos_n": 10,
+            "oos_total_pnl": 9777.51,
+            "oos_sharpe": 14.78,
+            "oos_profitable": true
+          }
+        ],
+        "oos_profitable_windows": 4,
+        "oos_total_pnl": 13521.76,
+        "oos_mean_sharpe": 5.95
+      },
+      "exit_reasons": {
+        "trail_sl": 76,
+        "tp": 23,
+        "trail_gap_sl": 17,
+        "gap_tp": 4,
+        "time_exit": 6
+      },
+      "sample_trades": [
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-03",
+          "exit_date": "2021-02-04",
+          "entry_price": 55.05,
+          "exit_price": 55.4851,
+          "pnl": 41.0153,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.015
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-18",
+          "exit_date": "2021-02-18",
+          "entry_price": 61.68,
+          "exit_price": 60.4464,
+          "pnl": -125.85,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.015
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-04",
+          "exit_date": "2021-03-04",
+          "entry_price": 61.08,
+          "exit_price": 63.5232,
+          "pnl": 241.83,
+          "exit_reason": "tp",
+          "trail_pct": 0.015
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-18",
+          "exit_date": "2021-03-18",
+          "entry_price": 64.42,
+          "exit_price": 63.1316,
+          "pnl": -131.33,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.015
+        },
+        {
+          "symbol": "MGC",
+          "entry_date": "2021-04-01",
+          "exit_date": "2021-04-12",
+          "entry_price": 1706.8,
+          "exit_price": 1731.63,
+          "pnl": 245.8095,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.015
+        }
+      ]
+    },
+    {
+      "label": "trail_2.00pct",
+      "trail_pct": 0.02,
+      "stats": {
+        "n": 126,
+        "total_pnl": 27638.5963,
+        "avg_pnl": 219.3539388888889,
+        "win_rate": 0.49206349206349204,
+        "sharpe_trade": 5.709689785934365,
+        "profit_factor": 3.0392632490759786,
+        "max_dd": -1568.7296000000001
+      },
+      "wf": {
+        "windows": [
+          {
+            "window": 1,
+            "oos_period": "2021-08-18..2022-01-18",
+            "oos_n": 11,
+            "oos_total_pnl": 7.05,
+            "oos_sharpe": 0.03,
+            "oos_profitable": true
+          },
+          {
+            "window": 2,
+            "oos_period": "2022-09-02..2023-02-03",
+            "oos_n": 10,
+            "oos_total_pnl": 1283.28,
+            "oos_sharpe": 5.68,
+            "oos_profitable": true
+          },
+          {
+            "window": 3,
+            "oos_period": "2023-09-21..2024-02-22",
+            "oos_n": 10,
+            "oos_total_pnl": 941.1,
+            "oos_sharpe": 3.27,
+            "oos_profitable": true
+          },
+          {
+            "window": 4,
+            "oos_period": "2024-10-08..2025-03-11",
+            "oos_n": 10,
+            "oos_total_pnl": 1481.77,
+            "oos_sharpe": 4.6,
+            "oos_profitable": true
+          },
+          {
+            "window": 5,
+            "oos_period": "2025-10-23..2026-03-26",
+            "oos_n": 10,
+            "oos_total_pnl": 10462.38,
+            "oos_sharpe": 15.2,
+            "oos_profitable": true
+          }
+        ],
+        "oos_profitable_windows": 5,
+        "oos_total_pnl": 14175.58,
+        "oos_mean_sharpe": 5.76
+      },
+      "exit_reasons": {
+        "tp": 28,
+        "trail_sl": 68,
+        "trail_gap_sl": 12,
+        "time_exit": 13,
+        "gap_tp": 5
+      },
+      "sample_trades": [
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-03",
+          "exit_date": "2021-02-05",
+          "entry_price": 55.05,
+          "exit_price": 57.252,
+          "pnl": 217.71,
+          "exit_reason": "tp",
+          "trail_pct": 0.02
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-02-18",
+          "exit_date": "2021-02-18",
+          "entry_price": 61.68,
+          "exit_price": 60.4464,
+          "pnl": -125.85,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.02
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-04",
+          "exit_date": "2021-03-04",
+          "entry_price": 61.08,
+          "exit_price": 63.5232,
+          "pnl": 241.83,
+          "exit_reason": "tp",
+          "trail_pct": 0.02
+        },
+        {
+          "symbol": "MCL",
+          "entry_date": "2021-03-18",
+          "exit_date": "2021-03-18",
+          "entry_price": 64.42,
+          "exit_price": 63.1316,
+          "pnl": -131.33,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.02
+        },
+        {
+          "symbol": "MGC",
+          "entry_date": "2021-04-01",
+          "exit_date": "2021-04-13",
+          "entry_price": 1706.8,
+          "exit_price": 1722.84,
+          "pnl": 157.9095,
+          "exit_reason": "trail_sl",
+          "trail_pct": 0.02
+        }
+      ]
+    }
+  ]
+}

@@ -85,7 +85,10 @@ def _extract_strategy_from_authorized_by(authorized_by: str) -> str | None:
     """Map _authorized_by to canonical strategy_id, or None if system caller.
 
     Args:
-        authorized_by: format "crypto_worker_STRAT-XXX" or arbitrary string
+        authorized_by: formats supportes:
+          - "crypto_worker_STRAT-XXX"          -> via _CRYPTO_STRAT_ID_MAP
+          - "<canonical_id>:<suffix>"          -> partie avant ':' (ex live_micro)
+          - "<canonical_id>"                    -> tel quel
 
     Returns:
         Canonical strategy_id (e.g. "btc_eth_dual_momentum") if extractable,
@@ -101,6 +104,12 @@ def _extract_strategy_from_authorized_by(authorized_by: str) -> str | None:
     if authorized_by.startswith("crypto_worker_"):
         strat_token = authorized_by[len("crypto_worker_"):]
         return _CRYPTO_STRAT_ID_MAP.get(strat_token, strat_token)
+    # Format "{canonical_id}:{suffix}" (ex "btc_asia_mes_leadlag_q80_v80_long_only:live_micro_entry").
+    # Bug fix 2026-05-10 : avant ce strip, le pre_order_guard recevait l'id complet
+    # avec suffix et le rejetait (whitelist match exact). Cause du 0-trade live_micro
+    # btc_asia_q80 depuis 2026-04-23 alors que paper avait emis BUY le 2026-05-01.
+    if ":" in authorized_by:
+        return authorized_by.split(":", 1)[0]
     # Direct canonical (e.g. "fx_carry_momentum_live", "always_on_carry")
     return authorized_by
 

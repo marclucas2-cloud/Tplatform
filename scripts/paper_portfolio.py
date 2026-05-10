@@ -141,12 +141,18 @@ STRATEGIES = {
     # ARCHIVED (WF-rejected 27 mars 2026): opex_gamma, gap_continuation,
     # crypto_proxy_v2, orb_v2, meanrev_v2, vwap_micro, triple_ema, gold_fear,
     # crypto_bear — voir archive/rejected/WHY_REJECTED.md
-    "corr_hedge": {
-        "name": "Correlation Regime Hedge",
-        "sharpe": 1.09,
-        "frequency": "intraday",
-        "multi_asset": True,
-    },
+    # corr_hedge: REJECTED 2026-05-10
+    # Sharpe live -0.77 sur 10 trades paper (cumul -$17.13), WR 20%.
+    # SAFE-003 auto-disabled le 2026-05-08 mais le code continuait a emettre
+    # des signaux malgre le flag (advisory only). Retire definitivement du
+    # dispatcher pour stopper le bruit. Si un re-WF montre que c'est juste
+    # un regime contraire, re-enabler.
+    # "corr_hedge": {
+    #     "name": "Correlation Regime Hedge",
+    #     "sharpe": 1.09,
+    #     "frequency": "intraday",
+    #     "multi_asset": True,
+    # },
     # === Session 26 mars 2026 (bear mission) — short strategies WF valides ===
     "vix_short": {
         "name": "VIX Expansion Short",
@@ -167,13 +173,17 @@ STRATEGIES = {
         "frequency": "intraday",
         "multi_asset": True,
     },
-    # === P0 TODO V3 — High-Beta Underperformance Short ===
-    "high_beta_short": {
-        "name": "High-Beta Underperformance Short",
-        "sharpe": 2.65,
-        "frequency": "intraday",
-        "multi_asset": True,
-    },
+    # high_beta_short: REJECTED 2026-05-10
+    # 2 trades paper (-$1.45 + -$15.48 = -$16.93), WR 0%. Echantillon
+    # tres faible mais perte par trade large. Le worst case -$15 sur 1 trade
+    # represente -1.5% du sleeve si live, inacceptable pour grade B.
+    # Retire pour reduire le bruit. Re-WF avec data fresh requis avant re-prom.
+    # "high_beta_short": {
+    #     "name": "High-Beta Underperformance Short",
+    #     "sharpe": 2.65,
+    #     "frequency": "intraday",
+    #     "multi_asset": True,
+    # },
     # RETIRES apres re-backtest horaires stricts :
     # - ORB 5-Min : Sharpe -0.05 (ne survit pas aux couts sur univers large)
     # - Earnings Drift : Sharpe -9.55 (overtrade sur small caps)
@@ -278,16 +288,15 @@ def save_state(state: dict, path=None):
 # =============================================================================
 
 # Allocation Tier S/A/B/C — fixe, basee sur la qualite de l'edge
+# 2026-05-10 cleanup : corr_hedge + high_beta_short REJECTED (cf STRATEGIES dict).
 TIER_ALLOCATION = {
     # TIER A (edge fort valide)
     "dow_seasonal":     0.25,
     # TIER B (edge modere / diversifiant)
-    "corr_hedge":       0.15,
     "lateday_meanrev":  0.10,
     "vix_short":        0.15,
     "failed_rally_short": 0.10,
     "eod_sell_v2":      0.10,
-    "high_beta_short":  0.08,
     # TIER C (daily/monthly, monitoring-only — 0% live perspective)
     "momentum_25etf":   0.03,  # MONITORING-ONLY
     "pairs_mu_amat":    0.03,  # MONITORING-ONLY
@@ -735,11 +744,13 @@ def signal_intraday(strategy_id: str, allocated_capital: float, state: dict) -> 
     STRAT_MAP = {
         "dow_seasonal": DayOfWeekSeasonalStrategy,
         "lateday_meanrev": LateDayMeanReversionStrategy,
-        "corr_hedge": CorrelationRegimeHedgeStrategy,
+        # corr_hedge: REJECTED 2026-05-10 (Sharpe -0.77 sur 10 trades paper)
+        # "corr_hedge": CorrelationRegimeHedgeStrategy,
         "vix_short": VIXExpansionShortStrategy,
         "failed_rally_short": FailedRallyShortStrategy,
         "eod_sell_v2": EODSellV2Strategy,
-        "high_beta_short": HighBetaUnderperfShortStrategy,
+        # high_beta_short: REJECTED 2026-05-10 (-$17 sur 2 trades, WR 0%)
+        # "high_beta_short": HighBetaUnderperfShortStrategy,
     }
 
     # RSI2 swing strategy uses daily bars, not intraday 5min

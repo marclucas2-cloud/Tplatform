@@ -21,6 +21,8 @@ from typing import Any, Dict, List
 
 logger = logging.getLogger(__name__)
 
+IBKR_EQUITY_FALLBACK_TTL_SECONDS = 3600
+
 
 @dataclass
 class BrokerState:
@@ -311,15 +313,39 @@ class PortfolioStateEngine:
 
     def _get_broker_state(self, name: str, broker) -> BrokerState:
         """Get state from a single broker."""
+        is_ibkr = "ibkr" in name.lower() or name.lower() in {"ib", "ibkr_live"}
         try:
             account = broker.get_account_info()
             equity = float(account.get("equity", account.get("total_equity", 0)))
             cash = float(account.get("cash", account.get("available_balance", 0)))
             paper = bool(account.get("paper", False))
-        except Exception:
-            equity = 0.0
-            cash = 0.0
-            paper = False
+            if is_ibkr and equity <= 0:
+                fallback = self._load_ibkr_equity_fallback()
+                if fallback:
+                    logger.warning(
+                        "V10 SNAPSHOT: IBKR account equity <= 0, using cached "
+                        "ibkr_equity fallback from %s",
+                        fallback.get("updated_at", "unknown"),
+                    )
+                    equity = float(fallback["equity"])
+                    cash = float(fallback["cash"])
+                    paper = bool(fallback.get("paper", False))
+        except Exception as exc:
+            fallback = self._load_ibkr_equity_fallback() if is_ibkr else None
+            if fallback:
+                logger.warning(
+                    "V10 SNAPSHOT: IBKR account query failed (%s), using cached "
+                    "ibkr_equity fallback from %s",
+                    exc,
+                    fallback.get("updated_at", "unknown"),
+                )
+                equity = float(fallback["equity"])
+                cash = float(fallback["cash"])
+                paper = bool(fallback.get("paper", False))
+            else:
+                equity = 0.0
+                cash = 0.0
+                paper = False
 
         try:
             positions = broker.get_positions()
@@ -356,3 +382,74 @@ class PortfolioStateEngine:
             unrealized_pnl=unrealized,
             paper=paper,
         )
+
+    def _load_ibkr_equity_fallback(
+        self,
+        max_age_seconds: int = IBKR_EQUITY_FALLBACK_TTL_SECONDS,
+    ) -> Dict[str, Any] | None:
+        """Read the latest persisted IBKR equity snapshot if it is fresh enough.
+
+        This prevents transient IBKR query failures from collapsing the unified
+        V10 NAV to "Binance only", which would create false -70% drawdowns.
+        """
+        state_dir = self._data_dir / "state"
+        candidates = (
+            state_dir / "ibkr_equity.json",
+            state_dir / "ibkr_futures" / "equity_state.json",
+        )
+        now = datetime.now(timezone.utc)
+
+        for path in candidates:
+            try:
+                if not path.exists():
+                    continue
+                payload = json.loads(path.read_text(encoding="utf-8"))
+                updated_raw = (
+                    payload.get("updated_at")
+                    or payload.get("timestamp")
+                    or payload.get("ts_utc")
+                )
+                if not updated_raw:
+                    continue
+                updated_at = datetime.fromisoformat(
+                    str(updated_raw).replace("Z", "+00:00")
+                )
+                if updated_at.tzinfo is None:
+                    updated_at = updated_at.replace(tzinfo=timezone.utc)
+                age_seconds = (now - updated_at.astimezone(timezone.utc)).total_seconds()
+                if age_seconds < 0 or age_seconds > max_age_seconds:
+                    continue
+
+                equity = self._first_positive_float(
+                    payload,
+                    ("equity", "net_liquidation", "netLiquidation", "total_equity", "totalEquity"),
+                )
+                if equity is None:
+                    continue
+                cash = self._first_positive_float(
+                    payload,
+                    ("cash", "available_cash", "available_balance", "availableFunds", "AvailableFunds"),
+                )
+                return {
+                    "equity": equity,
+                    "cash": cash if cash is not None else equity,
+                    "paper": bool(payload.get("paper", False)),
+                    "updated_at": updated_at.isoformat(),
+                    "source_path": str(path),
+                }
+            except Exception as exc:
+                logger.warning("V10 SNAPSHOT: unreadable IBKR equity fallback %s: %s", path, exc)
+        return None
+
+    @staticmethod
+    def _first_positive_float(payload: Dict[str, Any], keys: tuple[str, ...]) -> float | None:
+        for key in keys:
+            if key not in payload:
+                continue
+            try:
+                value = float(payload[key])
+            except Exception:
+                continue
+            if value > 0:
+                return value
+        return None

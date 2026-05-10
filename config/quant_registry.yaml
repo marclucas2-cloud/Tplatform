@@ -19,12 +19,27 @@
 # =============================================================================
 
 metadata:
-  version: 1
+  version: 2
   created_at: "2026-04-19"
+  updated_at: "2026-05-10"
   schema_version: 1
   notes: |
     v1: registre initial. Backfill depuis WF reports existants.
     promotion_gate migration vers source canonique (plan 9.0 B3).
+
+    v2 (2026-05-10): refactor "aucun seuil en dur" decision Marc.
+    - Les valeurs max_risk_usd / max_notional_usd des entries live_*
+      restent presentes pour reference historique mais sont IGNOREES par
+      le runtime. Source canonique des caps :
+        - core/governance/live_micro_sizing.py : caps en % du capital live
+          par grade (S=2.0%/0.2%, A=1.2%/0.12%, B=0.8%/0.08% notional/risk)
+        - core/worker/cycles/futures_runner.py : RISK_BUDGET_PCT=0.08
+          (8% portfolio VaR cap), recalcule en $ via equity * pct a chaque
+          cycle.
+        - config/limits_live.yaml : capital=25500 est BOOTSTRAP only,
+          override par update_capital(equity_live) au 1er cycle.
+    - Le champ risk_budget_pct (deja present sur live_core CAM/GOR) reste
+      la source officielle pour le sizing dynamique futures live.
 
 # Schema par strategie:
 #   strategy_id: string                # match live_whitelist.yaml canonique
@@ -145,14 +160,17 @@ strategies:
   - strategy_id: mes_estx50_divergence
     book: ibkr_futures
     status: paper_only
-    paper_start_at: "2026-04-23"
+    paper_start_at: "2026-05-10"          # Re-anchored apres wiring runtime 2026-05-10. Paper observation effective demarre maintenant.
     live_start_at: null
     wf_manifest_path: data/research/wf_manifests/mes_estx50_divergence_2026-04-23.json
     grade: A
     last_wf_run_at: "2026-04-23"
     is_live: false
-    infra_gaps: ["runner_wiring_pending_marc_decision"]
-    notes: "Research mission 2026-04-23 afternoon. LONG MES seulement quand Z(log(MES/ESTX50), 25d) <= -1.5 (intermarket divergence US-EU). WF 5/5 parfait (sensitivity sweet spot), Sharpe 0.95, CAGR 8.9%, DD -10.4%, 10 trades/an sur 5Y. Corr CAM -0.005 / GOR -0.102 (quasi-nulle/anti-corr). Earliest promotion live_micro: 2026-05-23."
+    infra_gaps: []
+    runtime_entrypoint: "core.worker.cycles.futures_runner: bloc 3a-quinquies (paper, ~apres mes_mr_vix_spike)"
+    runtime_module: strategies_v2.futures.mes_estx50_divergence.MESEstx50Divergence
+    runtime_wired_at: "2026-05-10"
+    notes: "Research mission 2026-04-23 afternoon. LONG MES seulement quand Z(log(MES/ESTX50), 25d) <= -1.5 (intermarket divergence US-EU). WF 5/5 parfait (sensitivity sweet spot), Sharpe 0.95, CAGR 8.9%, DD -10.4%, 10 trades/an sur 5Y. Corr CAM -0.005 / GOR -0.102 (quasi-nulle/anti-corr). Runtime cable 2026-05-10 dans futures_runner (paper section). Earliest promotion live_micro: 2026-06-09 (paper_start + 30j)."
 
   - strategy_id: mgc_mes_ratio_rotation
     book: ibkr_futures
@@ -248,16 +266,15 @@ strategies:
 
   - strategy_id: mib_estx50_spread
     book: ibkr_eu
-    status: frozen          # Phase 3.1 desk productif 2026-04-22: freeze tant que funding EUR 3.6K non effectue (cf chiffrage 22/04 NO_GO)
-    frozen_at: "2026-04-22"
-    frozen_reason: "Margin EUR 13.5K requis vs dispo 9.9K - re-activable si Marc funde le gap"
+    status: paper_only       # Unfrozen 2026-05-10 : capital IBKR $29K USD ~= 27K EUR > 13.5K EUR margin requis. Le "gap funding 3.6K" 2026-04-22 etait base sur l'equity pre-depot du 2026-04-30 (+$15K).
+    unfrozen_at: "2026-05-10"
     paper_start_at: "2026-04-18"
     live_start_at: null
     wf_manifest_path: data/research/wf_manifests/mib_estx50_spread_2026-04-19_backfill.json
     grade: S
     last_wf_run_at: "2026-04-19"
     is_live: false
-    infra_gaps: ["margin_eur_13500_requise_dispo_eur_9900_ibkr_gap_3600"]
+    infra_gaps: []
 
   # ═══════════════════════════════════════════════════════════════════════════
   # IBKR FX — disabled (ESMA EU leverage limits)

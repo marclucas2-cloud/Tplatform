@@ -41,6 +41,8 @@ POSITIONS_PATH = STATE_DIR / "positions.json"
 JOURNAL_PATH = STATE_DIR / "journal.jsonl"
 KILL_FLAG_PATH = STATE_DIR / "_kill_switch.json"
 LAST_CYCLE_PATH = STATE_DIR / "_last_cycle.json"
+STALE_ALERT_PATH = STATE_DIR / "_last_data_stale_alert.json"
+MAX_SIGNAL_AGE_DAYS = 1
 
 logger = logging.getLogger(__name__)
 
@@ -111,6 +113,81 @@ def _write_last_cycle(verdict: str, extra: dict | None = None) -> None:
     if extra:
         payload.update(extra)
     LAST_CYCLE_PATH.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+
+
+def _parse_target_date(signal_details: dict) -> datetime.date | None:
+    raw = signal_details.get("target_date")
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(str(raw).replace("Z", "+00:00")).date()
+    except Exception:
+        try:
+            return datetime.strptime(str(raw)[:10], "%Y-%m-%d").date()
+        except Exception:
+            return None
+
+
+def _validate_signal_freshness(
+    signal_details: dict,
+    now: datetime | None = None,
+) -> tuple[bool, str, dict]:
+    """Return whether a live_micro entry can use this signal.
+
+    Exits still run when this returns False. The guard only blocks new entries
+    when the paper data path explicitly flagged stale data or when the signal's
+    target date is older than the most recent completed daily session.
+    """
+    now = now or datetime.now(UTC)
+    if now.tzinfo is None:
+        now = now.replace(tzinfo=UTC)
+    today = now.astimezone(UTC).date()
+
+    data_status = str(signal_details.get("data_status", "fresh")).lower()
+    if data_status in {"stale", "missing", "invalid"}:
+        return False, f"data_status={data_status}", {
+            "data_status": data_status,
+            "stale_reason": signal_details.get("stale_reason") or signal_details.get("reason"),
+            "target_date": signal_details.get("target_date"),
+            "last_daily_date": signal_details.get("last_daily_date"),
+        }
+
+    target_date = _parse_target_date(signal_details)
+    if target_date is None:
+        return False, "missing_or_invalid_target_date", {
+            "target_date": signal_details.get("target_date"),
+        }
+
+    age_days = (today - target_date).days
+    if age_days < 0 or age_days > MAX_SIGNAL_AGE_DAYS:
+        return False, f"target_date_age_days={age_days}", {
+            "target_date": target_date.isoformat(),
+            "today_utc": today.isoformat(),
+            "max_age_days": MAX_SIGNAL_AGE_DAYS,
+        }
+    return True, "fresh", {
+        "target_date": target_date.isoformat(),
+        "today_utc": today.isoformat(),
+        "age_days": age_days,
+    }
+
+
+def _should_send_stale_alert(reason: str, detail: dict) -> bool:
+    """Deduplicate stale-data Telegram alerts to one per UTC day/reason."""
+    _ensure_state_dir()
+    today = datetime.now(UTC).date().isoformat()
+    key = f"{today}:{reason}:{detail.get('target_date')}"
+    try:
+        payload = json.loads(STALE_ALERT_PATH.read_text(encoding="utf-8")) if STALE_ALERT_PATH.exists() else {}
+    except Exception:
+        payload = {}
+    if payload.get("key") == key:
+        return False
+    STALE_ALERT_PATH.write_text(
+        json.dumps({"key": key, "ts_utc": datetime.now(UTC).isoformat(), "detail": detail}, indent=2),
+        encoding="utf-8",
+    )
+    return True
 
 
 def _telegram_alert(level: str, title: str, body: str) -> None:
@@ -264,6 +341,27 @@ def run_exit_if_needed(broker, live_start_at_iso: str) -> int:
 
 def run_entry_if_needed(broker, signal_side: str, signal_details: dict, live_start_at_iso: str) -> bool:
     """If signal=BUY + 0 open + kill flag clear: place BUY. Returns True if fill OK."""
+    fresh_ok, fresh_reason, fresh_detail = _validate_signal_freshness(signal_details)
+    if not fresh_ok:
+        _journal_event({
+            "event": "entry_skipped",
+            "reason": f"data_freshness_guard: {fresh_reason}",
+            "detail": fresh_detail,
+            "signal": signal_details,
+        })
+        logger.error(
+            "live_micro q80: ENTRY BLOCKED by data freshness guard: %s detail=%s",
+            fresh_reason,
+            fresh_detail,
+        )
+        if _should_send_stale_alert(fresh_reason, fresh_detail):
+            _telegram_alert(
+                "critical",
+                "ENTRY BLOCKED stale data",
+                f"Reason: {fresh_reason}\nDetail: {fresh_detail}",
+            )
+        return False
+
     kill_on, kill_data = _is_kill_switch_on()
     if kill_on:
         _journal_event({
@@ -298,7 +396,19 @@ def run_entry_if_needed(broker, signal_side: str, signal_details: dict, live_sta
             can_pyramid,
             enforce_sizing,
         )
-        enforce_sizing(GRADE, NOTIONAL_USD, risk_usd=RISK_USD)
+        # Equity Binance live = denominateur des caps en %.
+        # Refactor 2026-05-10 : caps live_micro sont fraction du capital reel
+        # (cf core/governance/live_micro_sizing.py refactor "aucun seuil en dur").
+        try:
+            from core.broker.binance_broker import BinanceBroker
+            equity_usd = float(BinanceBroker().get_account_info().get("equity", 0) or 0)
+        except Exception as eq_exc:
+            logger.warning(
+                f"live_micro q80: cannot read Binance equity ({eq_exc}); "
+                "blocking entry to be safe"
+            )
+            equity_usd = 0.0
+        enforce_sizing(GRADE, NOTIONAL_USD, equity_usd, risk_usd=RISK_USD)
         ok_pyr, reason_pyr = can_pyramid(live_start_at_iso, open_count)
         if not ok_pyr:
             _journal_event({

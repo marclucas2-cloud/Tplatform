@@ -9,9 +9,17 @@ Evaluates after minimum trade count:
 
 Disabled strategies move to paper-only automatically.
 Marc can reactivate manually after diagnosis.
+
+NOTE 2026-05-10 : actuellement advisory-only — `is_disabled()` n'est jamais
+consulte par le worker pour bloquer effectivement les nouveaux trades. C'est
+purement informatif (alert Telegram + log critique). TODO : wire vers
+pre_order_guard.is_strategy_disabled (kill_switch_live per-strategy disable
+mechanism).
 """
+import json
 import logging
 import math
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +28,13 @@ logger = logging.getLogger(__name__)
 CONTINUE = "CONTINUE"
 DISABLE = "DISABLE"
 ALERT = "ALERT"
+
+# Persistance du set _disabled_strategies (refactor 2026-05-10).
+# Avant : guard re-cree a chaque cycle, set vide a chaque fois -> re-disable
+# en boucle -> spam de logs CRITICAL identiques a chaque tick. Solution :
+# persister le set sur disque, charger au init.
+ROOT = Path(__file__).resolve().parent.parent
+DEFAULT_STATE_PATH = ROOT / "data" / "state" / "safe003_disabled.json"
 
 
 class LivePerformanceGuard:
@@ -33,11 +48,36 @@ class LivePerformanceGuard:
         "slippage_disable_ratio": 5.0,
     }
 
-    def __init__(self, thresholds: dict = None, alert_callback=None):
+    def __init__(
+        self,
+        thresholds: dict = None,
+        alert_callback=None,
+        state_path: Path | None = None,
+    ):
         self.thresholds = {**self.DEFAULT_THRESHOLDS, **(thresholds or {})}
         self.alert_callback = alert_callback
+        self.state_path = Path(state_path) if state_path else DEFAULT_STATE_PATH
         self._disabled_strategies: set = set()
         self._consecutive_losses: dict = {}
+        self._load_state()
+
+    def _load_state(self) -> None:
+        try:
+            if self.state_path.exists():
+                data = json.loads(self.state_path.read_text(encoding="utf-8"))
+                self._disabled_strategies = set(data.get("disabled", []))
+        except Exception as e:
+            logger.warning(f"LivePerformanceGuard: cannot load state ({e})")
+
+    def _save_state(self) -> None:
+        try:
+            self.state_path.parent.mkdir(parents=True, exist_ok=True)
+            self.state_path.write_text(
+                json.dumps({"disabled": sorted(self._disabled_strategies)}, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            logger.warning(f"LivePerformanceGuard: cannot save state ({e})")
 
     def evaluate(self, strategy_name: str, live_trades: list,
                  backtest_slippage_bps: float = 0) -> tuple:
@@ -51,6 +91,11 @@ class LivePerformanceGuard:
         Returns:
             (action, reason) where action is CONTINUE, DISABLE, or ALERT
         """
+        # Already disabled (loaded from persistent state) -> short circuit
+        # Empeche le spam log "AUTO-DISABLED" a chaque cycle (refactor 2026-05-10).
+        if strategy_name in self._disabled_strategies:
+            return CONTINUE, f"already_disabled (persistent)"
+
         n_trades = len(live_trades)
         min_trades = self.thresholds["min_trades_for_eval"]
 
@@ -105,19 +150,23 @@ class LivePerformanceGuard:
         """Manually reactivate a disabled strategy."""
         if strategy_name in self._disabled_strategies:
             self._disabled_strategies.discard(strategy_name)
+            self._save_state()
             logger.info(f"Strategy REACTIVATED: {strategy_name} by {authorized_by}")
 
     def get_disabled(self) -> list:
         return list(self._disabled_strategies)
 
     def _disable(self, strategy_name: str, reason: str):
+        already = strategy_name in self._disabled_strategies
         self._disabled_strategies.add(strategy_name)
-        logger.warning(f"STRATEGY AUTO-DISABLED: {strategy_name} — {reason}")
-        if self.alert_callback:
-            self.alert_callback(
-                f"STRATEGY DISABLED: {strategy_name}\nReason: {reason}",
-                "critical"
-            )
+        self._save_state()
+        if not already:
+            logger.warning(f"STRATEGY AUTO-DISABLED: {strategy_name} — {reason}")
+            if self.alert_callback:
+                self.alert_callback(
+                    f"STRATEGY DISABLED: {strategy_name}\nReason: {reason}",
+                    "critical"
+                )
 
     @staticmethod
     def _calc_sharpe(pnls: list, annualize: bool = False) -> float:

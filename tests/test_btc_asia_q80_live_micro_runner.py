@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import importlib
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -24,6 +25,7 @@ def _reload_runner(tmp_path, monkeypatch):
     monkeypatch.setattr(mod, "JOURNAL_PATH", tmp_path / "journal.jsonl")
     monkeypatch.setattr(mod, "KILL_FLAG_PATH", tmp_path / "_kill_switch.json")
     monkeypatch.setattr(mod, "LAST_CYCLE_PATH", tmp_path / "_last_cycle.json")
+    monkeypatch.setattr(mod, "STALE_ALERT_PATH", tmp_path / "_last_data_stale_alert.json")
     return mod
 
 
@@ -133,6 +135,42 @@ class TestRunEntrySkipSignalPath:
             live_start_at_iso="2026-04-23",
         )
         assert result is False
+
+
+class TestDataFreshnessGuard:
+    def test_fresh_target_date_allowed(self, tmp_path, monkeypatch):
+        mod = _reload_runner(tmp_path, monkeypatch)
+        ok, reason, detail = mod._validate_signal_freshness(
+            {"target_date": "2026-05-09", "data_status": "fresh"},
+            now=datetime(2026, 5, 10, 8, 30, tzinfo=timezone.utc),
+        )
+        assert ok is True
+        assert reason == "fresh"
+        assert detail["age_days"] == 1
+
+    def test_explicit_stale_status_blocks_entry(self, tmp_path, monkeypatch):
+        mod = _reload_runner(tmp_path, monkeypatch)
+        ok, reason, detail = mod._validate_signal_freshness(
+            {
+                "target_date": "2026-05-09",
+                "data_status": "stale",
+                "stale_reason": "target_not_in_daily",
+            },
+            now=datetime(2026, 5, 10, 8, 30, tzinfo=timezone.utc),
+        )
+        assert ok is False
+        assert reason == "data_status=stale"
+        assert detail["stale_reason"] == "target_not_in_daily"
+
+    def test_old_target_date_blocks_entry(self, tmp_path, monkeypatch):
+        mod = _reload_runner(tmp_path, monkeypatch)
+        ok, reason, detail = mod._validate_signal_freshness(
+            {"target_date": "2026-05-07"},
+            now=datetime(2026, 5, 10, 8, 30, tzinfo=timezone.utc),
+        )
+        assert ok is False
+        assert reason == "target_date_age_days=3"
+        assert detail["max_age_days"] == 1
 
     def test_kill_switch_active_skips_entry(self, tmp_path, monkeypatch):
         mod = _reload_runner(tmp_path, monkeypatch)

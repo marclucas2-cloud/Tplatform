@@ -80,13 +80,15 @@ def test_btc_asia_mes_leadlag_q70_v80_archived():
     assert entry is None, "q70_v80 doit etre retire de live_whitelist (archive 2026-04-22)"
 
 
-def test_us_sector_ls_40_5_is_paper_only():
-    """T3-B1 INT-C 2026-04-18 promotion: paper_only log-only.
-    Book alpaca_us paper-only. Ne doit PAS etre live_allowed."""
+def test_us_sector_ls_40_5_is_rejected():
+    """T3-B1 INT-C 2026-04-18 promotion paper -> REJECTED 2026-04-30.
+    Re-WF ETF SPDR + borrow cost 1%/an : 18/18 configs Sharpe negatif.
+    Edge initial venait du bruit smaller caps + biais selection.
+    Cf live_whitelist.yaml entry + config/quant_registry.yaml rejected_at."""
     assert is_strategy_live_allowed("us_sector_ls_40_5", "alpaca_us") is False
     entry = get_strategy_entry("us_sector_ls_40_5", "alpaca_us")
     assert entry is not None
-    assert entry["status"] == "paper_only"
+    assert entry["status"].lower() == "rejected"
     assert entry["runtime_module"] == "strategies_v2.us.us_sector_ls"
 
 

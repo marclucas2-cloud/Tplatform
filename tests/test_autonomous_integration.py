@@ -334,11 +334,11 @@ class TestAccelerated72hRandomEvents:
 class TestMultipleStrategiesDisableDuringAutonomous:
     """Scenario 6: 3 strategies auto-disabled during autonomous mode."""
 
-    def test_remaining_strategies_continue(self):
+    def test_remaining_strategies_continue(self, tmp_path):
         """Disabling some strategies should not cascade to others."""
         from core.live_performance_guard import DISABLE, LivePerformanceGuard
 
-        guard = LivePerformanceGuard()
+        guard = LivePerformanceGuard(state_path=tmp_path / "safe003_disabled.json")
 
         # Trades with negative Sharpe -> will trigger DISABLE
         bad_trades = [{"pnl": -10}] * 12

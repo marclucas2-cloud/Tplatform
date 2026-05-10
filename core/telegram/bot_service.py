@@ -154,16 +154,73 @@ def _load_cash_flows():
 
 
 def _strategy_phases():
-    """Load strategy phases from registry."""
+    """Load strategy phases from canonical quant_registry.yaml.
+
+    Source de verite (plan 9.0 B2) : config/quant_registry.yaml.
+    L'ancien dashboard/api/strategy_registry.py est obsolete (code registry drift).
+
+    Returns dict {strategy_id: {phase, broker, asset_class, grade}} avec phase
+    mappee depuis status canonique :
+      live_core    -> LIVE
+      live_micro   -> LIVE_MICRO
+      live_probation -> PROBATION
+      paper_only   -> PAPER
+      paper_retrospective -> PAPER
+      frozen       -> FROZEN
+      disabled     -> DISABLED
+      REJECTED     -> REJECTED
+    """
     try:
-        import importlib.util
-        reg_path = ROOT / "dashboard" / "api" / "strategy_registry.py"
-        spec = importlib.util.spec_from_file_location("strategy_registry", reg_path)
-        mod = importlib.util.module_from_spec(spec)
-        spec.loader.exec_module(mod)
-        return getattr(mod, "STRATEGY_PHASES", {})
+        import yaml
+        path = ROOT / "config" / "quant_registry.yaml"
+        with open(path, encoding="utf-8") as f:
+            data = yaml.safe_load(f)
     except Exception:
         return {}
+
+    BOOK_TO_BROKER = {
+        "ibkr_futures": "IBKR",
+        "ibkr_eu":      "IBKR",
+        "ibkr_fx":      "IBKR",
+        "binance_crypto": "BINANCE",
+        "alpaca_us":    "ALPACA",
+    }
+    BOOK_TO_ASSET = {
+        "ibkr_futures": "FUTURES",
+        "ibkr_eu":      "EU",
+        "ibkr_fx":      "FX",
+        "binance_crypto": "CRYPTO",
+        "alpaca_us":    "US",
+    }
+    STATUS_TO_PHASE = {
+        "live_core":           "LIVE",
+        "live_probation":      "PROBATION",
+        "live_micro":          "LIVE_MICRO",
+        "paper_only":          "PAPER",
+        "paper_retrospective": "PAPER",
+        "frozen":              "FROZEN",
+        "disabled":            "DISABLED",
+        "keep_research":       "RESEARCH",
+        "REJECTED":            "REJECTED",
+    }
+
+    out = {}
+    for s in data.get("strategies", []) or []:
+        sid = s.get("strategy_id")
+        if not sid:
+            continue
+        book = s.get("book", "")
+        # Skip meta-orchestrators (us_stocks_daily) qui ne sont pas des strats canoniques
+        if s.get("is_canonical_strategy") is False:
+            continue
+        out[sid] = {
+            "phase": STATUS_TO_PHASE.get(s.get("status"), s.get("status", "UNKNOWN")),
+            "broker": BOOK_TO_BROKER.get(book, book.upper()),
+            "asset_class": BOOK_TO_ASSET.get(book, ""),
+            "grade": s.get("grade") or "",
+            "is_live": bool(s.get("is_live")),
+        }
+    return out
 
 
 # ── Commands ─────────────────────────────────────────────────────────────────
@@ -207,18 +264,116 @@ async def cmd_status(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(text, parse_mode="Markdown")
 
 
+def _ibkr_positions_via_insync(port: int | None = None, client_id: int = 98) -> list[dict]:
+    """Read IBKR positions directement via ib_insync (gere stocks/FX/futures).
+
+    Inclut SL/TP broker-side via ib.openTrades() correle par localSymbol.
+    """
+    import asyncio
+    try:
+        from ib_insync import IB
+    except ImportError:
+        return []
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+
+    host = os.environ.get("IBKR_HOST", "127.0.0.1")
+    if port is None:
+        port = int(os.environ.get("IBKR_PORT", "4002"))
+
+    ib = IB()
+    ib.RequestTimeout = 15
+    out = []
+    try:
+        ib.connect(host, port, clientId=client_id, timeout=10)
+
+        # 1. Pre-build SL/TP map keyed by localSymbol from openTrades.
+        # IBKR brackets are STP (stop) + LMT (take-profit) child orders.
+        sl_tp_by_sym: dict[str, dict] = {}
+        try:
+            for trade in ib.openTrades():
+                ctr = trade.contract
+                sym = getattr(ctr, "localSymbol", None) or ctr.symbol
+                order = trade.order
+                otype = getattr(order, "orderType", "")
+                # STP / STP LMT -> stop loss
+                if otype in ("STP", "STP LMT", "TRAIL"):
+                    px = getattr(order, "auxPrice", 0) or getattr(order, "trailStopPrice", 0)
+                    sl_tp_by_sym.setdefault(sym, {})["sl"] = float(px) if px else None
+                # LMT -> take profit (uniquement les enfants brackets, pas les market orders)
+                elif otype == "LMT" and getattr(order, "parentId", 0):
+                    sl_tp_by_sym.setdefault(sym, {})["tp"] = float(order.lmtPrice or 0) or None
+        except Exception:
+            pass
+
+        # 2. Build positions list, joining SL/TP map.
+        for item in ib.portfolio():
+            if item.position == 0:
+                continue
+            c = item.contract
+            sym = getattr(c, "localSymbol", None) or c.symbol
+            tp_sl = sl_tp_by_sym.get(sym, {})
+            out.append({
+                "symbol": sym,
+                "qty": float(item.position),
+                "market_value": float(item.marketValue),
+                "unrealized_pl": float(item.unrealizedPNL),
+                "avg_cost": float(item.averageCost),
+                "sl": tp_sl.get("sl"),
+                "tp": tp_sl.get("tp"),
+            })
+    except Exception:
+        pass
+    finally:
+        try:
+            ib.disconnect()
+        except Exception:
+            pass
+    return out
+
+
 async def cmd_positions(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/positions — Toutes les positions."""
+    """/positions — Toutes les positions (IBKR live + Binance + Alpaca paper)."""
     if not _auth(update):
         return
 
+    ibkr_pos = _ibkr_positions_via_insync()
     bnb_pos = _binance_positions()
     alp_pos = _alpaca_positions()
 
     lines = ["📋 *Positions Ouvertes*\n"]
 
+    paper_mode = os.environ.get("IBKR_PAPER", "false").lower() == "true"
+    ibkr_label = "PAPER" if paper_mode else "LIVE"
+    if ibkr_pos:
+        lines.append(f"*IBKR ({ibkr_label}):*")
+        for p in ibkr_pos[:10]:
+            sym = p["symbol"]
+            qty = p["qty"]
+            pnl = p["unrealized_pl"]
+            mv = p["market_value"]
+            sl = p.get("sl")
+            tp = p.get("tp")
+            sign = "+" if pnl >= 0 else ""
+            e = "🟢" if pnl >= 0 else "🔴"
+            sl_tp_str = ""
+            if sl or tp:
+                parts = []
+                if sl:
+                    parts.append(f"SL=${sl:,.2f}")
+                if tp:
+                    parts.append(f"TP=${tp:,.2f}")
+                sl_tp_str = f" [{' '.join(parts)}]"
+            else:
+                sl_tp_str = " [⚠️ NO BRACKET]"
+            lines.append(f"  {e} `{sym}` qty={qty:+.0f} ${mv:,.0f} P&L={sign}${pnl:,.0f}{sl_tp_str}")
+    else:
+        lines.append(f"*IBKR ({ibkr_label}):* Aucune position (ou Gateway down)")
+
     if bnb_pos:
-        lines.append("*Binance (LIVE):*")
+        lines.append("\n*Binance (LIVE):*")
         for p in bnb_pos[:10]:
             sym = p.get("symbol", "?")
             pnl = float(p.get("unrealized_pl", 0))
@@ -227,7 +382,7 @@ async def cmd_positions(update: Update, context: ContextTypes.DEFAULT_TYPE):
             e = "🟢" if pnl >= 0 else "🔴"
             lines.append(f"  {e} `{sym}` ${mv:,.0f} P&L={sign}${pnl:,.0f}")
     else:
-        lines.append("*Binance:* Aucune position directionnelle")
+        lines.append("\n*Binance:* Aucune position directionnelle")
 
     if alp_pos:
         lines.append("\n*Alpaca (PAPER):*")
@@ -244,20 +399,36 @@ async def cmd_positions(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_strats(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/strats — Strategies par phase lifecycle."""
+    """/strats — Strategies par phase lifecycle (source: quant_registry.yaml)."""
     if not _auth(update):
         return
 
     phases = _strategy_phases()
+    if not phases:
+        await update.message.reply_text(
+            "Erreur: impossible de lire config/quant_registry.yaml. "
+            "Verifier le fichier sur le serveur."
+        )
+        return
+
     grouped = {}
     for sid, info in phases.items():
-        p = info.get("phase", "CODE")
+        p = info.get("phase", "UNKNOWN")
         grouped.setdefault(p, []).append((sid, info))
 
-    icons = {"LIVE": "🟢", "PROBATION": "🟡", "PAPER": "🔵", "WF_PENDING": "⏳", "CODE": "⬜", "REJECTED": "❌"}
-    order = ["LIVE", "PROBATION", "PAPER", "WF_PENDING", "CODE", "REJECTED"]
+    icons = {
+        "LIVE":       "🟢",
+        "LIVE_MICRO": "🟡",
+        "PROBATION":  "🟡",
+        "PAPER":      "🔵",
+        "FROZEN":     "🧊",
+        "DISABLED":   "⚪",
+        "RESEARCH":   "🔬",
+        "REJECTED":   "❌",
+    }
+    order = ["LIVE", "LIVE_MICRO", "PROBATION", "PAPER", "FROZEN", "DISABLED", "RESEARCH", "REJECTED"]
 
-    lines = [f"🎯 *Strategies ({len(phases)} total)*\n"]
+    lines = [f"🎯 *Strategies ({len(phases)} canoniques)*\n"]
     for phase in order:
         items = grouped.get(phase, [])
         if not items:
@@ -267,8 +438,9 @@ async def cmd_strats(update: Update, context: ContextTypes.DEFAULT_TYPE):
         for sid, info in items:
             ac = info.get("asset_class", "")
             broker = info.get("broker", "")
-            name = sid.replace("_", " ").title()
-            lines.append(f"  `{name}` [{ac}] {broker}")
+            grade = info.get("grade", "")
+            grade_s = f" [{grade}]" if grade else ""
+            lines.append(f"  `{sid}` {ac}/{broker}{grade_s}")
 
     await update.message.reply_text("\n".join(lines), parse_mode="Markdown")
 
@@ -343,22 +515,27 @@ async def cmd_fx(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 
 async def cmd_risk(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/risk — Kill switch, drawdown, limites."""
+    """/risk — Kill switch, drawdown numerique, limites + reason si KS actif."""
     if not _auth(update):
         return
 
     worker_ok = _worker_running()
     ibkr_ok = _ibkr_connected()
 
-    # Kill switch states
-    ks_ibkr = "OFF"
-    ks_crypto = "OFF"
+    # Kill switch states (avec reason + age)
+    ks_ibkr_status = "OFF"
+    ks_ibkr_detail = ""
+    ks_crypto_status = "OFF"
+    ks_crypto_detail = ""
     try:
         ks_path = ROOT / "data" / "kill_switch_state.json"
         if ks_path.exists():
             ks = json.loads(ks_path.read_text())
             if ks.get("active"):
-                ks_ibkr = "ACTIVE ⚠️"
+                ks_ibkr_status = "ACTIVE ⚠️"
+                reason = ks.get("activation_reason", "?")
+                since = ks.get("activated_at", "?")
+                ks_ibkr_detail = f" since {since[:16]} ({reason})"
     except Exception:
         pass
     try:
@@ -366,25 +543,39 @@ async def cmd_risk(update: Update, context: ContextTypes.DEFAULT_TYPE):
         if ks_path.exists():
             ks = json.loads(ks_path.read_text())
             if ks.get("active"):
-                ks_crypto = "ACTIVE ⚠️"
+                ks_crypto_status = "ACTIVE ⚠️"
+                ks_crypto_detail = f" ({ks.get('reason', '?')})"
     except Exception:
         pass
+
+    # DD numerique depuis unified_portfolio.json
+    dd_lines = []
+    try:
+        snap_path = ROOT / "data" / "risk" / "unified_portfolio.json"
+        if snap_path.exists():
+            snap = json.loads(snap_path.read_text())
+            dd_lines.append(f"  DD daily: `{snap.get('dd_daily_pct', 0):+.2f}%`")
+            dd_lines.append(f"  DD weekly: `{snap.get('dd_weekly_pct', 0):+.2f}%`")
+            dd_lines.append(f"  DD peak: `{snap.get('dd_from_peak_pct', 0):+.2f}%`")
+            alert = snap.get("alert_level", "?")
+            alert_icon = "🟢" if alert in ("OK", "NOMINAL") else ("🟡" if alert == "DEFENSIVE" else "🔴")
+            dd_lines.append(f"  Alert: `{alert}` {alert_icon}")
+    except Exception:
+        dd_lines.append("  DD: (snapshot indisponible)")
 
     text = (
         f"🛡 *Risk Dashboard*\n"
         f"{'─' * 28}\n\n"
         f"*Kill Switch:*\n"
-        f"  IBKR: `{ks_ibkr}` {'🟢' if 'OFF' in ks_ibkr else '🔴'}\n"
-        f"  Crypto: `{ks_crypto}` {'🟢' if 'OFF' in ks_crypto else '🔴'}\n\n"
-        f"*Infra:*\n"
+        f"  IBKR: `{ks_ibkr_status}`{ks_ibkr_detail} {'🟢' if 'OFF' in ks_ibkr_status else '🔴'}\n"
+        f"  Crypto: `{ks_crypto_status}`{ks_crypto_detail} {'🟢' if 'OFF' in ks_crypto_status else '🔴'}\n\n"
+        f"*Drawdown (NAV cross-broker):*\n"
+        + "\n".join(dd_lines)
+        + f"\n\n*Infra:*\n"
         f"  Worker: `{'ON' if worker_ok else 'OFF'}` {'🟢' if worker_ok else '🔴'}\n"
-        f"  IBKR GW: `{'ON' if ibkr_ok else 'OFF'}` {'🟢' if ibkr_ok else '🔴'}\n"
-        f"  Dashboard: `ON` 🟢\n\n"
-        f"*Limites:*\n"
-        f"  Max DD daily: `-5%`\n"
-        f"  Max DD hourly: `-3%`\n"
-        f"  Kelly mode: `NOMINAL (1/8)`\n"
-        f"  Crypto regime: `BEAR`"
+        f"  IBKR GW: `{'ON' if ibkr_ok else 'OFF'}` {'🟢' if ibkr_ok else '🔴'}\n\n"
+        f"*Seuils kill switch:*\n"
+        f"  daily -5% / hourly -3% / 5d -8% / monthly -12%"
     )
     await update.message.reply_text(text, parse_mode="Markdown")
 
@@ -484,12 +675,24 @@ async def cmd_health(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     # Check services via systemctl
     services = {}
-    for svc in ["trading-worker", "ibgateway", "trading-dashboard", "trading-watchdog", "trading-telegram"]:
+    for svc in ["trading-worker", "ibgateway", "ibgateway-paper", "trading-dashboard", "trading-watchdog", "trading-telegram"]:
         try:
             r = subprocess.run(["systemctl", "is-active", svc], capture_output=True, text=True, timeout=3)
             services[svc] = r.stdout.strip() == "active"
         except Exception:
             services[svc] = False
+
+    # Verifier directement les ports IB (4002 live, 4003 paper) car le service
+    # peut etre 'active' mais l'app Java pas encore listening (2FA pending matin).
+    import socket as _sk
+    def _port_open(port):
+        try:
+            with _sk.create_connection(("127.0.0.1", port), timeout=2):
+                return True
+        except Exception:
+            return False
+    ibgw_live_port = _port_open(4002)
+    ibgw_paper_port = _port_open(4003)
 
     text = f"System Health — {now}\n\n"
 
@@ -529,20 +732,126 @@ async def cmd_health(update: Update, context: ContextTypes.DEFAULT_TYPE):
         pass
 
     text += f"\nServices:\n"
+    _service_labels = {
+        "trading-worker": "Worker",
+        "ibgateway": "IB Gateway LIVE",
+        "ibgateway-paper": "IB Gateway PAPER",
+        "trading-dashboard": "Dashboard",
+        "trading-watchdog": "Watchdog",
+        "trading-telegram": "Telegram bot",
+    }
     for svc, ok in services.items():
-        name = svc.replace("trading-", "").replace("ibgateway", "IB Gateway").title()
+        name = _service_labels.get(svc, svc)
         text += f"  [{'ON' if ok else 'OFF'}] {name}\n"
 
     text += (
+        f"\nIBKR Gateway ports:\n"
+        f"  4002 LIVE : {'LISTEN' if ibgw_live_port else 'closed (2FA pending?)'}\n"
+        f"  4003 PAPER: {'LISTEN' if ibgw_paper_port else 'closed'}\n"
         f"\nHealth checks:\n"
         f"  Worker HTTP: {'OK' if worker_ok else 'FAIL'}\n"
-        f"  IBKR TCP: {'OK' if ibkr_ok else 'FAIL'}\n"
+        f"  IBKR (env port): {'OK' if ibkr_ok else 'FAIL'}\n"
     )
     await update.message.reply_text(f"```\n{text}```", parse_mode="Markdown")
 
 
+def _ibkr_close_all_via_insync(port: int | None = None, client_id: int = 99) -> dict:
+    """Close ALL IBKR positions via ib_insync direct (works for stocks/FX/futures).
+
+    Bypasses BaseBroker adapters which only know Stock/Forex contracts.
+    Iterates ib.positions() and sends MarketOrder opposite side for each
+    contract — works for Stock, Forex, Future, etc.
+
+    Returns: {"closed": int, "cancelled": int, "errors": list[str], "status": str}
+    """
+    import asyncio
+    result = {"closed": 0, "cancelled": 0, "errors": [], "status": "OK"}
+
+    try:
+        from ib_insync import IB, MarketOrder
+    except ImportError:
+        result["status"] = "ERROR"
+        result["errors"].append("ib_insync not installed")
+        return result
+
+    try:
+        asyncio.get_event_loop()
+    except RuntimeError:
+        asyncio.set_event_loop(asyncio.new_event_loop())
+
+    host = os.environ.get("IBKR_HOST", "127.0.0.1")
+    if port is None:
+        port = int(os.environ.get("IBKR_PORT", "4002"))
+
+    ib = IB()
+    ib.RequestTimeout = 30
+    try:
+        ib.connect(host, port, clientId=client_id, timeout=20)
+    except Exception as e:
+        result["status"] = "ERROR"
+        result["errors"].append(f"connect {host}:{port} cid={client_id}: {e}")
+        return result
+
+    try:
+        # 1. Cancel ALL open orders FIRST (avoid SL/TP triggering pendant close)
+        try:
+            open_orders = list(ib.openOrders())
+        except Exception as e:
+            open_orders = []
+            result["errors"].append(f"openOrders query: {e}")
+        for order in open_orders:
+            try:
+                ib.cancelOrder(order)
+                result["cancelled"] += 1
+            except Exception as e:
+                result["errors"].append(f"cancel order {getattr(order, 'orderId', '?')}: {e}")
+
+        # 2. Close ALL positions via MarketOrder oppose
+        try:
+            positions = list(ib.positions())
+        except Exception as e:
+            positions = []
+            result["errors"].append(f"positions query: {e}")
+        for pos in positions:
+            try:
+                qty = abs(float(pos.position))
+                if qty == 0:
+                    continue
+                side = "SELL" if pos.position > 0 else "BUY"
+                contract = pos.contract
+                order = MarketOrder(side, qty)
+                # outsideRth=True pour futures night session, harmless sur stocks RTH
+                order.outsideRth = True
+                ib.placeOrder(contract, order)
+                result["closed"] += 1
+            except Exception as e:
+                sym = getattr(getattr(pos, "contract", None), "localSymbol", "?")
+                result["errors"].append(f"close {sym}: {e}")
+
+        # 3. Attendre brievement les fills (sans bloquer trop longtemps)
+        ib.sleep(3)
+
+    finally:
+        try:
+            ib.disconnect()
+        except Exception:
+            pass
+
+    if result["errors"]:
+        result["status"] = "PARTIAL" if (result["closed"] > 0 or result["cancelled"] > 0) else "FAILED"
+    return result
+
+
 async def cmd_kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """/kill CONFIRM — Kill switch: ferme TOUTES positions + persiste l'etat."""
+    """/kill CONFIRM — Kill switch: ferme TOUTES positions + persiste l'etat.
+
+    Ordre:
+      1. Ferme positions IBKR (ib_insync direct, gere stocks/FX/futures).
+      2. Ferme positions Binance (BinanceBroker.close_position).
+      3. Active les kill switches (apres tentatives, pour bloquer le re-entry
+         meme si certaines fermetures ont echoue).
+      4. Rapport detaille avec status FAILED/PARTIAL/OK.
+    """
     if not _auth(update):
         return
 
@@ -551,56 +860,91 @@ async def cmd_kill(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text(
             "⚠️ *KILL SWITCH*\n\n"
             "Ceci va:\n"
-            "1. Fermer TOUTES les positions (3 brokers)\n"
-            "2. Annuler TOUS les ordres\n"
-            "3. Activer le kill switch (bloque les trades)\n\n"
+            "1. Fermer TOUTES les positions IBKR + Binance\n"
+            "2. Annuler TOUS les ordres ouverts (SL/TP brackets)\n"
+            "3. Activer les kill switches (bloque nouveaux trades)\n\n"
             "Envoyez `/kill CONFIRM` pour executer.",
             parse_mode="Markdown"
         )
         return
 
-    results = []
+    lines = []
+    overall_ok = True
 
-    # 1. Activate kill switches (persist state BEFORE closing)
+    # 1. IBKR via ib_insync direct (port 4002 live par defaut, override IBKR_PORT)
+    try:
+        ibkr = _ibkr_close_all_via_insync()
+        lines.append(
+            f"IBKR [{ibkr['status']}]: {ibkr['closed']} pos closed, "
+            f"{ibkr['cancelled']} orders cancelled"
+        )
+        if ibkr["errors"]:
+            lines.append(f"  IBKR errors: {len(ibkr['errors'])} (premieres: "
+                        + "; ".join(ibkr['errors'][:3]) + ")")
+            overall_ok = False
+    except Exception as e:
+        lines.append(f"IBKR [EXCEPTION]: {e}")
+        overall_ok = False
+
+    # 2. Binance positions
+    bnb_closed = 0
+    bnb_errors = []
+    try:
+        from core.broker.binance_broker import BinanceBroker
+        bnb = BinanceBroker()
+        try:
+            cancelled = bnb.cancel_all_orders(_authorized_by="telegram_kill")
+        except Exception as e:
+            cancelled = 0
+            bnb_errors.append(f"cancel_all: {e}")
+        try:
+            positions = bnb.get_positions()
+        except Exception as e:
+            positions = []
+            bnb_errors.append(f"get_positions: {e}")
+        for pos in positions:
+            sym = pos.get("symbol", "?")
+            try:
+                bnb.close_position(sym, _authorized_by="telegram_kill")
+                bnb_closed += 1
+            except Exception as e:
+                bnb_errors.append(f"close {sym}: {e}")
+        status = "OK" if not bnb_errors else ("PARTIAL" if bnb_closed > 0 else "FAILED")
+        lines.append(f"Binance [{status}]: {bnb_closed} pos closed, {cancelled} orders cancelled")
+        if bnb_errors:
+            lines.append(f"  Binance errors: {len(bnb_errors)} (premieres: "
+                        + "; ".join(bnb_errors[:3]) + ")")
+            overall_ok = False
+    except Exception as e:
+        lines.append(f"Binance [EXCEPTION]: {e}")
+        overall_ok = False
+
+    # 3. Activer les kill switches APRES tentatives (block re-entry)
     try:
         from core.kill_switch_live import LiveKillSwitch
         ks = LiveKillSwitch()
-        ks.activate(reason="operator_telegram_kill", trigger_type="MANUAL")
-        results.append("Kill switch IBKR: ACTIVE")
+        if not ks.is_active:
+            ks.activate(reason="operator_telegram_kill", trigger_type="MANUAL")
+        lines.append("Kill switch IBKR: ACTIVE")
     except Exception as e:
-        results.append(f"Kill switch IBKR: {e}")
+        lines.append(f"Kill switch IBKR: {e}")
+        overall_ok = False
     try:
         from core.crypto.risk_manager_crypto import CryptoKillSwitch
         cks = CryptoKillSwitch()
         cks._activate("operator_telegram_kill")
-        results.append("Kill switch crypto: ACTIVE")
+        lines.append("Kill switch crypto: ACTIVE")
     except Exception as e:
-        results.append(f"Kill switch crypto: {e}")
+        lines.append(f"Kill switch crypto: {e}")
+        overall_ok = False
 
-    # 2. Close all positions + cancel orders via EmergencyCloseAll
-    try:
-        from core.risk.emergency_close_all import EmergencyCloseAll
-        brokers = {}
-        try:
-            from core.broker.binance_broker import BinanceBroker
-            brokers["BINANCE"] = BinanceBroker()
-        except Exception:
-            pass
-        try:
-            from core.broker.ibkr_adapter import IBKRBroker
-            brokers["IBKR"] = IBKRBroker(client_id=50)
-        except Exception:
-            pass
-        closer = EmergencyCloseAll(brokers=brokers)
-        report = closer.execute(force=True)
-        results.append(
-            f"Close: {report.get('total_positions_closed', 0)} pos, "
-            f"{report.get('total_orders_cancelled', 0)} ordres"
-        )
-    except Exception as e:
-        results.append(f"Close: {e}")
-
-    text = "🔴 *KILL SWITCH ACTIVE*\n\n" + "\n".join(f"  {r}" for r in results)
+    # 4. Rapport
+    header = "🔴 *KILL SWITCH ACTIVE*" if overall_ok else "🟠 *KILL SWITCH PARTIEL*"
+    text = header + "\n\n" + "\n".join(f"  {r}" for r in lines)
+    if not overall_ok:
+        text += ("\n\n⚠️ *VERIFIER MANUELLEMENT* dans TWS / Binance que toutes "
+                 "les positions sont fermees. Le kill switch bloque les nouveaux "
+                 "ordres mais des fermetures ont peut-etre echoue.")
     await update.message.reply_text(text, parse_mode="Markdown")
 
 
@@ -772,57 +1116,93 @@ async def cmd_emergency(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await update.message.reply_text(f"Error: {e}")
         return
 
-    # Execute
+    # Execute — meme logique que /kill mais avec confirmation code TOTP-like
     code = args.strip().upper()
     try:
-        from core.risk.emergency_close_all import EmergencyCloseAll, _generate_confirmation_code
+        from core.risk.emergency_close_all import _generate_confirmation_code
         expected = _generate_confirmation_code()
         if code != expected:
             await update.message.reply_text("Invalid confirmation code.")
             return
-
-        # Build broker dict from available connections
-        brokers = {}
-        try:
-            if os.environ.get("BINANCE_API_KEY"):
-                from core.broker.binance_broker import BinanceBroker
-                brokers["BINANCE"] = BinanceBroker()
-        except Exception:
-            pass
-        try:
-            from core.broker.ibkr_adapter import IBKRBroker
-            brokers["IBKR"] = IBKRBroker(client_id=50)
-        except Exception:
-            pass
-
-        # Kill switch callback — activate BOTH kill switches to prevent re-entry
-        def _emergency_kill(level):
-            try:
-                from core.kill_switch_live import LiveKillSwitch
-                LiveKillSwitch().activate(reason=f"emergency_{level}", trigger_type="EMERGENCY")
-            except Exception:
-                pass
-            try:
-                from core.crypto.risk_manager_crypto import CryptoKillSwitch
-                CryptoKillSwitch()._activate(f"emergency_{level}")
-            except Exception:
-                pass
-
-        closer = EmergencyCloseAll(
-            brokers=brokers,
-            kill_switch_callback=_emergency_kill,
-        )
-        result = closer.execute(confirmation_code=code)
-
-        text = (
-            f"<b>EMERGENCY CLOSE {'DONE' if result['status'] == 'EXECUTED' else result['status']}</b>\n"
-            f"Positions closed: {result.get('total_positions_closed', 0)}\n"
-            f"Orders cancelled: {result.get('total_orders_cancelled', 0)}\n"
-            f"Time: {result.get('elapsed_seconds', 0):.1f}s"
-        )
-        await update.message.reply_text(text, parse_mode="HTML")
     except Exception as e:
-        await update.message.reply_text(f"EMERGENCY ERROR: {e}")
+        await update.message.reply_text(f"EMERGENCY ERROR (code check): {e}")
+        return
+
+    lines = []
+    overall_ok = True
+
+    # 1. IBKR via ib_insync direct
+    try:
+        ibkr = _ibkr_close_all_via_insync()
+        lines.append(
+            f"IBKR [{ibkr['status']}]: {ibkr['closed']} pos closed, "
+            f"{ibkr['cancelled']} orders cancelled"
+        )
+        if ibkr["errors"]:
+            lines.append(f"  IBKR errors: {len(ibkr['errors'])} (premieres: "
+                        + "; ".join(ibkr['errors'][:3]) + ")")
+            overall_ok = False
+    except Exception as e:
+        lines.append(f"IBKR [EXCEPTION]: {e}")
+        overall_ok = False
+
+    # 2. Binance
+    bnb_closed = 0
+    bnb_errors = []
+    try:
+        if os.environ.get("BINANCE_API_KEY"):
+            from core.broker.binance_broker import BinanceBroker
+            bnb = BinanceBroker()
+            try:
+                cancelled = bnb.cancel_all_orders(_authorized_by="telegram_emergency")
+            except Exception as e:
+                cancelled = 0
+                bnb_errors.append(f"cancel_all: {e}")
+            try:
+                positions = bnb.get_positions()
+            except Exception as e:
+                positions = []
+                bnb_errors.append(f"get_positions: {e}")
+            for pos in positions:
+                sym = pos.get("symbol", "?")
+                try:
+                    bnb.close_position(sym, _authorized_by="telegram_emergency")
+                    bnb_closed += 1
+                except Exception as e:
+                    bnb_errors.append(f"close {sym}: {e}")
+            status = "OK" if not bnb_errors else ("PARTIAL" if bnb_closed > 0 else "FAILED")
+            lines.append(f"Binance [{status}]: {bnb_closed} pos closed, {cancelled} orders cancelled")
+            if bnb_errors:
+                lines.append(f"  Binance errors: {len(bnb_errors)}")
+                overall_ok = False
+        else:
+            lines.append("Binance: skip (no API key)")
+    except Exception as e:
+        lines.append(f"Binance [EXCEPTION]: {e}")
+        overall_ok = False
+
+    # 3. Active kill switches (block re-entry)
+    try:
+        from core.kill_switch_live import LiveKillSwitch
+        LiveKillSwitch().activate(reason="emergency_LEVEL_3", trigger_type="EMERGENCY")
+        lines.append("Kill switch IBKR: ACTIVE")
+    except Exception as e:
+        lines.append(f"Kill switch IBKR: {e}")
+        overall_ok = False
+    try:
+        from core.crypto.risk_manager_crypto import CryptoKillSwitch
+        CryptoKillSwitch()._activate("emergency_LEVEL_3")
+        lines.append("Kill switch crypto: ACTIVE")
+    except Exception as e:
+        lines.append(f"Kill switch crypto: {e}")
+        overall_ok = False
+
+    header = "🚨 <b>EMERGENCY CLOSE EXECUTED</b>" if overall_ok else "🟠 <b>EMERGENCY CLOSE PARTIEL</b>"
+    text = header + "\n\n" + "\n".join(lines)
+    if not overall_ok:
+        text += ("\n\n⚠️ VERIFIER MANUELLEMENT TWS / Binance — fermetures partielles. "
+                 "Kill switches bloquent les nouveaux ordres.")
+    await update.message.reply_text(text, parse_mode="HTML")
 
 
 # ── Main ─────────────────────────────────────────────────────────────────────
