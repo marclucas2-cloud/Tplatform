@@ -198,10 +198,10 @@ export default function Overview() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="font-mono text-xs text-[var(--color-text-secondary)]">
-                    {s.allocation_pct}%
+                    {s.allocation_pct !== null && s.allocation_pct !== undefined ? `${Number(s.allocation_pct).toFixed(1)}%` : '—'}
                   </span>
-                  <span className={`font-mono text-xs ${s.pnl_5d >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}`}>
-                    ${s.pnl_5d >= 0 ? '+' : ''}{s.pnl_5d.toFixed(0)}
+                  <span className={`font-mono text-xs ${(s.pnl_5d ?? 0) >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}`}>
+                    {s.pnl_5d !== null && s.pnl_5d !== undefined ? `$${s.pnl_5d >= 0 ? '+' : ''}${Number(s.pnl_5d).toFixed(0)}` : '—'}
                   </span>
                 </div>
               </div>

@@ -255,8 +255,10 @@ export default function Analytics() {
                   />
                 </div>
                 <div className="flex justify-between text-xs text-[var(--color-text-secondary)] mt-1">
-                  <span>P&L 5j: ${s.pnl_5d >= 0 ? '+' : ''}{s.pnl_5d.toFixed(0)}</span>
-                  <span>Seuil: ${s.kill_threshold.toFixed(0)}</span>
+                  <span>
+                    P&L 5j: {s.pnl_5d !== null && s.pnl_5d !== undefined ? `$${s.pnl_5d >= 0 ? '+' : ''}${Number(s.pnl_5d).toFixed(0)}` : '—'}
+                  </span>
+                  <span>Seuil: ${Number(s.kill_threshold || 0).toFixed(0)}</span>
                 </div>
               </div>
             )

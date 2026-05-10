@@ -128,13 +128,13 @@ export default function Strategies() {
                       <td className="py-2.5 text-xs text-[var(--color-text-secondary)]">{s.asset_class}</td>
                       <td className="py-2.5 text-xs font-mono text-[var(--color-text-secondary)]">{s.broker}</td>
                       <td className="py-2.5 text-right font-mono font-semibold">
-                        {s.sharpe ? s.sharpe.toFixed(2) : '—'}
+                        {s.sharpe !== null && s.sharpe !== undefined ? Number(s.sharpe).toFixed(2) : '—'}
                       </td>
                       <td className="py-2.5 text-right font-mono">
-                        {s.allocation_pct > 0 ? `${s.allocation_pct}%` : '—'}
+                        {s.allocation_pct !== null && s.allocation_pct !== undefined ? `${Number(s.allocation_pct).toFixed(1)}%` : '—'}
                       </td>
-                      <td className={`py-2.5 text-right font-mono ${s.pnl_5d >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}`}>
-                        {s.pnl_5d !== 0 ? `$${s.pnl_5d >= 0 ? '+' : ''}${s.pnl_5d.toFixed(0)}` : '—'}
+                      <td className={`py-2.5 text-right font-mono ${(s.pnl_5d ?? 0) >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}`}>
+                        {s.pnl_5d !== null && s.pnl_5d !== undefined ? `$${s.pnl_5d >= 0 ? '+' : ''}${Number(s.pnl_5d).toFixed(0)}` : '—'}
                       </td>
                       <td className="py-2.5 px-4 text-right">
                         {killStatus !== 'N/A' ? (

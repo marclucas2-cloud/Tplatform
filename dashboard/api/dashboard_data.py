@@ -63,6 +63,21 @@ GRADE_NOTIONAL_PCT = {
     "B": 0.8,
 }
 
+DISPLAY_STRATEGY_ID = {
+    "Cross-Asset Mom": "cross_asset_momentum",
+    "Cross Asset Mom": "cross_asset_momentum",
+    "Gold-Oil Rotation": "gold_oil_rotation",
+    "Gold Oil Rotation": "gold_oil_rotation",
+    "Gold Trend MGC": "gold_trend_mgc",
+    "btc_asia_mes_leadlag_q80_long_only": "btc_asia_mes_leadlag_q80_v80_long_only",
+    "btc_asia_mes_leadlag_q80_live_micro": "btc_asia_mes_leadlag_q80_v80_long_only",
+    "btc_asia_q80_live_micro": "btc_asia_mes_leadlag_q80_v80_long_only",
+    "alt_rel_strength": "alt_rel_strength_14_60_7",
+    "us_sector_ls": "us_sector_ls_40_5",
+    "eu_relmom": "eu_relmom_40_3",
+    "mib_estx50": "mib_estx50_spread",
+}
+
 
 def safe_float(value: Any, default: float = 0.0) -> float:
     try:
@@ -103,6 +118,31 @@ def quant_strategy_entries() -> list[dict[str, Any]]:
     if isinstance(strategies, list):
         return [s for s in strategies if isinstance(s, dict) and s.get("strategy_id")]
     return []
+
+
+def canonical_strategy_id(value: Any) -> str | None:
+    if value is None:
+        return None
+    raw = str(value).strip()
+    if not raw:
+        return None
+    if raw in DISPLAY_STRATEGY_ID:
+        return DISPLAY_STRATEGY_ID[raw]
+    canonical_ids = {str(s.get("strategy_id")) for s in quant_strategy_entries()}
+    if raw in canonical_ids:
+        return raw
+    lowered = raw.lower().strip()
+    if lowered in DISPLAY_STRATEGY_ID:
+        return DISPLAY_STRATEGY_ID[lowered]
+    normalized = lowered.replace("-", "_").replace(" ", "_")
+    normalized = "".join(ch for ch in normalized if ch.isalnum() or ch == "_")
+    if normalized in DISPLAY_STRATEGY_ID:
+        return DISPLAY_STRATEGY_ID[normalized]
+    if normalized in canonical_ids:
+        return normalized
+    if normalized.endswith("_live_micro") and normalized[:-11] in DISPLAY_STRATEGY_ID:
+        return DISPLAY_STRATEGY_ID[normalized[:-11]]
+    return normalized or None
 
 
 def _title_strategy(strategy_id: str) -> str:
@@ -545,6 +585,8 @@ def get_dashboard_positions(include_paper: bool = True) -> dict[str, Any]:
     positions.extend(get_ibkr_positions_via_insync(mode="live"))
     positions.extend(get_binance_positions())
     if include_paper:
+        paper_port = int(os.environ.get("IBKR_PAPER_PORT", "4003"))
+        positions.extend(get_ibkr_positions_via_insync(port=paper_port, mode="paper"))
         positions.extend(get_alpaca_positions())
 
     total_long = sum(safe_float(p.get("market_value")) for p in positions if p.get("direction") == "LONG")
@@ -630,26 +672,187 @@ def get_dashboard_portfolio() -> dict[str, Any]:
     }
 
 
-def _strategy_pnl_5d() -> dict[str, float]:
+def _pnl_timestamp(item: dict[str, Any]) -> datetime | None:
+    for key in (
+        "exit_time",
+        "timestamp_closed",
+        "ts_utc",
+        "logged_at_utc",
+        "timestamp",
+        "closed_at",
+        "as_of_date",
+        "target_date",
+        "date",
+        "entry_time",
+        "timestamp_filled",
+        "timestamp_signal",
+    ):
+        dt = _parse_dt(item.get(key))
+        if dt is not None:
+            return dt
+    return None
+
+
+def _first_pnl_value(item: dict[str, Any]) -> float | None:
+    for key in (
+        "net_pnl_usd",
+        "realized_pnl_usd",
+        "pnl_usd",
+        "pnl_net",
+        "pnl_gross",
+        "realized_pnl",
+        "day_pnl_usd",
+        "pnl",
+    ):
+        if key in item and item.get(key) is not None:
+            return safe_float(item.get(key), 0.0)
+    return None
+
+
+def _add_strategy_pnl(
+    totals: dict[str, dict[str, Any]],
+    strategy: Any,
+    pnl: float,
+    source: str,
+) -> None:
+    sid = canonical_strategy_id(strategy)
+    if not sid:
+        return
+    row = totals.setdefault(sid, {"pnl": 0.0, "sources": {}})
+    row["pnl"] += float(pnl)
+    row["sources"][source] = int(row["sources"].get(source, 0)) + 1
+
+
+def _load_sqlite_strategy_pnl(cutoff: datetime, totals: dict[str, dict[str, Any]]) -> None:
+    for db_name in ("live_journal.db", "paper_journal.db"):
+        db_path = DATA_DIR / db_name
+        if not db_path.exists():
+            continue
+        try:
+            import sqlite3
+
+            conn = sqlite3.connect(str(db_path))
+            conn.row_factory = sqlite3.Row
+            try:
+                cols = {row[1] for row in conn.execute("PRAGMA table_info(trades)").fetchall()}
+                if "strategy" not in cols:
+                    continue
+                select_cols = ", ".join(sorted(cols))
+                for row in conn.execute(f"SELECT {select_cols} FROM trades").fetchall():
+                    item = dict(row)
+                    status = str(item.get("status", "")).lower()
+                    if status and status not in {"closed", "filled", "exit"}:
+                        continue
+                    dt = _pnl_timestamp(item)
+                    if dt is not None and dt < cutoff:
+                        continue
+                    pnl = _first_pnl_value(item)
+                    if pnl is None:
+                        continue
+                    _add_strategy_pnl(totals, item.get("strategy"), pnl, db_name)
+            finally:
+                conn.close()
+        except Exception as exc:
+            logger.debug("Failed to aggregate strategy PnL from %s: %s", db_path, exc)
+
+
+def _load_jsonl_strategy_pnl(cutoff: datetime, totals: dict[str, dict[str, Any]]) -> None:
+    for path in STATE_DIR.glob("**/*journal*.jsonl"):
+        try:
+            records = []
+            for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
+                if not line.strip():
+                    continue
+                try:
+                    item = json.loads(line)
+                except Exception:
+                    continue
+                if isinstance(item, dict):
+                    records.append(item)
+            if not records:
+                continue
+
+            default_sid = canonical_strategy_id(path.parent.name)
+            cumulative_key = next(
+                (
+                    key
+                    for key in ("cumulative_pnl_usd", "cum_pnl_usd", "cumulative_pnl")
+                    if any(key in r for r in records)
+                ),
+                None,
+            )
+            if cumulative_key:
+                by_sid: dict[str, list[dict[str, Any]]] = {}
+                for item in records:
+                    sid = canonical_strategy_id(item.get("strategy_id") or item.get("strategy") or default_sid)
+                    if sid:
+                        by_sid.setdefault(sid, []).append(item)
+                for sid, items in by_sid.items():
+                    before = None
+                    last = None
+                    for item in items:
+                        dt = _pnl_timestamp(item)
+                        if dt is None:
+                            continue
+                        value = safe_float(item.get(cumulative_key), float("nan"))
+                        if value != value:
+                            continue
+                        if dt < cutoff:
+                            before = value
+                        else:
+                            if before is None:
+                                before = 0.0
+                            last = value
+                    if last is not None:
+                        _add_strategy_pnl(totals, sid, last - (before or 0.0), str(path.relative_to(ROOT)))
+                continue
+
+            for item in records:
+                dt = _pnl_timestamp(item)
+                if dt is not None and dt < cutoff:
+                    continue
+                pnl = _first_pnl_value(item)
+                if pnl is None:
+                    continue
+                sid = item.get("strategy_id") or item.get("strategy") or default_sid
+                _add_strategy_pnl(totals, sid, pnl, str(path.relative_to(ROOT)))
+        except Exception as exc:
+            logger.debug("Failed to aggregate strategy PnL from %s: %s", path, exc)
+
+
+def _load_open_strategy_pnl(totals: dict[str, dict[str, Any]]) -> None:
+    position_sources = [
+        lambda: get_ibkr_positions_via_insync(mode="live"),
+        lambda: get_ibkr_positions_via_insync(port=int(os.environ.get("IBKR_PAPER_PORT", "4003")), mode="paper"),
+        get_binance_positions,
+        get_alpaca_positions,
+    ]
+    for load_positions in position_sources:
+        try:
+            for pos in load_positions():
+                pnl = safe_float(pos.get("pnl"), 0.0)
+                strategy = pos.get("strategy") or pos.get("strategy_id")
+                if strategy and (pnl != 0.0 or pos.get("source")):
+                    _add_strategy_pnl(totals, strategy, pnl, "open_positions")
+        except Exception as exc:
+            logger.debug("Failed to aggregate open-position strategy PnL: %s", exc)
+
+
+def _strategy_pnl_5d() -> dict[str, dict[str, Any]]:
     cutoff = datetime.now(UTC) - timedelta(days=5)
-    totals: dict[str, float] = {}
+    totals: dict[str, dict[str, Any]] = {}
     state = load_json(STATE_DIR / "paper_portfolio_state.json", {})
     for sid, entries in state.get("strategy_pnl_log", {}).items() if isinstance(state, dict) else []:
         if isinstance(entries, list):
-            totals[sid] = totals.get(sid, 0.0) + sum(safe_float(e.get("pnl")) for e in entries[-5:] if isinstance(e, dict))
+            pnl = sum(safe_float(e.get("pnl")) for e in entries[-5:] if isinstance(e, dict))
+            _add_strategy_pnl(totals, sid, pnl, "paper_portfolio_state")
 
-    for path in STATE_DIR.glob("*/paper_journal.jsonl"):
-        sid = path.parent.name
-        try:
-            for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
-                item = json.loads(line)
-                dt = _parse_dt(item.get("timestamp") or item.get("ts") or item.get("closed_at") or item.get("date"))
-                if dt and dt < cutoff:
-                    continue
-                pnl = safe_float(item.get("pnl_usd", item.get("pnl", item.get("realized_pnl"))), 0.0)
-                totals[sid] = totals.get(sid, 0.0) + pnl
-        except Exception:
-            continue
+    _load_sqlite_strategy_pnl(cutoff, totals)
+    _load_jsonl_strategy_pnl(cutoff, totals)
+    _load_open_strategy_pnl(totals)
+    for row in totals.values():
+        row["pnl"] = round(float(row.get("pnl", 0.0)), 2)
+        row["sources"] = dict(sorted(row.get("sources", {}).items()))
     return totals
 
 
@@ -689,7 +892,8 @@ def build_strategy_rows() -> list[dict[str, Any]]:
 
         kill_status = disabled_reason or ("OK" if phase in {"LIVE", "LIVE_MICRO", "PROBATION", "PAPER"} else "N/A")
         threshold = -(capital * 0.2) if capital else 0.0
-        pnl = pnl_5d.get(sid, 0.0)
+        pnl_detail = pnl_5d.get(sid)
+        pnl = float(pnl_detail["pnl"]) if pnl_detail is not None else None
         rows.append({
             "id": sid,
             "name": entry.get("display_name") or entry.get("name") or _title_strategy(sid),
@@ -705,9 +909,10 @@ def build_strategy_rows() -> list[dict[str, Any]]:
             "sharpe": manifest_sharpe(entry.get("wf_manifest_path")),
             "allocation_pct": round(allocation_pct, 2) if allocation_pct is not None else None,
             "capital": round(capital, 2),
-            "pnl_5d": round(pnl, 2),
+            "pnl_5d": round(pnl, 2) if pnl is not None else None,
+            "pnl_5d_sources": pnl_detail.get("sources", {}) if pnl_detail else {},
             "kill_threshold": round(threshold, 2),
-            "kill_margin_pct": round((pnl - threshold) / abs(threshold) * 100, 0) if threshold else 100,
+            "kill_margin_pct": round(((pnl or 0.0) - threshold) / abs(threshold) * 100, 0) if threshold else 100,
             "kill_switch_status": kill_status,
             "kill_switch_reason": disabled_reason,
             "is_live": bool(entry.get("is_live", False)),
