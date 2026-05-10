@@ -585,8 +585,6 @@ def get_dashboard_positions(include_paper: bool = True) -> dict[str, Any]:
     positions.extend(get_ibkr_positions_via_insync(mode="live"))
     positions.extend(get_binance_positions())
     if include_paper:
-        paper_port = int(os.environ.get("IBKR_PAPER_PORT", "4003"))
-        positions.extend(get_ibkr_positions_via_insync(port=paper_port, mode="paper"))
         positions.extend(get_alpaca_positions())
 
     total_long = sum(safe_float(p.get("market_value")) for p in positions if p.get("direction") == "LONG")
@@ -830,13 +828,16 @@ def _load_jsonl_strategy_pnl(cutoff: datetime, totals: dict[str, dict[str, Any]]
 def _load_open_strategy_pnl(totals: dict[str, dict[str, Any]]) -> None:
     position_sources = [
         lambda: get_ibkr_positions_via_insync(mode="live"),
-        lambda: get_ibkr_positions_via_insync(port=int(os.environ.get("IBKR_PAPER_PORT", "4003")), mode="paper"),
         get_binance_positions,
         get_alpaca_positions,
     ]
     for load_positions in position_sources:
         try:
             for pos in load_positions():
+                if pos.get("mode") == "paper":
+                    # Paper broker books contain known orphan drift. Paper PnL
+                    # is sourced from canonical local journals instead.
+                    continue
                 pnl = safe_float(pos.get("pnl"), 0.0)
                 strategy = pos.get("strategy") or pos.get("strategy_id")
                 if strategy and (pnl != 0.0 or pos.get("source")):
