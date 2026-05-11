@@ -154,7 +154,7 @@ def test_strategy_pnl_5d_aggregates_db_jsonl_and_open_positions(tmp_path, monkey
     monkeypatch.setattr(
         dashboard_data,
         "get_ibkr_positions_via_insync",
-        lambda *args, **kwargs: [{"strategy": "Gold-Oil Rotation", "pnl": 77.0, "source": "test"}]
+        lambda *args, **kwargs: [{"strategy": "Gold-Oil Rotation", "pnl": 77.0, "mode": "live", "source": "test"}]
         if kwargs.get("mode") == "live"
         else [],
     )
@@ -164,8 +164,11 @@ def test_strategy_pnl_5d_aggregates_db_jsonl_and_open_positions(tmp_path, monkey
     pnl = dashboard_data._strategy_pnl_5d()
 
     assert pnl["cross_asset_momentum"]["pnl"] == 123.45
+    assert pnl["cross_asset_momentum"]["live_pnl"] == 123.45
     assert pnl["alt_rel_strength_14_60_7"]["pnl"] == -15.0
+    assert pnl["alt_rel_strength_14_60_7"]["paper_pnl"] == -15.0
     assert pnl["gold_oil_rotation"]["pnl"] == 77.0
+    assert pnl["gold_oil_rotation"]["live_pnl"] == 77.0
 
 
 def test_dashboard_positions_include_canonical_paper_futures_state(tmp_path, monkeypatch):
@@ -244,4 +247,6 @@ def test_strategy_pnl_includes_open_paper_futures_state(tmp_path, monkeypatch):
     pnl = dashboard_data._strategy_pnl_30d()
 
     assert pnl["gold_oil_rotation"]["pnl"] == 120.0
+    assert pnl["gold_oil_rotation"]["paper_pnl"] == 120.0
     assert pnl["gold_oil_rotation"]["sources"] == {"open_positions": 1}
+    assert pnl["gold_oil_rotation"]["modes"] == {"paper": 1}

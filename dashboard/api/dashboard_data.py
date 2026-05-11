@@ -933,7 +933,7 @@ def get_paper_overview() -> dict[str, Any]:
     pnl_30d = _strategy_pnl_30d()
     for sid, row in by_strategy.items():
         detail = pnl_30d.get(sid)
-        row["pnl_30d"] = round(safe_float(detail.get("pnl") if detail else None), 2) if detail else None
+        row["pnl_30d"] = round(safe_float(detail.get("paper_pnl") if detail else None), 2) if detail else None
         row["pnl_30d_sources"] = detail.get("sources", {}) if detail else {}
 
     for bucket in (by_broker, by_strategy):
@@ -998,13 +998,21 @@ def _add_strategy_pnl(
     strategy: Any,
     pnl: float,
     source: str,
+    mode: str = "unknown",
 ) -> None:
     sid = canonical_strategy_id(strategy)
     if not sid:
         return
-    row = totals.setdefault(sid, {"pnl": 0.0, "sources": {}})
-    row["pnl"] += float(pnl)
+    mode_key = mode if mode in {"live", "paper"} else "unknown"
+    row = totals.setdefault(
+        sid,
+        {"pnl": 0.0, "live_pnl": 0.0, "paper_pnl": 0.0, "unknown_pnl": 0.0, "sources": {}, "modes": {}},
+    )
+    value = float(pnl)
+    row["pnl"] += value
+    row[f"{mode_key}_pnl"] += value
     row["sources"][source] = int(row["sources"].get(source, 0)) + 1
+    row["modes"][mode_key] = int(row["modes"].get(mode_key, 0)) + 1
 
 
 def _source_label(path: Path) -> str:
@@ -1017,6 +1025,7 @@ def _source_label(path: Path) -> str:
 def _load_sqlite_strategy_pnl(cutoff: datetime, totals: dict[str, dict[str, Any]]) -> None:
     for db_name in ("live_journal.db", "paper_journal.db"):
         db_path = DATA_DIR / db_name
+        mode = "live" if db_name.startswith("live") else "paper"
         if not db_path.exists():
             continue
         try:
@@ -1040,7 +1049,7 @@ def _load_sqlite_strategy_pnl(cutoff: datetime, totals: dict[str, dict[str, Any]
                     pnl = _first_pnl_value(item)
                     if pnl is None:
                         continue
-                    _add_strategy_pnl(totals, item.get("strategy"), pnl, db_name)
+                    _add_strategy_pnl(totals, item.get("strategy"), pnl, db_name, mode=mode)
             finally:
                 conn.close()
         except Exception as exc:
@@ -1095,7 +1104,8 @@ def _load_jsonl_strategy_pnl(cutoff: datetime, totals: dict[str, dict[str, Any]]
                                 before = 0.0
                             last = value
                     if last is not None:
-                        _add_strategy_pnl(totals, sid, last - (before or 0.0), _source_label(path))
+                        mode = "live" if "live" in path.name.lower() else "paper"
+                        _add_strategy_pnl(totals, sid, last - (before or 0.0), _source_label(path), mode=mode)
                 continue
 
             for item in records:
@@ -1106,7 +1116,8 @@ def _load_jsonl_strategy_pnl(cutoff: datetime, totals: dict[str, dict[str, Any]]
                 if pnl is None:
                     continue
                 sid = item.get("strategy_id") or item.get("strategy") or default_sid
-                _add_strategy_pnl(totals, sid, pnl, _source_label(path))
+                mode = "live" if "live" in path.name.lower() else "paper"
+                _add_strategy_pnl(totals, sid, pnl, _source_label(path), mode=mode)
         except Exception as exc:
             logger.debug("Failed to aggregate strategy PnL from %s: %s", path, exc)
 
@@ -1132,7 +1143,7 @@ def _load_open_strategy_pnl(totals: dict[str, dict[str, Any]]) -> None:
                 pnl = safe_float(pos.get("pnl"), 0.0)
                 strategy = pos.get("strategy") or pos.get("strategy_id")
                 if strategy and (pnl != 0.0 or pos.get("source")):
-                    _add_strategy_pnl(totals, strategy, pnl, "open_positions")
+                    _add_strategy_pnl(totals, strategy, pnl, "open_positions", mode=str(pos.get("mode", "unknown")))
         except Exception as exc:
             logger.debug("Failed to aggregate open-position strategy PnL: %s", exc)
 
@@ -1151,14 +1162,18 @@ def _strategy_pnl_days(days: int) -> dict[str, dict[str, Any]]:
                 if dt is not None and dt < cutoff:
                     continue
                 pnl += safe_float(entry.get("pnl"))
-            _add_strategy_pnl(totals, sid, pnl, "paper_portfolio_state")
+            _add_strategy_pnl(totals, sid, pnl, "paper_portfolio_state", mode="paper")
 
     _load_sqlite_strategy_pnl(cutoff, totals)
     _load_jsonl_strategy_pnl(cutoff, totals)
     _load_open_strategy_pnl(totals)
     for row in totals.values():
         row["pnl"] = round(float(row.get("pnl", 0.0)), 2)
+        row["live_pnl"] = round(float(row.get("live_pnl", 0.0)), 2)
+        row["paper_pnl"] = round(float(row.get("paper_pnl", 0.0)), 2)
+        row["unknown_pnl"] = round(float(row.get("unknown_pnl", 0.0)), 2)
         row["sources"] = dict(sorted(row.get("sources", {}).items()))
+        row["modes"] = dict(sorted(row.get("modes", {}).items()))
     return totals
 
 
@@ -1211,6 +1226,8 @@ def build_strategy_rows() -> list[dict[str, Any]]:
         pnl = float(pnl_detail["pnl"]) if pnl_detail is not None else None
         pnl30_detail = pnl_30d.get(sid)
         pnl30 = float(pnl30_detail["pnl"]) if pnl30_detail is not None else None
+        pnl30_live = float(pnl30_detail.get("live_pnl", 0.0)) if pnl30_detail is not None else None
+        pnl30_paper = float(pnl30_detail.get("paper_pnl", 0.0)) if pnl30_detail is not None else None
         rows.append({
             "id": sid,
             "name": entry.get("display_name") or entry.get("name") or _title_strategy(sid),
@@ -1229,7 +1246,10 @@ def build_strategy_rows() -> list[dict[str, Any]]:
             "pnl_5d": round(pnl, 2) if pnl is not None else None,
             "pnl_5d_sources": pnl_detail.get("sources", {}) if pnl_detail else {},
             "pnl_30d": round(pnl30, 2) if pnl30 is not None else None,
+            "pnl_30d_live": round(pnl30_live, 2) if pnl30_live is not None else None,
+            "pnl_30d_paper": round(pnl30_paper, 2) if pnl30_paper is not None else None,
             "pnl_30d_sources": pnl30_detail.get("sources", {}) if pnl30_detail else {},
+            "pnl_30d_modes": pnl30_detail.get("modes", {}) if pnl30_detail else {},
             "kill_threshold": round(threshold, 2),
             "kill_margin_pct": round(((pnl or 0.0) - threshold) / abs(threshold) * 100, 0) if threshold else 100,
             "kill_switch_status": kill_status,
