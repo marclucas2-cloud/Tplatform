@@ -102,8 +102,8 @@ export default function Strategies() {
               <th className="text-right py-3 cursor-pointer hover:text-[var(--color-text-primary)]" onClick={() => toggleSort('allocation_pct')}>
                 <span className="flex items-center justify-end gap-1">Alloc <SortIcon col="allocation_pct" /></span>
               </th>
-              <th className="text-right py-3 cursor-pointer hover:text-[var(--color-text-primary)]" onClick={() => toggleSort('pnl_5d')}>
-                <span className="flex items-center justify-end gap-1">P&L 5j <SortIcon col="pnl_5d" /></span>
+              <th className="text-right py-3 cursor-pointer hover:text-[var(--color-text-primary)]" onClick={() => toggleSort('pnl_30d')}>
+                <span className="flex items-center justify-end gap-1">P&L 30j <SortIcon col="pnl_30d" /></span>
               </th>
               <th className="text-right py-3 px-4">Kill Switch</th>
             </tr>
@@ -133,8 +133,8 @@ export default function Strategies() {
                       <td className="py-2.5 text-right font-mono">
                         {s.allocation_pct !== null && s.allocation_pct !== undefined ? `${Number(s.allocation_pct).toFixed(1)}%` : '—'}
                       </td>
-                      <td className={`py-2.5 text-right font-mono ${(s.pnl_5d ?? 0) >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}`}>
-                        {s.pnl_5d !== null && s.pnl_5d !== undefined ? `$${s.pnl_5d >= 0 ? '+' : ''}${Number(s.pnl_5d).toFixed(0)}` : '—'}
+                      <td className={`py-2.5 text-right font-mono ${(s.pnl_30d ?? 0) >= 0 ? 'text-[var(--color-profit)]' : 'text-[var(--color-loss)]'}`}>
+                        {s.pnl_30d !== null && s.pnl_30d !== undefined ? `$${s.pnl_30d >= 0 ? '+' : ''}${Number(s.pnl_30d).toFixed(0)}` : '—'}
                       </td>
                       <td className="py-2.5 px-4 text-right">
                         {killStatus !== 'N/A' ? (

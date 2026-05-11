@@ -122,14 +122,29 @@ def reconcile_ibkr_futures(paper: bool = False) -> dict:
         ROOT / "data" / "state" /
         ("futures_positions_paper.json" if paper else "futures_positions_live.json"),
     ]
-    state_path = next((p for p in state_paths if p.exists()), state_paths[0])
-    if state_path.exists():
+    # 2026-05-11: prefer the path with actual content. Migration scripts left
+    # an empty {} stub at the canonical path while the runtime still writes
+    # to the legacy one, producing false-positive only_in_broker CRITICALs
+    # every futures cycle. Skip empty/unreadable paths and fall back to the
+    # next candidate before declaring local positions empty.
+    local: dict = {}
+    chosen_path = None
+    for p in state_paths:
+        if not p.exists():
+            continue
         try:
-            local = json.loads(state_path.read_text(encoding="utf-8"))
-            if isinstance(local, dict):
-                result["local_positions"] = list(local.keys())
+            data = json.loads(p.read_text(encoding="utf-8"))
         except Exception as e:
-            result["divergences"].append({"type": "state_file_corrupted", "err": str(e)})
+            result["divergences"].append({"type": "state_file_corrupted", "err": f"{p.name}: {e}"})
+            continue
+        if isinstance(data, dict) and data:
+            local = data
+            chosen_path = p
+            break
+        if chosen_path is None:
+            chosen_path = p  # remember as fallback even if empty
+    if isinstance(local, dict):
+        result["local_positions"] = list(local.keys())
 
     broker_syms = {p["symbol"][:3] for p in result["broker_positions"]}  # base symbol
     local_syms = set(result["local_positions"])

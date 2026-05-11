@@ -90,6 +90,9 @@ export default function Positions() {
 
   // Risk if all stopped
   const riskIfStopped = filtered.reduce((sum, p) => {
+    if (p.risk_if_stopped !== null && p.risk_if_stopped !== undefined) {
+      return sum + Number(p.risk_if_stopped || 0)
+    }
     if (!p.stop_loss || !p.current_price || !p.shares) return sum
     const loss = Math.abs(p.shares) * Math.abs(p.current_price - p.stop_loss)
     return sum + loss

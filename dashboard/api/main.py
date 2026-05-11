@@ -37,6 +37,7 @@ from dashboard_data import (
     get_dashboard_portfolio,
     get_dashboard_positions,
     get_ibkr_positions_via_insync,
+    get_paper_overview,
     load_binance_account_snapshot,
     load_quant_registry,
     strategy_detail,
@@ -317,6 +318,16 @@ def get_positions():
         }
     except Exception as e:
         return {"error": str(e), "positions": [], "count": 0}
+
+
+@app.get("/api/paper/overview")
+def api_paper_overview():
+    """Canonical paper book: local state, journals and mark-to-market."""
+    try:
+        return get_paper_overview()
+    except Exception as e:
+        logger.error(f"Paper overview error: {e}")
+        return {"error": str(e), "positions": [], "positions_count": 0}
 
 
 # ── Strategies ───────────────────────────────────────────────────────────────
@@ -1336,6 +1347,10 @@ def get_futures_trades(limit: int = 50):
 def get_futures_positions():
     """Current futures positions from state files."""
     live_rows = get_ibkr_positions_via_insync(mode="live")
+    paper_rows = [
+        p for p in get_paper_overview().get("positions", [])
+        if p.get("broker") == "IBKR" and p.get("asset_class") == "FUTURES"
+    ]
     result = {"live": {}, "paper": {}}
     for suffix in ("live", "paper"):
         fp = ROOT / "data" / "state" / f"futures_positions_{suffix}.json"
@@ -1346,6 +1361,8 @@ def get_futures_positions():
                 pass
     result["live_broker"] = live_rows
     result["live_broker_count"] = len(live_rows)
+    result["paper_canonical"] = paper_rows
+    result["paper_canonical_count"] = len(paper_rows)
     return result
 
 
