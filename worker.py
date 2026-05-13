@@ -1580,24 +1580,40 @@ def run_bracket_watchdog_cycle():
                         except Exception:
                             pass
 
+            # 2026-05-13 incident MNQ : pick the FIRST candidate that has actual
+            # content. Migration scripts left an empty {} at the canonical book-
+            # convention path, while the runtime still writes to the legacy
+            # path. The watchdog used to read the empty one first, fall back to
+            # Tier 2 placeholder defaults (tp_points=50), and silently close
+            # MNQ at +$100 instead of the real CAM TP at +$4675.
             _state_candidates = [
                 ROOT / "data" / "state" / "ibkr_futures" / "positions_live.json",
                 ROOT / "data" / "state" / "futures_positions_live.json",
             ]
-            _state_file = next((p for p in _state_candidates if p.exists()), _state_candidates[0])
             _state = {}
-            if _state_file.exists():
+            _state_file = None
+            for _p in _state_candidates:
+                if not _p.exists():
+                    continue
                 try:
-                    _state = json.loads(_state_file.read_text(encoding="utf-8"))
+                    _candidate = json.loads(_p.read_text(encoding="utf-8"))
                 except Exception:
-                    pass
+                    continue
+                if isinstance(_candidate, dict) and _candidate:
+                    _state = _candidate
+                    _state_file = _p
+                    break
+                if _state_file is None:
+                    _state_file = _p  # remember as fallback even if empty
 
-            # Strategy default SL/TP offsets
-            _STRAT_DEFAULTS = {
-                "MES": {"sl_points": 30, "tp_points": 50},
-                "MNQ": {"sl_points": 30, "tp_points": 50},
-                "MGC": {"sl_pct": 0.004, "tp_pct": 0.008},
-            }
+            # Strategy default SL/TP offsets — RETIRED 2026-05-13.
+            # These placeholders (tp_points=50 on MNQ) silently replaced real
+            # strategy brackets (tp=+2346pts for CAM) when the state file path
+            # was empty and IBGW was slow to re-send open orders after its
+            # nightly 2FA window. See incident write-up in reports/checkup/.
+            # The runtime is now state-driven only; Tier 3 (synthesized from
+            # market price) remains as the last-resort SL-only safety net.
+            _STRAT_DEFAULTS: dict = {}
 
             # Tick-snap helper — IBKR rejects non-tick prices with warning 110
             # (bug 2026-05-04: MGC live unprotected for 6h because SL=4484.48
@@ -1682,10 +1698,19 @@ def run_bracket_watchdog_cycle():
                             _tp = _tp or _entry_px - _d["tp_points"]
                     _source = "strat_defaults"
 
-                # Tier 3: synthesize from current market price (-1%/+1.5% for longs)
-                # This is the LAST RESORT — never let a position stay unprotected.
-                # Better a loose bracket than no bracket.
+                # Tier 3: SL-only safety net from current market price (-1.5%).
+                # Last resort when state file has lost the symbol. Used to
+                # also synth a TP (+1.5%), but that closed MNQ at +$100 on
+                # 2026-05-13 instead of the real CAM TP at +$4675 — Tier 3
+                # now leaves the TP unset and lets the position run, while
+                # alerting Marc CRITICAL so the state file gets repaired.
                 if _sl == 0 or _tp == 0:
+                    if _state_file is None or not _state or _sym not in _state:
+                        logger.critical(
+                            f"BRACKET WATCHDOG: {_sym} state file missing/empty for "
+                            f"this symbol — synthesizing SL-only safety net (no TP). "
+                            f"Repair {_state_file} ASAP."
+                        )
                     try:
                         _fut_q = _WdFuture(
                             _sym, exchange="CME", currency="USD",
@@ -1702,14 +1727,16 @@ def run_bracket_watchdog_cycle():
                             _wdt.sleep(2); _ib.sleep(1)
                             if _bars:
                                 _current_px = float(_bars[-1].close)
-                                # 1% SL / 1.5% TP from current — conservative bracket
-                                if pos.position > 0:
-                                    _sl = _current_px * 0.99
-                                    _tp = _current_px * 1.015
-                                else:
-                                    _sl = _current_px * 1.01
-                                    _tp = _current_px * 0.985
-                                _source = f"current_px={_current_px}"
+                                # Synthesize ONLY the leg that's actually missing.
+                                # SL fallback only — never auto-place a TP without
+                                # the real strategy target (silent TP repose caused
+                                # the MNQ 2026-05-13 incident).
+                                if _sl == 0:
+                                    if pos.position > 0:
+                                        _sl = _current_px * 0.985  # -1.5%
+                                    else:
+                                        _sl = _current_px * 1.015  # +1.5% for short
+                                _source = f"current_px={_current_px}_SL_only"
                     except Exception as _px_err:
                         logger.warning(
                             f"BRACKET WATCHDOG: {_sym} current price fetch failed: {_px_err}"
@@ -1730,12 +1757,20 @@ def run_bracket_watchdog_cycle():
                 _repose_ok = False
                 _fail_reason = ""
 
-                # We MUST have SL/TP by now (Tier 3 always succeeds if IBKR is up).
-                # If _sl or _tp is still 0, something is very wrong.
-                if _sl > 0 and _tp > 0:
+                # We MUST have at least an SL by now (Tier 3 synthesizes
+                # an SL from current price if IBKR is up). TP can legitimately
+                # remain 0 when the state file is missing this symbol — we'd
+                # rather leave the position uncapped than silently invent a
+                # placeholder TP that doesn't reflect the actual strategy.
+                # Place whichever legs we actually have prices for.
+                _can_place_sl = _need_sl = (not _has_sl) and _sl > 0
+                _can_place_tp = _need_tp = (not _has_tp) and _tp > 0
+                if _can_place_sl or _can_place_tp:
                     logger.info(
                         f"BRACKET WATCHDOG: {_sym} repose attempt "
-                        f"SL={_sl} TP={_tp} source={_source}"
+                        f"SL={_sl if _can_place_sl else 'KEEP'} "
+                        f"TP={_tp if _can_place_tp else 'KEEP'} "
+                        f"source={_source}"
                     )
                     # Reuse existing OCA group if one leg exists, else create new
                     _existing_oca = ""
@@ -1745,9 +1780,9 @@ def run_bracket_watchdog_cycle():
                             break
                     _oca = _existing_oca or f"WATCHDOG_{_sym}_{_wd_uuid.uuid4().hex[:8]}"
 
-                    # Only place what's missing
-                    _need_sl = not _has_sl
-                    _need_tp = not _has_tp
+                    # _need_sl / _need_tp already set above (only True when we
+                    # actually have a price for the missing leg — no silent
+                    # placeholders).
 
                     # Try repose up to 3 times to handle transient IBKR errors
                     for _attempt in range(1, 4):
@@ -1798,12 +1833,21 @@ def run_bracket_watchdog_cycle():
                             _wdt.sleep(3)
 
                     if _repose_ok:
-                        # Update state file
+                        # Update state file. Fall back to the legacy canonical
+                        # path if no candidate had content (state was wiped).
+                        if _state_file is None:
+                            _state_file = (
+                                ROOT / "data" / "state" / "futures_positions_live.json"
+                            )
                         if _sym not in _state:
                             _state[_sym] = {}
+                        _existing_sl = float(_state[_sym].get("sl", 0) or 0)
+                        _existing_tp = float(_state[_sym].get("tp", 0) or 0)
                         _state[_sym].update({
                             "symbol": _sym, "side": "BUY" if pos.position > 0 else "SELL",
-                            "qty": _qty, "entry": _entry_px, "sl": _sl, "tp": _tp,
+                            "qty": _qty, "entry": _entry_px,
+                            "sl": _sl if _sl > 0 else _existing_sl,
+                            "tp": _tp if _tp > 0 else _existing_tp,
                             "contract_month": getattr(pos.contract, "lastTradeDateOrContractMonth", None),
                             "local_symbol": getattr(pos.contract, "localSymbol", None),
                             "oca_group": _oca, "mode": "LIVE",
