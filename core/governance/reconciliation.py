@@ -122,13 +122,15 @@ def reconcile_ibkr_futures(paper: bool = False) -> dict:
         ROOT / "data" / "state" /
         ("futures_positions_paper.json" if paper else "futures_positions_live.json"),
     ]
-    # 2026-05-11: prefer the path with actual content. Migration scripts left
-    # an empty {} stub at the canonical path while the runtime still writes
-    # to the legacy one, producing false-positive only_in_broker CRITICALs
-    # every futures cycle. Skip empty/unreadable paths and fall back to the
-    # next candidate before declaring local positions empty.
-    local: dict = {}
-    chosen_path = None
+    # 2026-05-14: MERGE keys from BOTH state files. The bracket_watchdog
+    # writes M2K (and only M2K) into the canonical book-convention path,
+    # while futures_runner writes all live positions into the legacy path.
+    # Before this fix, the first-non-empty break stopped at the canonical
+    # path holding M2K alone and flagged MCL+MNQ as only_in_broker CRITICAL
+    # every 15 min for ~5 h on 2026-05-13. Both paths are now considered
+    # authoritative — a symbol present in either file is treated as locally
+    # tracked. Corruption in any path still surfaces as a divergence.
+    local_syms_acc: set[str] = set()
     for p in state_paths:
         if not p.exists():
             continue
@@ -137,14 +139,9 @@ def reconcile_ibkr_futures(paper: bool = False) -> dict:
         except Exception as e:
             result["divergences"].append({"type": "state_file_corrupted", "err": f"{p.name}: {e}"})
             continue
-        if isinstance(data, dict) and data:
-            local = data
-            chosen_path = p
-            break
-        if chosen_path is None:
-            chosen_path = p  # remember as fallback even if empty
-    if isinstance(local, dict):
-        result["local_positions"] = list(local.keys())
+        if isinstance(data, dict):
+            local_syms_acc.update(data.keys())
+    result["local_positions"] = sorted(local_syms_acc)
 
     broker_syms = {p["symbol"][:3] for p in result["broker_positions"]}  # base symbol
     local_syms = set(result["local_positions"])

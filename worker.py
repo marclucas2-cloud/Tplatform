@@ -1772,13 +1772,59 @@ def run_bracket_watchdog_cycle():
                         f"TP={_tp if _can_place_tp else 'KEEP'} "
                         f"source={_source}"
                     )
-                    # Reuse existing OCA group if one leg exists, else create new
-                    _existing_oca = ""
-                    for _leg in (_key_has_stp.get(_contract_k, []) + _key_has_lmt.get(_contract_k, [])):
-                        if _leg.order.ocaGroup:
-                            _existing_oca = _leg.order.ocaGroup
-                            break
-                    _oca = _existing_oca or f"WATCHDOG_{_sym}_{_wd_uuid.uuid4().hex[:8]}"
+                    # ALWAYS create a fresh OCA group when reposing legs.
+                    # Reusing an existing OCA group fails on IB-side when the
+                    # group is in a closed/terminal state (e.g. after a sibling
+                    # leg was filled or cancelled), causing new orders to be
+                    # auto-cancelled within seconds (incident 2026-05-14 M2K
+                    # TP 3062 loop: watchdog reused WATCHDOG_M2K_e3d4196e from
+                    # the surviving SL, every retry was cancelled by IB after
+                    # ~3 s, repeating every 5 min indefinitely).
+                    # To re-couple legs cleanly, cancel any surviving leg and
+                    # re-attach SL+TP together in the new group.
+                    _oca = f"WATCHDOG_{_sym}_{_wd_uuid.uuid4().hex[:8]}"
+                    _existing_legs = (
+                        _key_has_stp.get(_contract_k, [])
+                        + _key_has_lmt.get(_contract_k, [])
+                    )
+                    if _existing_legs and (_need_sl or _need_tp):
+                        # Need to repose at least one leg in a fresh OCA group.
+                        # Cancel any surviving legs and re-attach both ends
+                        # together, otherwise we'd end up with one leg in the
+                        # stale group and one in the new group (no OCA link).
+                        for _leg in _existing_legs:
+                            try:
+                                logger.info(
+                                    f"BRACKET WATCHDOG: cancelling surviving "
+                                    f"{_leg.order.orderType} on {_sym} "
+                                    f"orderId={_leg.order.orderId} "
+                                    f"(stale OCA={_leg.order.ocaGroup or 'EMPTY'}) "
+                                    f"to repose in fresh OCA={_oca}"
+                                )
+                                _ib.cancelOrder(_leg.order)
+                            except Exception as _cancel_err:
+                                logger.warning(
+                                    f"BRACKET WATCHDOG: cancel surviving leg "
+                                    f"failed on {_sym} orderId="
+                                    f"{_leg.order.orderId}: {_cancel_err}"
+                                )
+                        _wdt.sleep(2); _ib.sleep(1)
+                        # All legs cancelled; we now need to re-place both.
+                        if not _has_sl:
+                            pass  # already _need_sl=True
+                        else:
+                            _need_sl = True
+                        if not _has_tp:
+                            pass
+                        else:
+                            _need_tp = True
+                        # _sl / _tp values: reuse what we had if no new value.
+                        # If the surviving leg was SL, _sl may be 0 here; pull
+                        # it from state file or strategy default.
+                        if _sl == 0 and _sym in _state:
+                            _sl = float(_state[_sym].get("sl", 0) or 0)
+                        if _tp == 0 and _sym in _state:
+                            _tp = float(_state[_sym].get("tp", 0) or 0)
 
                     # _need_sl / _need_tp already set above (only True when we
                     # actually have a price for the missing leg — no silent
