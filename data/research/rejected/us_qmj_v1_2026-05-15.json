@@ -1,0 +1,410 @@
+{
+  "strategy_id": "us_qmj_v1",
+  "generated_at": "2026-05-15T15:13:41.751680+00:00",
+  "verdict": "REJECTED",
+  "rationale": "REJECTED: 5/9 criteria failed; profitable_windows=2/7, sharpe_oos=-0.882, pf_oos=0.910. Sideways 2015-16 check sharpe=-0.071.",
+  "universe": {
+    "source": "current S&P 500 snapshot from data/us_stocks/_universe.json",
+    "requested_symbols": 496,
+    "usable_symbols": 496,
+    "survivorship_bias_warning": true
+  },
+  "data_limitations": [
+    "Universe backtest = current S&P 500 / Russell 1000 members; survivorship bias is active.",
+    "No delisted equities are present; bankruptcies and delisted losers are missing.",
+    "Earnings timestamps from yfinance/free sources can be imprecise; BMO/AMC noise is expected.",
+    "Pre-2018 coverage is degraded for some symbols; yfinance backfills prices and corporate actions.",
+    "Borrow cost and locate availability are unavailable in yfinance; fixed proxies are used.",
+    "Free adjusted-price data can still contain dividend/corporate-action restatement errors."
+  ],
+  "fundamentals": {
+    "source": "SEC EDGAR companyfacts cached locally",
+    "pit_proxy": "EDGAR filed_date when available; strategy fallback applies 90d quarterly / 120d annual lag",
+    "not_true_pit": true,
+    "q4_2020_visibility_rule": "period_end 2020-12-31 with lag proxy is not visible before 2021-04-01"
+  },
+  "costs": {
+    "slippage_pct": 0.0002,
+    "borrow_rate_annual": 0.015,
+    "locate_fail_rate": 0.03,
+    "commission_usd": 0.0
+  },
+  "wf_config": {
+    "is_years": 4,
+    "oos_years": 1,
+    "windows": "2018-2024 annual OOS",
+    "score_weights": "1/3 profitability, 1/3 safety, 1/3 stability; no optimization"
+  },
+  "criteria": [
+    {
+      "name": "Sharpe OOS net >= 0.8",
+      "pass": false,
+      "value": -0.8822358013969668
+    },
+    {
+      "name": "PF OOS >= 1.2",
+      "pass": false,
+      "value": 0.9100427708793543
+    },
+    {
+      "name": ">= 50% OOS windows profitable",
+      "pass": false,
+      "value": 2
+    },
+    {
+      "name": ">= 200 trades OOS",
+      "pass": true,
+      "value": 3655
+    },
+    {
+      "name": "Max DD OOS <= 2x Max DD IS",
+      "pass": true,
+      "value": {
+        "oos": -0.17346284888307872,
+        "max_abs_is": 0.12674561622745673
+      }
+    },
+    {
+      "name": "(costs + borrow) / gross <= 30%",
+      "pass": true,
+      "value": 0.013523280598237574
+    },
+    {
+      "name": "Corr 60d vs live sleeves <= 0.4",
+      "pass": false,
+      "value": 0.40793285302620863
+    },
+    {
+      "name": "Stress periods no catastrophe",
+      "pass": true,
+      "value": {
+        "covid_2020": {
+          "sharpe": -2.337894941600039,
+          "max_drawdown": -0.01949663548129299,
+          "net_pnl": -365.9890876878271
+        },
+        "bear_2022": {
+          "sharpe": 0.34825449592650454,
+          "max_drawdown": -0.021525730405613897,
+          "net_pnl": 149.754967765748
+        },
+        "gme_squeeze": {
+          "sharpe": -3.7503018989476335,
+          "max_drawdown": -0.0054883590071302946,
+          "net_pnl": -49.65074907152666,
+          "max_single_name_loss_pct_gross": -0.003672326334927591
+        },
+        "q4_2018": {
+          "sharpe": -2.405488687195897,
+          "max_drawdown": -0.0179670216158353,
+          "net_pnl": -289.2329018781129
+        }
+      }
+    },
+    {
+      "name": "Sideways 2015-16 Sharpe >= 0",
+      "pass": false,
+      "value": -0.07062192412464481
+    }
+  ],
+  "oos_metrics_concat": {
+    "sharpe_net": -0.8822358013969668,
+    "profit_factor": 0.9100427708793543,
+    "max_drawdown": -0.17346284888307872,
+    "hit_rate": 0.49658002735978113,
+    "n_trades": 3655,
+    "avg_hold": 20.999452804377565,
+    "total_cost_pct": 0.013523280598237574,
+    "ratio_borrow_cost_to_gross": 0.008123358366673645,
+    "total_net_pnl": -2957.789253039229
+  },
+  "wf_windows": [
+    {
+      "window_idx": 1,
+      "train_start": "2014-01-01",
+      "train_end": "2017-12-31",
+      "test_start": "2018-01-01",
+      "test_end": "2018-12-31",
+      "is_sharpe": -0.29079738942439814,
+      "is_max_drawdown": -0.04343655026109183,
+      "is_n_trades": 1884,
+      "oos_sharpe": -0.5232036911666211,
+      "oos_profit_factor": 0.9436440536923802,
+      "oos_max_drawdown": -0.03077613579962979,
+      "oos_n_trades": 563,
+      "oos_hit_rate": 0.5044404973357016,
+      "oos_total_net_pnl": -287.2073784098566,
+      "oos_profitable": false,
+      "oos_total_cost_pct": 0.01568396109341398,
+      "oos_borrow_to_gross": 0.009341129246463565,
+      "usable_symbols": 496
+    },
+    {
+      "window_idx": 2,
+      "train_start": "2015-01-01",
+      "train_end": "2018-12-31",
+      "test_start": "2019-01-01",
+      "test_end": "2019-12-31",
+      "is_sharpe": -0.35471837331037254,
+      "is_max_drawdown": -0.053982276485133096,
+      "is_n_trades": 1995,
+      "oos_sharpe": -2.030345834852337,
+      "oos_profit_factor": 0.8180865125887063,
+      "oos_max_drawdown": -0.05210158319014091,
+      "oos_n_trades": 463,
+      "oos_hit_rate": 0.4773218142548596,
+      "oos_total_net_pnl": -826.2217645814226,
+      "oos_profitable": false,
+      "oos_total_cost_pct": 0.014119708443534038,
+      "oos_borrow_to_gross": 0.00839287438614341,
+      "usable_symbols": 496
+    },
+    {
+      "window_idx": 3,
+      "train_start": "2016-01-01",
+      "train_end": "2019-12-31",
+      "test_start": "2020-01-01",
+      "test_end": "2020-12-31",
+      "is_sharpe": -0.809916485613348,
+      "is_max_drawdown": -0.08545433351415355,
+      "is_n_trades": 2009,
+      "oos_sharpe": -1.1258943236340948,
+      "oos_profit_factor": 0.8862323435760467,
+      "oos_max_drawdown": -0.04991710672838612,
+      "oos_n_trades": 521,
+      "oos_hit_rate": 0.508637236084453,
+      "oos_total_net_pnl": -719.2535807373395,
+      "oos_profitable": false,
+      "oos_total_cost_pct": 0.011264657006409653,
+      "oos_borrow_to_gross": 0.006866021838651173,
+      "usable_symbols": 496
+    },
+    {
+      "window_idx": 4,
+      "train_start": "2017-01-01",
+      "train_end": "2020-12-31",
+      "test_start": "2021-01-01",
+      "test_end": "2021-12-31",
+      "is_sharpe": -1.1444932790460978,
+      "is_max_drawdown": -0.12674561622745673,
+      "is_n_trades": 2064,
+      "oos_sharpe": 0.06898662993667302,
+      "oos_profit_factor": 1.0071049553680849,
+      "oos_max_drawdown": -0.025721766367747922,
+      "oos_n_trades": 515,
+      "oos_hit_rate": 0.5359223300970873,
+      "oos_total_net_pnl": 26.18439059878162,
+      "oos_profitable": true,
+      "oos_total_cost_pct": 0.01645433646080266,
+      "oos_borrow_to_gross": 0.010048893648042392,
+      "usable_symbols": 496
+    },
+    {
+      "window_idx": 5,
+      "train_start": "2018-01-01",
+      "train_end": "2021-12-31",
+      "test_start": "2022-01-01",
+      "test_end": "2022-12-31",
+      "is_sharpe": -0.8573410799454065,
+      "is_max_drawdown": -0.11698977059677862,
+      "is_n_trades": 2163,
+      "oos_sharpe": 1.0060810315848374,
+      "oos_profit_factor": 1.0888753915799716,
+      "oos_max_drawdown": -0.017197007676645892,
+      "oos_n_trades": 509,
+      "oos_hit_rate": 0.5009823182711198,
+      "oos_total_net_pnl": 419.6398949279839,
+      "oos_profitable": true,
+      "oos_total_cost_pct": 0.01052691122804591,
+      "oos_borrow_to_gross": 0.006198664417212177,
+      "usable_symbols": 496
+    },
+    {
+      "window_idx": 6,
+      "train_start": "2019-01-01",
+      "train_end": "2022-12-31",
+      "test_start": "2023-01-01",
+      "test_end": "2023-12-31",
+      "is_sharpe": -0.8383013973746621,
+      "is_max_drawdown": -0.12608336835809641,
+      "is_n_trades": 2173,
+      "oos_sharpe": -1.2086599728561243,
+      "oos_profit_factor": 0.8833109808260778,
+      "oos_max_drawdown": -0.024571814028259364,
+      "oos_n_trades": 446,
+      "oos_hit_rate": 0.5,
+      "oos_total_net_pnl": -400.91422434685603,
+      "oos_profitable": false,
+      "oos_total_cost_pct": 0.013679058913597114,
+      "oos_borrow_to_gross": 0.008205307473450907,
+      "usable_symbols": 496
+    },
+    {
+      "window_idx": 7,
+      "train_start": "2020-01-01",
+      "train_end": "2023-12-31",
+      "test_start": "2024-01-01",
+      "test_end": "2024-12-31",
+      "is_sharpe": -0.6979793834737961,
+      "is_max_drawdown": -0.07482381391533632,
+      "is_n_trades": 2140,
+      "oos_sharpe": -1.6832214163649808,
+      "oos_profit_factor": 0.7883211312660816,
+      "oos_max_drawdown": -0.050190206959461525,
+      "oos_n_trades": 413,
+      "oos_hit_rate": 0.44794188861985473,
+      "oos_total_net_pnl": -611.9198371198288,
+      "oos_profitable": false,
+      "oos_total_cost_pct": 0.014842582041503178,
+      "oos_borrow_to_gross": 0.008841559833628004,
+      "usable_symbols": 496
+    }
+  ],
+  "regime_breakdown": [
+    {
+      "regime": "bull",
+      "window": "2017",
+      "start": "2017-01-01",
+      "end": "2017-12-31",
+      "data_quality": "OK",
+      "observations": 0,
+      "sharpe": 0.0,
+      "profit_factor": 0.0,
+      "max_drawdown": 0.0
+    },
+    {
+      "regime": "bull",
+      "window": "2019",
+      "start": "2019-01-01",
+      "end": "2019-12-31",
+      "data_quality": "OK",
+      "observations": 252,
+      "sharpe": -2.295950997868351,
+      "profit_factor": 0.6359323290648017,
+      "max_drawdown": -0.052146866505603184
+    },
+    {
+      "regime": "bull",
+      "window": "2021",
+      "start": "2021-01-01",
+      "end": "2021-12-31",
+      "data_quality": "OK",
+      "observations": 252,
+      "sharpe": -0.2623084466483936,
+      "profit_factor": 0.9547522886220995,
+      "max_drawdown": -0.02940274087411976
+    },
+    {
+      "regime": "bull",
+      "window": "2023_2024",
+      "start": "2023-01-01",
+      "end": "2024-12-31",
+      "data_quality": "OK",
+      "observations": 502,
+      "sharpe": -1.3106359358185804,
+      "profit_factor": 0.7862886243176728,
+      "max_drawdown": -0.06777884940004941
+    },
+    {
+      "regime": "bear",
+      "window": "2018Q4",
+      "start": "2018-10-01",
+      "end": "2018-12-31",
+      "data_quality": "OK",
+      "observations": 63,
+      "sharpe": -2.405488687195897,
+      "profit_factor": 0.6074018298394622,
+      "max_drawdown": -0.0179670216158353
+    },
+    {
+      "regime": "bear",
+      "window": "2020Q1",
+      "start": "2020-01-01",
+      "end": "2020-03-31",
+      "data_quality": "OK",
+      "observations": 62,
+      "sharpe": -0.7200748409642689,
+      "profit_factor": 0.8876768806909866,
+      "max_drawdown": -0.013008806494742231
+    },
+    {
+      "regime": "bear",
+      "window": "2022",
+      "start": "2022-01-01",
+      "end": "2022-12-31",
+      "data_quality": "OK",
+      "observations": 251,
+      "sharpe": 0.34825449592650454,
+      "profit_factor": 1.0577437371179657,
+      "max_drawdown": -0.021525730405613897
+    },
+    {
+      "regime": "sideways",
+      "window": "2011",
+      "start": "2011-01-01",
+      "end": "2011-12-31",
+      "data_quality": "DEGRADED",
+      "observations": 0,
+      "sharpe": 0.0,
+      "profit_factor": 0.0,
+      "max_drawdown": 0.0
+    },
+    {
+      "regime": "sideways",
+      "window": "2015_2016",
+      "start": "2015-01-01",
+      "end": "2016-12-31",
+      "data_quality": "DEGRADED",
+      "observations": 0,
+      "sharpe": 0.0,
+      "profit_factor": 0.0,
+      "max_drawdown": 0.0
+    }
+  ],
+  "correlation": {
+    "available": true,
+    "correlations": {
+      "CAM": 0.370062000968591,
+      "GOR": 0.3988077355306766,
+      "BTC_live_proxy": 0.40793285302620863
+    },
+    "max_abs_rolling_60d": 0.40793285302620863
+  },
+  "stress_tests": {
+    "covid_2020": {
+      "sharpe": -2.337894941600039,
+      "max_drawdown": -0.01949663548129299,
+      "net_pnl": -365.9890876878271
+    },
+    "bear_2022": {
+      "sharpe": 0.34825449592650454,
+      "max_drawdown": -0.021525730405613897,
+      "net_pnl": 149.754967765748
+    },
+    "gme_squeeze": {
+      "sharpe": -3.7503018989476335,
+      "max_drawdown": -0.0054883590071302946,
+      "net_pnl": -49.65074907152666,
+      "max_single_name_loss_pct_gross": -0.003672326334927591
+    },
+    "q4_2018": {
+      "sharpe": -2.405488687195897,
+      "max_drawdown": -0.0179670216158353,
+      "net_pnl": -289.2329018781129
+    }
+  },
+  "paper_monitoring": {
+    "eligible": false,
+    "minimum_days": 30,
+    "earliest_live_if_marc_approves": "2026-06-15"
+  },
+  "sideways_2015_2016_check": {
+    "sharpe_net": -0.07062192412464481,
+    "profit_factor": 0.9889410574378257,
+    "max_drawdown": -0.049475821089405514,
+    "n_trades": 934,
+    "hit_rate": 0.5171306209850107,
+    "total_net_pnl": -113.06441126849234,
+    "observations": 503
+  }
+}
