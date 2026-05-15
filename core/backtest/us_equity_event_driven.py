@@ -128,6 +128,7 @@ class EventDrivenBacktester:
         costs_config: CostsConfig | Mapping[str, float] | None = None,
         seed: int = 42,
         universe_membership_source: str = "current",
+        copy_history: bool = True,
     ):
         if capital <= 0:
             raise ValueError("capital must be positive")
@@ -139,6 +140,7 @@ class EventDrivenBacktester:
         self.rng = np.random.default_rng(seed)
         self.seed = seed
         self.universe_membership_source = universe_membership_source
+        self.copy_history = copy_history
         self.metadata = self._build_metadata()
 
     def run(
@@ -146,6 +148,7 @@ class EventDrivenBacktester:
         price_data: Mapping[str, pd.DataFrame],
         signal_func: Callable[[SignalContext], Iterable[SignalIntent | Mapping[str, object]]],
         earnings_data: Mapping[str, pd.DataFrame] | None = None,
+        signal_filter: Callable[[pd.Timestamp, pd.Timestamp], bool] | None = None,
     ) -> BacktestOutput:
         prepared = self._prepare_price_data(price_data)
         earnings = self._prepare_earnings_data(earnings_data or {})
@@ -179,14 +182,18 @@ class EventDrivenBacktester:
 
             self._apply_dividends_and_borrow(positions, prepared, current_date, events)
 
-            context = SignalContext(
-                as_of=current_date,
-                prior_date=prior_date,
-                history=self._history_views(prepared, i),
-                earnings_history=self._earnings_views(earnings, prior_date),
-                metadata=self.metadata,
-            )
-            intents = [self._coerce_signal(intent) for intent in signal_func(context)]
+            should_evaluate_signal = signal_filter is None or signal_filter(current_date, prior_date)
+            if should_evaluate_signal:
+                context = SignalContext(
+                    as_of=current_date,
+                    prior_date=prior_date,
+                    history=self._history_views(prepared, i, copy=self.copy_history),
+                    earnings_history=self._earnings_views(earnings, prior_date),
+                    metadata=self.metadata,
+                )
+                intents = [self._coerce_signal(intent) for intent in signal_func(context)]
+            else:
+                intents = []
             for intent in intents:
                 if self._has_open_position(positions, intent.symbol, intent.side):
                     continue
@@ -296,8 +303,14 @@ class EventDrivenBacktester:
         return dates.sort_values()
 
     @staticmethod
-    def _history_views(prepared: Mapping[str, pd.DataFrame], stop_index: int) -> dict[str, pd.DataFrame]:
-        return {symbol: df.iloc[:stop_index].copy() for symbol, df in prepared.items()}
+    def _history_views(
+        prepared: Mapping[str, pd.DataFrame],
+        stop_index: int,
+        copy: bool = True,
+    ) -> dict[str, pd.DataFrame]:
+        if copy:
+            return {symbol: df.iloc[:stop_index].copy() for symbol, df in prepared.items()}
+        return {symbol: df.iloc[:stop_index] for symbol, df in prepared.items()}
 
     @staticmethod
     def _earnings_views(earnings: Mapping[str, pd.DataFrame], prior_date: pd.Timestamp) -> dict[str, pd.DataFrame]:
