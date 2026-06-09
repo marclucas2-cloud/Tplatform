@@ -2015,6 +2015,14 @@ from core.worker.cycles.pead_runner import (  # noqa: E402
     run_pead_paper_cycle,
 )
 
+# 2026-05-14: conditional paper observers for watchlist strategies.
+# Pure local simulation: journal + state only, no broker imports / no orders.
+from core.worker.cycles.conditional_paper_runner import (  # noqa: E402
+    run_bnb_defensive_trend_paper_cycle,
+    run_zn_month_end_extension_paper_cycle,
+    run_paper_watch_cycle,
+)
+
 def run_fx_paper_cycle():
     """FX Paper Trading — run validated FX strategies on IBKR paper (port 4003).
 
@@ -4895,11 +4903,17 @@ def main():
         except Exception as _boe:
             logger.warning(f"FUTURES BOOT RECONCILE: open orders scan failed: {_boe}")
 
-        # Strategy default SL/TP offsets (points) for fallback
-        # Overnight MES/MNQ: SL=entry-30, TP=entry+50 (overnight_buy_close.py)
+        # Strategy default SL/TP offsets (points) for fallback.
+        # Overnight MES/MNQ: SL=entry-30, TP=entry+50 (overnight_buy_close.py).
+        # M2K/MCL/MGC added 2026-06-07 after SL-cancel incident: a position
+        # without an entry in this map fell through to the UNPROTECTED branch
+        # which then wrote sl=tp=0.0 to state, defeating the watchdog forever.
         _STRAT_DEFAULTS = {
             "MES": {"sl_points": 30, "tp_points": 50, "multiplier": 5},
             "MNQ": {"sl_points": 30, "tp_points": 50, "multiplier": 2},
+            "M2K": {"sl_points": 6, "tp_points": 12, "multiplier": 5},
+            "MCL": {"sl_points": 0.6, "tp_points": 1.5, "multiplier": 100},
+            "MGC": {"sl_points": 12, "tp_points": 30, "multiplier": 10},
         }
 
         _canonical_state_file = ROOT / "data" / "state" / "ibkr_futures" / "positions_live.json"
@@ -4957,8 +4971,20 @@ def main():
                 )
 
             if sym in _existing:
-                _existing[sym]["sl"] = _sl
-                _existing[sym]["tp"] = _tp
+                # NEVER overwrite a positive SL/TP with 0.0 — that wipes the
+                # bracket the watchdog uses to repose. Incident 2026-06-05:
+                # state was reset to {sl: 0, tp: 0} when recovery sources were
+                # all empty, then watchdog spammed 5186 CRITICAL alerts and
+                # the position ran unprotected for 24h.
+                if _sl > 0:
+                    _existing[sym]["sl"] = _sl
+                elif "sl" not in _existing[sym] or float(_existing[sym].get("sl", 0) or 0) <= 0:
+                    # Only set 0 if nothing valid was ever present (very first boot).
+                    _existing[sym]["sl"] = 0.0
+                if _tp > 0:
+                    _existing[sym]["tp"] = _tp
+                elif "tp" not in _existing[sym] or float(_existing[sym].get("tp", 0) or 0) <= 0:
+                    _existing[sym]["tp"] = 0.0
                 if _oca:
                     _existing[sym]["oca_group"] = _oca
                 _existing[sym]["entry"] = _entry_px or _existing[sym].get("entry", 0)
@@ -5229,6 +5255,18 @@ def main():
                                              alert_callback=_cycle_alert,
                                              metrics_callback=_cycle_metrics_cb,
                                              timeout_seconds=120.0),
+        "bnb_defensive_trend_24h": CycleRunner("bnb_defensive_trend_24h", run_bnb_defensive_trend_paper_cycle,
+                                             alert_callback=_cycle_alert,
+                                             metrics_callback=_cycle_metrics_cb,
+                                             timeout_seconds=90.0),
+        "zn_month_end_extension": CycleRunner("zn_month_end_extension", run_zn_month_end_extension_paper_cycle,
+                                             alert_callback=_cycle_alert,
+                                             metrics_callback=_cycle_metrics_cb,
+                                             timeout_seconds=120.0),
+        "paper_watch": CycleRunner("paper_watch", run_paper_watch_cycle,
+                                             alert_callback=_cycle_alert,
+                                             metrics_callback=_cycle_metrics_cb,
+                                             timeout_seconds=60.0),
     }
     logger.info(f"  CycleRunners initialized: {list(_runners.keys())}")
 
@@ -5341,6 +5379,15 @@ def main():
         if now_paris.hour < 3:
             run_alt_rel_strength_paper_cycle._done_today = False
 
+        # === BNB DEFENSIVE TREND PAPER (7j/7, 03h10 Paris = apres close daily UTC) ===
+        # Watchlist paper observer: BNBUSDC spot proxy, no broker, no live orders.
+        # Signal uses previous closed daily bar only; fill is retrospective paper log.
+        if now_paris.hour == 3 and now_paris.minute >= 10 and not getattr(run_bnb_defensive_trend_paper_cycle, '_done_today', False):
+            _runners["bnb_defensive_trend_24h"].run()
+            run_bnb_defensive_trend_paper_cycle._done_today = True
+        if now_paris.hour < 3:
+            run_bnb_defensive_trend_paper_cycle._done_today = False
+
         # === BTC/MES ASIA LEADLAG PAPER (7j/7, 10h30 Paris = apres close BTC Asia 08:00 UTC) ===
         # T3-A2 VALIDATED (Sharpe +1.07, WF 4/5). Log-only retrospective journal.
         # Ne requiert pas weekday (crypto trade 24/7) mais le MES signal use US weekday data.
@@ -5351,6 +5398,15 @@ def main():
                 run_btc_asia_mes_leadlag_paper_cycle()
             except Exception as _bl_err:
                 logger.error(f"BTC/MES LEADLAG error: {_bl_err}", exc_info=True)
+
+        # === ZN MONTH-END EXTENSION PAPER (daily 07h20 Paris, after UTC date roll) ===
+        # Watchlist paper observer: ZN=F proxy, no IBKR connection, no live/paper orders.
+        # Date gate uses calendar business days; ATR/stops use prior bars only.
+        if now_paris.hour == 7 and now_paris.minute >= 20 and not getattr(run_zn_month_end_extension_paper_cycle, '_done_today', False):
+            _runners["zn_month_end_extension"].run()
+            run_zn_month_end_extension_paper_cycle._done_today = True
+        if now_paris.hour < 7:
+            run_zn_month_end_extension_paper_cycle._done_today = False
 
         # === EU INDICES RELMOM PAPER (lun-ven, 18h00 Paris = apres close EU 17h30) ===
         # T3-A3 VALIDATED (Sharpe +0.71, WF 4/5). Log-only retrospective.
@@ -5429,6 +5485,15 @@ def main():
             run_pead_paper_cycle._done_today = True
         if is_weekday() and now_paris.hour < 22:
             run_pead_paper_cycle._done_today = False
+
+        # === PAPER WATCH (7j/7, 07h35 Paris) ===
+        # Daily hygiene report for paper sleeves: stale data, missing journal,
+        # last signal, paper PnL. Sends one concise Telegram alert.
+        if now_paris.hour == 7 and now_paris.minute >= 35 and not getattr(run_paper_watch_cycle, '_done_today', False):
+            _runners["paper_watch"].run()
+            run_paper_watch_cycle._done_today = True
+        if now_paris.hour < 7:
+            run_paper_watch_cycle._done_today = False
 
         # === MACRO ECB EVENT DRIVEN (lun-ven, 14h50 Paris, jours BCE only) ===
         # Le module skip lui-meme les jours non-BCE; on declenche tous les jours
