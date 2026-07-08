@@ -1,9 +1,26 @@
 metadata:
-  version: 8
-  updated_at: '2026-04-30'
-  updated_by: codex_ibkr_capital_raise_15k
+  version: 9
+  updated_at: '2026-07-08'
+  updated_by: marc_regime_failure_stop_losses
   review_cadence: hebdomadaire
-  notes: 'v2 2026-04-16: +3 candidates ibkr_futures paper_only (INT-C).
+  notes: 'v9 2026-07-08: Regime failure decision. Peak equity $39,735 (2026-05-13) ->
+    trough $27,621 (2026-06-30) = -30.5% DD in 48 days, 2-3x l''expected DD des
+    strats WF. Attribution: -$5.2K vs peak (dont ~-$4.2K IBKR live sur CAM +
+    Gold-Oil Rotation). Momentum strats prises a contre-pied du reversal
+    US indices + gold correction 2026-05 -> 2026-06.
+
+    ACTIONS v9:
+    - cross_asset_momentum: live_core -> paper_only (re-WF requis avant retour live)
+    - gold_oil_rotation: live_core -> paper_only (re-WF requis)
+    - btc_asia_mes_leadlag_q80_v80_long_only: live_micro -> paper_only
+      (0 trades declenches en 2 mois de toute facon)
+    - M2K live position fermee 2026-07-08 @ $2,980.80
+
+    Portfolio live desormais: 0 strategie active. IBKR live = capital idle,
+    Binance = seul le passif earn reste. Re-WF planifie pour 2026-Q3 sur
+    fenetre incluant regime reversal Mai-Juin 2026.
+
+    v2 2026-04-16: +3 candidates ibkr_futures paper_only (INT-C).
 
     v3 2026-04-16: gold_trend_mgc -> paper_only (V1 recalibration SL/TP).
 
@@ -29,7 +46,7 @@ metadata:
 ibkr_futures:
 - strategy_id: cross_asset_momentum
   book: ibkr_futures
-  status: live_core
+  status: paper_only  # v9 2026-07-08: demoted from live_core after -30.5% peak-to-trough. Re-WF required before re-promotion.
   runtime_entrypoint: worker.py:_run_futures_cycle (bloc STRATS LIVE CAPABLE)
   runtime_module: strategies_v2.futures.cross_asset_momentum.CrossAssetMomentum
   wf_source: data/research/wf_manifests/cross_asset_momentum_runtime48h_2026-04-27.json
@@ -102,7 +119,7 @@ ibkr_futures:
     \ (Phase C residuel marker pour promotion_check.py)."
 - strategy_id: gold_oil_rotation
   book: ibkr_futures
-  status: live_core
+  status: paper_only  # v9 2026-07-08: demoted from live_core. 11 MGC entries stopped en cascade juin 2026 (MGC $4568 -> $4042 = -11.5%). Re-WF required.
   runtime_entrypoint: worker.py:_run_futures_cycle (bloc STRATS LIVE CAPABLE)
   runtime_module: strategies_v2.futures.gold_oil_rotation.GoldOilRotation
   wf_source: scripts/wf_gold_oil_rotation.py (5/5 OOS profitable)
@@ -354,7 +371,7 @@ binance_crypto:
 # Cf. archived_rejected dans config/quant_registry.yaml.
 - strategy_id: btc_asia_mes_leadlag_q80_v80_long_only
   book: binance_crypto
-  status: live_micro                          # Phase 2 desk productif 2026-04-22 (GO Marc)
+  status: paper_only                          # v9 2026-07-08: demoted from live_micro (0 trades declenches en 2 mois, decision paper-only globale)
   live_start_at: "2026-04-23"
   runtime_entrypoint: core.runtime.btc_asia_q80_live_micro_runner.run_live_micro_cycle (10h30 Paris, apres paper retrospective journal)
   runtime_module: strategies.crypto.btc_asia_mes_leadlag

@@ -21,7 +21,7 @@
 metadata:
   version: 2
   created_at: "2026-04-19"
-  updated_at: "2026-05-10"
+  updated_at: "2026-05-14"
   schema_version: 1
   notes: |
     v1: registre initial. Backfill depuis WF reports existants.
@@ -40,6 +40,11 @@ metadata:
           override par update_capital(equity_live) au 1er cycle.
     - Le champ risk_budget_pct (deja present sur live_core CAM/GOR) reste
       la source officielle pour le sizing dynamique futures live.
+
+    v3 (2026-05-14): mise en observation paper-only de deux candidats
+    conditionnels non live:
+    - bnb_defensive_trend_24h (Binance BNB spot defensive trend, watchlist)
+    - zn_month_end_extension (ZN month-end extension, watchlist)
 
 # Schema par strategie:
 #   strategy_id: string                # match live_whitelist.yaml canonique
@@ -67,25 +72,41 @@ strategies:
 
   - strategy_id: cross_asset_momentum
     book: ibkr_futures
-    status: live_core
-    paper_start_at: null
+    status: paper_only  # v9 2026-07-08 demoted after -30.5% peak-to-trough regime failure
+    paper_start_at: "2026-07-08"
     live_start_at: "2026-04-07"
+    live_end_at: "2026-07-08"  # regime failure demote, re-WF required
     wf_manifest_path: data/research/wf_manifests/cross_asset_momentum_runtime48h_2026-04-27.json
     grade: B
     last_wf_run_at: "2026-04-27"
-    is_live: true
-    infra_gaps: ["front_month_proxy_vs_deferred_contract_mcl", "broker_bracket_disappearance_root_cause_pending"]
+    is_live: false
+    infra_gaps: ["front_month_proxy_vs_deferred_contract_mcl", "broker_bracket_disappearance_root_cause_pending", "re_wf_required_regime_2026Q2"]
 
   - strategy_id: gold_oil_rotation
     book: ibkr_futures
-    status: live_core
-    paper_start_at: null
+    status: paper_only  # v9 2026-07-08 demoted after 11 MGC entries stopped en cascade juin 2026
+    paper_start_at: "2026-07-08"
     live_start_at: "2026-04-08"
+    live_end_at: "2026-07-08"  # regime failure demote, re-WF required
     wf_manifest_path: data/research/wf_manifests/gold_oil_rotation_2026-04-19_backfill.json
     grade: S
     last_wf_run_at: "2026-04-19"
-    is_live: true
-    infra_gaps: []
+    is_live: false
+    infra_gaps: ["re_wf_required_regime_2026Q2"]
+
+  - strategy_id: zn_month_end_extension
+    book: ibkr_futures
+    status: paper_only
+    paper_start_at: "2026-05-14"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/zn_month_end_extension_2026-05-14.json
+    grade: B
+    last_wf_run_at: "2026-05-14"
+    is_live: false
+    infra_gaps: ["conditional_watchlist_not_validated_live", "zn_margin_and_contract_roll_review_required", "runner_uses_yfinance_proxy_not_broker_data"]
+    runtime_entrypoint: "core.worker.cycles.conditional_paper_runner:run_zn_month_end_extension_paper_cycle"
+    runtime_wired_at: "2026-05-14"
+    notes: "Paper-only observer approved by Marc 2026-05-14. Long ZN on third business day before month-end, exit second business day next month or ATR bracket. WF 5/6 profitable, PF 1.51, DD -4.2%, Sharpe 0.61 below strict live threshold. Collect forward paper evidence; no live/paper IBKR order placement."
 
   - strategy_id: gold_trend_mgc
     book: ibkr_futures
@@ -222,6 +243,20 @@ strategies:
     is_live: false
     infra_gaps: ["strat_hebdo_4_trades_max_en_30j_pas_10", "data_stale_btcusdt_alts_parquets"]
 
+  - strategy_id: bnb_defensive_trend_24h
+    book: binance_crypto
+    status: paper_only
+    paper_start_at: "2026-05-14"
+    live_start_at: null
+    wf_manifest_path: data/research/wf_manifests/bnb_defensive_trend_24h_2026-05-14.json
+    grade: B
+    last_wf_run_at: "2026-05-14"
+    is_live: false
+    infra_gaps: ["conditional_watchlist_not_validated_live", "oos_2024_plus_sharpe_below_0_8", "bnbusdc_execution_parity_to_bnbusdt_data_proxy_required"]
+    runtime_entrypoint: "core.worker.cycles.conditional_paper_runner:run_bnb_defensive_trend_paper_cycle"
+    runtime_wired_at: "2026-05-14"
+    notes: "Paper-only observer approved by Marc 2026-05-14. BNB spot defensive trend: BNB above SMA50, BTC above SMA100, BNB and BNB/BTC 10d returns > -3%, 24h max hold with 4% SL / 8% TP. Full sample Sharpe ~0.91 but 2024+ OOS Sharpe ~0.40; watchlist only, no live promotion without fresh paper + re-WF."
+
   # btc_asia_mes_leadlag_q70_v80 archive 2026-04-22 (PO verdict)
   # - Duplicate du q80_v80_long_only (meme WF manifest)
   # - Variante mode=both (long+short) incompatible spot Binance France
@@ -230,15 +265,16 @@ strategies:
 
   - strategy_id: btc_asia_mes_leadlag_q80_v80_long_only
     book: binance_crypto
-    status: live_micro          # Phase 2 desk productif 2026-04-22 (GO Marc)
-    paper_start_at: "2026-04-20"
-    live_start_at: "2026-04-23"  # premier cycle live_micro 10h30 Paris 2026-04-23
+    status: paper_only          # v9 2026-07-08 demoted from live_micro (0 trade en 2 mois, decision paper-only globale)
+    paper_start_at: "2026-07-08"
+    live_start_at: "2026-04-23"
+    live_end_at: "2026-07-08"
     wf_manifest_path: data/research/wf_manifests/btc_asia_mes_leadlag_q70_v80_2026-04-19_backfill.json
     grade: B
     last_wf_run_at: "2026-04-19"
-    is_live: true                # promu live_micro 2026-04-23
+    is_live: false
     infra_gaps: []
-    notes: "B5 iter3 wire parallele au q70_v80 both. Compat Binance France spot (long only). Sharpe backtest +1.08. Phase 2 desk productif: live_micro BTCUSDC $200 notional, kill DD -$50, max 1 position, no pyramid avant J+14."
+    notes: "B5 iter3 wire parallele au q70_v80 both. Compat Binance France spot (long only). Sharpe backtest +1.08. Demote 2026-07-08: aucun signal declenche en 2 mois live, decision paper-only globale suite regime failure."
     live_micro_config:
       notional_usd: 200
       risk_usd: 20
